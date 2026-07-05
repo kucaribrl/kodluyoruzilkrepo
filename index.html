@@ -165,10 +165,10 @@
   @media print{
     body.printing>*{display:none!important}
     body.printing #printarea{display:flex!important;flex-wrap:wrap;gap:6px;padding:6px}
-    body.printing .lbl{border:1px solid #000;border-radius:5px;padding:6px 8px;width:210px;text-align:center;page-break-inside:avoid;color:#000}
-    body.printing .lbl .l-ad{font-size:11px;font-weight:800;line-height:1.2}
-    body.printing .lbl .l-meta{font-size:10px;font-weight:700;margin:1px 0 3px}
-    body.printing .lbl .l-seri{font-size:9px;font-weight:600;margin-top:2px}
+    body.printing .lbl{border:1px solid #000;border-radius:5px;padding:7px 8px;width:210px;text-align:center;page-break-inside:avoid;color:#000}
+    body.printing .lbl .l-ad{font-size:12px;font-weight:800;line-height:1.3;margin-bottom:2px}
+    body.printing .lbl .l-line{font-size:10px;font-weight:700;line-height:1.4}
+    body.printing .lbl svg{margin-top:4px}
   }
   .warnbox{background:var(--bad-s);color:var(--bad);border-radius:11px;padding:10px 13px;font-size:12px;font-weight:700;margin-top:10px}
   .infobox{background:var(--thr-s);color:var(--thr);border-radius:11px;padding:10px 13px;font-size:12px;font-weight:700;margin-top:10px}
@@ -633,7 +633,7 @@ function barkodYazdir(id){const u=urun(id);let changed=false;renkObjs(u).forEach
 }
 function seriStr(u){if(u.birim!=='seri')return 'Tekli ürün';if(u.bedenler&&u.bedenler.length)return 'Seri: '+u.bedenler.map(x=>typeof x==='object'?x.beden+(x.adet>1?'×'+x.adet:''):x).join('·')+' ('+u.seri+')';return u.seri+"'li seri"}
 function barkodYap(id){const u=urun(id);const renkler=renkObjs(u).filter(r=>r.barkod);let cells='';const sstr=seriStr(u);
-  renkler.forEach((r,i)=>{const n=Math.max(0,+($('bkq-'+i)?.value||0));for(let k=0;k<n;k++)cells+=`<div class="lbl"><div class="l-ad">${esc(u.ad)}${u.marka?' · '+esc(u.marka):''}</div><div class="l-meta">${esc(u.kod||'')}${r.ad?' · '+esc(r.ad):''}</div>${barkodSVG(r.barkod,40)}<div class="l-seri">${esc(sstr)}</div></div>`});
+  renkler.forEach((r,i)=>{const n=Math.max(0,+($('bkq-'+i)?.value||0));for(let k=0;k<n;k++)cells+=`<div class="lbl"><div class="l-ad">${esc(u.ad)}</div><div class="l-line">${esc(u.kod||'')}</div>${r.ad?`<div class="l-line">${esc(r.ad)}</div>`:''}<div class="l-line">${esc(sstr)}</div>${barkodSVG(r.barkod,40)}</div>`});
   if(!cells)return toast('Adet gir');
   const area=document.getElementById('printarea');area.innerHTML=cells;document.body.classList.add('printing');
   setTimeout(()=>{window.print();document.body.classList.remove('printing')},150);
