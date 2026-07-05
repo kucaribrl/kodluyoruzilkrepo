@@ -163,9 +163,9 @@
   .acitem:first-child{border-top:none}.acitem:active{background:var(--ln2)}
   .acitem small{display:block;color:var(--sub);font-size:11px;font-weight:600}
   .acitem.yeni{color:var(--ind2)}
-  .sbars{display:flex;gap:3px;margin-top:5px}
-  .sbar{height:5px;flex:1;border-radius:3px;background:var(--ln2)}
-  .sbar.teslim{background:var(--ind2)}.sbar.odendi{background:var(--bad)}
+  .svbars{display:flex;gap:3px;flex:0 0 auto}
+  .svbar{width:5px;height:40px;border-radius:3px;background:var(--ln2)}
+  .svbar.teslim{background:var(--ind2)}.svbar.odendi{background:var(--bad)}
   .bkrow{display:flex;gap:11px;align-items:center;padding:11px 0;border-bottom:1px dashed var(--ln)}
   .bksvg{flex:0 0 130px;background:#fff;border:1px solid var(--ln);border-radius:8px;padding:5px}.bkinfo{flex:1}
   .pasifrow{opacity:.5}
@@ -734,7 +734,7 @@ function rSatis(){
   let html=`<div class="tabs">`+tabs.map(t=>`<div class="tb ${satisFilt===t[0]?'on':''}" onclick="satisFilt='${t[0]}';rSatis()">${t[1]}</div>`).join('')+`</div>`;
   html+=`<div class="sec">Satışlar <a onclick="formSatis()">+ Yeni</a></div><div class="card">`+(list.length?list.map(s=>{
     const ayrildi=s.teslimDurum==='ayrildi';const teslim=!ayrildi;const odendi=s.odenen>=s.tutar;
-    return `<div class="row" onclick="satisFis(${s.id})"><div class="av ${ayrildi?'o':'g'}">${ayrildi?'🔖':'🧾'}</div><div class="mid"><div class="t">${esc(s.mus)}</div><div class="s">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div><div class="sbars"><div class="sbar ${teslim?'teslim':''}" title="Teslim"></div><div class="sbar ${odendi?'odendi':''}" title="Ödeme"></div></div></div><div class="end"><div class="n">${money(s.tutar,s.pb)}</div><div class="u">${ayrildi?'🔖 ayrıldı':teslim?'✓ teslim':''}${odendi?' · 💰':''}</div></div></div>`}).join(''):emp('🧾','Kayıt yok.'))+`</div>`;
+    return `<div class="row" onclick="satisFis(${s.id})"><div class="svbars"><i class="svbar ${teslim?'teslim':''}" title="Teslim edildi"></i><i class="svbar ${odendi?'odendi':''}" title="Parası alındı"></i></div><div class="av ${ayrildi?'o':'g'}">${ayrildi?'🔖':'🧾'}</div><div class="mid"><div class="t">${esc(s.mus)}</div><div class="s">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div></div><div class="end"><div class="n">${money(s.tutar,s.pb)}</div><div class="u">${ayrildi?'🔖 ayrıldı':teslim?'✓ teslim':''}${odendi?' · 💰':''}</div></div></div>`}).join(''):emp('🧾','Kayıt yok.'))+`</div>`;
   $('app').innerHTML=html;
 }
 let sepet=[], sPB='TL', sVade=0, sEdit=0, sDurum='teslim', sMusId=0, sUrunId=0, sCekFoto='';
