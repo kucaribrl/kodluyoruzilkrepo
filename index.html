@@ -607,12 +607,14 @@ function karHesap(){const al=+$('u-alis')?.value||0,ky=+$('u-kar')?.value||0;if(
 function karInfo(){const al=+$('u-alis')?.value||0,st=+$('u-satis')?.value||0,ky=+$('u-kar')?.value||0;const info=$('kar-info');if(info)info.innerHTML=`💡 Alış ${money(al,uPB)} + %${ky} kâr → satış <b>${money(st,uPB)}</b> <span style="opacity:.7">(elle de girebilirsin)</span>`}
 function kaydetUrun(id){
   const ad=$('u-ad').value.trim();if(!ad){urunTab('genel');return toast('Ürün adı gerekli')}
+  const kod=$('u-kod').value.trim();if(!kod){urunTab('genel');$('u-kod')&&$('u-kod').focus();return toast('Ürün kodu gerekli')}
+  if(db.urunler.some(x=>x.id!==id&&(x.kod||'').trim().toLowerCase()===kod.toLowerCase())){urunTab('genel');$('u-kod')&&$('u-kod').focus();return toast('Bu kod zaten kullanılıyor: '+kod)}
   const birim=$('sb-seri').classList.contains('on')?'seri':'adet';
   const bedenler=birim==='seri'?fBeden.filter(x=>x.beden).map(x=>({beden:x.beden.trim(),adet:Math.max(1,+x.adet||1)})):[];
   const renkler=fRenk.filter(r=>(r.ad||'').trim()||r.stok||r.foto).map(r=>({ad:(r.ad||'').trim(),hex:hexFromAd(r.ad)||r.hex||'#8a8f98',foto:r.foto||'',barkod:(r.barkod||'').trim()||genBarkod(),stok:+r.stok||0,kirik:(r.kirik&&Object.keys(r.kirik).length)?r.kirik:null}));
   const stok=renkler.length?renkler.reduce((a,r)=>a+r.stok,0):(+$('u-stok').value||0);
   const seri=birim==='seri'?(bedenler.reduce((a,x)=>a+x.adet,0)||5):1;
-  const o={ad,kod:$('u-kod').value.trim(),kat:$('u-kat').value.trim(),marka:$('u-marka').value.trim(),kaynak:$('u-kaynak').value,birim,bedenler,seri,pb:uPB,alis:+$('u-alis').value||0,karYuzde:+$('u-kar').value||0,satis:+$('u-satis').value||0,promosyon:+($('u-promo').value||0),kritik:+$('u-kritik').value||10,kumas:$('u-kumas').value.trim(),tedarikciId:+($('u-ted').value||0)||null,raf:$('u-raf').value.trim(),agirlik:+($('u-agirlik').value||0)||0,yil:$('u-yil').value.trim(),sezon:$('u-sezon').value,not:$('u-not').value.trim(),pasif:$('u-aktif')?!$('u-aktif').checked:false,renkler,stok,cesit:'Markalı'};
+  const o={ad,kod,kat:$('u-kat').value.trim(),marka:$('u-marka').value.trim(),kaynak:$('u-kaynak').value,birim,bedenler,seri,pb:uPB,alis:+$('u-alis').value||0,karYuzde:+$('u-kar').value||0,satis:+$('u-satis').value||0,promosyon:+($('u-promo').value||0),kritik:+$('u-kritik').value||10,kumas:$('u-kumas').value.trim(),tedarikciId:+($('u-ted').value||0)||null,raf:$('u-raf').value.trim(),agirlik:+($('u-agirlik').value||0)||0,yil:$('u-yil').value.trim(),sezon:$('u-sezon').value,not:$('u-not').value.trim(),pasif:$('u-aktif')?!$('u-aktif').checked:false,renkler,stok,cesit:'Markalı'};
   if(id){Object.assign(urun(id),o)}else{o.id=nid('u');db.urunler.push(o)}
   save();closeM();render();toast('Ürün kaydedildi ✓');
 }
