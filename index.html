@@ -145,6 +145,8 @@
   .bchip{display:inline-flex;align-items:center;gap:5px;background:var(--ind);color:#fff;font-size:12.5px;font-weight:800;padding:6px 8px 6px 11px;border-radius:9px}
   .bchip i{cursor:pointer;font-style:normal;opacity:.75;font-size:11px}
   .binp{width:70px!important;padding:8px 10px!important;margin:0!important}
+  .brow{display:flex;align-items:center;gap:8px;margin-top:7px}
+  .brow .bn{flex:1;margin:0;font-weight:700}
   .renkcard{border:1px solid var(--ln);border-radius:13px;padding:11px;margin-top:10px;background:#fbfcfe}
   .rc-top{display:flex;align-items:center;gap:8px}.rc-top .rad{flex:1;margin:0}
   .rc-body{display:flex;gap:10px;margin-top:10px}
@@ -480,7 +482,7 @@ function urunDetay(id){
     ['Kod',u.kod],['Kategori · Marka',[u.kat,u.marka].filter(Boolean).join(' · ')],
     ['Yıl · Mevsim',[u.yil,u.sezon].filter(Boolean).join(' · ')],
     ['Kumaş',u.kumas],u.agirlik?['Ağırlık',u.agirlik+' gr']:null,
-    u.birim==='seri'&&u.bedenler&&u.bedenler.length?['Seri İçeriği',u.bedenler.join(' · ')]:null,
+    u.birim==='seri'&&u.bedenler&&u.bedenler.length?['Seri İçeriği',u.bedenler.map(x=>typeof x==='object'?x.beden+(x.adet>1?'×'+x.adet:''):x).join(' · ')+' = '+u.seri+' parça']:null,
     ['Tedarikçi',(u.tedarikciId&&cari(u.tedarikciId))?cari(u.tedarikciId).ad:''],
     ['RAF',u.raf],['Kaynak',u.kaynak==='alim'?'Hazır Alınan':'Kendi Üretimi'],
   ].filter(x=>x&&x[1]);
@@ -501,15 +503,14 @@ const RENK_ADI={'#111111':'Siyah','#ffffff':'Beyaz','#f2f2ee':'Beyaz','#1d2f52':
 const BEDEN_STD=['S','M','L','XL','XXL','3XL','4XL','5XL'];
 const PBSYM={TL:'₺',USD:'$',EUR:'€'};
 const ISLEMLER=['Kesim','Dikim','Nakış','Baskı','Ütü / Paket','Yıkama'];
-let fRenk=[], fBeden=[], fIslem=[], uPB='TL', uTab='genel';
+let fRenk=[], fBeden=[], uPB='TL', uTab='genel';
 function resizeImg(file,cb,max=900,q=0.72){const r=new FileReader();r.onload=()=>{const img=new Image();img.onload=()=>{let w=img.width,h=img.height;if(w>h&&w>max){h=Math.round(h*max/w);w=max}else if(h>max){w=Math.round(w*max/h);h=max}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);try{cb(c.toDataURL('image/jpeg',q))}catch(e){cb(r.result)}};img.src=r.result};r.readAsDataURL(file)}
 function genBarkod(){let s='869';for(let i=0;i<10;i++)s+=Math.floor(Math.random()*10);return s}
 function formUrun(id){
   if(!canUrunYaz())return toast('Bu işlem için yetkiniz yok');
   const u=id?urun(id):{birim:'seri',seri:5,renkler:[],kaynak:'uretim',cesit:'Markalı',karYuzde:40,pb:'TL'};
   fRenk=(u.renkler||[]).map(r=>typeof r==='object'?{ad:r.ad||'',hex:r.hex,foto:r.foto||'',barkod:r.barkod||'',stok:+r.stok||0,kirik:r.kirik?{...r.kirik}:null}:{ad:RENK_ADI[r]||'',hex:r,foto:'',barkod:'',stok:0,kirik:null});
-  fBeden=(u.bedenler&&u.bedenler.length)?u.bedenler.slice():BEDEN_STD.slice(0,u.seri||5);
-  fIslem=(u.islemler||[]).map(x=>({islem:x.islem,fasonId:x.fasonId}));
+  fBeden=(u.bedenler&&u.bedenler.length)?u.bedenler.map(x=>typeof x==='object'?{beden:x.beden,adet:+x.adet||1}:{beden:x,adet:1}):BEDEN_STD.slice(0,u.seri||5).map(b=>({beden:b,adet:1}));
   uPB=u.pb||'TL';uTab='genel';
   const teds=db.cariler.filter(c=>c.tip==='tedarikci');
   const sezonlar=['','4 Mevsim','Yaz','Kış','İlkbahar','Sonbahar'];
@@ -524,8 +525,8 @@ function formUrun(id){
       <div class="g2"><div><label>Tedarikçi</label><select id="u-ted"><option value="0">— seç —</option>${teds.map(t=>`<option value="${t.id}" ${u.tedarikciId===t.id?'selected':''}>${esc(t.ad)}</option>`).join('')}</select></div><div><label>RAF / Yer</label><input id="u-raf" value="${esc(u.raf||'')}" placeholder="A-12"></div></div>
       <label>Satış Şekli</label><div class="seg2"><div class="o ${u.birim==='seri'?'on':''}" id="sb-seri" onclick="setBirim('seri')">Seri (asorti)</div><div class="o ${u.birim==='adet'?'on':''}" id="sb-adet" onclick="setBirim('adet')">Tekli (adet)</div></div>
       <div id="beden-wrap" style="${u.birim==='adet'?'display:none':''}">
-        <label>Seri İçeriği (bedenler)</label>
-        <div style="display:flex;gap:6px;margin-bottom:7px"><button type="button" class="btn ghost sm" style="width:auto;padding:7px 11px;margin:0" onclick="bedenPreset(['S','M','L','XL','XXL'])">S-XXL</button><button type="button" class="btn ghost sm" style="width:auto;padding:7px 11px;margin:0" onclick="bedenPreset(['M','L','XL','2XL','3XL'])">M-3XL</button><button type="button" class="btn ghost sm" style="width:auto;padding:7px 11px;margin:0" onclick="bedenPreset(['2XL','3XL','4XL','5XL'])">Büyük</button></div>
+        <label>Seri İçeriği <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub);font-size:11px">(bir seride hangi bedenden kaç adet)</span></label>
+        <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap"><button type="button" class="btn ghost sm" style="width:auto;padding:7px 11px;margin:0" onclick="bedenPreset(['S','M','L','XL','XXL'])">S-XXL</button><button type="button" class="btn ghost sm" style="width:auto;padding:7px 11px;margin:0" onclick="bedenPreset(['M','L','XL','2XL','3XL'])">M-3XL</button><button type="button" class="btn ghost sm" style="width:auto;padding:7px 11px;margin:0" onclick="bedenPreset(['2XL','3XL','4XL','5XL'])">Büyük</button></div>
         <div id="beden-box" class="bedenbox"></div>
       </div>
       <div class="sec" style="margin-top:8px">💰 Maliyet & Fiyat</div>
@@ -534,8 +535,6 @@ function formUrun(id){
       <div class="g2"><div><label>Satış Fiyatı</label><input id="u-satis" type="number" value="${u.satis||0}" oninput="karInfo()"></div><div><label>Promosyon Fiyatı</label><input id="u-promo" type="number" value="${u.promosyon||''}" placeholder="opsiyonel"></div></div>
       <div class="infobox" id="kar-info"></div>
       <div class="g2"><div><label>Stok (renk yoksa)</label><input id="u-stok" type="number" value="${u.stok||0}"></div><div><label>Kritik Stok Uyarısı</label><input id="u-kritik" type="number" value="${u.kritik||10}"></div></div>
-      <div class="sec" style="margin-top:8px">🧵 İşlem Takibi <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub);font-size:11px">(kim kesti/dikti/işledi — sorun çıkarsa iz sürülsün)</span></div>
-      <div id="islem-box"></div>
       <label style="margin-top:14px">Not</label><textarea id="u-not" rows="2" placeholder="İsteğe bağlı">${esc(u.not||'')}</textarea>
     </div>
     <div id="upane-stok" style="display:none">
@@ -545,17 +544,18 @@ function formUrun(id){
     <button class="btn" onclick="kaydetUrun(${id||0})">Kaydet</button>
     ${id?`<button class="btn danger" onclick="silUrun(${id})">Ürünü Sil</button>`:''}
   `);
-  cizBeden();cizRenk();cizIslem();karInfo();
+  cizBeden();cizRenk();karInfo();
 }
-function cizIslem(){const box=$('islem-box');if(!box)return;const fasons=db.cariler.filter(c=>c.tip==='fason');
-  box.innerHTML=fIslem.map((it,i)=>`<div class="islemrow"><select onchange="fIslem[${i}].islem=this.value">${ISLEMLER.map(x=>`<option ${it.islem===x?'selected':''}>${x}</option>`).join('')}</select><select onchange="fIslem[${i}].fasonId=+this.value||0"><option value="0">— fason seç —</option>${fasons.map(f=>`<option value="${f.id}" ${it.fasonId===f.id?'selected':''}>${esc(f.ad)}</option>`).join('')}</select><button class="del" onclick="fIslem.splice(${i},1);cizIslem()">✕</button></div>`).join('')+`<button type="button" class="btn ghost sm" onclick="islemEkle()" style="margin-top:8px">+ İşlem Ekle</button>${fasons.length?'':'<div class="mini" style="margin-top:6px">Fason firma yok — Cari › Fason\'dan ekleyebilirsin.</div>'}`;
-}
-function islemEkle(){fIslem.push({islem:'Dikim',fasonId:0});cizIslem()}
 function urunTab(t){uTab=t;$('upane-genel').style.display=t==='genel'?'':'none';$('upane-stok').style.display=t==='stok'?'':'none';$('ut-genel').classList.toggle('on',t==='genel');$('ut-stok').classList.toggle('on',t==='stok')}
 function setUPB(v){uPB=v;const seg=$('u-pb-seg');if(seg)[...seg.children].forEach(c=>c.classList.toggle('on',c.textContent.trim().startsWith(PBSYM[v])));karInfo()}
-function cizBeden(){const b=$('beden-box');if(!b)return;b.innerHTML=fBeden.map((s,i)=>`<span class="bchip">${esc(s)}<i onclick="fBeden.splice(${i},1);cizBeden()">✕</i></span>`).join('')+`<input id="beden-in" class="binp" placeholder="+beden" onkeydown="if(event.key==='Enter'){event.preventDefault();bedenEkle()}">`}
-function bedenEkle(){const el=$('beden-in');const v=(el.value||'').trim().toUpperCase();if(v&&!fBeden.includes(v))fBeden.push(v);el.value='';cizBeden();$('beden-in')&&$('beden-in').focus()}
-function bedenPreset(list){fBeden=list.slice();cizBeden()}
+function cizBeden(){const b=$('beden-box');if(!b)return;
+  b.innerHTML=fBeden.map((x,i)=>`<div class="brow"><input class="bn" value="${esc(x.beden)}" oninput="fBeden[${i}].beden=this.value.toUpperCase()"><div class="step sm"><button class="b" onclick="bAdet(${i},-1)">−</button><input type="number" inputmode="numeric" value="${x.adet}" oninput="fBeden[${i}].adet=Math.max(1,+this.value||1);bTot()"><button class="b p" onclick="bAdet(${i},1)">+</button></div><button class="del" onclick="fBeden.splice(${i},1);cizBeden()">✕</button></div>`).join('')+`<div style="display:flex;gap:6px;margin-top:8px"><input id="beden-in" class="binp" placeholder="+beden" onkeydown="if(event.key==='Enter'){event.preventDefault();bedenEkle()}"><button type="button" class="btn ghost sm" style="width:auto;padding:8px 13px;margin:0" onclick="bedenEkle()">Ekle</button></div><div class="mini" id="beden-tot" style="margin-top:7px"></div>`;
+  bTot();
+}
+function bTot(){const t=$('beden-tot');if(!t)return;const s=fBeden.reduce((a,x)=>a+(+x.adet||0),0);t.innerHTML=fBeden.length?`👕 Bir seri = <b>${s}</b> parça · ${fBeden.map(x=>x.beden+(x.adet>1?'×'+x.adet:'')).join(' + ')}`:''}
+function bAdet(i,d){fBeden[i].adet=Math.max(1,(+fBeden[i].adet||1)+d);cizBeden()}
+function bedenEkle(){const el=$('beden-in');const v=(el.value||'').trim().toUpperCase();if(v&&!fBeden.some(x=>x.beden===v))fBeden.push({beden:v,adet:1});el.value='';cizBeden();$('beden-in')&&$('beden-in').focus()}
+function bedenPreset(list){fBeden=list.map(b=>({beden:b,adet:1}));cizBeden()}
 function cizRenk(){
   const box=$('renk-box');if(!box)return;
   box.innerHTML=fRenk.map((r,i)=>{
@@ -571,7 +571,7 @@ function cizRenk(){
         </div>
       </div>
       <div class="rc-kirikh" onclick="renkKirik(${i})">${kirikOpen?'▾':'▸'} Kırık seri (tek beden)${kirikTop?` · ${kirikTop} adet`:''}</div>
-      ${kirikOpen?`<div class="rc-kirik">${fBeden.length?fBeden.map(bd=>`<div class="kb"><span>${esc(bd)}</span><input type="number" inputmode="numeric" value="${(r.kirik&&r.kirik[bd])||''}" placeholder="0" oninput="setKirik(${i},'${esc(bd)}',this.value)"></div>`).join(''):'<div class="mini">Önce Genel Bilgi sekmesinde seri içeriği (beden) ekle</div>'}</div>`:''}
+      ${kirikOpen?`<div class="rc-kirik">${fBeden.length?fBeden.map(x=>{const bd=x.beden;return `<div class="kb"><span>${esc(bd)}</span><input type="number" inputmode="numeric" value="${(r.kirik&&r.kirik[bd])||''}" placeholder="0" oninput="setKirik(${i},'${esc(bd)}',this.value)"></div>`}).join(''):'<div class="mini">Önce Genel Bilgi sekmesinde seri içeriği (beden) ekle</div>'}</div>`:''}
     </div>`;
   }).join('')+`<button type="button" class="btn ghost sm" onclick="renkEkle()" style="margin-top:10px">+ Renk Ekle</button><div class="mini" id="renk-tot" style="margin-top:8px"></div>`;
   renkTot();
@@ -589,11 +589,11 @@ function karInfo(){const al=+$('u-alis')?.value||0,st=+$('u-satis')?.value||0,ky
 function kaydetUrun(id){
   const ad=$('u-ad').value.trim();if(!ad){urunTab('genel');return toast('Ürün adı gerekli')}
   const birim=$('sb-seri').classList.contains('on')?'seri':'adet';
-  const bedenler=birim==='seri'?fBeden.slice():[];
+  const bedenler=birim==='seri'?fBeden.filter(x=>x.beden).map(x=>({beden:x.beden.trim(),adet:Math.max(1,+x.adet||1)})):[];
   const renkler=fRenk.filter(r=>r.hex).map(r=>({ad:(r.ad||'').trim(),hex:r.hex,foto:r.foto||'',barkod:(r.barkod||'').trim(),stok:+r.stok||0,kirik:(r.kirik&&Object.keys(r.kirik).length)?r.kirik:null}));
   const stok=renkler.length?renkler.reduce((a,r)=>a+r.stok,0):(+$('u-stok').value||0);
-  const seri=birim==='seri'?(bedenler.length||5):1;
-  const o={ad,kod:$('u-kod').value.trim(),kat:$('u-kat').value.trim(),marka:$('u-marka').value.trim(),kaynak:$('u-kaynak').value,birim,bedenler,seri,pb:uPB,alis:+$('u-alis').value||0,karYuzde:+$('u-kar').value||0,satis:+$('u-satis').value||0,promosyon:+($('u-promo').value||0),kritik:+$('u-kritik').value||10,kumas:$('u-kumas').value.trim(),tedarikciId:+($('u-ted').value||0)||null,raf:$('u-raf').value.trim(),agirlik:+($('u-agirlik').value||0)||0,yil:$('u-yil').value.trim(),sezon:$('u-sezon').value,not:$('u-not').value.trim(),islemler:fIslem.filter(x=>x.fasonId).map(x=>({islem:x.islem,fasonId:x.fasonId})),renkler,stok,cesit:'Markalı'};
+  const seri=birim==='seri'?(bedenler.reduce((a,x)=>a+x.adet,0)||5):1;
+  const o={ad,kod:$('u-kod').value.trim(),kat:$('u-kat').value.trim(),marka:$('u-marka').value.trim(),kaynak:$('u-kaynak').value,birim,bedenler,seri,pb:uPB,alis:+$('u-alis').value||0,karYuzde:+$('u-kar').value||0,satis:+$('u-satis').value||0,promosyon:+($('u-promo').value||0),kritik:+$('u-kritik').value||10,kumas:$('u-kumas').value.trim(),tedarikciId:+($('u-ted').value||0)||null,raf:$('u-raf').value.trim(),agirlik:+($('u-agirlik').value||0)||0,yil:$('u-yil').value.trim(),sezon:$('u-sezon').value,not:$('u-not').value.trim(),renkler,stok,cesit:'Markalı'};
   if(id){Object.assign(urun(id),o)}else{o.id=nid('u');db.urunler.push(o)}
   save();closeM();render();toast('Ürün kaydedildi ✓');
 }
