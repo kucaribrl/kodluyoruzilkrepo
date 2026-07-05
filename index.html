@@ -619,8 +619,24 @@ function kaydetUrun(id){
   const stok=renkler.length?renkler.reduce((a,r)=>a+r.stok,0):(+$('u-stok').value||0);
   const seri=birim==='seri'?(bedenler.reduce((a,x)=>a+x.adet,0)||5):1;
   const o={ad,kod,kat:$('u-kat').value.trim(),marka:$('u-marka').value.trim(),kaynak:uKaynak,birim,bedenler,seri,pb:uPB,alis:+$('u-alis').value||0,karYuzde:+$('u-kar').value||0,satis:+$('u-satis').value||0,promosyon:+($('u-promo').value||0),kritik:+$('u-kritik').value||10,kumas:$('u-kumas').value.trim(),tedarikciId:uKaynak==='alim'?(+($('u-ted').value||0)||null):null,raf:$('u-raf').value.trim(),agirlik:+($('u-agirlik').value||0)||0,yil:$('u-yil').value.trim(),sezon:$('u-sezon').value,not:$('u-not').value.trim(),pasif:$('u-aktif')?!$('u-aktif').checked:false,renkler,stok,cesit:'Markalı'};
+  const oldStok=id?(urun(id)?.stok||0):0;
   if(id){Object.assign(urun(id),o)}else{o.id=nid('u');db.urunler.push(o)}
-  save();closeM();render();toast('Ürün kaydedildi ✓');
+  save();closeM();
+  // Hazır alım → tedarikçiye borç (yeni ürün veya stok artışı kadar)
+  const delta=id?Math.max(0,o.stok-oldStok):o.stok;
+  const ted=o.tedarikciId?cari(o.tedarikciId):null;
+  if(uKaynak==='alim'&&ted&&delta>0&&o.alis>0){
+    const tutar=delta*o.alis, pb=o.pb||'TL';
+    render();toast('Ürün kaydedildi ✓');
+    askConfirm(`${delta} ${o.birim} × ${money(o.alis,pb)} = ${money(tutar,pb)}\n${ted.ad} firmasına borç yazılsın mı?`,()=>{
+      if(pb==='USD'){ted.doviz='USD';ted.bakiyeUSD=(ted.bakiyeUSD||0)+tutar}
+      else if(pb==='EUR'){ted.bakiye=(ted.bakiye||0)+tutar*db.kurEUR}
+      else{ted.bakiye=(ted.bakiye||0)+tutar}
+      save();render();toast(`${ted.ad} firmasına ${money(tutar,pb)} borç yazıldı`);
+    },'Borç Yaz');
+    return;
+  }
+  render();toast('Ürün kaydedildi ✓');
 }
 function silUrun(id){askConfirm('Ürün silinsin mi?',()=>{db.urunler=db.urunler.filter(x=>x.id!==id);save();closeM();render();toast('Silindi')})}
 /* ---- Ürün Çoğalt ---- */
