@@ -155,6 +155,7 @@
   .rc-kirik{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}
   .kb{display:flex;flex-direction:column;align-items:center;gap:3px;width:52px}
   .kb span{font-size:11px;font-weight:800;color:var(--sub)}.kb input{width:52px;text-align:center;padding:7px 4px}
+  .islemrow{display:flex;gap:7px;align-items:center;margin-top:8px}.islemrow select{flex:1;padding:10px}
   .warnbox{background:var(--bad-s);color:var(--bad);border-radius:11px;padding:10px 13px;font-size:12px;font-weight:700;margin-top:10px}
   .infobox{background:var(--thr-s);color:var(--thr);border-radius:11px;padding:10px 13px;font-size:12px;font-weight:700;margin-top:10px}
   .okbox{background:var(--good-s);color:var(--good);border-radius:11px;padding:10px 13px;font-size:12px;font-weight:700;margin-top:10px}
@@ -478,7 +479,7 @@ function urunDetay(id){
   const infoRows=[
     ['Kod',u.kod],['Kategori · Marka',[u.kat,u.marka].filter(Boolean).join(' · ')],
     ['Yıl · Mevsim',[u.yil,u.sezon].filter(Boolean).join(' · ')],
-    ['Kumaş',u.kumas],['Menşei',u.mensei],u.agirlik?['Ağırlık',u.agirlik+' gr']:null,
+    ['Kumaş',u.kumas],u.agirlik?['Ağırlık',u.agirlik+' gr']:null,
     u.birim==='seri'&&u.bedenler&&u.bedenler.length?['Seri İçeriği',u.bedenler.join(' · ')]:null,
     ['Tedarikçi',(u.tedarikciId&&cari(u.tedarikciId))?cari(u.tedarikciId).ad:''],
     ['RAF',u.raf],['Kaynak',u.kaynak==='alim'?'Hazır Alınan':'Kendi Üretimi'],
@@ -489,6 +490,7 @@ function urunDetay(id){
     ${karGoster()?`<div class="kv" style="margin-top:8px"><span class="k">Alış / Kâr</span><span class="v">${money(u.alis,pb)} · <span class="pos">${money(kar,pb)} (%${karY})</span></span></div>`:''}
     <div class="dbox" style="margin-top:12px">${infoRows.map(([k,v])=>`<div class="dline"><span>${k}</span><b>${esc(''+v)}</b></div>`).join('')}</div>
     ${hasRenkStok(u)?`<div class="sec" style="margin-top:14px">Renk & Stok</div><div class="card" style="padding:6px 12px">${renkObjs(u).map(r=>{const kt=kirikTop(r);return `<div class="renksel"><span class="sw sm" style="background:${r.hex}"></span>${r.foto?`<img src="${r.foto}" style="width:34px;height:34px;border-radius:7px;object-fit:cover">`:''}<span class="rn">${esc(r.ad||'—')}${r.barkod?`<small style="display:block;color:var(--sub);font-weight:600">${esc(r.barkod)}</small>`:''}</span><span class="rs ${r.stok<=0?'bad':''}">${r.stok||0} seri${kt?`<br><span style="color:var(--thr)">+${kt} kırık</span>`:''}</span></div>`}).join('')}</div>`:''}
+    ${u.islemler&&u.islemler.length?`<div class="sec" style="margin-top:14px">🧵 İşlem Takibi</div><div class="dbox">${u.islemler.map(it=>`<div class="dline"><span>${esc(it.islem)}</span><b>${esc((cari(it.fasonId)||{}).ad||'—')}</b></div>`).join('')}</div>`:''}
     ${u.not?`<div class="infobox" style="margin-top:12px">📝 ${esc(u.not)}</div>`:''}
     ${(canUrunYaz()||canSee('satis'))?`<div class="g2" style="margin-top:16px">${canUrunYaz()?`<button class="btn ghost sm" onclick="formUrun(${id})">✏️ Düzenle</button>`:''}${canSee('satis')?`<button class="btn sm" onclick="closeM();go('satis');setTimeout(()=>formSatis(${id}),150)">🧾 Satışa Ekle</button>`:''}</div>`:''}
   `);
@@ -498,7 +500,8 @@ const PAL=['#111111','#ffffff','#1d2f52','#8a8f98','#e8e2d4','#5a1220','#2b2b2b'
 const RENK_ADI={'#111111':'Siyah','#ffffff':'Beyaz','#f2f2ee':'Beyaz','#1d2f52':'Lacivert','#8a8f98':'Gri','#e8e2d4':'Bej','#5a1220':'Bordo','#2b2b2b':'Antrasit','#0f9d63':'Yeşil','#c8891a':'Hardal','#7a4fd0':'Mor','#e0455f':'Kırmızı','#333940':'Antrasit'};
 const BEDEN_STD=['S','M','L','XL','XXL','3XL','4XL','5XL'];
 const PBSYM={TL:'₺',USD:'$',EUR:'€'};
-let fRenk=[], fBeden=[], uPB='TL', uTab='genel';
+const ISLEMLER=['Kesim','Dikim','Nakış','Baskı','Ütü / Paket','Yıkama'];
+let fRenk=[], fBeden=[], fIslem=[], uPB='TL', uTab='genel';
 function resizeImg(file,cb,max=900,q=0.72){const r=new FileReader();r.onload=()=>{const img=new Image();img.onload=()=>{let w=img.width,h=img.height;if(w>h&&w>max){h=Math.round(h*max/w);w=max}else if(h>max){w=Math.round(w*max/h);h=max}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);try{cb(c.toDataURL('image/jpeg',q))}catch(e){cb(r.result)}};img.src=r.result};r.readAsDataURL(file)}
 function genBarkod(){let s='869';for(let i=0;i<10;i++)s+=Math.floor(Math.random()*10);return s}
 function formUrun(id){
@@ -506,6 +509,7 @@ function formUrun(id){
   const u=id?urun(id):{birim:'seri',seri:5,renkler:[],kaynak:'uretim',cesit:'Markalı',karYuzde:40,pb:'TL'};
   fRenk=(u.renkler||[]).map(r=>typeof r==='object'?{ad:r.ad||'',hex:r.hex,foto:r.foto||'',barkod:r.barkod||'',stok:+r.stok||0,kirik:r.kirik?{...r.kirik}:null}:{ad:RENK_ADI[r]||'',hex:r,foto:'',barkod:'',stok:0,kirik:null});
   fBeden=(u.bedenler&&u.bedenler.length)?u.bedenler.slice():BEDEN_STD.slice(0,u.seri||5);
+  fIslem=(u.islemler||[]).map(x=>({islem:x.islem,fasonId:x.fasonId}));
   uPB=u.pb||'TL';uTab='genel';
   const teds=db.cariler.filter(c=>c.tip==='tedarikci');
   const sezonlar=['','4 Mevsim','Yaz','Kış','İlkbahar','Sonbahar'];
@@ -516,8 +520,7 @@ function formUrun(id){
       <div class="g2"><div><label>Ürün Kodu</label><input id="u-kod" value="${esc(u.kod||'')}" placeholder="2026Y001"></div><div><label>Kategori</label><input id="u-kat" value="${esc(u.kat||'')}" placeholder="Polo"></div></div>
       <div class="g2"><div><label>Marka</label><input id="u-marka" value="${esc(u.marka||'')}" placeholder="Öz Marka"></div><div><label>Kaynak</label><select id="u-kaynak"><option value="uretim" ${u.kaynak!=='alim'?'selected':''}>Kendi Üretimi</option><option value="alim" ${u.kaynak==='alim'?'selected':''}>Hazır Alınan</option></select></div></div>
       <div class="g2"><div><label>Yıl</label><input id="u-yil" value="${esc(u.yil||'')}" placeholder="2026"></div><div><label>Mevsim</label><select id="u-sezon">${sezonlar.map(s=>`<option ${u.sezon===s?'selected':''}>${s}</option>`).join('')}</select></div></div>
-      <div class="g2"><div><label>Menşei Ülke</label><input id="u-mensei" value="${esc(u.mensei||'Türkiye')}"></div><div><label>Ağırlık (gr)</label><input id="u-agirlik" type="number" value="${u.agirlik||''}" placeholder="0"></div></div>
-      <label>Ürün Kumaşı</label><input id="u-kumas" value="${esc(u.kumas||'')}" placeholder="Süprem %100 Pamuk">
+      <div class="g2"><div><label>Ürün Kumaşı</label><input id="u-kumas" value="${esc(u.kumas||'')}" placeholder="Süprem %100 Pamuk"></div><div><label>Ağırlık (gr)</label><input id="u-agirlik" type="number" value="${u.agirlik||''}" placeholder="0"></div></div>
       <div class="g2"><div><label>Tedarikçi</label><select id="u-ted"><option value="0">— seç —</option>${teds.map(t=>`<option value="${t.id}" ${u.tedarikciId===t.id?'selected':''}>${esc(t.ad)}</option>`).join('')}</select></div><div><label>RAF / Yer</label><input id="u-raf" value="${esc(u.raf||'')}" placeholder="A-12"></div></div>
       <label>Satış Şekli</label><div class="seg2"><div class="o ${u.birim==='seri'?'on':''}" id="sb-seri" onclick="setBirim('seri')">Seri (asorti)</div><div class="o ${u.birim==='adet'?'on':''}" id="sb-adet" onclick="setBirim('adet')">Tekli (adet)</div></div>
       <div id="beden-wrap" style="${u.birim==='adet'?'display:none':''}">
@@ -525,12 +528,15 @@ function formUrun(id){
         <div style="display:flex;gap:6px;margin-bottom:7px"><button type="button" class="btn ghost sm" style="width:auto;padding:7px 11px;margin:0" onclick="bedenPreset(['S','M','L','XL','XXL'])">S-XXL</button><button type="button" class="btn ghost sm" style="width:auto;padding:7px 11px;margin:0" onclick="bedenPreset(['M','L','XL','2XL','3XL'])">M-3XL</button><button type="button" class="btn ghost sm" style="width:auto;padding:7px 11px;margin:0" onclick="bedenPreset(['2XL','3XL','4XL','5XL'])">Büyük</button></div>
         <div id="beden-box" class="bedenbox"></div>
       </div>
-      <label>Fiyat Para Birimi</label><div class="seg2" id="u-pb-seg"><div class="o ${uPB==='TL'?'on':''}" onclick="setUPB('TL')">₺ TL</div><div class="o ${uPB==='USD'?'on':''}" onclick="setUPB('USD')">$ USD</div><div class="o ${uPB==='EUR'?'on':''}" onclick="setUPB('EUR')">€ EUR</div></div>
-      <div class="g2"><div><label>Alış Fiyatı</label><input id="u-alis" type="number" value="${u.alis||0}" oninput="karHesap()"></div><div><label>Kâr %</label><input id="u-kar" type="number" value="${u.karYuzde||40}" oninput="karHesap()"></div></div>
+      <div class="sec" style="margin-top:8px">💰 Maliyet & Fiyat</div>
+      <label>Para Birimi</label><div class="seg2" id="u-pb-seg"><div class="o ${uPB==='TL'?'on':''}" onclick="setUPB('TL')">₺ TL</div><div class="o ${uPB==='USD'?'on':''}" onclick="setUPB('USD')">$ USD</div><div class="o ${uPB==='EUR'?'on':''}" onclick="setUPB('EUR')">€ EUR</div></div>
+      <div class="g2"><div><label>Alış / Maliyet</label><input id="u-alis" type="number" value="${u.alis||0}" oninput="karHesap()"></div><div><label>Kâr %</label><input id="u-kar" type="number" value="${u.karYuzde||40}" oninput="karHesap()"></div></div>
       <div class="g2"><div><label>Satış Fiyatı</label><input id="u-satis" type="number" value="${u.satis||0}" oninput="karInfo()"></div><div><label>Promosyon Fiyatı</label><input id="u-promo" type="number" value="${u.promosyon||''}" placeholder="opsiyonel"></div></div>
       <div class="infobox" id="kar-info"></div>
       <div class="g2"><div><label>Stok (renk yoksa)</label><input id="u-stok" type="number" value="${u.stok||0}"></div><div><label>Kritik Stok Uyarısı</label><input id="u-kritik" type="number" value="${u.kritik||10}"></div></div>
-      <label>Not</label><textarea id="u-not" rows="2" placeholder="İsteğe bağlı">${esc(u.not||'')}</textarea>
+      <div class="sec" style="margin-top:8px">🧵 İşlem Takibi <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub);font-size:11px">(kim kesti/dikti/işledi — sorun çıkarsa iz sürülsün)</span></div>
+      <div id="islem-box"></div>
+      <label style="margin-top:14px">Not</label><textarea id="u-not" rows="2" placeholder="İsteğe bağlı">${esc(u.not||'')}</textarea>
     </div>
     <div id="upane-stok" style="display:none">
       <div class="infobox">Her renge foto, barkod ve seri adedi gir. Kırık serin varsa (2M-2L-1XL gibi) o rengin altında beden beden ekle.</div>
@@ -539,8 +545,12 @@ function formUrun(id){
     <button class="btn" onclick="kaydetUrun(${id||0})">Kaydet</button>
     ${id?`<button class="btn danger" onclick="silUrun(${id})">Ürünü Sil</button>`:''}
   `);
-  cizBeden();cizRenk();karInfo();
+  cizBeden();cizRenk();cizIslem();karInfo();
 }
+function cizIslem(){const box=$('islem-box');if(!box)return;const fasons=db.cariler.filter(c=>c.tip==='fason');
+  box.innerHTML=fIslem.map((it,i)=>`<div class="islemrow"><select onchange="fIslem[${i}].islem=this.value">${ISLEMLER.map(x=>`<option ${it.islem===x?'selected':''}>${x}</option>`).join('')}</select><select onchange="fIslem[${i}].fasonId=+this.value||0"><option value="0">— fason seç —</option>${fasons.map(f=>`<option value="${f.id}" ${it.fasonId===f.id?'selected':''}>${esc(f.ad)}</option>`).join('')}</select><button class="del" onclick="fIslem.splice(${i},1);cizIslem()">✕</button></div>`).join('')+`<button type="button" class="btn ghost sm" onclick="islemEkle()" style="margin-top:8px">+ İşlem Ekle</button>${fasons.length?'':'<div class="mini" style="margin-top:6px">Fason firma yok — Cari › Fason\'dan ekleyebilirsin.</div>'}`;
+}
+function islemEkle(){fIslem.push({islem:'Dikim',fasonId:0});cizIslem()}
 function urunTab(t){uTab=t;$('upane-genel').style.display=t==='genel'?'':'none';$('upane-stok').style.display=t==='stok'?'':'none';$('ut-genel').classList.toggle('on',t==='genel');$('ut-stok').classList.toggle('on',t==='stok')}
 function setUPB(v){uPB=v;const seg=$('u-pb-seg');if(seg)[...seg.children].forEach(c=>c.classList.toggle('on',c.textContent.trim().startsWith(PBSYM[v])));karInfo()}
 function cizBeden(){const b=$('beden-box');if(!b)return;b.innerHTML=fBeden.map((s,i)=>`<span class="bchip">${esc(s)}<i onclick="fBeden.splice(${i},1);cizBeden()">✕</i></span>`).join('')+`<input id="beden-in" class="binp" placeholder="+beden" onkeydown="if(event.key==='Enter'){event.preventDefault();bedenEkle()}">`}
@@ -583,7 +593,7 @@ function kaydetUrun(id){
   const renkler=fRenk.filter(r=>r.hex).map(r=>({ad:(r.ad||'').trim(),hex:r.hex,foto:r.foto||'',barkod:(r.barkod||'').trim(),stok:+r.stok||0,kirik:(r.kirik&&Object.keys(r.kirik).length)?r.kirik:null}));
   const stok=renkler.length?renkler.reduce((a,r)=>a+r.stok,0):(+$('u-stok').value||0);
   const seri=birim==='seri'?(bedenler.length||5):1;
-  const o={ad,kod:$('u-kod').value.trim(),kat:$('u-kat').value.trim(),marka:$('u-marka').value.trim(),kaynak:$('u-kaynak').value,birim,bedenler,seri,pb:uPB,alis:+$('u-alis').value||0,karYuzde:+$('u-kar').value||0,satis:+$('u-satis').value||0,promosyon:+($('u-promo').value||0),kritik:+$('u-kritik').value||10,kumas:$('u-kumas').value.trim(),tedarikciId:+($('u-ted').value||0)||null,raf:$('u-raf').value.trim(),mensei:$('u-mensei').value.trim(),agirlik:+($('u-agirlik').value||0)||0,yil:$('u-yil').value.trim(),sezon:$('u-sezon').value,not:$('u-not').value.trim(),renkler,stok,cesit:'Markalı'};
+  const o={ad,kod:$('u-kod').value.trim(),kat:$('u-kat').value.trim(),marka:$('u-marka').value.trim(),kaynak:$('u-kaynak').value,birim,bedenler,seri,pb:uPB,alis:+$('u-alis').value||0,karYuzde:+$('u-kar').value||0,satis:+$('u-satis').value||0,promosyon:+($('u-promo').value||0),kritik:+$('u-kritik').value||10,kumas:$('u-kumas').value.trim(),tedarikciId:+($('u-ted').value||0)||null,raf:$('u-raf').value.trim(),agirlik:+($('u-agirlik').value||0)||0,yil:$('u-yil').value.trim(),sezon:$('u-sezon').value,not:$('u-not').value.trim(),islemler:fIslem.filter(x=>x.fasonId).map(x=>({islem:x.islem,fasonId:x.fasonId})),renkler,stok,cesit:'Markalı'};
   if(id){Object.assign(urun(id),o)}else{o.id=nid('u');db.urunler.push(o)}
   save();closeM();render();toast('Ürün kaydedildi ✓');
 }
