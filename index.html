@@ -149,10 +149,10 @@
   .brow .bn{flex:1;margin:0;font-weight:700}
   .renkcard{border:1px solid var(--ln);border-radius:13px;padding:11px;margin-top:10px;background:#fbfcfe}
   .rc-top{display:flex;align-items:center;gap:8px}.rc-top .rad{flex:1;margin:0}
-  .rc-body{display:flex;gap:10px;margin-top:10px}
-  .rc-foto{width:74px;height:74px;flex:0 0 74px;border:1px dashed var(--ln);border-radius:11px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px;color:var(--sub);font-weight:700;cursor:pointer;overflow:hidden;background:#fff}
+  .rc-body{display:flex;gap:10px;margin-top:0}
+  .rc-foto{width:72px;height:72px;flex:0 0 72px;border:1px dashed var(--ln);border-radius:11px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px;color:var(--sub);font-weight:700;cursor:pointer;overflow:hidden;background:#fff}
   .rc-foto img{width:100%;height:100%;object-fit:cover}
-  .rc-fields{flex:1}.rc-fields label{margin:8px 0 4px}.rc-fields label:first-child{margin-top:0}.rc-fields input{padding:9px 11px}
+  .rc-fields{flex:1;min-width:0}.rc-fields label{margin:9px 0 4px}.rc-fields input{padding:9px 11px}
   .rc-kirikh{margin-top:10px;font-size:12.5px;font-weight:800;color:var(--ind2);cursor:pointer;user-select:none}
   .rc-kirik{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}
   .kb{display:flex;flex-direction:column;align-items:center;gap:3px;width:52px}
@@ -500,6 +500,8 @@ function urunDetay(id){
 
 const PAL=['#111111','#ffffff','#1d2f52','#8a8f98','#e8e2d4','#5a1220','#2b2b2b','#0f9d63','#c8891a','#7a4fd0','#e0455f','#333940'];
 const RENK_ADI={'#111111':'Siyah','#ffffff':'Beyaz','#f2f2ee':'Beyaz','#1d2f52':'Lacivert','#8a8f98':'Gri','#e8e2d4':'Bej','#5a1220':'Bordo','#2b2b2b':'Antrasit','#0f9d63':'Yeşil','#c8891a':'Hardal','#7a4fd0':'Mor','#e0455f':'Kırmızı','#333940':'Antrasit'};
+const AD_HEX={'siyah':'#111111','beyaz':'#f2f2ee','lacivert':'#1d2f52','gri':'#8a8f98','gary':'#8a8f98','bej':'#e8e2d4','bordo':'#5a1220','antrasit':'#2b2b2b','yeşil':'#0f9d63','yesil':'#0f9d63','hardal':'#c8891a','mor':'#7a4fd0','kırmızı':'#e0455f','kirmizi':'#e0455f','kahverengi':'#5a3a22','sarı':'#e8c020','sari':'#e8c020','mavi':'#2d6cdf','pembe':'#e57ba0','turuncu':'#e8792c','füme':'#4a4f57','fume':'#4a4f57','ekru':'#efe9dd','haki':'#6b6f42','vizon':'#b9a48a'};
+function hexFromAd(ad){return AD_HEX[(ad||'').toLowerCase().trim()]}
 const BEDEN_STD=['S','M','L','XL','XXL','3XL','4XL','5XL'];
 const PBSYM={TL:'₺',USD:'$',EUR:'€'};
 const ISLEMLER=['Kesim','Dikim','Nakış','Baskı','Ütü / Paket','Yıkama'];
@@ -538,7 +540,7 @@ function formUrun(id){
       <label style="margin-top:14px">Not</label><textarea id="u-not" rows="2" placeholder="İsteğe bağlı">${esc(u.not||'')}</textarea>
     </div>
     <div id="upane-stok" style="display:none">
-      <div class="infobox">Her renge foto, barkod ve seri adedi gir. Kırık serin varsa (2M-2L-1XL gibi) o rengin altında beden beden ekle.</div>
+      <div class="infobox">Renk adını yaz, fotoğrafını ve seri adedini gir. Barkod arkada otomatik üretilir. Kırık serin varsa (2M-2L-1XL gibi) o rengin altında beden beden ekle.</div>
       <div id="renk-box"></div>
     </div>
     <button class="btn" onclick="kaydetUrun(${id||0})">Kaydet</button>
@@ -562,11 +564,10 @@ function cizRenk(){
     const kirikOpen=r._kirikOpen||(r.kirik&&Object.keys(r.kirik).length);
     const kirikTop=r.kirik?Object.values(r.kirik).reduce((a,x)=>a+(+x||0),0):0;
     return `<div class="renkcard">
-      <div class="rc-top"><span class="sw" style="background:${r.hex}" onclick="renkCycle(${i})" title="Renk değiştir"></span><input class="rad" value="${esc(r.ad||'')}" placeholder="Renk adı" oninput="fRenk[${i}].ad=this.value"><button class="del" onclick="fRenk.splice(${i},1);cizRenk()">✕</button></div>
       <div class="rc-body">
         <div class="rc-foto" onclick="renkFotoSec(${i})">${r.foto?`<img src="${r.foto}">`:'<span>📷<br>Foto</span>'}<input type="file" accept="image/*" id="rf-${i}" style="display:none" onchange="renkFoto(${i},this)"></div>
         <div class="rc-fields">
-          <label style="margin-top:0">Barkod</label><input value="${esc(r.barkod||'')}" placeholder="barkod" oninput="fRenk[${i}].barkod=this.value">
+          <div class="rc-top"><input class="rad" value="${esc(r.ad||'')}" placeholder="Renk adı (Siyah, Bordo...)" oninput="fRenk[${i}].ad=this.value"><button class="del" onclick="fRenk.splice(${i},1);cizRenk()">✕</button></div>
           <label>Seri Adedi</label><input type="number" inputmode="numeric" value="${r.stok||0}" oninput="fRenk[${i}].stok=+this.value||0;renkTot()">
         </div>
       </div>
@@ -577,8 +578,7 @@ function cizRenk(){
   renkTot();
 }
 function renkTot(){const t=$('renk-tot');if(!t)return;if(!fRenk.length){t.textContent='';return}const s=fRenk.reduce((a,r)=>a+(+r.stok||0),0);const k=fRenk.reduce((a,r)=>a+(r.kirik?Object.values(r.kirik).reduce((b,x)=>b+(+x||0),0):0),0);t.innerHTML=`📦 Toplam: <b>${s}</b> seri${k?` + ${k} tek (kırık)`:''}`}
-function renkEkle(){const used=fRenk.map(r=>r.hex);const hex=PAL.find(x=>!used.includes(x))||PAL[0];fRenk.push({ad:RENK_ADI[hex]||'',hex,foto:'',barkod:genBarkod(),stok:0,kirik:null});cizRenk()}
-function renkCycle(i){const cur=PAL.indexOf(fRenk[i].hex);const nx=PAL[(cur+1)%PAL.length];const oldName=RENK_ADI[fRenk[i].hex];if(!fRenk[i].ad||fRenk[i].ad===oldName)fRenk[i].ad=RENK_ADI[nx]||'';fRenk[i].hex=nx;cizRenk()}
+function renkEkle(){fRenk.push({ad:'',hex:'#8a8f98',foto:'',barkod:genBarkod(),stok:0,kirik:null});cizRenk()}
 function renkFotoSec(i){const el=$('rf-'+i);if(el)el.click()}
 function renkFoto(i,input){const f=input.files&&input.files[0];if(!f)return;resizeImg(f,d=>{fRenk[i].foto=d;cizRenk()})}
 function renkKirik(i){if(!fBeden.length){urunTab('genel');return toast('Önce seri içeriği (beden) ekle')}fRenk[i]._kirikOpen=!fRenk[i]._kirikOpen;if(fRenk[i]._kirikOpen&&!fRenk[i].kirik)fRenk[i].kirik={};cizRenk()}
@@ -590,7 +590,7 @@ function kaydetUrun(id){
   const ad=$('u-ad').value.trim();if(!ad){urunTab('genel');return toast('Ürün adı gerekli')}
   const birim=$('sb-seri').classList.contains('on')?'seri':'adet';
   const bedenler=birim==='seri'?fBeden.filter(x=>x.beden).map(x=>({beden:x.beden.trim(),adet:Math.max(1,+x.adet||1)})):[];
-  const renkler=fRenk.filter(r=>r.hex).map(r=>({ad:(r.ad||'').trim(),hex:r.hex,foto:r.foto||'',barkod:(r.barkod||'').trim(),stok:+r.stok||0,kirik:(r.kirik&&Object.keys(r.kirik).length)?r.kirik:null}));
+  const renkler=fRenk.filter(r=>(r.ad||'').trim()||r.stok||r.foto).map(r=>({ad:(r.ad||'').trim(),hex:hexFromAd(r.ad)||r.hex||'#8a8f98',foto:r.foto||'',barkod:(r.barkod||'').trim()||genBarkod(),stok:+r.stok||0,kirik:(r.kirik&&Object.keys(r.kirik).length)?r.kirik:null}));
   const stok=renkler.length?renkler.reduce((a,r)=>a+r.stok,0):(+$('u-stok').value||0);
   const seri=birim==='seri'?(bedenler.reduce((a,x)=>a+x.adet,0)||5):1;
   const o={ad,kod:$('u-kod').value.trim(),kat:$('u-kat').value.trim(),marka:$('u-marka').value.trim(),kaynak:$('u-kaynak').value,birim,bedenler,seri,pb:uPB,alis:+$('u-alis').value||0,karYuzde:+$('u-kar').value||0,satis:+$('u-satis').value||0,promosyon:+($('u-promo').value||0),kritik:+$('u-kritik').value||10,kumas:$('u-kumas').value.trim(),tedarikciId:+($('u-ted').value||0)||null,raf:$('u-raf').value.trim(),agirlik:+($('u-agirlik').value||0)||0,yil:$('u-yil').value.trim(),sezon:$('u-sezon').value,not:$('u-not').value.trim(),renkler,stok,cesit:'Markalı'};
