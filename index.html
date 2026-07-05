@@ -322,7 +322,7 @@ function rPanel(){
   const mods=modulListe();
   let html=`
     <div class="greet"><div><div class="h">Merhaba 👋</div><div class="d">${new Date().toLocaleDateString('tr-TR',{weekday:'long',day:'numeric',month:'long'})}</div></div></div>
-    <div class="kur">💵 $ ${db.kurUSD.toFixed(2)} <span style="color:var(--ln)">|</span> 💶 € ${db.kurEUR.toFixed(2)}<span class="up" onclick="formKur()">Güncelle ›</span></div>
+    <div class="kur">💵 $ ${db.kurUSD.toFixed(2)} <span style="color:var(--ln)">|</span> 💶 € ${db.kurEUR.toFixed(2)}${db.kurTarih?`<span style="font-size:10px;color:var(--sub);font-weight:600;margin-left:6px">${kurYas()}</span>`:''}<span class="up" onclick="kurGuncelle()">🔄 Güncelle</span></div>
     <div class="tiles">${tiles}</div>`;
   if(bekleyen.length){
     html+=`<div class="sec">Bekleyen İşler</div><div class="card">`+bekleyen.slice(0,4).map((b,i)=>`<div class="todo" onclick="bekAct(${i})"><div class="ic" style="background:${b.bg}">${b.ic}</div><div class="m"><div class="t">${esc(b.t)}</div><div class="s">${esc(b.s)}</div></div><span style="color:var(--sub)">›</span></div>`).join('')+`</div>`;
@@ -839,8 +839,23 @@ function rAyarlar(){
   $('app').innerHTML=html;
 }
 function formFirma(){open_('Firma Adı',`<label>Firma Adı</label><input id="f-ad" value="${esc(db.firma)}"><button class="btn" onclick="db.firma=$('f-ad').value.trim()||db.firma;save();closeM();render();toast('Kaydedildi')">Kaydet</button>`)}
-function formKur(){open_('Günün Kuru',`<div class="g2"><div><label>USD ($)</label><input id="k-usd" type="number" step="0.01" value="${db.kurUSD}"></div><div><label>EUR (€)</label><input id="k-eur" type="number" step="0.01" value="${db.kurEUR}"></div></div><div class="infobox">Dolar-endeksli ürünlerin TL fiyatı bu kura göre hesaplanır.</div><button class="btn" onclick="kaydetKur()">Kaydet</button>`)}
-function kaydetKur(){db.kurUSD=+$('k-usd').value||db.kurUSD;db.kurEUR=+$('k-eur').value||db.kurEUR;save();closeM();render();toast('Kur güncellendi ✓')}
+function formKur(){open_('Günün Kuru',`<button class="btn g" style="margin-top:0" onclick="kurGuncelle()">🔄 Otomatik Güncel Kuru Al</button>${db.kurTarih?`<div class="mini" style="text-align:center;margin-top:8px">Son güncelleme: ${kurYas()}</div>`:''}<div class="mini" style="text-align:center;margin:10px 0 4px">— veya elle gir —</div><div class="g2"><div><label>USD ($)</label><input id="k-usd" type="number" step="0.01" value="${db.kurUSD}"></div><div><label>EUR (€)</label><input id="k-eur" type="number" step="0.01" value="${db.kurEUR}"></div></div><div class="infobox">Dolar-endeksli ürünlerin TL fiyatı bu kura göre hesaplanır.</div><button class="btn" onclick="kaydetKur()">Elle Kaydet</button>`)}
+function kaydetKur(){db.kurUSD=+$('k-usd').value||db.kurUSD;db.kurEUR=+$('k-eur').value||db.kurEUR;db.kurTarih=Date.now();save();closeM();render();toast('Kur güncellendi ✓')}
+async function kurCek(){
+  const upd=(usd,eur)=>{if(usd>0){db.kurUSD=+usd.toFixed(2);if(eur>0)db.kurEUR=+eur.toFixed(2);db.kurTarih=Date.now();save();return true}return false};
+  try{const r=await fetch('https://open.er-api.com/v6/latest/USD',{cache:'no-store'});const d=await r.json();
+    if(d&&d.rates&&d.rates.TRY)return upd(d.rates.TRY, d.rates.EUR?d.rates.TRY/d.rates.EUR:0);}catch(e){}
+  try{const r=await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json',{cache:'no-store'});const d=await r.json();
+    if(d&&d.usd&&d.usd.try)return upd(+d.usd.try, d.usd.eur?(+d.usd.try)/(+d.usd.eur):0);}catch(e){}
+  return false;
+}
+async function kurGuncelle(){
+  toast('Kur alınıyor...');
+  const ok=await kurCek();
+  if(ok){render();toast('Güncel kur alındı ✓ $'+db.kurUSD.toFixed(2))}
+  else{toast('Otomatik alınamadı — elle girebilirsin');formKur()}
+}
+function kurYas(){if(!db.kurTarih)return '';const dk=Math.round((Date.now()-db.kurTarih)/60000);return dk<1?'az önce':dk<60?dk+' dk önce':Math.round(dk/60)+' saat önce'}
 function yedekAl(){
   const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);const a=document.createElement('a');
@@ -863,6 +878,10 @@ function fabAction(){if(cur==='stok'){stokTab==='hammadde'?formHammadde():formUr
 
 /* =================== BAŞLAT =================== */
 go('panel');
+// açılışta kur eskiyse (yok veya 3 saatten eski) sessizce güncelle
+if(!db.kurTarih || Date.now()-db.kurTarih > 3*3600000){
+  kurCek().then(ok=>{if(ok&&cur==='panel')render()});
+}
 window.addEventListener('error',e=>{console.log('APPERR:',e.message)});
 </script>
 </body>
