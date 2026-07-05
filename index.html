@@ -718,8 +718,8 @@ function formSatis(pre,editId){
   const mus=db.cariler.filter(c=>c.tip==='musteri');
   if(!mus.length)return toast('Önce müşteri ekle (Cari)');
   if(!db.urunler.length)return toast('Önce ürün ekle (Stok)');
-  let selMus=0,eIsk=0,eOden=0;
-  if(editId){const s=db.satislar.find(x=>x.id===editId);if(s){selMus=s.mid;sPB=s.pb;sDurum=s.teslimDurum||'teslim';eIsk=s.iskonto||0;eOden=s.odenen||0;sepet=s.kalemler.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:k.fiyat,renkler:k.renkler?k.renkler.map(r=>({...r})):undefined}))}}
+  let selMus=0,eIsk=0,eOden=0,eKdv=0,eTasima=0;
+  if(editId){const s=db.satislar.find(x=>x.id===editId);if(s){selMus=s.mid;sPB=s.pb;sDurum=s.teslimDurum||'teslim';eIsk=s.iskonto||0;eOden=s.odenen||0;eKdv=s.kdv||0;eTasima=s.tasima||0;sepet=s.kalemler.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:k.fiyat,renkler:k.renkler?k.renkler.map(r=>({...r})):undefined}))}}
   else if(pre){const u=urun(pre);if(u)sepet.push({uid:u.id,urun:u.ad,mik:1,birim:u.birim,fiyat:u.satis})}
   open_(editId?'Satışı Düzenle':'Yeni Satış',`
     <label>Müşteri</label><select id="s-mus" onchange="musBilgi()">${mus.map(m=>`<option value="${m.id}" ${m.id===selMus?'selected':''}>${esc(m.ad)}</option>`).join('')}</select>
@@ -733,6 +733,7 @@ function formSatis(pre,editId){
     <div style="display:flex;gap:8px;margin-top:12px"><div class="seg2" style="flex:1"><div class="o on" id="pb-TL" onclick="setPB('TL')">₺</div><div class="o" id="pb-USD" onclick="setPB('USD')">$</div><div class="o" id="pb-EUR" onclick="setPB('EUR')">€</div></div></div>
     <label>İskonto (%)</label><input id="s-isk" type="number" value="${eIsk}" oninput="cizSepet()">
     <label>Vade</label><select id="s-vade" onchange="setVade(this.value)"><option value="0">Peşin</option><option value="30">30 gün</option><option value="60">60 gün</option><option value="90">90 gün çek</option></select>
+    <div class="g2"><div><label>KDV (%)</label><input id="s-kdv" type="number" inputmode="numeric" value="${eKdv}" oninput="cizSepet()" placeholder="0"></div><div><label>Taşıma / Kargo</label><input id="s-tasima" type="number" inputmode="numeric" value="${eTasima}" oninput="cizSepet()" placeholder="0"></div></div>
     <div class="total"><div class="l">GENEL TOPLAM</div><div class="v" id="s-top">₺0</div></div>
     <label>Bu Satışta Ödenen <a onclick="odenTumu()" style="color:var(--ind2);cursor:pointer;text-transform:none;letter-spacing:0;font-size:11px;float:right">Tümü ›</a></label><input id="s-oden" type="number" value="${eOden}" inputmode="numeric">
     <label>Ödeme Türü</label><select id="s-odetur"><option>Nakit</option><option>Havale</option><option>Kredi Kartı</option><option>Çek</option><option>Ödenmedi (borç)</option></select>
@@ -754,7 +755,17 @@ function barkodEkle(){const el=$('s-barkod');const kod=(el.value||'').trim().toL
   if(hasRenkStok(u)){$('s-urun').value=u.id;urnBilgi();toast(u.ad+' seçildi — renk adedini gir');return}
   const ex=sepet.find(k=>k.uid===u.id&&!k.renkler);if(ex)ex.mik++;else sepet.push({uid:u.id,urun:u.ad,mik:1,birim:u.birim,fiyat:u.satis});
   cizSepet();toast(u.ad+' eklendi ✓')}
-function odenTumu(){let ara=sepet.reduce((a,k)=>a+k.mik*k.fiyat,0);const isk=+($('s-isk')?.value||0),vf=vadeFarkiYuzde();const div=sPB==='USD'?db.kurUSD:sPB==='EUR'?db.kurEUR:1;$('s-oden').value=Math.round(ara*(1+vf/100)*(1-isk/100)/div)}
+function satisHesap(){
+  const ara=sepet.reduce((a,k)=>a+k.mik*k.fiyat,0);
+  const isk=+($('s-isk')?.value||0), vf=vadeFarkiYuzde(), kdv=+($('s-kdv')?.value||0), tasima=+($('s-tasima')?.value||0);
+  const div=sPB==='USD'?db.kurUSD:sPB==='EUR'?db.kurEUR:1;
+  const mal=ara*(1-isk/100)*(1+vf/100);   // TL bazı, indirim + vade farkı sonrası
+  const kdvTutar=mal*kdv/100;
+  const malPB=mal/div, kdvPB=kdvTutar/div;
+  const tutar=malPB+kdvPB+tasima;         // satış para biriminde
+  return {ara,isk,vf,kdv,tasima,div,malPB,kdvPB,tutar};
+}
+function odenTumu(){$('s-oden').value=Math.round(satisHesap().tutar)}
 function urnBilgi(){const u=urun(+$('s-urun').value);const info=$('s-urninfo'),rb=$('s-renkler'),step=$('s-mikwrap');if(!u)return;
   const objs=renkObjs(u);
   if(objs.length){
@@ -785,12 +796,12 @@ function vadeFarkiYuzde(){return sVade?Math.round(sVade/30)*2.5:0}
 function cizSepet(){
   const el=$('s-sepet');if(!el)return;
   el.innerHTML=sepet.map((k,i)=>{const sub=k.renkler&&k.renkler.length?`${k.renkler.map(r=>esc(r.ad)+' ×'+r.mik).join(' · ')} — ${TL(k.fiyat)}/${k.birim}`:`${k.mik} ${k.birim} × ${TL(k.fiyat)}`;return `<div class="li"><div class="lt">${esc(k.urun)}<small>${sub}</small></div><b style="margin-right:8px">${TL(k.mik*k.fiyat)}</b><button class="del" onclick="sepet.splice(${i},1);cizSepet()">✕</button></div>`}).join('')||'<div class="mini">Sepet boş</div>';
-  let ara=sepet.reduce((a,k)=>a+k.mik*k.fiyat,0);
-  const isk=+($('s-isk')?.value||0);
-  const vf=vadeFarkiYuzde();
-  let tutar=ara*(1+vf/100)*(1-isk/100);
-  const div=sPB==='USD'?db.kurUSD:sPB==='EUR'?db.kurEUR:1;
-  $('s-top').innerHTML=money(tutar/div,sPB)+(vf?`<div style="font-size:11px;color:var(--thr);font-weight:700">peşin ${TL(ara*(1-isk/100))} · +%${vf} vade farkı</div>`:'');
+  const h=satisHesap();const parts=[];
+  if(h.isk)parts.push(`iskonto −%${h.isk}`);
+  if(h.vf)parts.push(`vade +%${h.vf}`);
+  if(h.kdv)parts.push(`KDV +${money(h.kdvPB,sPB)}`);
+  if(h.tasima)parts.push(`taşıma +${money(h.tasima,sPB)}`);
+  $('s-top').innerHTML=money(h.tutar,sPB)+(parts.length?`<div style="font-size:11px;color:var(--thr);font-weight:700">${parts.join(' · ')}</div>`:'');
 }
 function satisDiv(s){return s.pb==='USD'?db.kurUSD:s.pb==='EUR'?db.kurEUR:1}
 function stokUygula(k,mult){ // mult=-1 satış (düş), +1 iptal (geri)
@@ -821,15 +832,13 @@ function revertSatis(s){
 function kaydetSatis(){
   if(!sepet.length)return toast('Sepet boş');
   const m=cari(+$('s-mus').value);
-  const ara=sepet.reduce((a,k)=>a+k.mik*k.fiyat,0);
-  const isk=+($('s-isk').value||0), vf=vadeFarkiYuzde();
-  const div=sPB==='USD'?db.kurUSD:sPB==='EUR'?db.kurEUR:1;
-  const tutar=ara*(1+vf/100)*(1-isk/100)/div;
+  const h=satisHesap();
+  const div=h.div, tutar=h.tutar;
   const odetur=$('s-odetur').value;
   let oden=Math.min(Math.max(0,+$('s-oden').value||0),tutar);
   if(odetur==='Ödenmedi (borç)')oden=0;
   const old=sEdit?db.satislar.find(x=>x.id===sEdit):null;
-  const data={tip:'satis',mid:m.id,mus:m.ad,kalemler:sepet.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:k.fiyat,renkler:k.renkler?k.renkler.map(r=>({...r})):undefined})),araToplam:ara,iskonto:isk,vadeFarki:vf,tutar,odenen:oden,pb:sPB,durum:'tamam',teslimDurum:sDurum,odemeTur:odetur,odemeHesapId:+($('s-hesap')?.value||0),vadeGun:sVade,odemeCekId:null};
+  const data={tip:'satis',mid:m.id,mus:m.ad,kalemler:sepet.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:k.fiyat,renkler:k.renkler?k.renkler.map(r=>({...r})):undefined})),araToplam:h.ara,iskonto:h.isk,vadeFarki:h.vf,kdv:h.kdv,kdvTutar:h.kdvPB,tasima:h.tasima,tutar,odenen:oden,pb:sPB,durum:'tamam',teslimDurum:sDurum,odemeTur:odetur,odemeHesapId:+($('s-hesap')?.value||0),vadeGun:sVade,odemeCekId:null};
   const commit=()=>{
     if(old)revertSatis(old);
     if(sEdit&&old){data.id=old.id;data.tarih=old.tarih;Object.assign(old,data);applySatis(old);save();closeM();go('satis');toast('Satış güncellendi ✓')}
@@ -848,6 +857,8 @@ function satisFis(id){
     <div style="margin-top:12px">${s.kalemler.map(k=>{const sub=k.renkler&&k.renkler.length?`${k.renkler.map(r=>esc(r.ad)+' ×'+r.mik).join(' · ')} — ${TL(k.fiyat)}`:`${k.mik} ${k.birim} × ${TL(k.fiyat)}`;return `<div class="li"><div class="lt">${esc(k.urun)}<small>${sub}</small></div><b>${TL(k.mik*k.fiyat)}</b></div>`}).join('')}</div>
     ${s.iskonto?`<div class="kv"><span class="k">İskonto</span><span class="v neg">%${s.iskonto}</span></div>`:''}
     ${s.vadeFarki?`<div class="kv"><span class="k">Vade farkı</span><span class="v">+%${s.vadeFarki}</span></div>`:''}
+    ${s.kdv?`<div class="kv"><span class="k">KDV %${s.kdv}</span><span class="v">+${money(s.kdvTutar||0,s.pb)}</span></div>`:''}
+    ${s.tasima?`<div class="kv"><span class="k">Taşıma / Kargo</span><span class="v">+${money(s.tasima,s.pb)}</span></div>`:''}
     <div class="total"><div class="l">TOPLAM</div><div class="v">${money(s.tutar,s.pb)}</div></div>
     <div class="kv" style="margin-top:8px"><span class="k">Ödenen</span><span class="v pos">${money(s.odenen,s.pb)}</span></div>
     <div class="kv"><span class="k">Kalan</span><span class="v ${s.tutar-s.odenen>0?'neg':'pos'}">${money(s.tutar-s.odenen,s.pb)}</span></div>
