@@ -284,15 +284,17 @@ function bugunSatis(){const b=new Date().setHours(0,0,0,0);return db.satislar.fi
 
 /* Roller ve yetki — merkezi model */
 const ROLLER={
-  patron:{ad:'Patron',ic:'👑',kar:true,para:true,views:'panel,satis,stok,cari,kasa,cek,uretim,portal,rapor,ayarlar,daha'},
-  ortak:{ad:'Ortak',ic:'🤝',kar:true,para:true,views:'panel,satis,stok,cari,kasa,cek,uretim,portal,rapor,ayarlar,daha'},
-  magaza:{ad:'Mağaza Elemanı',ic:'🏪',kar:false,para:false,views:'panel,satis,stok,cari,ayarlar,daha'},
-  depocu:{ad:'Depocu',ic:'📦',kar:false,para:false,views:'panel,stok,ayarlar,daha'},
-  fason:{ad:'Fason Takipçi',ic:'🧵',kar:false,para:false,views:'panel,uretim,ayarlar,daha'},
+  patron:{ad:'Patron',ic:'👑',kar:true,para:true,urunYaz:true,hammadde:true,views:'panel,satis,stok,cari,kasa,cek,uretim,portal,rapor,ayarlar,daha'},
+  ortak:{ad:'Ortak',ic:'🤝',kar:true,para:true,urunYaz:true,hammadde:true,views:'panel,satis,stok,cari,kasa,cek,uretim,portal,rapor,ayarlar,daha'},
+  magaza:{ad:'Mağaza Elemanı',ic:'🏪',kar:false,para:false,urunYaz:false,hammadde:false,views:'panel,satis,stok,cari,ayarlar,daha'},
+  depocu:{ad:'Depocu',ic:'📦',kar:false,para:false,urunYaz:false,hammadde:false,views:'panel,stok,ayarlar,daha'},
+  fason:{ad:'Fason Takipçi',ic:'🧵',kar:false,para:false,urunYaz:false,hammadde:true,views:'panel,uretim,ayarlar,daha'},
 };
 function yetki(){return ROLLER[db.rol]||ROLLER.patron}
 function karGoster(){return !!yetki().kar}
 function paraGoster(){return !!yetki().para}
+function canUrunYaz(){return !!yetki().urunYaz}
+function canHammadde(){return !!yetki().hammadde}
 function canSee(v){return yetki().views.split(',').includes(v)}
 function rolRenk(k){return {patron:'#b5820a',ortak:'#24487a',magaza:'#0f9d63',depocu:'#2d6cdf',fason:'#7a4fd0'}[k]||'#24487a'}
 function navFor(){
@@ -308,8 +310,7 @@ function go(v){
   if(!canSee(v))v='panel';
   cur=v;
   renderNav();
-  const fabViews={stok:1,cari:1,satis:1};
-  $('fab').classList.toggle('show',!!fabViews[v]&&canSee(v));
+  $('fab').classList.toggle('show',fabShow(v));
   render();window.scrollTo(0,0);
 }
 function renderNav(){
@@ -424,7 +425,8 @@ function rDaha(){
 /* ---------- STOK ---------- */
 let stokTab='mamul', stokKat='Tümü';
 function rStok(){
-  let html=`<div class="tabs"><div class="tb ${stokTab==='mamul'?'on':''}" onclick="stokTab='mamul';rStok()">👕 Mamül</div><div class="tb ${stokTab==='hammadde'?'on':''}" onclick="stokTab='hammadde';rStok()">🧵 Hammadde</div></div>`;
+  if(!canHammadde())stokTab='mamul';
+  let html=canHammadde()?`<div class="tabs"><div class="tb ${stokTab==='mamul'?'on':''}" onclick="stokTab='mamul';rStok()">👕 Mamül</div><div class="tb ${stokTab==='hammadde'?'on':''}" onclick="stokTab='hammadde';rStok()">🧵 Hammadde</div></div>`:'';
   if(stokTab==='mamul'){
     const kats=['Tümü',...new Set(db.urunler.map(u=>u.kat).filter(Boolean))];
     html+=`<input class="search" id="ara-stok" placeholder="🔍 Ürün, kod, marka ara..." oninput="rStokList()"><div class="segs">`+kats.map(k=>`<div class="seg ${k===stokKat?'on':''}" onclick="stokKat='${esc(k)}';rStok()">${esc(k)}</div>`).join('')+`</div><div class="card" id="stok-list"></div>`;
@@ -453,12 +455,13 @@ function urunDetay(id){
     <div class="kv"><span class="k">Satış / Alış</span><span class="v">${TL(u.satis)} / ${karGoster()?TL(u.alis):'•••'}</span></div>
     ${karGoster()?`<div class="kv"><span class="k">Kâr</span><span class="v pos">${TL(kar)} (%${karY})</span></div>`:''}
     <div style="margin-top:6px">${dots(u.renkler)}</div>
-    <div class="g2" style="margin-top:16px"><button class="btn ghost sm" onclick="formUrun(${id})">✏️ Düzenle</button><button class="btn sm" onclick="closeM();go('satis');setTimeout(()=>formSatis(${id}),150)">🧾 Satışa Ekle</button></div>
+    ${(canUrunYaz()||canSee('satis'))?`<div class="g2" style="margin-top:16px">${canUrunYaz()?`<button class="btn ghost sm" onclick="formUrun(${id})">✏️ Düzenle</button>`:''}${canSee('satis')?`<button class="btn sm" onclick="closeM();go('satis');setTimeout(()=>formSatis(${id}),150)">🧾 Satışa Ekle</button>`:''}</div>`:''}
   `);
 }
 
 let fRenk=[];
 function formUrun(id){
+  if(!canUrunYaz())return toast('Bu işlem için yetkiniz yok');
   const u=id?urun(id):{birim:'seri',seri:5,renkler:[],kaynak:'uretim',cesit:'Markasız',karYuzde:40};
   fRenk=[...(u.renkler||[])];
   open_(id?'Ürün Düzenle':'Yeni Ürün',`
@@ -989,7 +992,8 @@ function yedekYukle(inp){
 function open_(t,h){$('mT').textContent=t;$('mB').innerHTML=h;$('ov').classList.add('show')}
 function closeM(){$('ov').classList.remove('show')}
 $('ov').addEventListener('click',e=>{if(e.target.id==='ov')closeM()});
-function fabAction(){if(cur==='stok'){stokTab==='hammadde'?formHammadde():formUrun()}else if(cur==='cari')formCari(cariTab);else if(cur==='satis')formSatis()}
+function fabShow(v){if(!canSee(v))return false;if(v==='stok')return canUrunYaz()||canHammadde();if(v==='cari'||v==='satis')return true;return false}
+function fabAction(){if(cur==='stok'){(stokTab==='hammadde'&&canHammadde())?formHammadde():(canUrunYaz()?formUrun():toast('Bu işlem için yetkiniz yok'))}else if(cur==='cari')formCari(cariTab);else if(cur==='satis')formSatis()}
 
 /* =================== BAŞLAT =================== */
 go('panel');
