@@ -203,7 +203,24 @@
     body.thermal #printarea{display:block!important;padding:0}
     body.thermal .lbl{display:none!important}
     .fisT{font-family:'Courier New',ui-monospace,monospace;color:#000;width:100%;font-size:12px;line-height:1.5;letter-spacing:.2px}
+    body.printing .ieA4{display:block!important;color:#000;font-family:ui-sans-serif,system-ui,sans-serif;font-size:12.5px;width:100%}
   }
+  .ieA4{color:#000}
+  .ieA4 .ieh{display:flex;justify-content:space-between;align-items:flex-start}
+  .ieA4 .ien{font-size:22px;font-weight:800}.ieA4 .ies{font-size:11px;color:#333}
+  .ieA4 .iet{text-align:right;font-size:17px;font-weight:800;line-height:1.2}
+  .ieA4 .ieline{border-top:2px solid #000;margin:8px 0}
+  .ieA4 table.iem{width:100%;border-collapse:collapse;margin:6px 0}
+  .ieA4 table.iem td{padding:4px 6px;border:1px solid #bbb;font-size:12.5px}
+  .ieA4 table.iem td.lb{background:#f0f0f0;font-weight:700;width:70px;white-space:nowrap}
+  .ieA4 .iesec{font-weight:800;font-size:12px;letter-spacing:1px;margin:12px 0 3px;border-bottom:1px solid #000;padding-bottom:2px}
+  .ieA4 .ietag{display:inline-block;border:1px solid #000;border-radius:5px;padding:2px 9px;margin:2px 4px 2px 0;font-size:12.5px}
+  .ieA4 table.ietbl{width:100%;border-collapse:collapse}
+  .ieA4 table.ietbl th{text-align:left;border-bottom:1.5px solid #000;padding:4px 6px;font-size:11px}
+  .ieA4 table.ietbl td{padding:4px 6px;border-bottom:1px solid #ddd;font-size:12.5px}
+  .ieA4 .r{text-align:right}
+  .ieA4 .ieimg{max-height:200px;max-width:60%;border:1px solid #000}
+  .ieA4 .iesign{display:flex;justify-content:space-between;margin-top:44px;font-size:12.5px}
   /* Termal fiş iç stilleri (önizleme + baskı ortak) */
   .thermwrap{background:repeating-linear-gradient(45deg,#e6e8ee,#e6e8ee 10px,#e1e3ea 10px,#e1e3ea 20px);border-radius:12px;padding:18px 10px;margin-top:10px;display:flex;justify-content:center}
   .thermpaper{background:#fff;width:300px;max-width:100%;padding:16px 16px 6px;box-shadow:0 4px 18px rgba(0,0,0,.22);clip-path:polygon(0 0,100% 0,100% calc(100% - 6px),97% 100%,94% calc(100% - 6px),91% 100%,88% calc(100% - 6px),85% 100%,82% calc(100% - 6px),79% 100%,76% calc(100% - 6px),73% 100%,70% calc(100% - 6px),67% 100%,64% calc(100% - 6px),61% 100%,58% calc(100% - 6px),55% 100%,52% calc(100% - 6px),49% 100%,46% calc(100% - 6px),43% 100%,40% calc(100% - 6px),37% 100%,34% calc(100% - 6px),31% 100%,28% calc(100% - 6px),25% 100%,22% calc(100% - 6px),19% 100%,16% calc(100% - 6px),13% 100%,10% calc(100% - 6px),7% 100%,4% calc(100% - 6px),1% 100%,0 calc(100% - 6px))}
@@ -381,7 +398,7 @@ function seed(){return{
        {ad:'Baskı',fasonId:202,ucret:12,gonderilen:80,gelen:78,defolu:2,durum:'tamam',borclandi:true},
        {ad:'Dikim',fasonId:201,ucret:35,gonderilen:78,gelen:60,defolu:0,durum:'devam',borclandi:false},
        {ad:'Ütü / Paket',fasonId:204,ucret:6,gonderilen:0,gelen:0,defolu:0,durum:'bekliyor',borclandi:false}
-     ],baslangic:Date.now()-15*86400000,gun:12,durum:'devam',stoklandi:false},
+     ],baslangic:Date.now()-15*86400000,gun:12,genelGiderBirim:12,foto:'',durum:'devam',stoklandi:false},
   ],
   ortakHarcama:[
     {id:1,ortak:'Sen (Birol)',tutar:22000,hesapId:1,aciklama:'Kişisel kart',tarih:Date.now()-2*86400000},
@@ -1656,7 +1673,9 @@ function fasonlar(){return db.cariler.filter(c=>c.tip==='fason')}
 function fasonAd(d){return (d.fasonId&&cari(d.fasonId))?cari(d.fasonId).ad:(d.firma||'')}
 function ieMalMaliyet(i){return (i.malzeme||[]).reduce((a,m)=>a+(+m.tutar||0),0)}
 function ieFasonMaliyet(i){return (i.duraklar||[]).reduce((a,d)=>a+(+d.ucret||0)*(+d.gelen||0),0)}
-function ieToplamMaliyet(i){return ieMalMaliyet(i)+ieFasonMaliyet(i)}
+function ieGenelGider(i){return (+i.genelGiderBirim||0)*ieSaglam(i)}
+function ieToplamMaliyet(i){return ieMalMaliyet(i)+ieFasonMaliyet(i)+ieGenelGider(i)}
+const RENK_LISTE=['Siyah','Beyaz','Lacivert','Gri','Bej','Bordo','Antrasit','Yeşil','Hardal','Mor','Kırmızı','Mavi','Kahverengi','Sarı','Pembe','Turuncu','Füme','Ekru','Haki','Vizon'];
 function ieSaglam(i){const ds=i.duraklar||[];for(let k=ds.length-1;k>=0;k--)if((+ds[k].gelen||0)>0)return +ds[k].gelen;return 0}
 function ieBirimMaliyet(i){const s=ieSaglam(i);return s>0?ieToplamMaliyet(i)/s:0}
 function ieDefo(i){return (i.duraklar||[]).reduce((a,d)=>a+(+d.defolu||0),0)}
@@ -1676,72 +1695,103 @@ function rUretim(){
   $('app').innerHTML=html;
 }
 /* --- Yeni iş emri --- */
-let ieMal=[];
+let ieMal=[], ieRenk=[], ieFoto='', ieUrunId=0;
 function formIsEmri(){
-  if(!db.urunler.length)return toast('Önce ürün ekle');
-  ieMal=[];
+  ieMal=[];ieRenk=[];ieFoto='';ieUrunId=0;
   const fs=fasonlar();
   open_('Yeni İş Emri',`
-    <label>Ürün</label><select id="ie-urun" onchange="ieRenkCiz()">${db.urunler.filter(u=>!u.pasif).map(u=>`<option value="${u.id}">${esc(u.ad)} (${esc(u.kod||'')})</option>`).join('')}</select>
-    <div class="g2"><div><label>Hedef</label><input id="ie-hedef" type="number" value="" placeholder="ör. 100" oninput="ieRenkCiz()"></div><div><label>Termin (gün)</label><input id="ie-gun" type="number" value="15"></div></div>
-    <div class="sec" style="margin-top:12px">🎨 Renk Dağılımı <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub);font-size:11px">(opsiyonel)</span></div>
+    <datalist id="ie-urun-dl">${db.urunler.filter(u=>!u.pasif).map(u=>`<option value="${esc(u.ad)}">`).join('')}</datalist>
+    <datalist id="ie-ham-dl">${db.hammadde.map(h=>`<option value="${esc(h.ad)}">`).join('')}</datalist>
+    <datalist id="ie-renk-dl">${RENK_LISTE.map(r=>`<option value="${r}">`).join('')}</datalist>
+    <label>Ürün Adı</label><input id="ie-ad" list="ie-urun-dl" autocomplete="off" placeholder="Polo Yaka Triko / yeni numune..." oninput="ieUrunAra()">
+    <div class="g2"><div><label>Ürün Kodu</label><input id="ie-kod" placeholder="2026Y500" oninput="ieKodKontrol()"></div><div><label>Hedef</label><input id="ie-hedef" type="number" inputmode="numeric" placeholder="ör. 100"></div></div>
+    <div class="mini" id="ie-kod-uyari"></div>
+    <label>📷 Ürün / Numune Fotoğrafı</label><div id="ie-foto-box"></div>
+    <div class="g2"><div><label>Satış Şekli</label><select id="ie-birim"><option value="seri">Seri</option><option value="adet">Tekli (adet)</option></select></div><div><label>Termin (gün)</label><input id="ie-gun" type="number" value="15"></div></div>
+    <div class="sec" style="margin-top:12px">🎨 Renk Dağılımı <a onclick="ieRenkEkle()">+ renk</a></div>
     <div id="ie-renk"></div>
-    <div class="sec" style="margin-top:12px">🧵 Malzeme <a onclick="ieMalEkle()">+ satır</a></div>
-    <div class="mini">Kesilen partiye göre elle gir. Tutar = o malzemenin toplam ₺ maliyeti. Hammadde seçersen stoktan düşülür.</div>
+    <div class="sec" style="margin-top:12px">🧵 Malzeme / Kumaş <a onclick="ieMalEkle()">+ malzeme</a></div>
+    <div class="mini">Kumaş, aksesuar, etiket... adını yaz, çıkan öneriden seç. Elinde yoksa <b>🛒 Alınacak</b> işaretle — iş emri yine açılır, sonra alırsın.</div>
     <div id="ie-mal" style="margin-top:6px"></div>
     <div class="sec" style="margin-top:12px">🏭 Üretim Durakları</div>
-    <div class="mini">Bu ürün hangi işlemlerden geçecek? İşaretle, fasonu ve ₺/adet ücretini gir. (Nakış/baskı yoksa boş bırak.)</div>
-    ${fs.length?'':'<div class="warnbox" style="margin-top:6px">Hiç fason firma yok. Cari › Fason\'dan ekleyebilirsin (yine de durak açabilirsin).</div>'}
+    <div class="mini">Hangi işlemlerden geçecek? İşaretle, fasonu ve ₺/adet ücretini gir.</div>
+    ${fs.length?'':'<div class="warnbox" style="margin-top:6px">Hiç fason firma yok. Cari › Fason\'dan ekleyebilirsin.</div>'}
     <div id="ie-durak" style="margin-top:6px">${ISTASYON.map((s,x)=>`
       <label class="ckrow" style="margin:8px 0 0"><input type="checkbox" id="dk-${x}" ${x===0?'checked':''} onchange="$('dkf-${x}').style.display=this.checked?'block':'none'"><span>${s}</span></label>
       <div id="dkf-${x}" style="display:${x===0?'block':'none'};padding-left:8px">
         <div class="g2"><div><label style="margin-top:4px">Fason firma</label><select id="dkfas-${x}"><option value="0">— seç / dışarı —</option>${fs.map(f=>`<option value="${f.id}">${esc(f.ad)}</option>`).join('')}</select></div><div><label style="margin-top:4px">₺ / adet</label><input id="dkuc-${x}" type="number" inputmode="numeric" placeholder="0"></div></div>
       </div>`).join('')}</div>
+    <label style="margin-top:12px">Genel Gider (₺/adet)</label><input id="ie-gg" type="number" inputmode="numeric" value="12" placeholder="10-15">
+    <div class="mini">Elektrik, işçilik payı, nakliye vb. — birim maliyete eklenir.</div>
     <button class="btn" style="margin-top:14px" onclick="kaydetIsEmri()">İş Emri Aç</button>`);
-  ieRenkCiz();cizIeMal();
+  cizIeRenk();cizIeMal();cizIeFoto();
 }
-function ieRenkCiz(){const box=$('ie-renk');if(!box)return;const u=urun(+$('ie-urun').value);const hedef=+($('ie-hedef')?.value||0);
-  const cols=u?renkObjs(u):[];
-  if(!cols.length){box.innerHTML='<div class="mini">Bu üründe renk yok — toplam hedef üzerinden gider.</div>';return}
-  box.innerHTML=`<div class="card" style="padding:6px 12px">`+cols.map((r,i)=>`<div class="syrow"><span class="sw sm" style="background:${r.hex}"></span><span class="synm">${esc(r.ad||'—')}</span><input id="ier-${i}" data-ad="${esc(r.ad||'')}" type="number" inputmode="numeric" min="0" value="" placeholder="0" class="syin"></div>`).join('')+`</div><div class="mini" id="ie-renk-not"></div>`;
+function ieUrunAra(){const ad=($('ie-ad')?.value||'').trim().toLowerCase();const u=db.urunler.find(x=>!x.pasif&&x.ad.toLowerCase()===ad);
+  if(u&&u.id!==ieUrunId){ieUrunId=u.id;if($('ie-kod'))$('ie-kod').value=u.kod||'';if($('ie-birim'))$('ie-birim').value=u.birim||'seri';
+    ieFoto=urunKapak(u)||ieFoto;ieRenk=renkObjs(u).map(r=>({ad:r.ad,adet:0}));cizIeRenk();cizIeFoto();ieKodKontrol();}
+  else if(!u&&ieUrunId){ieUrunId=0;ieKodKontrol();}
 }
-function ieMalEkle(){ieMal.push({hid:'0',ad:'',mik:0,birim:'',tutar:0});cizIeMal()}
+function ieKodKontrol(){const el=$('ie-kod-uyari');if(!el)return;const kod=($('ie-kod')?.value||'').trim();
+  if(ieUrunId){el.innerHTML='<span style="color:var(--sub)">Mevcut ürüne üretim — kod sabit</span>';return}
+  if(!kod){el.innerHTML='';return}
+  const cak=db.urunler.find(u=>u.kod&&u.kod.toLowerCase()===kod.toLowerCase());
+  el.innerHTML=cak?`<span style="color:var(--bad)">⚠️ "${esc(kod)}" kodu zaten var (${esc(cak.ad)}) — başka kod gir</span>`:`<span style="color:var(--good)">✓ Kod uygun</span>`;
+}
+function cizIeFoto(){const b=$('ie-foto-box');if(!b)return;
+  b.innerHTML=`<div class="satfoto" onclick="$('ie-foto-in').click()">${ieFoto?`<img src="${ieFoto}"><span class="rm" onclick="event.stopPropagation();ieFoto='';cizIeFoto()">✕</span>`:'<span class="ph">📷 Numune / ürün fotoğrafı</span>'}</div><input type="file" id="ie-foto-in" accept="image/*" capture="environment" style="display:none" onchange="ieFotoSec(this)">`;
+}
+function ieFotoSec(input){const f=input.files&&input.files[0];if(!f)return;resizeImg(f,d=>{ieFoto=d;cizIeFoto()},1200,0.75)}
+function ieRenkEkle(){ieRenk.push({ad:'',adet:0});cizIeRenk()}
+function ieRenkSil(i){ieRenk.splice(i,1);cizIeRenk()}
+function ieRenkSet(i,k,v){const r=ieRenk[i];if(!r)return;if(k==='adet')r.adet=+v||0;else{r.ad=v;const sw=document.querySelector('#ie-renk .rrow[data-i="'+i+'"] .sw');if(sw)sw.style.background=hexFromAd(v)||'#ccc'}}
+function cizIeRenk(){const b=$('ie-renk');if(!b)return;
+  b.innerHTML=ieRenk.length?`<div class="card" style="padding:6px 12px">`+ieRenk.map((r,i)=>`<div class="syrow rrow" data-i="${i}"><span class="sw sm" style="background:${hexFromAd(r.ad)||'#ccc'}"></span><input list="ie-renk-dl" value="${esc(r.ad||'')}" placeholder="renk" oninput="ieRenkSet(${i},'ad',this.value)" style="flex:1;margin:0;padding:8px"><input type="number" inputmode="numeric" value="${r.adet||''}" placeholder="adet" oninput="ieRenkSet(${i},'adet',this.value)" class="syin" style="width:78px">${ieRenk.length?`<button class="del" onclick="ieRenkSil(${i})">✕</button>`:''}</div>`).join('')+`</div>`:'<div class="mini">İstersen "+ renk" ile renk dağılımı gir. Boş bırakırsan tek parça gider.</div>';
+}
+function ieMalEkle(){ieMal.push({ad:'',mik:0,birim:'',tutar:0,durum:'var'});cizIeMal()}
 function ieMalSil(i){ieMal.splice(i,1);cizIeMal()}
 function ieMalSet(i,k,v){const m=ieMal[i];if(!m)return;if(k==='mik'||k==='tutar')m[k]=+v||0;else m[k]=v;
-  if(k==='hid'){const h=db.hammadde.find(x=>x.id==v);if(h){m.ad=h.ad;m.birim=h.birim;if(!m.tutar&&m.mik&&h.alis)m.tutar=Math.round(m.mik*h.alis)}cizIeMal()}
+  if(k==='ad'){const h=db.hammadde.find(x=>x.ad.toLowerCase()===(''+v).toLowerCase());if(h){m.birim=h.birim;const bl=document.querySelector('#ie-mal .mrow[data-i="'+i+'"] .mbir');if(bl)bl.textContent=h.birim?'('+h.birim+')':''}}
+  if(k==='durum')cizIeMal();
 }
 function cizIeMal(){const b=$('ie-mal');if(!b)return;
-  b.innerHTML=ieMal.length?ieMal.map((m,i)=>`<div class="card" style="padding:8px 10px;margin-bottom:6px">
-    <div style="display:flex;gap:6px;align-items:center"><select style="flex:1;margin:0" onchange="ieMalSet(${i},'hid',this.value)"><option value="0">Malzeme seç…</option>${db.hammadde.map(h=>`<option value="${h.id}" ${m.hid==h.id?'selected':''}>${esc(h.ad)} (${h.stok} ${h.birim})</option>`).join('')}<option value="x" ${m.hid==='x'?'selected':''}>Diğer (elle)</option></select><button class="del" onclick="ieMalSil(${i})">✕</button></div>
-    ${m.hid==='x'?`<input placeholder="Malzeme adı" value="${esc(m.ad||'')}" oninput="ieMalSet(${i},'ad',this.value)" style="margin-top:6px">`:''}
-    <div class="g2" style="margin-top:6px"><div><label style="margin-top:0">Miktar${m.birim?' ('+esc(m.birim)+')':''}</label><input type="number" inputmode="numeric" value="${m.mik||''}" oninput="ieMalSet(${i},'mik',this.value)"></div><div><label style="margin-top:0">Tutar (₺)</label><input type="number" inputmode="numeric" value="${m.tutar||''}" oninput="ieMalSet(${i},'tutar',this.value)"></div></div>
-  </div>`).join(''):'<div class="mini">Henüz malzeme eklenmedi.</div>';
+  b.innerHTML=ieMal.length?ieMal.map((m,i)=>`<div class="card mrow" data-i="${i}" style="padding:8px 10px;margin-bottom:6px">
+    <div style="display:flex;gap:6px;align-items:center"><input list="ie-ham-dl" value="${esc(m.ad||'')}" placeholder="Kumaş / aksesuar adı yaz..." oninput="ieMalSet(${i},'ad',this.value)" style="flex:1;margin:0;padding:9px"><button class="del" onclick="ieMalSil(${i})">✕</button></div>
+    <div class="g2" style="margin-top:6px"><div><label style="margin-top:0">Miktar <span class="mbir" style="color:var(--sub);text-transform:none;letter-spacing:0">${m.birim?'('+esc(m.birim)+')':''}</span></label><input type="number" inputmode="numeric" value="${m.mik||''}" oninput="ieMalSet(${i},'mik',this.value)"></div><div><label style="margin-top:0">Tutar (₺)</label><input type="number" inputmode="numeric" value="${m.tutar||''}" oninput="ieMalSet(${i},'tutar',this.value)"></div></div>
+    <div class="seg2" style="margin-top:8px"><div class="o ${m.durum==='var'?'on':''}" onclick="ieMalSet(${i},'durum','var')">✓ Elimde var</div><div class="o ${m.durum==='alinacak'?'on':''}" onclick="ieMalSet(${i},'durum','alinacak')">🛒 Alınacak</div></div>
+  </div>`).join(''):'<div class="mini">Kumaş/malzeme eklemek için "+ malzeme".</div>';
 }
-function kaydetIsEmri(){const u=urun(+$('ie-urun').value);if(!u)return toast('Ürün seç');
+function kaydetIsEmri(){
+  const ad=($('ie-ad').value||'').trim();if(!ad)return toast('Ürün adı gir');
+  const kod=($('ie-kod').value||'').trim();
+  if(!ieUrunId){if(!kod)return toast('Ürün kodu gir');
+    if(db.urunler.some(u=>u.kod&&u.kod.toLowerCase()===kod.toLowerCase()))return toast('Bu kod zaten kullanılıyor — başka kod gir');}
   const hedef=+$('ie-hedef').value||0,gun=+$('ie-gun').value||15;if(hedef<=0)return toast('Hedef adet gir');
-  // renk dağılımı
-  const renkDagilim=[];document.querySelectorAll('#ie-renk input[id^="ier-"]').forEach(el=>{const a=el.getAttribute('data-ad');const v=+el.value||0;if(v>0)renkDagilim.push({ad:a,adet:v})});
-  // duraklar
-  const duraklar=[];ISTASYON.forEach((s,x)=>{if($('dk-'+x)&&$('dk-'+x).checked){duraklar.push({ad:s,fasonId:+($('dkfas-'+x)?.value||0)||null,ucret:+($('dkuc-'+x)?.value||0)||0,gonderilen:0,gelen:0,defolu:0,durum:'bekliyor',borclandi:false})}});
+  const birim=$('ie-birim').value||'seri';
+  const renkDagilim=ieRenk.filter(r=>(r.ad||'').trim()&&r.adet>0).map(r=>({ad:r.ad.trim(),adet:r.adet}));
+  const duraklar=[];ISTASYON.forEach((s,x)=>{if($('dk-'+x)&&$('dk-'+x).checked){duraklar.push({ad:s,fasonId:+($('dkfas-'+x)?.value||0)||null,ucret:+($('dkuc-'+x)?.value||0)||0,gonderilen:0,gelen:0,defolu:0,durum:'bekliyor',borclandi:false,foto:'',not:''})}});
   if(!duraklar.length)return toast('En az bir durak seç');
   duraklar[0].gonderilen=hedef;duraklar[0].durum='devam';
-  // malzeme + hammadde düş
-  const malzeme=ieMal.filter(m=>m.mik>0||m.tutar>0).map(m=>({hid:(m.hid&&m.hid!=='0'&&m.hid!=='x')?+m.hid:null,ad:m.ad||'Malzeme',mik:+m.mik||0,birim:m.birim||'',tutar:+m.tutar||0}));
-  malzeme.forEach(m=>{if(m.hid){const h=db.hammadde.find(x=>x.id===m.hid);if(h)h.stok=Math.max(0,h.stok-m.mik)}});
-  db.isemirleri.push({id:nid('ie'),urunId:u.id,urun:u.ad,kod:u.kod||'',birim:u.birim||'adet',hedef,renkDagilim,malzeme,duraklar,baslangic:Date.now(),gun,durum:'devam',stoklandi:false});
-  save();closeM();rUretim();toast('İş emri açıldı ✓ Malzeme stoktan düştü');
+  const malzeme=ieMal.filter(m=>(m.ad||'').trim()).map(m=>{const h=db.hammadde.find(x=>x.ad.toLowerCase()===m.ad.trim().toLowerCase());return {ad:m.ad.trim(),mik:+m.mik||0,birim:m.birim||(h?h.birim:''),tutar:+m.tutar||0,durum:m.durum||'var',hid:h?h.id:null}});
+  malzeme.forEach(m=>{if(m.durum==='var'&&m.hid){const h=db.hammadde.find(x=>x.id===m.hid);if(h)h.stok=Math.max(0,h.stok-m.mik)}});
+  db.isemirleri.push({id:nid('ie'),urunId:ieUrunId||null,urun:ad,kod,foto:ieFoto,birim,hedef,renkDagilim,malzeme,duraklar,genelGiderBirim:+$('ie-gg').value||0,baslangic:Date.now(),gun,durum:'devam',stoklandi:false});
+  save();closeM();rUretim();toast('İş emri açıldı ✓');
 }
 /* --- İş emri detay --- */
 function uretimDetay(id){
   const i=db.isemirleri.find(x=>x.id===id);if(!i)return;
   const kar=karGoster();const saglam=ieSaglam(i);const birim=ieBirimMaliyet(i);
   const durIc={tamam:'✅',devam:'🔵',bekliyor:'⬜'};
-  let html=`<div class="card" style="padding:14px"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:800;font-size:16px">${esc(i.urun)}</div><div class="mini">${esc(i.kod||'')} · başladı ${dstr(i.baslangic)} · hedef ${i.hedef} ${esc(i.birim||'adet')}</div></div><span class="pill ${i.durum==='tamam'?'ok':'low'}">${i.durum==='tamam'?'Tamam':'Devam'}</span></div>
-    ${i.renkDagilim&&i.renkDagilim.length?`<div class="mini" style="margin-top:8px">🎨 ${i.renkDagilim.map(r=>esc(r.ad)+' '+r.adet).join(' · ')}</div>`:''}</div>`;
-  if(kar){html+=`<div class="total" style="margin-top:12px"><div><div class="l">Toplam Maliyet</div><div class="v">${TL(ieToplamMaliyet(i))}</div></div><div style="text-align:right"><div class="l">Birim Maliyet</div><div class="v pos">${birim?TL(birim):'—'} ${birim?'/'+esc(i.birim||'ad'):''}</div></div></div>
+  let html=`<div class="card" style="padding:14px"><div style="display:flex;gap:12px">
+      ${i.foto?`<img src="${i.foto}" style="width:64px;height:64px;border-radius:10px;object-fit:cover;flex:0 0 auto">`:''}
+      <div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="font-weight:800;font-size:16px">${esc(i.urun)}${i.urunId?'':' <span class="pill low" style="vertical-align:middle">numune</span>'}</div><span class="pill ${i.durum==='tamam'?'ok':'low'}">${i.durum==='tamam'?'Tamam':'Devam'}</span></div>
+      <div class="mini" style="margin-top:2px">${esc(i.kod||'')} · başladı ${dstr(i.baslangic)} · hedef ${i.hedef} ${esc(i.birim||'adet')}</div></div></div>
+    ${i.renkDagilim&&i.renkDagilim.length?`<div class="mini" style="margin-top:8px">🎨 ${i.renkDagilim.map(r=>esc(r.ad)+' '+r.adet).join(' · ')}</div>`:''}</div>
+    <div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="isEmriA4(${id})">📄 İş Emri Formu (A4)</button><button class="btn g sm" onclick="isEmriPaylas(${id})">📤 Fasona Gönder</button></div>`;
+  if(kar){const gg=ieGenelGider(i);html+=`<div class="total" style="margin-top:12px"><div><div class="l">Toplam Maliyet</div><div class="v">${TL(ieToplamMaliyet(i))}</div></div><div style="text-align:right"><div class="l">Birim Maliyet</div><div class="v pos">${birim?TL(birim):'—'} ${birim?'/'+esc(i.birim||'ad'):''}</div></div></div>
     <div class="card" style="margin-top:8px;padding:4px 13px">
-      <div class="kv"><span class="k">🧵 Malzeme</span><span class="v">${TL(ieMalMaliyet(i))}</span></div>
+      <div class="kv"><span class="k">🧵 Malzeme / Kumaş</span><span class="v">${TL(ieMalMaliyet(i))}</span></div>
       <div class="kv"><span class="k">✂️ Fason işçilik</span><span class="v">${TL(ieFasonMaliyet(i))}</span></div>
+      ${i.genelGiderBirim?`<div class="kv"><span class="k">⚙️ Genel gider (₺${i.genelGiderBirim}/ad)</span><span class="v">${TL(gg)}</span></div>`:''}
       <div class="kv"><span class="k">📦 Tamamlanan (sağlam)</span><span class="v">${saglam} / ${i.hedef}</span></div>
       <div class="kv"><span class="k">🔥 Toplam defo/fire</span><span class="v" style="color:var(--bad)">${ieDefo(i)}</span></div>
     </div>`;}
@@ -1752,29 +1802,41 @@ function uretimDetay(id){
       <div style="flex:1;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:14.5px">${x+1}. ${esc(d.ad)}</b>${kar&&tutar?`<span class="mini" style="font-weight:800;color:var(--ink)">${TL(tutar)}</span>`:''}</div>
         <div class="mini" style="margin-top:2px">${fad?esc(fad):'<span style="color:var(--sub)">fason atanmadı</span>'}${d.gonderilen?` · ${d.gonderilen} gönderildi → ${d.gelen} geldi${d.defolu?' · '+d.defolu+' defo':''}`:''}${d.ucret?` · ₺${d.ucret}/ad`:''}</div>
-        ${i.durum!=='tamam'?`<button class="btn ghost sm" style="margin-top:7px;width:auto;padding:7px 14px" onclick="durakGuncelle(${id},${x})">${d.durum==='tamam'?'Düzenle':'Adet / Fason Gir'}</button>`:''}
+        ${d.not?`<div class="mini" style="margin-top:2px">📝 ${esc(d.not)}</div>`:''}
+        ${d.foto?`<img src="${d.foto}" style="width:70px;height:70px;border-radius:8px;object-fit:cover;margin-top:6px">`:''}
+        ${i.durum!=='tamam'?`<div style="display:flex;gap:7px;margin-top:7px;flex-wrap:wrap"><button class="btn ghost sm" style="width:auto;padding:7px 12px;margin:0" onclick="durakGuncelle(${id},${x})">${d.gonderilen?'Güncelle':'Adet / Fason Gir'}</button>${fad?`<button class="btn ghost sm" style="width:auto;padding:7px 12px;margin:0" onclick="isEmriPaylas(${id},${x})">📤 ${esc(d.ad)} fişi</button>`:''}</div>`:''}
       </div></div>`;
   });
   html+=`</div>`;
-  if(i.malzeme&&i.malzeme.length){html+=`<div class="sec">Kullanılan Malzeme</div><div class="card" style="padding:4px 13px">`+i.malzeme.map(m=>`<div class="kv"><span class="k">${esc(m.ad)}</span><span class="v">${m.mik?m.mik.toLocaleString('tr-TR')+' '+esc(m.birim||''):''}${kar&&m.tutar?' · '+TL(m.tutar):''}</span></div>`).join('')+`</div>`;}
+  html+=`<div class="sec">Malzeme / Kumaş <a onclick="ieMalDuzenle(${id})">${i.durum==='tamam'?'':'+ ekle / düzenle'}</a></div><div class="card" style="padding:4px 13px">`+((i.malzeme&&i.malzeme.length)?i.malzeme.map(m=>`<div class="kv"><span class="k">${esc(m.ad)}${m.durum==='alinacak'?' <span class="pill low">🛒 alınacak</span>':''}</span><span class="v">${m.mik?m.mik.toLocaleString('tr-TR')+' '+esc(m.birim||''):''}${kar&&m.tutar?' · '+TL(m.tutar):''}</span></div>`).join(''):'<div class="mini" style="padding:8px 0">Malzeme eklenmedi.</div>')+`</div>`;
   if(i.durum!=='tamam'){html+=`<button class="btn g" style="margin-top:14px" onclick="isEmriTamamla(${id})">📦 Tamamla → ${saglam||'?'} ${esc(i.birim||'adet')} stoğa al</button>`;}
   else{html+=`<div class="okbox" style="margin-top:14px">✅ ${ieSaglam(i)} ${esc(i.birim||'adet')} stoğa girdi${kar?` · birim maliyet ${TL(birim)}`:''}</div>`;}
   open_('İş Emri #'+i.id,html);
 }
 /* --- Durak güncelle --- */
+let dFoto='';
 function durakGuncelle(id,x){
   const i=db.isemirleri.find(v=>v.id===id);const d=i.duraklar[x];const fs=fasonlar();
+  dFoto=d.foto||'';
   const onceki=x>0?i.duraklar[x-1]:null;const varsayGonder=d.gonderilen||(onceki?(onceki.gelen-onceki.defolu):i.hedef)||i.hedef;
   open_(d.ad+' · Güncelle',`
     <label>Fason Firma</label><select id="d-fas"><option value="0">— dışarı / firma yok —</option>${fs.map(f=>`<option value="${f.id}" ${d.fasonId==f.id?'selected':''}>${esc(f.ad)}</option>`).join('')}</select>
     <div class="g2"><div><label>Gönderilen</label><input id="d-gon" type="number" inputmode="numeric" value="${varsayGonder}"></div><div><label>₺ / adet</label><input id="d-uc" type="number" inputmode="numeric" value="${d.ucret||''}" placeholder="0"></div></div>
     <div class="g2"><div><label>Gelen (sağlam)</label><input id="d-gel" type="number" inputmode="numeric" value="${d.gelen||''}" placeholder="0"></div><div><label>Defolu / fire</label><input id="d-def" type="number" inputmode="numeric" value="${d.defolu||''}" placeholder="0"></div></div>
+    <label>Not (fason için)</label><input id="d-not" value="${esc(d.not||'')}" placeholder="ör. yaka rengi koyu, ütü buharlı">
+    <label>📷 Fotoğraf (numune / gelen mal)</label><div id="d-foto-box"></div>
     <div class="infobox">Bu durak bitince fason firmaya <b>₺/adet × gelen</b> kadar borç yazılır. Defo/fire maliyeti sağlam mallara dağılır.</div>
     <button class="btn" onclick="durakKaydet(${id},${x})">Kaydet</button>`);
+  cizDurakFoto();
 }
+function cizDurakFoto(){const b=$('d-foto-box');if(!b)return;
+  b.innerHTML=`<div class="satfoto" onclick="$('d-foto-in').click()">${dFoto?`<img src="${dFoto}"><span class="rm" onclick="event.stopPropagation();dFoto='';cizDurakFoto()">✕</span>`:'<span class="ph">📷 Fotoğraf ekle</span>'}</div><input type="file" id="d-foto-in" accept="image/*" capture="environment" style="display:none" onchange="durakFotoSec(this)">`;
+}
+function durakFotoSec(input){const f=input.files&&input.files[0];if(!f)return;resizeImg(f,d=>{dFoto=d;cizDurakFoto()},1200,0.72)}
 function durakKaydet(id,x){
   const i=db.isemirleri.find(v=>v.id===id);const d=i.duraklar[x];
   d.fasonId=+($('d-fas').value||0)||null;d.gonderilen=+$('d-gon').value||0;d.gelen=+$('d-gel').value||0;d.defolu=+$('d-def').value||0;d.ucret=+$('d-uc').value||0;
+  d.not=($('d-not')?.value||'').trim();d.foto=dFoto;
   const bitti=d.gelen>0&&(d.gelen+d.defolu)>=d.gonderilen;
   d.durum=bitti?'tamam':(d.gelen>0?'devam':'devam');
   // fason borç (durak tamamlanınca, bir kez)
@@ -1786,30 +1848,117 @@ function durakKaydet(id,x){
 }
 /* --- Tamamla → stoğa al --- */
 function isEmriTamamla(id){
-  const i=db.isemirleri.find(v=>v.id===id);const u=urun(i.urunId);const saglam=ieSaglam(i);
-  if(saglam<=0)return toast('Önce bir duraktan gelen adet gir');
-  const birim=ieBirimMaliyet(i);const cols=u?renkObjs(u):[];
-  // renk başına prefill: renkDagilim'i sağlam adede göre ölçekle
+  const i=db.isemirleri.find(v=>v.id===id);const u=i.urunId?urun(i.urunId):null;const saglam=ieSaglam(i);
+  if(saglam<=0)return toast('Önce bir duraktan gelen (sağlam) adet gir');
+  const birim=ieBirimMaliyet(i);
+  const cols=(u&&renkObjs(u).length)?renkObjs(u).map(r=>({ad:r.ad,hex:r.hex})):((i.renkDagilim&&i.renkDagilim.length)?i.renkDagilim.map(r=>({ad:r.ad,hex:hexFromAd(r.ad)||'#ccc'})):[]);
   const planTop=(i.renkDagilim||[]).reduce((a,r)=>a+r.adet,0)||i.hedef;
-  const rows=cols.length?cols.map((r,x)=>{const plan=(i.renkDagilim||[]).find(z=>z.ad===r.ad);const oran=plan?plan.adet/planTop:1/cols.length;const pf=Math.round(saglam*oran);return `<div class="syrow"><span class="sw sm" style="background:${r.hex}"></span><span class="synm">${esc(r.ad||'—')}</span><input id="ta-${x}" data-ad="${esc(r.ad||'')}" type="number" inputmode="numeric" value="${pf}" class="syin"></div>`}).join(''):`<div class="syrow"><span class="synm">${esc(u?u.ad:i.urun)}</span><input id="ta-0" type="number" inputmode="numeric" value="${saglam}" class="syin"></div>`;
+  const rows=cols.length?cols.map((r,x)=>{const plan=(i.renkDagilim||[]).find(z=>z.ad===r.ad);const oran=plan?plan.adet/planTop:1/cols.length;const pf=Math.round(saglam*oran);return `<div class="syrow"><span class="sw sm" style="background:${r.hex}"></span><span class="synm">${esc(r.ad||'—')}</span><input id="ta-${x}" data-ad="${esc(r.ad||'')}" type="number" inputmode="numeric" value="${pf}" class="syin"></div>`}).join(''):`<div class="syrow"><span class="synm">${esc(i.urun)}</span><input id="ta-0" data-ad="" type="number" inputmode="numeric" value="${saglam}" class="syin"></div>`;
   open_('📦 Stoğa Al · #'+i.id,`
     <div class="mini">Üretimden çıkan sağlam adet: <b>${saglam} ${esc(i.birim||'adet')}</b></div>
-    ${karGoster()?`<div class="okbox" style="margin-top:8px">💰 Birim maliyet <b>${TL(birim)}</b> → ürünün maliyetine yazılacak</div>`:''}
+    ${!u?`<div class="infobox" style="margin-top:8px">🆕 <b>${esc(i.urun)}</b> (${esc(i.kod)}) yeni ürün olarak stoğa eklenecek.</div>`:''}
+    ${karGoster()?`<div class="okbox" style="margin-top:8px">💰 Net birim maliyet <b>${TL(birim)}</b>${!u?' · satış fiyatı sonra ürün kartından düzenlenir':' → ürünün maliyetine yazılacak'}</div>`:''}
     <div class="sec" style="margin-top:10px">Renk renk stoğa girecek</div>
     <div class="card" style="padding:6px 12px">${rows}</div>
-    <label class="ckrow" style="margin-top:10px"><input type="checkbox" id="ta-maliyet" checked><span>Birim maliyeti ürünün alış/maliyetine yaz</span></label>
+    <label class="ckrow" style="margin-top:10px"><input type="checkbox" id="ta-maliyet" checked><span>Net maliyeti ürünün alış/maliyetine yaz</span></label>
     <button class="btn g" style="margin-top:12px" onclick="isEmriStokla(${id})">✓ Stoğa Al & İş Emrini Kapat</button>`);
 }
 function isEmriStokla(id){
-  const i=db.isemirleri.find(v=>v.id===id);const u=urun(i.urunId);const birim=ieBirimMaliyet(i);
-  let toplam=0;
-  if(u&&renkObjs(u).length){renkObjs(u).forEach((r,x)=>{const v=+($('ta-'+x)?.value||0);r.stok=(+r.stok||0)+v;toplam+=v});u.stok=stokTop(u)}
-  else if(u){const v=+($('ta-0')?.value||0);u.stok=(+u.stok||0)+v;toplam=v}
-  if(u&&$('ta-maliyet')?.checked&&birim>0)u.alis=Math.round(birim);
-  // kalan borçlanmamış duraklar için fason borç
+  const i=db.isemirleri.find(v=>v.id===id);const birim=ieBirimMaliyet(i);const setMal=$('ta-maliyet')?.checked;
+  const rowsData=[];document.querySelectorAll('#mB .syrow input[id^="ta-"]').forEach(el=>rowsData.push({ad:el.getAttribute('data-ad')||'',adet:+el.value||0}));
+  const toplam=rowsData.reduce((a,r)=>a+r.adet,0);
+  let u=i.urunId?urun(i.urunId):null;
+  if(!u){ // numune → yeni ürün oluştur
+    const renkler=(i.renkDagilim&&i.renkDagilim.length)?i.renkDagilim.map((r,idx)=>({ad:r.ad,hex:hexFromAd(r.ad)||PAL[idx%PAL.length],foto:idx===0?(i.foto||''):'',barkod:genBarkod(),stok:0,kirik:null})):[{ad:'',hex:PAL[0],foto:i.foto||'',barkod:genBarkod(),stok:0,kirik:null}];
+    u={id:nid('u'),ad:i.urun,kod:i.kod,kat:'',marka:'',cesit:'Markalı',kaynak:'uretim',birim:i.birim||'seri',seri:5,bedenler:[],renkler,stok:0,alis:(setMal&&birim)?Math.round(birim):0,satis:(setMal&&birim)?Math.round(birim*1.4):0,karYuzde:40,kritik:10,pb:'TL',raf:'',pasif:false,not:'İş emri #'+i.id+' ile üretildi'};
+    db.urunler.push(u);i.urunId=u.id;
+  }
+  if(renkObjs(u).length){rowsData.forEach(rd=>{let r=renkObjs(u).find(x=>x.ad===rd.ad);if(!r&&renkObjs(u).length===1)r=renkObjs(u)[0];if(r)r.stok=(+r.stok||0)+rd.adet});u.stok=stokTop(u)}
+  else u.stok=(+u.stok||0)+toplam;
+  if(setMal&&birim>0)u.alis=Math.round(birim);
   (i.duraklar||[]).forEach(d=>{const t=(+d.ucret||0)*(+d.gelen||0);if(!d.borclandi&&d.fasonId&&t>0){const f=cari(d.fasonId);if(f){f.bakiye=(f.bakiye||0)+t;d.borclandi=true}}d.durum='tamam'});
   i.durum='tamam';i.stoklandi=true;
-  save();closeM();rUretim();toast(`${toplam} ${u?u.birim:'adet'} stoğa girdi ✓${u&&$('ta-maliyet')?.checked?' · maliyet güncellendi':''}`);
+  save();closeM();rUretim();toast(`${toplam} ${u.birim} stoğa girdi ✓${setMal?' · maliyet ₺'+Math.round(birim):''}`);
+}
+/* --- Malzeme sonradan ekle / düzenle --- */
+function ieMalDuzenle(id){const i=db.isemirleri.find(v=>v.id===id);if(!i||i.durum==='tamam')return;
+  ieMal=(i.malzeme||[]).map(m=>({...m}));
+  open_('Malzeme / Kumaş · #'+i.id,`
+    <datalist id="ie-ham-dl">${db.hammadde.map(h=>`<option value="${esc(h.ad)}">`).join('')}</datalist>
+    <div class="mini">Sonradan alınan/eklenen malzemeleri burada gir. "Elimde var" olanlar stoktan düşer.</div>
+    <div id="ie-mal" style="margin-top:8px"></div>
+    <button type="button" class="btn ghost sm" onclick="ieMalEkle()">+ malzeme</button>
+    <button class="btn" style="margin-top:10px" onclick="ieMalKaydet(${id})">Kaydet</button>`);
+  cizIeMal();
+}
+function ieMalKaydet(id){const i=db.isemirleri.find(v=>v.id===id);
+  const yeni=ieMal.filter(m=>(m.ad||'').trim()).map(m=>{const h=db.hammadde.find(x=>x.ad.toLowerCase()===m.ad.trim().toLowerCase());return {ad:m.ad.trim(),mik:+m.mik||0,birim:m.birim||(h?h.birim:''),tutar:+m.tutar||0,durum:m.durum||'var',hid:h?h.id:null}});
+  // yeni eklenen 'var' malzemelerden stok düş (öncekiler zaten düşmüştü — sadece yeni olanları düş)
+  const oncekiAd=new Set((i.malzeme||[]).map(m=>m.ad+'|'+m.mik));
+  yeni.forEach(m=>{if(m.durum==='var'&&m.hid&&!oncekiAd.has(m.ad+'|'+m.mik)){const h=db.hammadde.find(x=>x.id===m.hid);if(h)h.stok=Math.max(0,h.stok-m.mik)}});
+  i.malzeme=yeni;save();closeM();uretimDetay(id);toast('Malzeme güncellendi ✓');
+}
+/* --- İş emri paylaşım (WhatsApp) + A4 form --- */
+function ieShareText(i,x){
+  const durak=(x!=null&&x>=0&&i.duraklar[x])?i.duraklar[x]:null;
+  let t=`🏭 *${(db.firma||'ÖZ TEKSTİL').toLocaleUpperCase('tr-TR')} — İŞ EMRİ #${i.id}*\n`;
+  t+=`Ürün: *${i.urun}*${i.kod?' ('+i.kod+')':''}\n`;
+  t+=`Adet: *${i.hedef} ${i.birim||'adet'}*\n`;
+  if(i.renkDagilim&&i.renkDagilim.length)t+=`Renk: ${i.renkDagilim.map(r=>r.ad+' '+r.adet).join(' · ')}\n`;
+  if(durak){t+=`\n➡️ *Yapılacak işlem: ${durak.ad}*\n`;
+    if(durak.gonderilen)t+=`Gönderilen: ${durak.gonderilen} adet\n`;
+    if(durak.ucret)t+=`Anlaşılan: ₺${durak.ucret}/adet\n`;
+    if(durak.not)t+=`Not: ${durak.not}\n`;
+  }else{
+    t+=`\n*İşlem sırası:*\n`+i.duraklar.map((d,k)=>`${k+1}. ${d.ad}${fasonAd(d)?' — '+fasonAd(d):''}`).join('\n')+'\n';
+  }
+  const mals=(i.malzeme||[]).filter(m=>m.ad);
+  if(mals.length)t+=`\nMalzeme: ${mals.map(m=>m.ad+(m.mik?' '+m.mik+(m.birim||''):'')+(m.durum==='alinacak'?' (alınacak)':'')).join(', ')}\n`;
+  t+=`Termin: ${i.gun||'-'} gün`;
+  t+=`\n\n— ${db.firma||'Öz Tekstil'}${db.firmaTel?' · '+db.firmaTel:''}`;
+  return t;
+}
+function isEmriPaylas(id,x){
+  const i=db.isemirleri.find(v=>v.id===id);if(!i)return;
+  const durak=(x!=null&&x>=0&&i.duraklar[x])?i.duraklar[x]:null;
+  const f=durak&&durak.fasonId?cari(durak.fasonId):null;
+  const txt=ieShareText(i,x);
+  open_('📤 İş Emri Gönder'+(durak?' · '+durak.ad:''),`
+    <div class="mini">${f?esc(f.ad)+(f.tel?' · '+esc(f.tel):''):'Fason'} — gidecek mesaj:</div>
+    <div style="white-space:pre-wrap;background:#e7f6ea;border:1px solid #b6e0bf;border-radius:14px;padding:14px;margin-top:8px;font-size:13px;line-height:1.5;color:#0b3d1a">${esc(txt).replace(/\*(.+?)\*/g,'<b>$1</b>')}</div>
+    ${i.foto?`<div class="mini" style="margin-top:8px">🖼️ Ürün fotoğrafı da eklenecek</div><img src="${i.foto}" style="width:100%;max-height:190px;object-fit:cover;border-radius:12px;margin-top:6px">`:''}
+    <button class="btn g" onclick="isEmriWa(${id},${x==null?'null':x})">📱 ${i.foto?'Fotoğraflı Gönder':"WhatsApp'ta Gönder"}</button>
+    <button class="btn ghost sm" style="margin-top:8px" onclick="isEmriA4(${id})">📄 A4 Form Yazdır</button>`);
+}
+async function isEmriWa(id,x){
+  const i=db.isemirleri.find(v=>v.id===id);if(!i)return;
+  const durak=(x!=null&&x>=0&&i.duraklar[x])?i.duraklar[x]:null;
+  const f=durak&&durak.fasonId?cari(durak.fasonId):null;
+  const txt=ieShareText(i,x);
+  let ph=((f&&f.tel)||'').replace(/\D/g,'');if(ph){if(ph.length===10)ph='90'+ph;else if(ph[0]==='0')ph='9'+ph}
+  if(i.foto&&navigator.share){try{const file=dataURLtoFile(i.foto,'isemri-'+id+'.jpg');if(!navigator.canShare||navigator.canShare({files:[file]})){await navigator.share({files:[file],text:txt});return}}catch(e){if(e&&e.name==='AbortError')return}}
+  window.open(`https://wa.me/${ph}?text=${encodeURIComponent(txt)}`,'_blank');
+}
+function isEmriA4(id){
+  const i=db.isemirleri.find(v=>v.id===id);if(!i)return;
+  const renk=(i.renkDagilim&&i.renkDagilim.length)?i.renkDagilim.map(r=>`<span class="ietag">${esc(r.ad)}: <b>${r.adet}</b></span>`).join(''):'—';
+  const malRows=(i.malzeme||[]).length?i.malzeme.map(m=>`<tr><td>${esc(m.ad)}${m.durum==='alinacak'?' <i>(alınacak)</i>':''}</td><td class="r">${m.mik?esc(m.mik+' '+(m.birim||'')):''}</td></tr>`).join(''):'<tr><td colspan="2">—</td></tr>';
+  const durakRows=i.duraklar.map((d,k)=>`<tr><td>${k+1}. ${esc(d.ad)}</td><td>${esc(fasonAd(d)||'—')}</td><td class="r">${d.ucret?'₺'+d.ucret+'/ad':'—'}</td><td>${esc(d.not||'')}</td></tr>`).join('');
+  $('printarea').innerHTML=`<div class="ieA4">
+    <div class="ieh"><div><div class="ien">${esc(db.firma||'ÖZ TEKSTİL')}</div>${db.firmaTel?`<div class="ies">${esc(db.firmaTel)}</div>`:''}${db.firmaAdres?`<div class="ies">${esc(db.firmaAdres)}</div>`:''}</div><div class="iet">İŞ EMRİ<br>#${i.id}</div></div>
+    <div class="ieline"></div>
+    <table class="iem"><tr><td class="lb">Tarih</td><td>${dstr(i.baslangic)}</td><td class="lb">Termin</td><td>${i.gun||'-'} gün</td></tr>
+      <tr><td class="lb">Ürün</td><td><b>${esc(i.urun)}</b></td><td class="lb">Kod</td><td>${esc(i.kod||'-')}</td></tr>
+      <tr><td class="lb">Hedef</td><td><b>${i.hedef} ${esc(i.birim||'adet')}</b></td><td class="lb">Şekil</td><td>${esc(i.birim||'-')}</td></tr></table>
+    ${i.foto?`<div style="text-align:center;margin:10px 0"><img src="${i.foto}" class="ieimg"></div>`:''}
+    <div class="iesec">RENK DAĞILIMI</div><div style="margin:5px 0">${renk}</div>
+    <div class="iesec">MALZEME / KUMAŞ</div><table class="ietbl">${malRows}</table>
+    <div class="iesec">ÜRETİM AŞAMALARI</div><table class="ietbl"><tr><th>İşlem</th><th>Fason</th><th class="r">Ücret</th><th>Not</th></tr>${durakRows}</table>
+    <div class="iesign"><div>Teslim eden: ______________</div><div>Teslim alan: ______________</div></div>
+  </div>`;
+  const st=document.createElement('style');st.id='a4Style';st.textContent='@media print{@page{size:A4;margin:12mm}}';document.head.appendChild(st);
+  document.body.classList.add('printing');
+  setTimeout(()=>{window.print();document.body.classList.remove('printing');st.remove()},200);
 }
 
 /* ---------- PORTAL ---------- */
