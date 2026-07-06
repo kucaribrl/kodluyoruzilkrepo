@@ -200,6 +200,13 @@
     body.printing .fis td.r{text-align:right;white-space:nowrap}
     body.printing .fis small{color:#555}
     body.printing .fis .tot td{font-weight:800;font-size:16px;border-top:2px solid #000;border-bottom:none}
+    body.thermal #printarea{display:block!important;padding:0}
+    body.thermal .lbl{display:none!important}
+    .fisT{font-family:'Courier New',ui-monospace,monospace;color:#000;width:100%;font-size:12.5px;line-height:1.4}
+    .fisT .tc{text-align:center}.fisT .tb{font-weight:800}
+    .fisT .td{border-top:1px dashed #000;margin:5px 0}
+    .fisT .tl{display:flex;justify-content:space-between;gap:8px}
+    .fisT .ti{margin:3px 0}.fisT .tsub{display:flex;justify-content:space-between;gap:8px;padding-left:10px}
   }
   .warnbox{background:var(--bad-s);color:var(--bad);border-radius:11px;padding:10px 13px;font-size:12px;font-weight:700;margin-top:10px}
   .infobox{background:var(--thr-s);color:var(--thr);border-radius:11px;padding:10px 13px;font-size:12px;font-weight:700;margin-top:10px}
@@ -1043,7 +1050,8 @@ function satisFis(id){
     <div class="kv"><span class="k">Durum</span><span class="v">${durP}</span></div>
     ${(s.odemeler&&s.odemeler.length)?`<div class="sec" style="margin-top:12px">Ödemeler</div>`+s.odemeler.map(l=>`<div class="kv"><span class="k">${esc(l.tur)}${l.tur==='Çek'&&l.vade?' · vade '+dstr(l.vade):l.tur==='Kredi Kartı'?' · ≈34 gün':''}</span><span class="v pos">${money(l.tutar,l.pb)}</span></div>`).join(''):''}
     ${s.sevkiyat?`<div class="infobox" style="margin-top:12px">📦 <b>Sevkiyat:</b> ${esc(s.sevkiyat)}</div>`:''}
-    <div class="g2" style="margin-top:14px"><button class="btn ghost sm" onclick="fisYazdir(${id})">🖨️ Yazdır</button><button class="btn g sm" onclick="waFisPreview(${id})">📱 WhatsApp</button></div>
+    <div class="g2" style="margin-top:14px"><button class="btn sm" onclick="fisTermal(${id})">🧾 Termal Fiş</button><button class="btn g sm" onclick="waFisPreview(${id})">📱 WhatsApp</button></div>
+    <button class="btn ghost sm" style="margin-top:10px" onclick="fisYazdir(${id})">🖨️ A4 Yazdır</button>
     <div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="closeM();setTimeout(()=>formSatis(0,${id}),160)">✏️ Düzenle</button><button class="btn sm" onclick="satisDurum(${id})">${s.teslimDurum==='ayrildi'?'✓ Teslim Et':'🔖 Ayrıldı Yap'}</button></div>
     <button class="btn danger" onclick="silSatis(${id})">Satışı İptal Et</button>
   `);
@@ -1073,6 +1081,37 @@ function fisYazdir(id){const s=db.satislar.find(x=>x.id===id);
   const rows=s.kalemler.map(k=>{const sub=k.renkler&&k.renkler.length?k.renkler.map(r=>esc(r.ad)+'×'+r.mik).join(', '):k.mik+' '+k.birim;return `<tr><td>${esc(k.urun)}<br><small>${sub}</small></td><td class="r">${money(k.mik*k.fiyat,s.pb)}</td></tr>`}).join('');
   $('printarea').innerHTML=`<div class="fis"><h2>Öz Tekstil</h2><div>${esc(s.mus)} · ${tstr(s.tarih)}</div><table>${rows}${s.iskonto?`<tr><td>İskonto</td><td class="r">−%${s.iskonto}</td></tr>`:''}${s.kdv?`<tr><td>KDV %${s.kdv}</td><td class="r">+${money(s.kdvTutar||0,s.pb)}</td></tr>`:''}${s.tasima?`<tr><td>Taşıma</td><td class="r">+${money(s.tasima,s.pb)}</td></tr>`:''}<tr class="tot"><td>TOPLAM</td><td class="r">${money(s.tutar,s.pb)}</td></tr><tr><td>Ödenen</td><td class="r">${money(s.odenen,s.pb)}</td></tr><tr><td>Kalan</td><td class="r">${money(Math.max(0,s.tutar-s.odenen),s.pb)}</td></tr></table>${s.sevkiyat?`<div style="margin-top:8px"><b>Sevkiyat:</b> ${esc(s.sevkiyat)}</div>`:''}</div>`;
   document.body.classList.add('printing');setTimeout(()=>{window.print();document.body.classList.remove('printing')},150);
+}
+function fisTermal(id){const s=db.satislar.find(x=>x.id===id);
+  const line=(l,r)=>`<div class="tl"><span>${l}</span><span>${r}</span></div>`;
+  let items='';s.kalemler.forEach(k=>{const sub=k.renkler&&k.renkler.length?k.renkler.map(r=>esc(r.ad)+'×'+r.mik).join(' '):k.mik+' '+k.birim;items+=`<div class="ti">${esc(k.urun)}<div class="tsub"><span>${sub} × ${money(k.fiyat,s.pb)}</span><span>${money(k.mik*k.fiyat,s.pb)}</span></div></div>`});
+  const kalan=Math.max(0,s.tutar-s.odenen-(s.kesik||0));
+  $('printarea').innerHTML=`<div class="fisT">
+    <div class="tc tb" style="font-size:16px">ÖZ TEKSTİL</div>
+    <div class="tc" style="font-size:10px">Toptan Tekstil</div>
+    <div class="td"></div>
+    ${line('İrsaliye #'+s.id,tstr(s.tarih))}
+    <div>Müşteri: ${esc(s.mus)}</div>
+    <div class="td"></div>
+    ${items}
+    <div class="td"></div>
+    ${s.iskonto?line('İskonto','−%'+s.iskonto):''}
+    ${s.kdv?line('KDV %'+s.kdv,'+'+money(s.kdvTutar||0,s.pb)):''}
+    ${s.tasima?line('Taşıma','+'+money(s.tasima,s.pb)):''}
+    ${s.kesik?line('Kesik','−'+money(s.kesik,s.pb)):''}
+    <div class="tl tb" style="font-size:15px;margin-top:2px"><span>TOPLAM</span><span>${money(s.tutar,s.pb)}</span></div>
+    ${line('Ödenen',money(s.odenen,s.pb))}
+    ${line('KALAN',money(kalan,s.pb))}
+    <div class="td"></div>
+    <div>Ödeme: ${esc(s.odemeTur||'-')}</div>
+    ${s.sevkiyat?`<div>Sevkiyat: ${esc(s.sevkiyat)}</div>`:''}
+    <div class="td"></div>
+    <div class="tc" style="font-size:11px">Teşekkür ederiz 🙏</div>
+    <div style="height:16px"></div>
+  </div>`;
+  const st=document.createElement('style');st.id='thermStyle';st.textContent='@media print{@page{size:80mm auto;margin:3mm}}';document.head.appendChild(st);
+  document.body.classList.add('printing','thermal');
+  setTimeout(()=>{window.print();document.body.classList.remove('printing','thermal');st.remove()},160);
 }
 function satisDurum(id){const s=db.satislar.find(x=>x.id===id);s.teslimDurum=s.teslimDurum==='ayrildi'?'teslim':'ayrildi';save();closeM();go('satis');toast(s.teslimDurum==='ayrildi'?'Mal ayrıldı (rezerve) 🔖':'Teslim edildi ✓')}
 function silSatis(id){askConfirm('Satış iptal edilsin mi? Stok, bakiye, ödeme ve çek geri alınır.',()=>{
