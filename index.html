@@ -350,6 +350,8 @@ function seed(){return{
     {id:102,tip:'tedarikci',ad:'Antep Triko A.Ş.',tel:'0342 222 00 00',sehir:'Gaziantep',bakiye:24000},
     {id:201,tip:'fason',ad:'Aksu Atölye',tel:'0212 555 00 00',sehir:'İstanbul',bakiye:12000,durak:'Atölye'},
     {id:202,tip:'fason',ad:'Star Nakış',tel:'0212 555 11 11',sehir:'İstanbul',bakiye:5000,durak:'Nakış'},
+    {id:203,tip:'fason',ad:'Demir Kesimhane',tel:'0212 555 22 22',sehir:'İstanbul',bakiye:3000,durak:'Kesim'},
+    {id:204,tip:'fason',ad:'Ege Ütü & Paket',tel:'0212 555 33 33',sehir:'İstanbul',bakiye:0,durak:'Ütü / Paket'},
     {id:301,tip:'gider',ad:'Çaycı',bakiye:0},
     {id:302,tip:'gider',ad:'Yemekçi',bakiye:4500},
   ],
@@ -372,13 +374,14 @@ function seed(){return{
     {id:3,tip:'verilen',cariId:101,cari:'Antep Kumaşçı',tutar:300000,vade:Date.now()+30*86400000,banka:'Ziraat',durum:'portfoyde',verilisKur:32.40},
   ],
   isemirleri:[
-    {id:1,urunId:2,urun:'Basic Tişört',hedef:500,baslangic:Date.now()-15*86400000,gun:10,duraklar:[
-      {ad:'Kesim',firma:'Demir Kesimhane',gonderilen:500,gelen:500,defolu:0,durum:'tamam'},
-      {ad:'Nakış/Baskı',firma:'Star Nakış',gonderilen:500,gelen:495,defolu:5,durum:'tamam'},
-      {ad:'Atölye',firma:'Aksu Atölye',gonderilen:495,gelen:380,defolu:0,durum:'devam'},
-      {ad:'Ütü',firma:'',gonderilen:0,gelen:0,defolu:0,durum:'bekliyor'},
-      {ad:'Depo',firma:'Ana Depo',gonderilen:0,gelen:0,defolu:0,durum:'bekliyor'},
-    ],maliyet:40500,durum:'devam'},
+    {id:1,urunId:2,urun:'Basic Tişört',kod:'2026Y087',birim:'seri',hedef:80,renkDagilim:[{ad:'Beyaz',adet:40},{ad:'Siyah',adet:40}],
+     malzeme:[{hid:null,ad:'Süprem Kumaş',mik:180,birim:'kg',tutar:22500},{hid:null,ad:'Etiket + Poşet',mik:80,birim:'ad',tutar:1200}],
+     duraklar:[
+       {ad:'Kesim',fasonId:203,ucret:8,gonderilen:80,gelen:80,defolu:0,durum:'tamam',borclandi:true},
+       {ad:'Baskı',fasonId:202,ucret:12,gonderilen:80,gelen:78,defolu:2,durum:'tamam',borclandi:true},
+       {ad:'Dikim',fasonId:201,ucret:35,gonderilen:78,gelen:60,defolu:0,durum:'devam',borclandi:false},
+       {ad:'Ütü / Paket',fasonId:204,ucret:6,gonderilen:0,gelen:0,defolu:0,durum:'bekliyor',borclandi:false}
+     ],baslangic:Date.now()-15*86400000,gun:12,durum:'devam',stoklandi:false},
   ],
   ortakHarcama:[
     {id:1,ortak:'Sen (Birol)',tutar:22000,hesapId:1,aciklama:'Kişisel kart',tarih:Date.now()-2*86400000},
@@ -1643,76 +1646,166 @@ function cekTahsil(id){
 function cekKarsiliksiz(id){const c=db.cekler.find(x=>x.id===id);c.durum='karsiliksiz';const cc=cari(c.cariId);if(cc)cc.bakiye+=c.tutar;save();closeM();rCek();toast('Karşılıksız işlendi, borç geri eklendi')}
 
 /* ---------- ÜRETİM ---------- */
+/* ---------- ÜRETİM / FASON ---------- */
+const ISTASYON=['Kesim','Nakış','Baskı','Dikim','Ütü / Paket'];
+function fasonlar(){return db.cariler.filter(c=>c.tip==='fason')}
+function fasonAd(d){return (d.fasonId&&cari(d.fasonId))?cari(d.fasonId).ad:(d.firma||'')}
+function ieMalMaliyet(i){return (i.malzeme||[]).reduce((a,m)=>a+(+m.tutar||0),0)}
+function ieFasonMaliyet(i){return (i.duraklar||[]).reduce((a,d)=>a+(+d.ucret||0)*(+d.gelen||0),0)}
+function ieToplamMaliyet(i){return ieMalMaliyet(i)+ieFasonMaliyet(i)}
+function ieSaglam(i){const ds=i.duraklar||[];for(let k=ds.length-1;k>=0;k--)if((+ds[k].gelen||0)>0)return +ds[k].gelen;return 0}
+function ieBirimMaliyet(i){const s=ieSaglam(i);return s>0?ieToplamMaliyet(i)/s:0}
+function ieDefo(i){return (i.duraklar||[]).reduce((a,d)=>a+(+d.defolu||0),0)}
+function ieAktifDurak(i){return (i.duraklar||[]).find(d=>d.durum==='devam')||(i.duraklar||[]).find(d=>d.durum==='bekliyor')}
+
 function rUretim(){
-  let html=`<div class="sec">Aktif İş Emirleri <a onclick="formIsEmri()">+ Yeni</a></div>`;
+  let html=`<div class="sec">Üretim / Fason <a onclick="formIsEmri()">+ Yeni İş Emri</a></div>`;
   const aktif=db.isemirleri.filter(i=>i.durum!=='tamam');
+  const bitmis=db.isemirleri.filter(i=>i.durum==='tamam');
   html+=aktif.length?aktif.map(i=>{
-    const gec=-gunFark(i.baslangic+i.gun*86400000);
-    const aktifDurak=i.duraklar.find(d=>d.durum==='devam')||i.duraklar.find(d=>d.durum==='bekliyor')||i.duraklar[i.duraklar.length-1];
-    const tamam=i.duraklar.filter(d=>d.durum==='tamam').length;
-    return `<div class="card" style="margin-bottom:11px;padding:13px;cursor:pointer" onclick="uretimDetay(${i.id})"><div style="display:flex;align-items:center;gap:10px"><div class="av gray">👕</div><div class="mid"><div class="t">#${i.id} · ${esc(i.urun)}</div><div class="s">${i.hedef} adet · başladı ${dstr(i.baslangic)}</div></div>${i.durum==='devam'&&gec>0?`<span class="pill bad">${gec} gün geç</span>`:'<span class="pill ok">Zamanında</span>'}</div>
-      <div style="display:flex;gap:3px;margin-top:11px">${i.duraklar.map((d,x)=>`<div style="flex:1;height:6px;border-radius:3px;background:${d.durum==='tamam'?'var(--good)':d.durum==='devam'?'var(--ind2)':'var(--ln2)'}"></div>`).join('')}</div>
-      <div style="display:flex;justify-content:space-between;margin-top:7px;font-size:11px;color:var(--sub);font-weight:700"><span style="color:var(--ind2)">● ${esc(aktifDurak?aktifDurak.ad:'-')}</span><span>Hedef: ${dstr(i.baslangic+i.gun*86400000)}</span></div></div>`;
+    const ad=ieAktifDurak(i);const hedef=i.hedef||0;const yap=ieSaglam(i);const pct=hedef?Math.min(100,Math.round(yap/hedef*100)):0;
+    return `<div class="card" style="margin-bottom:11px;padding:13px;cursor:pointer" onclick="uretimDetay(${i.id})"><div style="display:flex;align-items:center;gap:10px"><div class="av gray">👕</div><div class="mid"><div class="t">#${i.id} · ${esc(i.urun)}</div><div class="s">${hedef} ${esc(i.birim||'adet')} · şu an: ${ad?esc(ad.ad)+(fasonAd(ad)?' ('+esc(fasonAd(ad))+')':''):'—'}</div></div><span class="pill low">%${pct}</span></div>
+      <div class="depoprog" style="margin-top:10px"><div class="bar"><i style="width:${pct}%"></i></div><span class="lbl">${yap}/${hedef}</span></div></div>`;
   }).join(''):emp('🏭','Aktif iş emri yok. + ile aç.');
+  if(bitmis.length){html+=`<div class="sec">Tamamlananlar</div>`+bitmis.slice(-5).reverse().map(i=>`<div class="card" style="margin-bottom:8px;padding:12px;opacity:.8;cursor:pointer" onclick="uretimDetay(${i.id})"><div style="display:flex;align-items:center;gap:10px"><div class="av g">✅</div><div class="mid"><div class="t">#${i.id} · ${esc(i.urun)}</div><div class="s">${ieSaglam(i)} ${esc(i.birim||'adet')} stoğa girdi${karGoster()?' · birim '+TL(ieBirimMaliyet(i)):''}</div></div><span class="pill ok">Tamam</span></div></div>`).join('');}
   html+=`<div class="sec">Hammadde <a onclick="stokTab='hammadde';go('stok')">tümü ›</a></div><div class="card">`+db.hammadde.slice(0,4).map(h=>`<div class="row" onclick="stokTab='hammadde';go('stok')"><div class="av gray">🧵</div><div class="mid"><div class="t">${esc(h.ad)}</div><div class="s">${esc(h.detay||'')}</div></div><div class="end"><div class="n ${h.stok<=h.kritik?'warnc':''}">${h.stok.toLocaleString('tr-TR')}</div><div class="u">${h.birim}</div></div></div>`).join('')+`</div>`;
   $('app').innerHTML=html;
 }
+/* --- Yeni iş emri --- */
+let ieMal=[];
 function formIsEmri(){
-  const kumaslar=db.hammadde.filter(h=>h.kat==='Kumaş');
+  if(!db.urunler.length)return toast('Önce ürün ekle');
+  ieMal=[];
+  const fs=fasonlar();
   open_('Yeni İş Emri',`
-    <label>Ürün</label><select id="ie-urun">${db.urunler.map(u=>`<option value="${u.id}">${esc(u.ad)}</option>`).join('')}</select>
-    <div class="g2"><div><label>Hedef Adet</label><input id="ie-hedef" type="number" value="500"></div><div><label>Kaç günde</label><input id="ie-gun" type="number" value="10"></div></div>
-    <label>Kullanılan Kumaş (stoktan düşülür)</label><select id="ie-kumas"><option value="0">— seçme —</option>${kumaslar.map(h=>`<option value="${h.id}">${esc(h.ad)} (${h.stok} ${h.birim})</option>`).join('')}</select>
-    <label>Kumaş Miktarı</label><input id="ie-kmik" type="number" value="0" placeholder="ör. 300">
-    <div class="infobox">Duraklar otomatik açılır: Kesim → Nakış → Atölye → Ütü → Depo. Kumaş seçersen stoktan düşülür.</div>
-    <button class="btn" onclick="kaydetIsEmri()">İş Emri Aç</button>`);
+    <label>Ürün</label><select id="ie-urun" onchange="ieRenkCiz()">${db.urunler.filter(u=>!u.pasif).map(u=>`<option value="${u.id}">${esc(u.ad)} (${esc(u.kod||'')})</option>`).join('')}</select>
+    <div class="g2"><div><label>Hedef</label><input id="ie-hedef" type="number" value="" placeholder="ör. 100" oninput="ieRenkCiz()"></div><div><label>Termin (gün)</label><input id="ie-gun" type="number" value="15"></div></div>
+    <div class="sec" style="margin-top:12px">🎨 Renk Dağılımı <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub);font-size:11px">(opsiyonel)</span></div>
+    <div id="ie-renk"></div>
+    <div class="sec" style="margin-top:12px">🧵 Malzeme <a onclick="ieMalEkle()">+ satır</a></div>
+    <div class="mini">Kesilen partiye göre elle gir. Tutar = o malzemenin toplam ₺ maliyeti. Hammadde seçersen stoktan düşülür.</div>
+    <div id="ie-mal" style="margin-top:6px"></div>
+    <div class="sec" style="margin-top:12px">🏭 Üretim Durakları</div>
+    <div class="mini">Bu ürün hangi işlemlerden geçecek? İşaretle, fasonu ve ₺/adet ücretini gir. (Nakış/baskı yoksa boş bırak.)</div>
+    ${fs.length?'':'<div class="warnbox" style="margin-top:6px">Hiç fason firma yok. Cari › Fason\'dan ekleyebilirsin (yine de durak açabilirsin).</div>'}
+    <div id="ie-durak" style="margin-top:6px">${ISTASYON.map((s,x)=>`
+      <label class="ckrow" style="margin:8px 0 0"><input type="checkbox" id="dk-${x}" ${x===0?'checked':''} onchange="$('dkf-${x}').style.display=this.checked?'block':'none'"><span>${s}</span></label>
+      <div id="dkf-${x}" style="display:${x===0?'block':'none'};padding-left:8px">
+        <div class="g2"><div><label style="margin-top:4px">Fason firma</label><select id="dkfas-${x}"><option value="0">— seç / dışarı —</option>${fs.map(f=>`<option value="${f.id}">${esc(f.ad)}</option>`).join('')}</select></div><div><label style="margin-top:4px">₺ / adet</label><input id="dkuc-${x}" type="number" inputmode="numeric" placeholder="0"></div></div>
+      </div>`).join('')}</div>
+    <button class="btn" style="margin-top:14px" onclick="kaydetIsEmri()">İş Emri Aç</button>`);
+  ieRenkCiz();cizIeMal();
 }
-function kaydetIsEmri(){const u=urun(+$('ie-urun').value);const hedef=+$('ie-hedef').value||0,gun=+$('ie-gun').value||10;if(hedef<=0)return toast('Hedef girin');
-  let mal=0;const kid=+$('ie-kumas').value,kmik=+$('ie-kmik').value||0;
-  if(kid&&kmik>0){const h=db.hammadde.find(x=>x.id===kid);if(h){h.stok=Math.max(0,h.stok-kmik);mal=kmik*h.alis}}
-  db.isemirleri.push({id:nid('ie'),urunId:u.id,urun:u.ad,hedef,baslangic:Date.now(),gun,maliyet:mal,durum:'devam',duraklar:[
-    {ad:'Kesim',firma:'',gonderilen:hedef,gelen:0,defolu:0,durum:'devam'},
-    {ad:'Nakış/Baskı',firma:'',gonderilen:0,gelen:0,defolu:0,durum:'bekliyor'},
-    {ad:'Atölye',firma:'',gonderilen:0,gelen:0,defolu:0,durum:'bekliyor'},
-    {ad:'Ütü',firma:'',gonderilen:0,gelen:0,defolu:0,durum:'bekliyor'},
-    {ad:'Depo',firma:'Ana Depo',gonderilen:0,gelen:0,defolu:0,durum:'bekliyor'}]});
-  save();closeM();rUretim();toast('İş emri açıldı ✓')}
+function ieRenkCiz(){const box=$('ie-renk');if(!box)return;const u=urun(+$('ie-urun').value);const hedef=+($('ie-hedef')?.value||0);
+  const cols=u?renkObjs(u):[];
+  if(!cols.length){box.innerHTML='<div class="mini">Bu üründe renk yok — toplam hedef üzerinden gider.</div>';return}
+  box.innerHTML=`<div class="card" style="padding:6px 12px">`+cols.map((r,i)=>`<div class="syrow"><span class="sw sm" style="background:${r.hex}"></span><span class="synm">${esc(r.ad||'—')}</span><input id="ier-${i}" data-ad="${esc(r.ad||'')}" type="number" inputmode="numeric" min="0" value="" placeholder="0" class="syin"></div>`).join('')+`</div><div class="mini" id="ie-renk-not"></div>`;
+}
+function ieMalEkle(){ieMal.push({hid:'0',ad:'',mik:0,birim:'',tutar:0});cizIeMal()}
+function ieMalSil(i){ieMal.splice(i,1);cizIeMal()}
+function ieMalSet(i,k,v){const m=ieMal[i];if(!m)return;if(k==='mik'||k==='tutar')m[k]=+v||0;else m[k]=v;
+  if(k==='hid'){const h=db.hammadde.find(x=>x.id==v);if(h){m.ad=h.ad;m.birim=h.birim;if(!m.tutar&&m.mik&&h.alis)m.tutar=Math.round(m.mik*h.alis)}cizIeMal()}
+}
+function cizIeMal(){const b=$('ie-mal');if(!b)return;
+  b.innerHTML=ieMal.length?ieMal.map((m,i)=>`<div class="card" style="padding:8px 10px;margin-bottom:6px">
+    <div style="display:flex;gap:6px;align-items:center"><select style="flex:1;margin:0" onchange="ieMalSet(${i},'hid',this.value)"><option value="0">Malzeme seç…</option>${db.hammadde.map(h=>`<option value="${h.id}" ${m.hid==h.id?'selected':''}>${esc(h.ad)} (${h.stok} ${h.birim})</option>`).join('')}<option value="x" ${m.hid==='x'?'selected':''}>Diğer (elle)</option></select><button class="del" onclick="ieMalSil(${i})">✕</button></div>
+    ${m.hid==='x'?`<input placeholder="Malzeme adı" value="${esc(m.ad||'')}" oninput="ieMalSet(${i},'ad',this.value)" style="margin-top:6px">`:''}
+    <div class="g2" style="margin-top:6px"><div><label style="margin-top:0">Miktar${m.birim?' ('+esc(m.birim)+')':''}</label><input type="number" inputmode="numeric" value="${m.mik||''}" oninput="ieMalSet(${i},'mik',this.value)"></div><div><label style="margin-top:0">Tutar (₺)</label><input type="number" inputmode="numeric" value="${m.tutar||''}" oninput="ieMalSet(${i},'tutar',this.value)"></div></div>
+  </div>`).join(''):'<div class="mini">Henüz malzeme eklenmedi.</div>';
+}
+function kaydetIsEmri(){const u=urun(+$('ie-urun').value);if(!u)return toast('Ürün seç');
+  const hedef=+$('ie-hedef').value||0,gun=+$('ie-gun').value||15;if(hedef<=0)return toast('Hedef adet gir');
+  // renk dağılımı
+  const renkDagilim=[];document.querySelectorAll('#ie-renk input[id^="ier-"]').forEach(el=>{const a=el.getAttribute('data-ad');const v=+el.value||0;if(v>0)renkDagilim.push({ad:a,adet:v})});
+  // duraklar
+  const duraklar=[];ISTASYON.forEach((s,x)=>{if($('dk-'+x)&&$('dk-'+x).checked){duraklar.push({ad:s,fasonId:+($('dkfas-'+x)?.value||0)||null,ucret:+($('dkuc-'+x)?.value||0)||0,gonderilen:0,gelen:0,defolu:0,durum:'bekliyor',borclandi:false})}});
+  if(!duraklar.length)return toast('En az bir durak seç');
+  duraklar[0].gonderilen=hedef;duraklar[0].durum='devam';
+  // malzeme + hammadde düş
+  const malzeme=ieMal.filter(m=>m.mik>0||m.tutar>0).map(m=>({hid:(m.hid&&m.hid!=='0'&&m.hid!=='x')?+m.hid:null,ad:m.ad||'Malzeme',mik:+m.mik||0,birim:m.birim||'',tutar:+m.tutar||0}));
+  malzeme.forEach(m=>{if(m.hid){const h=db.hammadde.find(x=>x.id===m.hid);if(h)h.stok=Math.max(0,h.stok-m.mik)}});
+  db.isemirleri.push({id:nid('ie'),urunId:u.id,urun:u.ad,kod:u.kod||'',birim:u.birim||'adet',hedef,renkDagilim,malzeme,duraklar,baslangic:Date.now(),gun,durum:'devam',stoklandi:false});
+  save();closeM();rUretim();toast('İş emri açıldı ✓ Malzeme stoktan düştü');
+}
+/* --- İş emri detay --- */
 function uretimDetay(id){
-  const i=db.isemirleri.find(x=>x.id===id);const gec=-gunFark(i.baslangic+i.gun*86400000);
-  let html=`<div class="kv"><span class="k">Ürün</span><span class="v">${esc(i.urun)} · ${i.hedef} adet</span></div>
-    <div class="kv"><span class="k">Başlangıç → Hedef</span><span class="v">${dstr(i.baslangic)} → ${dstr(i.baslangic+i.gun*86400000)}</span></div>
-    <div class="kv"><span class="k">Durum</span><span class="v ${i.durum==='devam'&&gec>0?'neg':'pos'}">${i.durum==='tamam'?'Tamamlandı':i.durum==='devam'&&gec>0?gec+' gün geç':'Zamanında'}</span></div>
-    <div class="sec" style="margin-top:14px">Fason Yolculuğu</div>`;
-  i.duraklar.forEach((d,x)=>{
-    html+=`<div class="card" style="margin-bottom:8px;padding:11px 13px"><div style="display:flex;justify-content:space-between;align-items:center"><div><b style="font-size:13.5px">${x+1}. ${esc(d.ad)}</b><div class="mini">${esc(d.firma||'firma atanmadı')}</div></div><span class="pill ${d.durum==='tamam'?'ok':d.durum==='devam'?'low':'n'}">${d.durum==='tamam'?'Tamam':d.durum==='devam'?'Devam':'Bekliyor'}</span></div>
-      ${d.gonderilen?`<div style="display:flex;gap:6px;margin-top:9px"><div style="flex:1;text-align:center;background:var(--ln2);border-radius:8px;padding:5px"><div style="font-weight:800">${d.gonderilen}</div><div style="font-size:9px;color:var(--sub)">GÖNDERİLEN</div></div><div style="flex:1;text-align:center;background:var(--ln2);border-radius:8px;padding:5px"><div style="font-weight:800">${d.gelen}</div><div style="font-size:9px;color:var(--sub)">GELEN</div></div><div style="flex:1;text-align:center;background:var(--ln2);border-radius:8px;padding:5px"><div style="font-weight:800;color:var(--bad)">${d.defolu}</div><div style="font-size:9px;color:var(--sub)">DEFOLU</div></div></div>`:''}
-      ${d.durum==='devam'?`<button class="btn sm" style="margin-top:9px" onclick="durakTeyit(${id},${x})">Adet Teyidi Gir</button>`:''}</div>`;
+  const i=db.isemirleri.find(x=>x.id===id);if(!i)return;
+  const kar=karGoster();const saglam=ieSaglam(i);const birim=ieBirimMaliyet(i);
+  const durIc={tamam:'✅',devam:'🔵',bekliyor:'⬜'};
+  let html=`<div class="card" style="padding:14px"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:800;font-size:16px">${esc(i.urun)}</div><div class="mini">${esc(i.kod||'')} · başladı ${dstr(i.baslangic)} · hedef ${i.hedef} ${esc(i.birim||'adet')}</div></div><span class="pill ${i.durum==='tamam'?'ok':'low'}">${i.durum==='tamam'?'Tamam':'Devam'}</span></div>
+    ${i.renkDagilim&&i.renkDagilim.length?`<div class="mini" style="margin-top:8px">🎨 ${i.renkDagilim.map(r=>esc(r.ad)+' '+r.adet).join(' · ')}</div>`:''}</div>`;
+  if(kar){html+=`<div class="total" style="margin-top:12px"><div><div class="l">Toplam Maliyet</div><div class="v">${TL(ieToplamMaliyet(i))}</div></div><div style="text-align:right"><div class="l">Birim Maliyet</div><div class="v pos">${birim?TL(birim):'—'} ${birim?'/'+esc(i.birim||'ad'):''}</div></div></div>
+    <div class="card" style="margin-top:8px;padding:4px 13px">
+      <div class="kv"><span class="k">🧵 Malzeme</span><span class="v">${TL(ieMalMaliyet(i))}</span></div>
+      <div class="kv"><span class="k">✂️ Fason işçilik</span><span class="v">${TL(ieFasonMaliyet(i))}</span></div>
+      <div class="kv"><span class="k">📦 Tamamlanan (sağlam)</span><span class="v">${saglam} / ${i.hedef}</span></div>
+      <div class="kv"><span class="k">🔥 Toplam defo/fire</span><span class="v" style="color:var(--bad)">${ieDefo(i)}</span></div>
+    </div>`;}
+  html+=`<div class="sec">Üretim Hattı</div><div class="card" style="padding:2px 14px">`;
+  i.duraklar.forEach((d,x)=>{const tutar=(+d.ucret||0)*(+d.gelen||0);const fad=fasonAd(d);
+    html+=`<div style="display:flex;gap:12px;padding:12px 0;${x<i.duraklar.length-1?'border-bottom:1px solid var(--ln)':''}">
+      <div style="flex:0 0 auto;font-size:22px;line-height:1">${durIc[d.durum]||'⬜'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:14.5px">${x+1}. ${esc(d.ad)}</b>${kar&&tutar?`<span class="mini" style="font-weight:800;color:var(--ink)">${TL(tutar)}</span>`:''}</div>
+        <div class="mini" style="margin-top:2px">${fad?esc(fad):'<span style="color:var(--sub)">fason atanmadı</span>'}${d.gonderilen?` · ${d.gonderilen} gönderildi → ${d.gelen} geldi${d.defolu?' · '+d.defolu+' defo':''}`:''}${d.ucret?` · ₺${d.ucret}/ad`:''}</div>
+        ${i.durum!=='tamam'?`<button class="btn ghost sm" style="margin-top:7px;width:auto;padding:7px 14px" onclick="durakGuncelle(${id},${x})">${d.durum==='tamam'?'Düzenle':'Adet / Fason Gir'}</button>`:''}
+      </div></div>`;
   });
-  if(karGoster())html+=`<div class="total" style="margin-top:10px"><div class="l">Tahmini birim maliyet</div><div class="v">${TL(i.maliyet/(i.hedef||1))}</div></div>`;
+  html+=`</div>`;
+  if(i.malzeme&&i.malzeme.length){html+=`<div class="sec">Kullanılan Malzeme</div><div class="card" style="padding:4px 13px">`+i.malzeme.map(m=>`<div class="kv"><span class="k">${esc(m.ad)}</span><span class="v">${m.mik?m.mik.toLocaleString('tr-TR')+' '+esc(m.birim||''):''}${kar&&m.tutar?' · '+TL(m.tutar):''}</span></div>`).join('')+`</div>`;}
+  if(i.durum!=='tamam'){html+=`<button class="btn g" style="margin-top:14px" onclick="isEmriTamamla(${id})">📦 Tamamla → ${saglam||'?'} ${esc(i.birim||'adet')} stoğa al</button>`;}
+  else{html+=`<div class="okbox" style="margin-top:14px">✅ ${ieSaglam(i)} ${esc(i.birim||'adet')} stoğa girdi${kar?` · birim maliyet ${TL(birim)}`:''}</div>`;}
   open_('İş Emri #'+i.id,html);
 }
-function durakTeyit(id,x){
-  const i=db.isemirleri.find(v=>v.id===id);const d=i.duraklar[x];
-  open_(d.ad+' · Teyit',`
-    <div class="mini">Gönderilen: <b>${d.gonderilen}</b> adet</div>
-    <label>Fason Firması</label><input id="d-firma" value="${esc(d.firma||'')}" placeholder="Aksu Atölye">
-    <div class="g2"><div><label>Gelen Adet</label><input id="d-gelen" type="number" value="${d.gonderilen}"></div><div><label>Defolu</label><input id="d-defolu" type="number" value="0"></div></div>
-    <label>Fason Ücreti (₺)</label><input id="d-ucret" type="number" value="0">
-    <button class="btn g" onclick="durakKaydet(${id},${x})">Teyit Et &amp; Sonraki Durağa Gönder</button>`);
+/* --- Durak güncelle --- */
+function durakGuncelle(id,x){
+  const i=db.isemirleri.find(v=>v.id===id);const d=i.duraklar[x];const fs=fasonlar();
+  const onceki=x>0?i.duraklar[x-1]:null;const varsayGonder=d.gonderilen||(onceki?(onceki.gelen-onceki.defolu):i.hedef)||i.hedef;
+  open_(d.ad+' · Güncelle',`
+    <label>Fason Firma</label><select id="d-fas"><option value="0">— dışarı / firma yok —</option>${fs.map(f=>`<option value="${f.id}" ${d.fasonId==f.id?'selected':''}>${esc(f.ad)}</option>`).join('')}</select>
+    <div class="g2"><div><label>Gönderilen</label><input id="d-gon" type="number" inputmode="numeric" value="${varsayGonder}"></div><div><label>₺ / adet</label><input id="d-uc" type="number" inputmode="numeric" value="${d.ucret||''}" placeholder="0"></div></div>
+    <div class="g2"><div><label>Gelen (sağlam)</label><input id="d-gel" type="number" inputmode="numeric" value="${d.gelen||''}" placeholder="0"></div><div><label>Defolu / fire</label><input id="d-def" type="number" inputmode="numeric" value="${d.defolu||''}" placeholder="0"></div></div>
+    <div class="infobox">Bu durak bitince fason firmaya <b>₺/adet × gelen</b> kadar borç yazılır. Defo/fire maliyeti sağlam mallara dağılır.</div>
+    <button class="btn" onclick="durakKaydet(${id},${x})">Kaydet</button>`);
 }
 function durakKaydet(id,x){
   const i=db.isemirleri.find(v=>v.id===id);const d=i.duraklar[x];
-  d.firma=$('d-firma').value.trim();d.gelen=+$('d-gelen').value||0;d.defolu=+$('d-defolu').value||0;d.durum='tamam';
-  const ucret=+$('d-ucret').value||0;i.maliyet+=ucret;
-  const saglam=d.gelen;
-  if(x<i.duraklar.length-1){const nx=i.duraklar[x+1];nx.gonderilen=saglam;nx.durum='devam'}
-  else{ // son durak (Depo) - mamül girişi
-    const u=urun(i.urunId);if(u){const seriEk=u.birim==='seri'?Math.floor(saglam/u.seri):saglam;u.stok+=seriEk}
-    i.durum='tamam';
-    // hammadde düş (basit: iş emri tamamında örnek düşüm)
-    toast('Üretim tamamlandı, mamül stoğa girdi ✓');
-  }
-  save();closeM();if(i.durum==='tamam')rUretim();else uretimDetay(id);
+  d.fasonId=+($('d-fas').value||0)||null;d.gonderilen=+$('d-gon').value||0;d.gelen=+$('d-gel').value||0;d.defolu=+$('d-def').value||0;d.ucret=+$('d-uc').value||0;
+  const bitti=d.gelen>0&&(d.gelen+d.defolu)>=d.gonderilen;
+  d.durum=bitti?'tamam':(d.gelen>0?'devam':'devam');
+  // fason borç (durak tamamlanınca, bir kez)
+  const tutar=d.ucret*d.gelen;
+  if(bitti&&!d.borclandi&&d.fasonId&&tutar>0){const f=cari(d.fasonId);if(f){f.bakiye=(f.bakiye||0)+tutar;d.borclandi=true;toast(`${f.ad} → ${TL(tutar)} fason borcu yazıldı`)}}
+  // sonraki durağa gönder
+  if(bitti&&x<i.duraklar.length-1){const nx=i.duraklar[x+1];if(!nx.gonderilen){nx.gonderilen=d.gelen;nx.durum='devam'}}
+  save();closeM();uretimDetay(id);
+}
+/* --- Tamamla → stoğa al --- */
+function isEmriTamamla(id){
+  const i=db.isemirleri.find(v=>v.id===id);const u=urun(i.urunId);const saglam=ieSaglam(i);
+  if(saglam<=0)return toast('Önce bir duraktan gelen adet gir');
+  const birim=ieBirimMaliyet(i);const cols=u?renkObjs(u):[];
+  // renk başına prefill: renkDagilim'i sağlam adede göre ölçekle
+  const planTop=(i.renkDagilim||[]).reduce((a,r)=>a+r.adet,0)||i.hedef;
+  const rows=cols.length?cols.map((r,x)=>{const plan=(i.renkDagilim||[]).find(z=>z.ad===r.ad);const oran=plan?plan.adet/planTop:1/cols.length;const pf=Math.round(saglam*oran);return `<div class="syrow"><span class="sw sm" style="background:${r.hex}"></span><span class="synm">${esc(r.ad||'—')}</span><input id="ta-${x}" data-ad="${esc(r.ad||'')}" type="number" inputmode="numeric" value="${pf}" class="syin"></div>`}).join(''):`<div class="syrow"><span class="synm">${esc(u?u.ad:i.urun)}</span><input id="ta-0" type="number" inputmode="numeric" value="${saglam}" class="syin"></div>`;
+  open_('📦 Stoğa Al · #'+i.id,`
+    <div class="mini">Üretimden çıkan sağlam adet: <b>${saglam} ${esc(i.birim||'adet')}</b></div>
+    ${karGoster()?`<div class="okbox" style="margin-top:8px">💰 Birim maliyet <b>${TL(birim)}</b> → ürünün maliyetine yazılacak</div>`:''}
+    <div class="sec" style="margin-top:10px">Renk renk stoğa girecek</div>
+    <div class="card" style="padding:6px 12px">${rows}</div>
+    <label class="ckrow" style="margin-top:10px"><input type="checkbox" id="ta-maliyet" checked><span>Birim maliyeti ürünün alış/maliyetine yaz</span></label>
+    <button class="btn g" style="margin-top:12px" onclick="isEmriStokla(${id})">✓ Stoğa Al & İş Emrini Kapat</button>`);
+}
+function isEmriStokla(id){
+  const i=db.isemirleri.find(v=>v.id===id);const u=urun(i.urunId);const birim=ieBirimMaliyet(i);
+  let toplam=0;
+  if(u&&renkObjs(u).length){renkObjs(u).forEach((r,x)=>{const v=+($('ta-'+x)?.value||0);r.stok=(+r.stok||0)+v;toplam+=v});u.stok=stokTop(u)}
+  else if(u){const v=+($('ta-0')?.value||0);u.stok=(+u.stok||0)+v;toplam=v}
+  if(u&&$('ta-maliyet')?.checked&&birim>0)u.alis=Math.round(birim);
+  // kalan borçlanmamış duraklar için fason borç
+  (i.duraklar||[]).forEach(d=>{const t=(+d.ucret||0)*(+d.gelen||0);if(!d.borclandi&&d.fasonId&&t>0){const f=cari(d.fasonId);if(f){f.bakiye=(f.bakiye||0)+t;d.borclandi=true}}d.durum='tamam'});
+  i.durum='tamam';i.stoklandi=true;
+  save();closeM();rUretim();toast(`${toplam} ${u?u.birim:'adet'} stoğa girdi ✓${u&&$('ta-maliyet')?.checked?' · maliyet güncellendi':''}`);
 }
 
 /* ---------- PORTAL ---------- */
