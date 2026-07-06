@@ -263,6 +263,10 @@
   .satfoto .ph{color:var(--sub);font-weight:700;font-size:13px}
   .satfoto img{width:100%;max-height:220px;object-fit:cover;display:block}
   .satfoto .rm{position:absolute;top:7px;right:7px;background:rgba(0,0,0,.6);color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800}
+  .wagal{display:flex;gap:8px;overflow-x:auto;margin-top:8px;padding-bottom:4px}
+  .wathumb{flex:0 0 auto;width:96px;text-align:center}
+  .wathumb img{width:96px;height:96px;object-fit:cover;border-radius:10px;border:1px solid var(--ln)}
+  .wathumb span{display:block;font-size:10px;color:var(--sub);font-weight:700;margin-top:3px;line-height:1.2;white-space:normal}
   .kv{display:flex;justify-content:space-between;padding:7px 0;font-size:13.5px;border-bottom:1px solid var(--ln)}
   .kv:last-child{border-bottom:none}.kv .k{color:var(--sub)}.kv .v{font-weight:800}
   .matrix{overflow-x:auto;border:1px solid var(--ln);border-radius:12px}
@@ -1180,31 +1184,57 @@ function satisFis(id){
   `);
 }
 function fisText(s){
-  let t=`*Öz Tekstil*\n${s.mus} · ${tstr(s.tarih)}\n\n`;
-  s.kalemler.forEach(k=>{const sub=k.renkler&&k.renkler.length?k.renkler.map(r=>r.ad+'×'+r.mik).join(', '):k.mik+' '+k.birim;t+=`• ${k.urun} (${sub}) — ${money(k.mik*k.fiyat,s.pb)}\n`});
-  if(s.iskonto)t+=`İskonto: %${s.iskonto}\n`;
+  const ciz='━━━━━━━━━━━━━━';
+  const d=new Date(s.tarih);const tarih=d.toLocaleDateString('tr-TR',{day:'2-digit',month:'long',year:'numeric'})+' · '+d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
+  let t=`🧾 *${(db.firma||'ÖZ TEKSTİL').toLocaleUpperCase('tr-TR')}*\n`;
+  if(db.firmaSlogan)t+=`_${db.firmaSlogan}_\n`;
+  t+=`${ciz}\n📅 ${tarih}\n🧾 İrsaliye No: *${s.id}*\n👤 ${s.mus}\n${ciz}\n\n🛍️ *Ürünler*\n`;
+  s.kalemler.forEach(k=>{
+    const sub=k.renkler&&k.renkler.length?k.renkler.map(r=>r.ad+' ×'+r.mik).join(' · '):k.mik+' '+k.birim;
+    t+=`▪️ *${k.urun}*\n   ${sub} · ${k.mik}×${money(k.fiyat,s.pb)} = ${money(k.mik*k.fiyat,s.pb)}\n`;
+  });
+  t+=`\n${ciz}\n`;
+  const hasAdj=s.iskonto||s.kdv||s.tasima;
+  if(hasAdj)t+=`Ara Toplam: ${money(s.araToplam||s.tutar,s.pb)}\n`;
+  if(s.iskonto)t+=`İskonto %${s.iskonto}: −${money((s.araToplam||0)*s.iskonto/100,s.pb)}\n`;
   if(s.kdv)t+=`KDV %${s.kdv}: +${money(s.kdvTutar||0,s.pb)}\n`;
   if(s.tasima)t+=`Taşıma: +${money(s.tasima,s.pb)}\n`;
-  t+=`\n*TOPLAM: ${money(s.tutar,s.pb)}*\nÖdenen: ${money(s.odenen,s.pb)}\nKalan: ${money(Math.max(0,s.tutar-s.odenen),s.pb)}`;
-  if(s.odemeler&&s.odemeler.length>1){t+=`\n\nÖdemeler:`;s.odemeler.forEach(l=>{t+=`\n- ${l.tur}: ${money(l.tutar,l.pb)}`})}
-  if(s.sevkiyat)t+=`\n\n📦 Sevkiyat: ${s.sevkiyat}`;
+  t+=`💵 *TOPLAM: ${money(s.tutar,s.pb)}*\n${ciz}\n`;
+  const kalan=Math.max(0,s.tutar-s.odenen-(s.kesik||0));
+  t+=`✅ Ödenen: ${money(s.odenen,s.pb)}\n`;
+  if(s.kesik)t+=`✂️ Kesik: ${money(s.kesik,s.pb)}\n`;
+  t+=kalan>0.5?`🔴 *Kalan: ${money(kalan,s.pb)}*\n`:`🟢 *Ödendi ✓*\n`;
+  if(s.odemeler&&s.odemeler.length>1){t+=`\n💳 *Ödemeler*\n`;s.odemeler.forEach(l=>{const ek=l.tur==='Çek'&&l.vade?' (vade '+dstr(l.vade)+')':'';t+=`• ${l.tur}${ek}: ${money(l.tutar,l.pb)}\n`})}
+  if(s.sevkiyat)t+=`\n📦 Sevkiyat: ${s.sevkiyat}\n`;
+  t+=`\n🙏 Bizi tercih ettiğiniz için teşekkür ederiz.`;
+  if(db.firmaTel)t+=`\n📞 ${db.firmaTel}`;
   return t;
 }
-function waFisPreview(id){const s=db.satislar.find(x=>x.id===id);const m=cari(s.mid);
+function saleImages(s){const imgs=[],seen=new Set();
+  if(s.foto&&!seen.has(s.foto)){seen.add(s.foto);imgs.push({src:s.foto,ad:'Sipariş fotoğrafı'})}
+  s.kalemler.forEach(k=>{const u=urun(k.uid);if(!u)return;let added=false;
+    if(k.renkler&&k.renkler.length&&u.renkler){k.renkler.forEach(rc=>{const ro=(u.renkler||[]).find(x=>x&&typeof x==='object'&&x.ad===rc.ad&&x.foto);if(ro&&!seen.has(ro.foto)){seen.add(ro.foto);imgs.push({src:ro.foto,ad:k.urun+' · '+ro.ad});added=true}})}
+    if(!added){const kap=urunKapak(u);if(kap&&!seen.has(kap)){seen.add(kap);imgs.push({src:kap,ad:k.urun})}}
+  });
+  return imgs;
+}
+function waFisPreview(id){const s=db.satislar.find(x=>x.id===id);const m=cari(s.mid);const imgs=saleImages(s);
+  const wamsg=fisText(s).replace(/\*(.+?)\*/g,'<b>$1</b>').replace(/_(.+?)_/g,'<i>$1</i>');
   open_('WhatsApp Önizleme',`
     <div class="mini">Müşteriye gidecek mesaj:</div>
-    <div style="white-space:pre-wrap;background:#e7f6ea;border:1px solid #b6e0bf;border-radius:12px;padding:13px;margin-top:8px;font-size:13.5px;line-height:1.5">${esc(fisText(s))}</div>
-    ${s.foto?`<div class="mini" style="margin-top:8px">📷 Bu fotoğraf da eklenecek:</div><img src="${s.foto}" style="width:100%;max-height:200px;object-fit:cover;border-radius:12px;margin-top:6px">`:''}
-    <button class="btn g" onclick="fisWhatsapp(${id})">📱 ${s.foto?"Fotoğraflı Gönder":"WhatsApp'ta Aç ve Gönder"}</button>
-    ${s.foto?`<div class="mini" style="margin-top:6px">Telefon paylaşım penceresinden WhatsApp'ı seç — fotoğraf ve mesaj birlikte gider. Bilgisayarda sadece mesaj gider, fotoğrafı elle eklersin.</div>`:(!m||!m.tel)?'<div class="mini" style="margin-top:6px">Müşteri telefonu yok — WhatsApp kişi seçtirir.</div>':''}
+    <div style="white-space:pre-wrap;background:#e7f6ea;border:1px solid #b6e0bf;border-radius:14px;padding:14px;margin-top:8px;font-size:13.5px;line-height:1.55;color:#0b3d1a">${wamsg}</div>
+    ${imgs.length?`<div class="mini" style="margin-top:10px">🖼️ ${imgs.length} görsel de eklenecek:</div><div class="wagal">${imgs.map(im=>`<div class="wathumb"><img src="${im.src}"><span>${esc(im.ad)}</span></div>`).join('')}</div>`:''}
+    <button class="btn g" onclick="fisWhatsapp(${id})">📱 ${imgs.length?"Görselli Gönder":"WhatsApp'ta Aç ve Gönder"}</button>
+    ${imgs.length?`<div class="mini" style="margin-top:6px">Telefon paylaşım penceresinden WhatsApp'ı seç — mesaj ve görseller birlikte gider. Bilgisayarda sadece mesaj gider, görselleri elle eklersin.</div>`:(!m||!m.tel)?'<div class="mini" style="margin-top:6px">Müşteri telefonu yok — WhatsApp kişi seçtirir.</div>':''}
   `);
 }
 function dataURLtoFile(durl,name){const arr=durl.split(',');const mime=(arr[0].match(/:(.*?);/)||[])[1]||'image/jpeg';const bstr=atob(arr[1]);let n=bstr.length;const u8=new Uint8Array(n);while(n--)u8[n]=bstr.charCodeAt(n);return new File([u8],name,{type:mime})}
 async function fisWhatsapp(id){const s=db.satislar.find(x=>x.id===id);const m=cari(s.mid);const txt=fisText(s);
   let ph=((m&&m.tel)||'').replace(/\D/g,'');if(ph){if(ph.length===10)ph='90'+ph;else if(ph[0]==='0')ph='9'+ph}
-  // Fotoğraf varsa telefonun paylaşım sayfasıyla resim+metin birlikte gönder
-  if(s.foto&&navigator.share){try{const file=dataURLtoFile(s.foto,'siparis-'+id+'.jpg');
-    if(!navigator.canShare||navigator.canShare({files:[file]})){await navigator.share({files:[file],text:txt});return}
+  // Görsel(ler) varsa telefonun paylaşım sayfasıyla resim+metin birlikte gönder
+  const imgs=saleImages(s);
+  if(imgs.length&&navigator.share){try{const files=imgs.map((im,i)=>dataURLtoFile(im.src,'urun-'+id+'-'+i+'.jpg'));
+    if(!navigator.canShare||navigator.canShare({files})){await navigator.share({files,text:txt});return}
   }catch(e){if(e&&e.name==='AbortError')return}}
   window.open(`https://wa.me/${ph}?text=${encodeURIComponent(txt)}`,'_blank');
 }
