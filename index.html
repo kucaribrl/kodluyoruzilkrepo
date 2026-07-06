@@ -120,6 +120,12 @@
   .dbox{margin-top:12px;border:1px solid var(--ln);border-radius:12px;overflow:hidden}
   .dline{display:flex;justify-content:space-between;gap:12px;padding:9px 13px;font-size:13.5px;border-top:1px solid var(--ln2)}
   .dline:first-child{border-top:none}.dline span{color:var(--sub)}.dline b{text-align:right;max-width:62%}
+  .exhead{display:flex;gap:8px;font-size:10px;font-weight:800;text-transform:uppercase;color:var(--sub);padding:6px 4px;border-bottom:1px solid var(--ln)}
+  .exhead span:first-child{flex:1}.exhead span:nth-child(2){width:90px;text-align:right}.exhead span:last-child{width:90px;text-align:right}
+  .exrow{display:flex;gap:8px;align-items:center;padding:9px 4px;border-bottom:1px solid var(--ln2)}
+  .exl{flex:1;min-width:0}.exl b{font-size:13.5px;font-weight:700}.exl small{display:block;color:var(--sub);font-size:11px}
+  .exb{width:90px;text-align:right;font-size:13px;font-weight:700}.exr{width:90px;text-align:right;font-size:13.5px;font-weight:800}
+  .exb.neg,.exr.neg{color:var(--bad)}.exb.pos,.exr.pos{color:var(--good)}
   .btn{width:100%;padding:14px;border:none;border-radius:13px;background:var(--ind2);color:#fff;font-size:15px;font-weight:800;margin-top:18px;cursor:pointer}
   .btn:active{opacity:.9}.btn.ghost{background:var(--ln2);color:var(--ind)}.btn.danger{background:var(--bad-s);color:var(--bad)}.btn.g{background:var(--good)}.btn.sm{padding:11px;font-size:13.5px;margin-top:0}
   .seg2{display:flex;background:var(--ln2);border-radius:11px;padding:3px}
@@ -290,6 +296,7 @@ function seed(){return{
   bekleyenPortal:[
     {id:1,mus:'Yılmaz Tekstil',mid:1,tarih:Date.now()-600000,kalemler:[{uid:1,urun:'Polo Yaka Triko',mik:30,birim:'seri',fiyat:133}],tutar:3990},
   ],
+  hareketler:[],
   cekler:[
     {id:1,tip:'alinan',cariId:1,cari:'Yılmaz Tekstil',tutar:15000,vade:Date.now()+4*86400000,banka:'Ziraat',durum:'portfoyde'},
     {id:2,tip:'alinan',cariId:2,cari:'Aksoy Konfeksiyon',tutar:45000,vade:Date.now()+11*86400000,banka:'İş Bankası',durum:'portfoyde'},
@@ -314,7 +321,9 @@ let db=load();
 function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(!d||!d.urunler)return seed();seqFix(d);return d}catch(e){return seed()}}
 function seqFix(d){ // id çakışmasını önle: her sıra numarasını mevcut en yüksek id'nin üstüne çek
   d.seq=d.seq||{};
+  d.hareketler=d.hareketler||[];
   const mx=(arr,base)=>{let m=base;(arr||[]).forEach(x=>{if(x&&+x.id>m)m=+x.id});return m+1};
+  d.seq.hr=Math.max(d.seq.hr||0,mx(d.hareketler,1000));
   d.seq.c=Math.max(d.seq.c||0,mx(d.cariler,1000));
   d.seq.u=Math.max(d.seq.u||0,mx(d.urunler,1000));
   d.seq.s=Math.max(d.seq.s||0,mx(d.satislar,1000));
@@ -836,7 +845,7 @@ function musAra(){const q=($('s-mus-in')?.value||'').trim().toLowerCase();const 
   box.style.display=box.innerHTML?'block':'none';
   if(!q)box.style.display='none';
 }
-function musSec(id){sMusId=id;const m=cari(id);if($('s-mus-in'))$('s-mus-in').value=m?m.ad:'';$('s-mus-list').style.display='none';musBilgi()}
+function musSec(id){sMusId=id;const m=cari(id);if($('s-mus-in'))$('s-mus-in').value=m?m.ad:'';$('s-mus-list').style.display='none';if(m&&m.paraTercih&&m.paraTercih!=='TL'&&!sepet.length&&!sEdit)setPB(m.paraTercih);musBilgi()}
 function musYeniEkle(){satisMusteriEkle(($('s-mus-in')?.value||'').trim())}
 function satisMusteriEkle(ad){
   _saleStash={sepet:sepet.map(k=>({...k,renkler:k.renkler?k.renkler.map(r=>({...r})):undefined})),sOdemeler:sOdemeler.map(l=>({...l})),sPB,sDurum,sCekFoto,isk:$('s-isk')?.value||0,kdv:$('s-kdv')?.value||0,tasima:$('s-tasima')?.value||0,sevk:$('s-sevk')?.value||'',kesik:$('s-kesik')?.value||0};
@@ -1098,12 +1107,13 @@ function formCari(tip,id,preAd){
     ${!isGid?`<div style="display:flex;gap:12px;align-items:center;margin-bottom:4px"><div class="cfoto" id="c-foto" onclick="$('c-foto-inp').click()">${c.foto?`<img src="${c.foto}">`:'📷'}</div><div class="mini">Resim ekle (isteğe bağlı)</div><input type="file" accept="image/*" id="c-foto-inp" style="display:none" onchange="cariFotoSec(this)"></div>`:''}
     <label>${isGid?'Gider Adı / Açıklama':'Ad / Firma'}</label><input id="c-ad" value="${esc(c.ad||'')}">
     ${!isGid?`<div class="g2"><div><label>Telefon</label><input id="c-tel" type="tel" inputmode="tel" value="${esc(c.tel||'')}" oninput="this.value=this.value.replace(/[^0-9 +()-]/g,'')" placeholder="05xx..."></div><div><label>Şehir</label><input id="c-sehir" value="${esc(c.sehir||'')}"></div></div>`:''}
-    ${(isTed||isFas)?`<label>Yetkili Kişi</label><input id="c-yetkili" placeholder="İrtibat kurulacak kişi" value="${esc(c.yetkili||'')}">`:''}
+    ${(isTed||isFas||isMus)?`<div class="g2"><div><label>Yetkili Kişi</label><input id="c-yetkili" placeholder="İrtibat" value="${esc(c.yetkili||'')}"></div><div><label>E-posta</label><input id="c-eposta" type="email" placeholder="ornek@mail.com" value="${esc(c.eposta||'')}" oninput="this.value=this.value.replace(/\\s/g,'')"></div></div>`:''}
     ${isMus?`<div class="g2"><div><label>Kredi Limiti</label><input id="c-limit" type="number" value="${c.limit||0}"></div><div><label>Grup</label><select id="c-grup"><option ${c.grup==='Bayi'?'selected':''}>Bayi</option><option ${c.grup==='Perakende'?'selected':''}>Perakende</option><option ${c.grup==='Özel'?'selected':''}>Özel</option></select></div></div>
     <label style="margin-top:12px">Müşteri Tipi</label>
     <div class="seg2"><div class="o ${!c.yabanci?'on':''}" id="mt-yerli" onclick="setMusTip(0)">🇹🇷 Yerli</div><div class="o ${c.yabanci?'on':''}" id="mt-yabanci" onclick="setMusTip(1)">🌍 Yabancı</div></div>
-    <div id="mt-yerli-box" style="display:${c.yabanci?'none':'block'}"><label>Adres</label><input id="c-adres" value="${esc(c.adres||'')}" placeholder="Açık adres"><label>Ambar / Sevkiyat</label><input id="c-ambar" value="${esc(c.ambar||'')}" placeholder="Malın gönderileceği ambar"></div>
-    <div id="mt-yabanci-box" style="display:${c.yabanci?'block':'none'}"><div class="g2"><div><label>Ülke</label><input id="c-ulke" value="${esc(c.ulke||'')}" placeholder="Irak, Rusya..."></div><div><label>Müşteri Kodu</label><input id="c-kod" value="${esc(c.kod||'')}" placeholder="gümrük/vergi kodu"></div></div></div>`:''}
+    <div id="mt-yerli-box" style="display:${c.yabanci?'none':'block'}"><label>Adres</label><input id="c-adres" value="${esc(c.adres||'')}" placeholder="Açık adres"><label>Ambar / Sevkiyat</label><input id="c-ambar" value="${esc(c.ambar||'')}" placeholder="Malın gönderileceği ambar"><div class="g2"><div><label>Vergi Dairesi</label><input id="c-vd" value="${esc(c.vd||'')}"></div><div><label>Vergi / TC No</label><input id="c-vno" inputmode="numeric" value="${esc(c.vno||'')}" oninput="this.value=this.value.replace(/[^0-9]/g,'')"></div></div></div>
+    <div id="mt-yabanci-box" style="display:${c.yabanci?'block':'none'}"><div class="g2"><div><label>Ülke</label><input id="c-ulke" value="${esc(c.ulke||'')}" placeholder="Irak, Rusya..."></div><div><label>Müşteri Kodu</label><input id="c-kod" value="${esc(c.kod||'')}" placeholder="gümrük/vergi kodu"></div></div></div>
+    <label>Tercih Ettiği Para Birimi <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub)">— satışta bu kur seçili gelir</span></label>${dvzSel('c-paratercih',c.paraTercih)}`:''}
     ${isTed?`<div class="g2"><div><label>Ne Tedarik Eder</label><select id="c-tedtur">${optList(TED_TUR,c.tedTur)}</select></div><div><label>Vade (gün)</label><input id="c-vade" type="number" placeholder="0" value="${c.vade||''}"></div></div>`:''}
     ${isFas?`<div class="g2"><div><label>İşlem Türü</label><select id="c-fasislem">${optList(FAS_ISLEM,c.fasIslem)}</select></div><div><label>Günlük Kapasite (adet)</label><input id="c-kapasite" type="number" placeholder="0" value="${c.kapasite||''}"></div></div>`:''}
     ${isGid?`<div class="g2"><div><label>Kategori</label><select id="c-gidkat">${optList(GID_KAT,c.gidKat)}</select></div><div><label>Aylık Sabit Tutar (₺)</label><input id="c-aylik" type="number" placeholder="0" value="${c.aylik||''}"></div></div>
@@ -1117,7 +1127,8 @@ function formCari(tip,id,preAd){
 function kaydetCari(tip,id){const ad=$('c-ad').value.trim();if(!ad)return toast('Ad gerekli');
   if(!id&&db.cariler.some(x=>x.tip===tip&&(x.ad||'').trim().toLowerCase()===ad.toLowerCase()))return toast('Bu isimde kayıt zaten var: '+ad);
   const o={tip,ad,bakiye:+$('c-bak').value||0,foto:cFoto};
-  if(tip==='musteri'){o.yabanci=musYabanci;if($('c-adres'))o.adres=$('c-adres').value.trim();if($('c-ambar'))o.ambar=$('c-ambar').value.trim();if($('c-ulke'))o.ulke=$('c-ulke').value.trim();if($('c-kod'))o.kod=$('c-kod').value.trim()}
+  if(tip==='musteri'){o.yabanci=musYabanci;if($('c-adres'))o.adres=$('c-adres').value.trim();if($('c-ambar'))o.ambar=$('c-ambar').value.trim();if($('c-ulke'))o.ulke=$('c-ulke').value.trim();if($('c-kod'))o.kod=$('c-kod').value.trim();if($('c-vd'))o.vd=$('c-vd').value.trim();if($('c-vno'))o.vno=$('c-vno').value.trim();if($('c-paratercih'))o.paraTercih=$('c-paratercih').value}
+  if($('c-eposta'))o.eposta=$('c-eposta').value.trim();
   const V=idn=>$(idn)?$(idn).value:undefined, VT=idn=>$(idn)?$(idn).value.trim():undefined, VN=idn=>$(idn)?(+$(idn).value||0):undefined;
   if($('c-tel'))o.tel=VT('c-tel'); if($('c-sehir'))o.sehir=VT('c-sehir'); if($('c-yetkili'))o.yetkili=VT('c-yetkili');
   if($('c-limit'))o.limit=VN('c-limit'); if($('c-grup'))o.grup=V('c-grup');
@@ -1141,6 +1152,13 @@ function cariKart(id){
   const dL=(k,v)=>v?`<div class="dline"><span>${k}</span><b>${esc(''+v)}</b></div>`:'';
   const detay=[
     dL('Yetkili',c.yetkili),
+    dL('E-posta',c.eposta),
+    isMus?dL('Adres',c.adres):'',
+    isMus?dL('Ambar',c.ambar):'',
+    isMus&&c.yabanci?dL('Ülke / Kod',[c.ulke,c.kod].filter(Boolean).join(' · ')):'',
+    isMus&&(c.vd||c.vno)?dL('Vergi',[c.vd,c.vno].filter(Boolean).join(' · ')):'',
+    isMus&&c.grup?dL('Grup',c.grup+(grupIsk(c.grup)?' (−%'+grupIsk(c.grup)+')':'')):'',
+    isMus&&c.paraTercih&&c.paraTercih!=='TL'?dL('Para tercihi',c.paraTercih):'',
     c.tip==='tedarikci'?dL('Tedarik',c.tedTur):'',
     c.tip==='tedarikci'&&c.vade?dL('Vade',c.vade+' gün'):'',
     c.tip==='fason'?dL('İşlem',c.fasIslem||c.durak):'',
@@ -1153,14 +1171,43 @@ function cariKart(id){
   ].filter(Boolean).join('');
   if(detay)extra+=`<div class="dbox">${detay}</div>`;
   open_(c.ad,`
-    <div class="total"><div><div class="l">${lbl}</div><div class="v ${cls}">${usd?USD(c.bakiyeUSD||0):TL(Math.abs(b))}</div></div><div style="text-align:right"><div class="mini">${esc(c.sehir||c.durak||'')}</div><div class="mini">${esc(c.tel||'')}</div></div></div>
+    <div class="total"><div><div class="l">${lbl}</div><div class="v ${cls}">${usd?USD(c.bakiyeUSD||0):TL(Math.abs(b))}</div></div><div style="text-align:right;overflow:hidden">${c.foto?`<img src="${c.foto}" style="width:44px;height:44px;border-radius:11px;object-fit:cover;margin-bottom:4px">`:''}<div class="mini">${esc(c.sehir||c.durak||'')}</div><div class="mini">${esc(c.tel||'')}</div></div></div>
     ${extra}
     <div class="g3" style="margin-top:14px">
       <button class="btn ${isMus?'g':''} sm" onclick="formOdeme(${id})">${isMus?'💰 Tahsilat':'💵 Ödeme'}</button>
-      ${isMus?`<button class="btn ghost sm" onclick="closeM();go('satis');setTimeout(formSatis,150)">🧾 Satış</button>`:`<button class="btn ghost sm" onclick="formAlim(${id})">📥 Alım</button>`}
+      ${isMus?`<button class="btn ghost sm" onclick="closeM();go('satis');setTimeout(()=>formSatis(),150)">🧾 Satış</button>`:`<button class="btn ghost sm" onclick="formAlim(${id})">📥 Alım</button>`}
       <button class="btn ghost sm" onclick="formCari('${c.tip}',${id})">✏️ Düzenle</button>
     </div>
-    ${isMus?`<div class="sec" style="margin-top:16px">Satışlar (${sat.length})</div>${sat.length?sat.map(s=>`<div class="li"><div class="lt">${tstr(s.tarih)}<small>${s.kalemler.length} kalem</small></div><b>${money(s.tutar,s.pb)}</b></div>`).join(''):'<div class="mini">Satış yok</div>'}`:''}
+    <button class="btn ghost sm" style="margin-top:10px" onclick="ekstreGoster(${id})">📄 Cari Ekstre (hesap dökümü)</button>
+    ${isMus?`<div class="sec" style="margin-top:16px">Son Satışlar (${sat.length})</div>${sat.length?sat.slice(0,6).map(s=>`<div class="li" onclick="event.stopPropagation();satisFis(${s.id})" style="cursor:pointer"><div class="lt">${tstr(s.tarih)}<small>${s.kalemler.map(k=>esc(k.urun)).join(', ')}</small></div><b>${money(s.tutar,s.pb)}</b></div>`).join(''):'<div class="mini">Satış yok</div>'}`:''}
+  `);
+}
+function cariEkstre(id){
+  const c=cari(id);const evs=[];const isMus=c.tip==='musteri';
+  db.satislar.filter(s=>s.mid===id).forEach(s=>{const div=satisDiv(s);
+    evs.push({t:s.tarih,ad:'Satış',det:s.kalemler.map(k=>k.urun).join(', ').slice(0,40),borc:s.tutar*div,sid:s.id});
+    if(s.odenen>0)evs.push({t:s.tarih+1,ad:'Ödeme (satışta)',det:s.odemeTur||'',alacak:s.odenen*div});
+    if(s.kesik>0)evs.push({t:s.tarih+2,ad:'Kesik',det:'müşteri kırdı',alacak:s.kesik*div});
+  });
+  (db.hareketler||[]).filter(h=>h.cariId===id).forEach(h=>{
+    const isTah=h.tip==='tahsilat';
+    if(h.tutar>0)evs.push({t:h.tarih,ad:isTah?'Tahsilat':'Ödeme',det:h.tur||'',[isMus===isTah?'alacak':'borc']:h.tutar});
+    if(h.kesik>0)evs.push({t:h.tarih+1,ad:'Kesik',det:'müşteri kırdı',alacak:h.kesik});
+  });
+  evs.sort((a,b)=>a.t-b.t);
+  const net=evs.reduce((a,e)=>a+(e.borc||0)-(e.alacak||0),0);
+  const devir=(c.bakiye||0)-net;
+  return {evs,devir};
+}
+function ekstreGoster(id){
+  const c=cari(id);const {evs,devir}=cariEkstre(id);let run=devir;
+  const rows=evs.map(e=>{run+=(e.borc||0)-(e.alacak||0);return `<div class="exrow"><div class="exl"><b>${e.ad}</b><small>${tstr(e.t)}${e.det?' · '+esc(e.det):''}</small></div><div class="exb ${e.borc?'neg':'pos'}">${e.borc?'+'+TL(e.borc):'−'+TL(e.alacak)}</div><div class="exr ${run>0?'neg':run<0?'pos':''}">${TL(Math.abs(run))}${run<0?' A':''}</div></div>`}).join('');
+  open_('Ekstre · '+c.ad,`
+    <div class="exhead"><span>Hareket</span><span>Tutar</span><span>Bakiye</span></div>
+    <div class="exrow"><div class="exl"><b>Devir (önceki bakiye)</b></div><div class="exb"></div><div class="exr ${devir>0?'neg':devir<0?'pos':''}">${TL(Math.abs(devir))}${devir<0?' A':''}</div></div>
+    ${rows||'<div class="mini" style="padding:10px">Hareket yok</div>'}
+    <div class="total" style="margin-top:12px"><div class="l">GÜNCEL BAKİYE</div><div class="v ${c.bakiye>0?'neg':c.bakiye<0?'pos':''}">${TL(Math.abs(c.bakiye||0))}${c.bakiye<0?' (alacaklı)':c.bakiye>0?' (borçlu)':''}</div></div>
+    <div class="mini" style="margin-top:6px">Borç kırmızı (+), tahsilat/ödeme yeşil (−). "A" = müşteri alacaklı.</div>
   `);
 }
 function formOdeme(id){
@@ -1182,6 +1229,7 @@ function kaydetOdeme(id){
     if(c.doviz==='USD'){c.bakiyeUSD=(c.bakiyeUSD||0)-(t/db.kurUSD)}else{c.bakiye-=t}
     if(tur==='Çek'){db.cekler.push({id:nid('cek'),tip:'verilen',cariId:c.id,cari:c.ad,tutar:t,vade:Date.now()+90*86400000,banka:'—',durum:'portfoyde',verilisKur:db.kurUSD})}else if(h){h.bakiye-=t}
   }
+  db.hareketler.push({id:nid('hr'),cariId:id,tip:isMus?'tahsilat':'odeme',tutar:t,kesik,tur,tarih:Date.now()});
   save();closeM();rCari();toast((isMus?'Tahsilat':'Ödeme')+' kaydedildi ✓ '+TL(t)+(isMus&&kesik>0?' + kesik '+TL(kesik):''))}
 function formAlim(id){
   const c=cari(id);
