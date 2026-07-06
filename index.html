@@ -825,12 +825,16 @@ function rSatis(){
   let list=[...db.satislar].sort((a,b)=>b.tarih-a.tarih);
   if(satisFilt==='ayrildi')list=list.filter(s=>s.teslimDurum==='ayrildi');
   else if(satisFilt==='teslim')list=list.filter(s=>(s.teslimDurum||'teslim')==='teslim');
+  else if(satisFilt==='depo')list=list.filter(s=>s.depo);
   const ayr=db.satislar.filter(s=>s.teslimDurum==='ayrildi').length;
-  const tabs=[['tum','Tümü'],['ayrildi','🔖 Ayrılan'+(ayr?' ('+ayr+')':'')],['teslim','✓ Teslim']];
+  const depoBek=depoBekleyen().length;
+  const tabs=[['tum','Tümü'],['depo','📦 Depo'+(depoBek?' ('+depoBek+')':'')],['ayrildi','🔖 Ayrılan'+(ayr?' ('+ayr+')':'')],['teslim','✓ Teslim']];
   let html=`<div class="tabs">`+tabs.map(t=>`<div class="tb ${satisFilt===t[0]?'on':''}" onclick="satisFilt='${t[0]}';rSatis()">${t[1]}</div>`).join('')+`</div>`;
+  if(satisFilt==='depo')html+=`<div class="mini" style="margin:2px 3px 0">📦 Depocuya gönderilen toplama emirleri. <b>Ayrılıyor</b> = bekliyor, <b>✓ Hazır</b> = depocu ayırdı.</div>`;
   html+=`<div class="sec">Satışlar <a onclick="formSatis()">+ Yeni</a></div><div class="card">`+(list.length?list.map(s=>{
     const ayrildi=s.teslimDurum==='ayrildi';const teslim=!ayrildi;const odendi=s.odenen>=s.tutar;
-    return `<div class="row" onclick="satisFis(${s.id})"><div class="svbars"><i class="svbar ${teslim?'teslim':''}" title="Teslim edildi"></i><i class="svbar ${odendi?'odendi':''}" title="Parası alındı"></i></div><div class="av ${ayrildi?'o':'g'}">${ayrildi?'🔖':'🧾'}</div><div class="mid"><div class="t">${esc(s.mus)}</div><div class="s">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div></div><div class="end"><div class="n">${money(s.tutar,s.pb)}</div><div class="u">${ayrildi?'🔖 ayrıldı':teslim?'✓ teslim':''}${odendi?' · 💰':''}</div></div></div>`}).join(''):emp('🧾','Kayıt yok.'))+`</div>`;
+    const depoBadge=s.depo==='bekliyor'?'<span class="pill low" style="margin-left:5px">📦 ayrılıyor</span>':s.depo==='hazir'?'<span class="pill ok" style="margin-left:5px">✓ hazır</span>':'';
+    return `<div class="row" onclick="satisFis(${s.id})"><div class="svbars"><i class="svbar ${teslim?'teslim':''}" title="Teslim edildi"></i><i class="svbar ${odendi?'odendi':''}" title="Parası alındı"></i></div><div class="av ${ayrildi?'o':'g'}">${ayrildi?'🔖':'🧾'}</div><div class="mid"><div class="t">${esc(s.mus)}${depoBadge}</div><div class="s">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div></div><div class="end"><div class="n">${money(s.tutar,s.pb)}</div><div class="u">${ayrildi?'🔖 ayrıldı':teslim?'✓ teslim':''}${odendi?' · 💰':''}</div></div></div>`}).join(''):emp('🧾',satisFilt==='depo'?'Depoda bekleyen sipariş yok.':'Kayıt yok.'))+`</div>`;
   $('app').innerHTML=html;
 }
 let sepet=[], sPB='TL', sVade=0, sEdit=0, sDurum='teslim', sMusId=0, sUrunId=0, sCekFoto='', sOdemeler=[], sDepo=false;
