@@ -476,9 +476,9 @@ function canSee(v){return yetki().views.split(',').includes(v)}
 function rolRenk(k){return {patron:'#b5820a',ortak:'#24487a',magaza:'#0f9d63',depocu:'#2d6cdf',fason:'#7a4fd0'}[k]||'#24487a'}
 function navFor(){
   const r=db.rol;
-  if(r==='depocu')return [['panel','📊','Panel'],['stok','📦','Stok'],['daha','⋯','Daha']];
-  if(r==='fason')return [['panel','📊','Panel'],['uretim','🏭','Üretim'],['daha','⋯','Daha']];
-  return [['panel','📊','Panel'],['satis','🧾','Satış'],['stok','📦','Stok'],['cari','👥','Cari'],['daha','⋯','Daha']];
+  if(r==='depocu')return [['panel','📊','Panel'],['stok','📦','Stok']];
+  if(r==='fason')return [['panel','📊','Panel'],['uretim','🏭','Üretim']];
+  return [['panel','📊','Panel'],['satis','🧾','Satış'],['stok','📦','Stok'],['cari','👥','Cari']];
 }
 
 /* =================== ROUTER =================== */
@@ -575,6 +575,7 @@ function rPanel(){
 function bekAct(i){if(window._bek&&window._bek[i])window._bek[i].act()}
 function modulListe(){
   const onay=db.bekleyenPortal.length;
+  const navVs=navFor().map(x=>x[0]);
   const all=[
     {ic:'🧾',ad:'Satış',v:'satis'},
     {ic:'📦',ad:'Stok',v:'stok'},
@@ -584,8 +585,11 @@ function modulListe(){
     {ic:'🏷️',ad:'Çek',v:'cek'},
     {ic:'🛍️',ad:'Portal',v:'portal',bd:onay||''},
     {ic:'📊',ad:'Rapor',v:'rapor'},
+    {ic:'⚙️',ad:'Ayarlar',v:'ayarlar'},
   ];
-  return all.filter(m=>canSee(m.v)).map(m=>({ic:m.ic,ad:m.ad,bd:m.bd,act:`go('${m.v}')`}));
+  const list=all.filter(m=>canSee(m.v)&&!navVs.includes(m.v)).map(m=>({ic:m.ic,ad:m.ad,bd:m.bd,act:`go('${m.v}')`}));
+  if(db.rol==='depocu')list.unshift({ic:'📋',ad:'Sayım',act:'depoSayim()'});
+  return list;
 }
 
 /* ---------- DAHA ---------- */
