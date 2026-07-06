@@ -211,6 +211,8 @@
   .warnbox{background:var(--bad-s);color:var(--bad);border-radius:11px;padding:10px 13px;font-size:12px;font-weight:700;margin-top:10px}
   .infobox{background:var(--thr-s);color:var(--thr);border-radius:11px;padding:10px 13px;font-size:12px;font-weight:700;margin-top:10px}
   .okbox{background:var(--good-s);color:var(--good);border-radius:11px;padding:10px 13px;font-size:12px;font-weight:700;margin-top:10px}
+  .depoitem{display:flex;justify-content:space-between;align-items:center;padding:5px 0;font-size:13.5px;border-top:1px dashed var(--ln)}
+  .depoitem:first-child{border-top:none}.depoitem span{color:var(--tx)}.depoitem b{font-weight:800}
   .kv{display:flex;justify-content:space-between;padding:7px 0;font-size:13.5px;border-bottom:1px solid var(--ln)}
   .kv:last-child{border-bottom:none}.kv .k{color:var(--sub)}.kv .v{font-weight:800}
   .matrix{overflow-x:auto;border:1px solid var(--ln);border-radius:12px}
@@ -459,6 +461,10 @@ function rPanel(){
   }
   if(db.rol==='magaza'||db.rol==='depocu'){ // teslim bekleyen (ayrılan) siparişler
     ayrilan.forEach(s=>bekleyen.push({ic:'🔖',bg:'var(--warn-s)',t:s.mus+' · mal ayrıldı',s:'teslim bekliyor · '+s.kalemler.length+' kalem',act:()=>{go('satis');setTimeout(()=>satisFis(s.id),150)}}));
+  }
+  // TOPLAMA EMİRLERİ — depocu hazırlasın işaretli satışlar
+  if(db.rol==='depocu'||db.rol==='magaza'||para){
+    depoBekleyen().forEach(s=>bekleyen.push({ic:'📦',bg:'var(--thr-s)',t:s.mus+' · toplama emri',s:'ayrılacak · İrsaliye #'+s.id+' · '+s.kalemler.length+' kalem',act:()=>depoEmri(s.id)}));
   }
   if(db.rol==='fason'){
     db.isemirleri.filter(i=>i.durum==='devam').forEach(i=>{const gec=-gunFark(i.baslangic+i.gun*86400000);bekleyen.push({ic:gec>0?'⏱️':'🏭',bg:gec>0?'var(--bad-s)':'var(--thr-s)',t:'İş Emri #'+i.id+(gec>0?' gecikti':''),s:i.urun+(gec>0?' · '+gec+' gün geç':' · devam'),act:()=>uretimDetay(i.id)})});
@@ -792,15 +798,15 @@ function rSatis(){
     return `<div class="row" onclick="satisFis(${s.id})"><div class="svbars"><i class="svbar ${teslim?'teslim':''}" title="Teslim edildi"></i><i class="svbar ${odendi?'odendi':''}" title="Parası alındı"></i></div><div class="av ${ayrildi?'o':'g'}">${ayrildi?'🔖':'🧾'}</div><div class="mid"><div class="t">${esc(s.mus)}</div><div class="s">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div></div><div class="end"><div class="n">${money(s.tutar,s.pb)}</div><div class="u">${ayrildi?'🔖 ayrıldı':teslim?'✓ teslim':''}${odendi?' · 💰':''}</div></div></div>`}).join(''):emp('🧾','Kayıt yok.'))+`</div>`;
   $('app').innerHTML=html;
 }
-let sepet=[], sPB='TL', sVade=0, sEdit=0, sDurum='teslim', sMusId=0, sUrunId=0, sCekFoto='', sOdemeler=[];
+let sepet=[], sPB='TL', sVade=0, sEdit=0, sDurum='teslim', sMusId=0, sUrunId=0, sCekFoto='', sOdemeler=[], sDepo=false;
 function pbKur(pb){return pb==='USD'?db.kurUSD:pb==='EUR'?db.kurEUR:1}
 function setDurum(d){sDurum=d;$('td-teslim').classList.toggle('on',d==='teslim');$('td-ayrildi').classList.toggle('on',d==='ayrildi')}
 function formSatis(pre,editId){
-  sepet=[];sPB='TL';sVade=0;sEdit=editId||0;sDurum='teslim';sMusId=0;sUrunId=0;sCekFoto='';sOdemeler=[];
+  sepet=[];sPB='TL';sVade=0;sEdit=editId||0;sDurum='teslim';sMusId=0;sUrunId=0;sCekFoto='';sOdemeler=[];sDepo=false;
   if(!db.cariler.some(c=>c.tip==='musteri'))return toast('Önce müşteri ekle (Cari)');
   if(!db.urunler.length)return toast('Önce ürün ekle (Stok)');
   let eIsk=0,eKdv=10,eTasima=0,eSevk='',eKesik=0;
-  if(editId){const s=db.satislar.find(x=>x.id===editId);if(s){sMusId=s.mid;sPB=s.pb;sDurum=s.teslimDurum||'teslim';eIsk=s.iskonto||0;eKdv=s.kdv||0;eTasima=s.tasima||0;eSevk=s.sevkiyat||'';eKesik=s.kesik||0;sOdemeler=(s.odemeler||(s.odenen>0?[{tur:s.odemeTur||'Nakit',tutar:s.odenen,pb:s.pb,hesapId:s.odemeHesapId||0,vade:s.cekVade||0,foto:s.cekFoto||''}]:[])).map(l=>({...l}));sepet=s.kalemler.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:k.fiyat,renkler:k.renkler?k.renkler.map(r=>({...r})):undefined}))}}
+  if(editId){const s=db.satislar.find(x=>x.id===editId);if(s){sMusId=s.mid;sPB=s.pb;sDurum=s.teslimDurum||'teslim';eIsk=s.iskonto||0;eKdv=s.kdv||0;eTasima=s.tasima||0;eSevk=s.sevkiyat||'';eKesik=s.kesik||0;sDepo=!!s.depo;sOdemeler=(s.odemeler||(s.odenen>0?[{tur:s.odemeTur||'Nakit',tutar:s.odenen,pb:s.pb,hesapId:s.odemeHesapId||0,vade:s.cekVade||0,foto:s.cekFoto||''}]:[])).map(l=>({...l}));sepet=s.kalemler.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:k.fiyat,renkler:k.renkler?k.renkler.map(r=>({...r})):undefined}))}}
   else if(pre){const u=urun(pre);if(u){sMusId=0;sepet.push({uid:u.id,urun:u.ad,mik:1,birim:u.birim,fiyat:u.satis})}}
   if(!sOdemeler.length)sOdemeler=[{tur:'Nakit',tutar:0,pb:sPB,hesapId:(db.hesaplar[0]&&db.hesaplar[0].id)||0,vade:0,foto:''}];
   const musName=sMusId?(cari(sMusId)?.ad||''):'';
@@ -828,6 +834,7 @@ function formSatis(pre,editId){
     <div class="mini" id="s-odeme-ozet" style="margin-top:7px"></div>
     <label style="margin-top:14px">Sevkiyat / Kargo Notu</label><textarea id="s-sevk" rows="2" placeholder="Ambar, kargo, kod, çuval üzerine yazılacak...">${esc(eSevk)}</textarea>
     <label>Durum — mal nerede?</label><div class="seg2"><div class="o ${sDurum==='teslim'?'on':''}" id="td-teslim" onclick="setDurum('teslim')">✓ Teslim Edildi</div><div class="o ${sDurum==='ayrildi'?'on':''}" id="td-ayrildi" onclick="setDurum('ayrildi')">🔖 Ayrıldı (rezerve)</div></div>
+    <label class="ckrow" style="margin-top:10px"><input type="checkbox" id="s-depo" ${sDepo?'checked':''}><span>📦 Depocu hazırlasın — malı ayırması için toplama emri gönder</span></label>
     <button class="btn" onclick="kaydetSatis()">${editId?'Değişikliği Kaydet':'Satışı Tamamla'}</button>
   `);
   musBilgi();cizSepet();cizOdeme();
@@ -1022,7 +1029,7 @@ function kaydetSatis(){
   let kesik=Math.max(0,+($('s-kesik')?.value||0));kesik=Math.min(kesik,Math.max(0,tutar-oden)); // kalanı aşamaz
   const odetur=odemeler.length>1?'Karışık':(odemeler[0]?odemeler[0].tur:'—');
   const old=sEdit?db.satislar.find(x=>x.id===sEdit):null;
-  const data={tip:'satis',mid:m.id,mus:m.ad,kalemler:sepet.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:k.fiyat,renkler:k.renkler?k.renkler.map(r=>({...r})):undefined})),araToplam:h.ara,iskonto:h.isk,vadeFarki:h.vf,kdv:h.kdv,kdvTutar:h.kdvPB,tasima:h.tasima,sevkiyat:($('s-sevk')?.value||'').trim(),tutar,odenen:oden,kesik,pb:sPB,durum:'tamam',teslimDurum:sDurum,odemeler,odemeTur:odetur};
+  const data={tip:'satis',mid:m.id,mus:m.ad,kalemler:sepet.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:k.fiyat,renkler:k.renkler?k.renkler.map(r=>({...r})):undefined})),araToplam:h.ara,iskonto:h.isk,vadeFarki:h.vf,kdv:h.kdv,kdvTutar:h.kdvPB,tasima:h.tasima,sevkiyat:($('s-sevk')?.value||'').trim(),tutar,odenen:oden,kesik,pb:sPB,durum:'tamam',teslimDurum:sDurum,depo:$('s-depo')?.checked?((old&&old.depo==='hazir')?'hazir':'bekliyor'):null,odemeler,odemeTur:odetur};
   const commit=()=>{
     if(old)revertSatis(old);
     if(sEdit&&old){data.id=old.id;data.tarih=old.tarih;Object.assign(old,data);applySatis(old);save();closeM();go('satis');toast('Satış güncellendi ✓')}
@@ -1048,10 +1055,12 @@ function satisFis(id){
     ${s.kesik?`<div class="kv"><span class="k">Kesik (müşteri kırdı)</span><span class="v" style="color:var(--thr)">${money(s.kesik,s.pb)}</span></div>`:''}
     <div class="kv"><span class="k">Kalan</span><span class="v ${s.tutar-s.odenen-(s.kesik||0)>0.5?'neg':'pos'}">${money(Math.max(0,s.tutar-s.odenen-(s.kesik||0)),s.pb)}</span></div>
     <div class="kv"><span class="k">Durum</span><span class="v">${durP}</span></div>
+    ${s.depo?`<div class="kv"><span class="k">Depo</span><span class="v">${s.depo==='hazir'?'<span class="pill ok">✓ Hazırlandı</span>':'<span class="pill low">📦 Ayrılıyor</span>'}</span></div>`:''}
     ${(s.odemeler&&s.odemeler.length)?`<div class="sec" style="margin-top:12px">Ödemeler</div>`+s.odemeler.map(l=>`<div class="kv"><span class="k">${esc(l.tur)}${l.tur==='Çek'&&l.vade?' · vade '+dstr(l.vade):l.tur==='Kredi Kartı'?' · ≈34 gün':''}</span><span class="v pos">${money(l.tutar,l.pb)}</span></div>`).join(''):''}
     ${s.sevkiyat?`<div class="infobox" style="margin-top:12px">📦 <b>Sevkiyat:</b> ${esc(s.sevkiyat)}</div>`:''}
     <div class="g2" style="margin-top:14px"><button class="btn sm" onclick="fisTermal(${id})">🧾 Termal Fiş</button><button class="btn g sm" onclick="waFisPreview(${id})">📱 WhatsApp</button></div>
     <button class="btn ghost sm" style="margin-top:10px" onclick="fisYazdir(${id})">🖨️ A4 Yazdır</button>
+    ${s.depo?`<button class="btn ${s.depo==='hazir'?'ghost':'g'} sm" style="margin-top:10px" onclick="closeM();setTimeout(()=>depoEmri(${id}),160)">📦 Toplama Emri${s.depo==='hazir'?' (hazır)':''}</button>`:''}
     <div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="closeM();setTimeout(()=>formSatis(0,${id}),160)">✏️ Düzenle</button><button class="btn sm" onclick="satisDurum(${id})">${s.teslimDurum==='ayrildi'?'✓ Teslim Et':'🔖 Ayrıldı Yap'}</button></div>
     <button class="btn danger" onclick="silSatis(${id})">Satışı İptal Et</button>
   `);
@@ -1114,6 +1123,21 @@ function fisTermal(id){const s=db.satislar.find(x=>x.id===id);
   setTimeout(()=>{window.print();document.body.classList.remove('printing','thermal');st.remove()},160);
 }
 function satisDurum(id){const s=db.satislar.find(x=>x.id===id);s.teslimDurum=s.teslimDurum==='ayrildi'?'teslim':'ayrildi';save();closeM();go('satis');toast(s.teslimDurum==='ayrildi'?'Mal ayrıldı (rezerve) 🔖':'Teslim edildi ✓')}
+/* ---- Depo toplama/ayırma emri ---- */
+function depoBekleyen(){return db.satislar.filter(s=>s.depo==='bekliyor').sort((a,b)=>a.tarih-b.tarih)}
+function depoEmri(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;
+  const items=s.kalemler.map(k=>{const u=urun(k.uid);const raf=(u&&u.raf)?u.raf:'—';
+    const rows=k.renkler&&k.renkler.length?k.renkler.map(r=>`<div class="depoitem"><span>${esc(r.ad)}</span><b>${r.mik} ${k.birim}</b></div>`).join(''):`<div class="depoitem"><span>—</span><b>${k.mik} ${k.birim}</b></div>`;
+    return `<div class="card" style="padding:11px;margin-bottom:9px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><b>${esc(k.urun)}</b><span class="pill low">RAF ${esc(raf)}</span></div>${rows}</div>`}).join('');
+  open_('📦 Toplama Emri · İrsaliye #'+id,`
+    <div class="mini">${esc(s.mus)} · ${tstr(s.tarih)}</div>
+    <div class="infobox">Aşağıdaki ürünleri renk renk ayır, hazırla. Bittiğinde "Hazırladım" bas.</div>
+    ${items}
+    ${s.sevkiyat?`<div class="okbox">📦 Sevkiyat: ${esc(s.sevkiyat)}</div>`:''}
+    ${s.depo==='hazir'?'<div class="okbox">✓ Bu sipariş hazırlandı</div>':`<button class="btn g" onclick="depoHazirla(${id})">✓ Hazırladım / Ayırdım</button>`}
+  `);
+}
+function depoHazirla(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;s.depo='hazir';save();closeM();render();toast('Sipariş hazırlandı ✓ Patrona bildirildi')}
 function silSatis(id){askConfirm('Satış iptal edilsin mi? Stok, bakiye, ödeme ve çek geri alınır.',()=>{
   const s=db.satislar.find(x=>x.id===id);revertSatis(s);
   db.satislar=db.satislar.filter(x=>x.id!==id);save();closeM();go('satis');toast('İptal edildi')})}
