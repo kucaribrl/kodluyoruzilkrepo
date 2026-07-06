@@ -884,7 +884,8 @@ async function kameraTara(){
     $('ov').addEventListener('click',function h(e){if(e.target.id==='ov'){done=true;stream.getTracks().forEach(t=>t.stop());$('ov').removeEventListener('click',h)}});
   }catch(e){toast('Kameraya erişilemedi')}
 }
-function grupIsk(g){return {Bayi:5,'Özel':8,Perakende:0}[g]||0}
+const MUS_GRUP=['Bayi','Toptancı','Aracı','Perakende','Özel'];
+function grupIsk(g){return {Bayi:5,'Toptancı':7,'Aracı':6,'Özel':8,Perakende:0}[g]||0}
 function musBilgi(){const m=sMusId?cari(sMusId):null;const el=$('s-musinfo');if(!el)return;if(!m){el.innerHTML='';return}
   const asim=m.bakiye>0&&m.limit&&m.bakiye>m.limit*0.9;
   const gi=grupIsk(m.grup);if($('s-isk')&&!sEdit){$('s-isk').value=gi;cizSepet()}
@@ -1075,7 +1076,12 @@ function rCari(){
   const tabs=[['musteri','👥 Müşteri'],['tedarikci','🚚 Tedarikçi'],['fason','🧵 Fason'],['gider','☕ Gider']];
   let html=`<div class="tabs">`+tabs.map(t=>`<div class="tb ${cariTab===t[0]?'on':''}" onclick="cariTab='${t[0]}';rCari()">${t[1]}</div>`).join('')+`</div>`;
   html+=`<input class="search" id="ara-cari" placeholder="🔍 Ara..." oninput="rCariList()">`;
-  if(cariTab==='musteri'){const tk=db.cariler.filter(c=>c.tip==='musteri').reduce((a,c)=>a+(c.kesikToplam||0),0);if(tk>0)html+=`<div class="warnbox" style="margin-bottom:10px">✂️ Tüm müşterilerin toplam kesiği (zararın): <b>${TL(tk)}</b></div>`}
+  if(cariTab==='musteri'){
+    const borclu=db.cariler.filter(c=>c.tip==='musteri'&&c.bakiye>0).length;
+    const cuma=new Date().getDay()===5;
+    html+=`<button class="btn ${cuma?'g':'ghost'} sm" style="margin-bottom:10px" onclick="tahsilatHatirlat()">🔔 Tahsilat Hatırlatma${borclu?' ('+borclu+')':''}${cuma?' · Bugün Cuma!':''}</button>`;
+    const tk=db.cariler.filter(c=>c.tip==='musteri').reduce((a,c)=>a+(c.kesikToplam||0),0);if(tk>0)html+=`<div class="warnbox" style="margin-bottom:10px">✂️ Tüm müşterilerin toplam kesiği (zararın): <b>${TL(tk)}</b></div>`;
+  }
   html+=`<div class="card" id="cari-list"></div>`;
   $('app').innerHTML=html;rCariList();
 }
@@ -1107,8 +1113,8 @@ function formCari(tip,id,preAd){
     ${!isGid?`<div style="display:flex;gap:12px;align-items:center;margin-bottom:4px"><div class="cfoto" id="c-foto" onclick="$('c-foto-inp').click()">${c.foto?`<img src="${c.foto}">`:'📷'}</div><div class="mini">Resim ekle (isteğe bağlı)</div><input type="file" accept="image/*" id="c-foto-inp" style="display:none" onchange="cariFotoSec(this)"></div>`:''}
     <label>${isGid?'Gider Adı / Açıklama':'Ad / Firma'}</label><input id="c-ad" value="${esc(c.ad||'')}">
     ${!isGid?`<div class="g2"><div><label>Telefon</label><input id="c-tel" type="tel" inputmode="tel" value="${esc(c.tel||'')}" oninput="this.value=this.value.replace(/[^0-9 +()-]/g,'')" placeholder="05xx..."></div><div><label>Şehir</label><input id="c-sehir" value="${esc(c.sehir||'')}"></div></div>`:''}
-    ${(isTed||isFas||isMus)?`<div class="g2"><div><label>Yetkili Kişi</label><input id="c-yetkili" placeholder="İrtibat" value="${esc(c.yetkili||'')}"></div><div><label>E-posta</label><input id="c-eposta" type="email" placeholder="ornek@mail.com" value="${esc(c.eposta||'')}" oninput="this.value=this.value.replace(/\\s/g,'')"></div></div>`:''}
-    ${isMus?`<div class="g2"><div><label>Kredi Limiti</label><input id="c-limit" type="number" value="${c.limit||0}"></div><div><label>Grup</label><select id="c-grup"><option ${c.grup==='Bayi'?'selected':''}>Bayi</option><option ${c.grup==='Perakende'?'selected':''}>Perakende</option><option ${c.grup==='Özel'?'selected':''}>Özel</option></select></div></div>
+    ${(isTed||isFas)?`<label>Yetkili Kişi</label><input id="c-yetkili" placeholder="İrtibat kurulacak kişi" value="${esc(c.yetkili||'')}">`:''}
+    ${isMus?`<div class="g2"><div><label>Kredi Limiti</label><input id="c-limit" type="number" value="${c.limit||0}"></div><div><label>Grup</label><select id="c-grup">${optList(MUS_GRUP,c.grup||'Bayi')}</select></div></div>
     <label style="margin-top:12px">Müşteri Tipi</label>
     <div class="seg2"><div class="o ${!c.yabanci?'on':''}" id="mt-yerli" onclick="setMusTip(0)">🇹🇷 Yerli</div><div class="o ${c.yabanci?'on':''}" id="mt-yabanci" onclick="setMusTip(1)">🌍 Yabancı</div></div>
     <div id="mt-yerli-box" style="display:${c.yabanci?'none':'block'}"><label>Adres</label><input id="c-adres" value="${esc(c.adres||'')}" placeholder="Açık adres"><label>Ambar / Sevkiyat</label><input id="c-ambar" value="${esc(c.ambar||'')}" placeholder="Malın gönderileceği ambar"><div class="g2"><div><label>Vergi Dairesi</label><input id="c-vd" value="${esc(c.vd||'')}"></div><div><label>Vergi / TC No</label><input id="c-vno" inputmode="numeric" value="${esc(c.vno||'')}" oninput="this.value=this.value.replace(/[^0-9]/g,'')"></div></div></div>
@@ -1128,7 +1134,6 @@ function kaydetCari(tip,id){const ad=$('c-ad').value.trim();if(!ad)return toast(
   if(!id&&db.cariler.some(x=>x.tip===tip&&(x.ad||'').trim().toLowerCase()===ad.toLowerCase()))return toast('Bu isimde kayıt zaten var: '+ad);
   const o={tip,ad,bakiye:+$('c-bak').value||0,foto:cFoto};
   if(tip==='musteri'){o.yabanci=musYabanci;if($('c-adres'))o.adres=$('c-adres').value.trim();if($('c-ambar'))o.ambar=$('c-ambar').value.trim();if($('c-ulke'))o.ulke=$('c-ulke').value.trim();if($('c-kod'))o.kod=$('c-kod').value.trim();if($('c-vd'))o.vd=$('c-vd').value.trim();if($('c-vno'))o.vno=$('c-vno').value.trim();if($('c-paratercih'))o.paraTercih=$('c-paratercih').value}
-  if($('c-eposta'))o.eposta=$('c-eposta').value.trim();
   const V=idn=>$(idn)?$(idn).value:undefined, VT=idn=>$(idn)?$(idn).value.trim():undefined, VN=idn=>$(idn)?(+$(idn).value||0):undefined;
   if($('c-tel'))o.tel=VT('c-tel'); if($('c-sehir'))o.sehir=VT('c-sehir'); if($('c-yetkili'))o.yetkili=VT('c-yetkili');
   if($('c-limit'))o.limit=VN('c-limit'); if($('c-grup'))o.grup=V('c-grup');
@@ -1148,11 +1153,11 @@ function cariKart(id){
   const b=c.bakiye,cls=b>0?'neg':b<0?'pos':'',lbl=isMus?(b>0?'Borçlu':b<0?'Alacaklı':'Kapalı'):(b>0?'Ona borcun':b<0?'Senden alacağı':'Kapalı');
   let extra='';
   if(isMus&&c.limit){const p=Math.min(100,Math.round(Math.max(0,b)/c.limit*100));extra=`<div class="mini" style="margin-top:8px">Kredi limiti: ${TL(Math.max(0,b))} / ${TL(c.limit)}</div><div style="height:7px;border-radius:5px;background:var(--ln2);overflow:hidden;margin-top:5px"><i style="display:block;height:100%;width:${p}%;background:${p>85?'var(--bad)':'var(--warn)'}"></i></div>`}
+  if(isMus&&b>0){const g=gecikmeGun(id);if(g>=15)extra+=`<div class="warnbox" style="margin-top:8px">⏰ <b>${g} gündür ödeme yok</b> — ${TL(b)} borç. <span onclick="event.stopPropagation();waHatirlat(${id})" style="color:var(--good);font-weight:800;cursor:pointer">WhatsApp'tan hatırlat ›</span></div>`}
   if(isMus&&c.kesikToplam>0)extra+=`<div class="warnbox" style="margin-top:8px">✂️ Bu müşterinin toplam kesiği (senin zararın): <b>${TL(c.kesikToplam)}</b></div>`;
   const dL=(k,v)=>v?`<div class="dline"><span>${k}</span><b>${esc(''+v)}</b></div>`:'';
   const detay=[
-    dL('Yetkili',c.yetkili),
-    dL('E-posta',c.eposta),
+    c.tip!=='musteri'?dL('Yetkili',c.yetkili):'',
     isMus?dL('Adres',c.adres):'',
     isMus?dL('Ambar',c.ambar):'',
     isMus&&c.yabanci?dL('Ülke / Kod',[c.ulke,c.kod].filter(Boolean).join(' · ')):'',
@@ -1179,7 +1184,7 @@ function cariKart(id){
       <button class="btn ghost sm" onclick="formCari('${c.tip}',${id})">✏️ Düzenle</button>
     </div>
     <button class="btn ghost sm" style="margin-top:10px" onclick="ekstreGoster(${id})">📄 Cari Ekstre (hesap dökümü)</button>
-    ${isMus?`<div class="sec" style="margin-top:16px">Son Satışlar (${sat.length})</div>${sat.length?sat.slice(0,6).map(s=>`<div class="li" onclick="event.stopPropagation();satisFis(${s.id})" style="cursor:pointer"><div class="lt">${tstr(s.tarih)}<small>${s.kalemler.map(k=>esc(k.urun)).join(', ')}</small></div><b>${money(s.tutar,s.pb)}</b></div>`).join(''):'<div class="mini">Satış yok</div>'}`:''}
+    ${isMus?musKartAlt(id):''}
   `);
 }
 function cariEkstre(id){
@@ -1198,6 +1203,39 @@ function cariEkstre(id){
   const net=evs.reduce((a,e)=>a+(e.borc||0)-(e.alacak||0),0);
   const devir=(c.bakiye||0)-net;
   return {evs,devir};
+}
+function musUrunGecmis(id){const map={};db.satislar.filter(s=>s.mid===id).sort((a,b)=>a.tarih-b.tarih).forEach(s=>s.kalemler.forEach(k=>{const m=map[k.uid]||(map[k.uid]={uid:k.uid,urun:k.urun,adet:0,sonFiyat:k.fiyat,sonTarih:s.tarih});m.adet+=k.mik;m.sonFiyat=k.fiyat;m.sonTarih=s.tarih}));return Object.values(map).sort((a,b)=>b.sonTarih-a.sonTarih)}
+function musOdemeler(id){const arr=[];
+  (db.hareketler||[]).filter(h=>h.cariId===id&&h.tip==='tahsilat'&&h.tutar>0).forEach(h=>arr.push({tarih:h.tarih,tur:h.tur||'Nakit',tutar:h.tutar}));
+  db.satislar.filter(s=>s.mid===id&&s.odenen>0).forEach(s=>{(s.odemeler&&s.odemeler.length?s.odemeler:[{tur:s.odemeTur||'Nakit',tutar:s.odenen,pb:s.pb}]).forEach(l=>{if(+l.tutar>0)arr.push({tarih:s.tarih,tur:l.tur,tutar:(+l.tutar||0)*pbKur(l.pb||s.pb),satis:true})})});
+  return arr.sort((a,b)=>b.tarih-a.tarih);
+}
+function musKartAlt(id){
+  const urunGec=musUrunGecmis(id), odemeGec=musOdemeler(id);
+  const cekGec=db.cekler.filter(k=>k.cariId===id&&k.tip==='alinan').sort((a,b)=>a.vade-b.vade);
+  let h=`<div class="sec" style="margin-top:16px">🛍️ Aldığı Ürünler (${urunGec.length})</div>`;
+  h+=urunGec.length?urunGec.slice(0,10).map(g=>`<div class="li"><div class="lt">${esc(g.urun)}<small>toplam ${g.adet} · son alım ${dstr(g.sonTarih)}</small></div><b>${TL(g.sonFiyat)}</b></div>`).join(''):'<div class="mini">Henüz ürün almadı</div>';
+  h+=`<div class="sec" style="margin-top:16px">💳 Ödeme Geçmişi (${odemeGec.length})</div>`;
+  h+=odemeGec.length?odemeGec.slice(0,10).map(o=>`<div class="li"><div class="lt">${esc(o.tur)}${o.satis?' <small style="display:inline;color:var(--sub)">(satışta)</small>':''}<small>${tstr(o.tarih)}</small></div><b class="pos">${TL(o.tutar)}</b></div>`).join(''):'<div class="mini">Ödeme yok</div>';
+  if(cekGec.length){h+=`<div class="sec" style="margin-top:16px">🏷️ Verdiği Çek / Kart (${cekGec.length})</div>`;
+    h+=cekGec.map(k=>{const gecti=k.vade<Date.now()&&k.durum==='portfoyde';return `<div class="li"><div class="lt">${esc(k.banka||'Çek')}${k.tur==='kk'?' (Kredi Kartı)':''}<small>vade ${dstr(k.vade)} · ${k.durum==='portfoyde'?(gecti?'⏰ vadesi geçti':'portföyde'):esc(k.durum)}</small></div><div style="display:flex;align-items:center;gap:8px"><b>${TL(k.tutar)}</b>${k.foto?`<button class="btn ghost sm" style="width:auto;padding:6px 9px;margin:0" onclick="cekFotoGoster(${k.id})">📷</button>`:''}</div></div>`}).join('');}
+  return h;
+}
+function cekFotoGoster(cekId){const k=db.cekler.find(x=>x.id===cekId);if(!k||!k.foto)return;open_('Çek Resmi',`<img src="${k.foto}" style="width:100%;border-radius:12px"><div class="kv" style="margin-top:10px"><span class="k">Tutar</span><span class="v">${TL(k.tutar)}</span></div><div class="kv"><span class="k">Vade</span><span class="v">${dstr(k.vade)}</span></div>`)}
+function sonTahsilat(id){let t=0;(db.hareketler||[]).filter(h=>h.cariId===id&&h.tip==='tahsilat'&&h.tutar>0).forEach(h=>{if(h.tarih>t)t=h.tarih});db.satislar.filter(s=>s.mid===id&&s.odenen>0).forEach(s=>{if(s.tarih>t)t=s.tarih});return t}
+function gecikmeGun(id){const t=sonTahsilat(id);if(t)return Math.floor((Date.now()-t)/86400000);const ilk=db.satislar.filter(s=>s.mid===id).map(s=>s.tarih).sort((a,b)=>a-b)[0];return ilk?Math.floor((Date.now()-ilk)/86400000):0}
+function waHatirlat(id){const m=cari(id);if(!m)return;let ph=((m.tel)||'').replace(/\D/g,'');if(ph){if(ph.length===10)ph='90'+ph;else if(ph[0]==='0')ph='9'+ph}
+  const msg=`Merhaba ${m.ad}, Öz Tekstil. Güncel bakiyeniz ${TL(Math.max(0,m.bakiye))}. Uygun olduğunuzda ödeme yapabilirseniz seviniriz. Teşekkürler 🙏`;
+  window.open(`https://wa.me/${ph}?text=${encodeURIComponent(msg)}`,'_blank');
+}
+function tahsilatHatirlat(){
+  const list=db.cariler.filter(c=>c.tip==='musteri'&&c.bakiye>0).map(c=>({c,g:gecikmeGun(c.id)})).sort((a,b)=>b.g-a.g);
+  const cuma=new Date().getDay()===5;
+  open_('🔔 Tahsilat Hatırlatma',`
+    ${cuma?'<div class="okbox" style="margin-bottom:8px">📅 Bugün Cuma — tahsilat günü!</div>':''}
+    <div class="mini">Borcu olan müşteriler; en uzun süre ödeme yapmayan üstte. 📱 ile WhatsApp'tan hatırlat.</div>
+    <div style="margin-top:10px">${list.length?list.map(({c,g})=>`<div class="li"><div class="lt">${esc(c.ad)}<small class="${g>=15?'':''}" style="${g>=15?'color:var(--bad);font-weight:700':''}">${g?g+' gündür ödeme yok':'ödeme yok'} · ${TL(c.bakiye)} borç</small></div><button class="btn g sm" style="width:auto;padding:8px 12px;margin:0" onclick="waHatirlat(${c.id})">📱</button></div>`).join(''):'<div class="mini">Borçlu müşteri yok 🎉</div>'}</div>
+  `);
 }
 function ekstreGoster(id){
   const c=cari(id);const {evs,devir}=cariEkstre(id);let run=devir;
