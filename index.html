@@ -331,6 +331,15 @@ function seqFix(d){ // id çakışmasını önle: her sıra numarasını mevcut 
   d.seq.ie=Math.max(d.seq.ie||0,mx(d.isemirleri,1000));
   d.seq.h=Math.max(d.seq.h||0,mx(d.hammadde,1000));
   d.seq.oh=Math.max(d.seq.oh||0,mx(d.hesaplar,1000));
+  // eski id-çakışması onarımı: aynı id'li cari varsa yeni id ver, referansları isimle taşı
+  const gorulen={};
+  (d.cariler||[]).forEach(c=>{
+    if(gorulen[c.id]){const oldId=c.id,newId=d.seq.c++;
+      (d.satislar||[]).forEach(s=>{if(s.mid===oldId&&s.mus===c.ad)s.mid=newId});
+      (d.cekler||[]).forEach(k=>{if(k.cariId===oldId&&k.cari===c.ad)k.cariId=newId});
+      c.id=newId;
+    }else gorulen[c.id]=1;
+  });
   // eski string renkleri obje formuna çevir (renk renk stok için)
   const NM={'#111111':'Siyah','#f2f2ee':'Beyaz','#ffffff':'Beyaz','#1d2f52':'Lacivert','#8a8f98':'Gri','#e8e2d4':'Bej','#5a1220':'Bordo','#2b2b2b':'Antrasit','#0f9d63':'Yeşil','#c8891a':'Hardal','#7a4fd0':'Mor','#e0455f':'Kırmızı'};
   (d.urunler||[]).forEach(u=>{
@@ -1131,6 +1140,7 @@ function formCari(tip,id,preAd){
     ${id?`<button class="btn danger" onclick="silCari(${id})">Sil</button>`:''}`);
 }
 function kaydetCari(tip,id){const ad=$('c-ad').value.trim();if(!ad)return toast('Ad gerekli');
+  if(tip==='musteri'&&!($('c-tel')?.value||'').trim()){$('c-tel')&&$('c-tel').focus();return toast('Telefon gerekli')}
   if(!id&&db.cariler.some(x=>x.tip===tip&&(x.ad||'').trim().toLowerCase()===ad.toLowerCase()))return toast('Bu isimde kayıt zaten var: '+ad);
   const o={tip,ad,bakiye:+$('c-bak').value||0,foto:cFoto};
   if(tip==='musteri'){o.yabanci=musYabanci;if($('c-adres'))o.adres=$('c-adres').value.trim();if($('c-ambar'))o.ambar=$('c-ambar').value.trim();if($('c-ulke'))o.ulke=$('c-ulke').value.trim();if($('c-kod'))o.kod=$('c-kod').value.trim();if($('c-vd'))o.vd=$('c-vd').value.trim();if($('c-vno'))o.vno=$('c-vno').value.trim();if($('c-paratercih'))o.paraTercih=$('c-paratercih').value}
