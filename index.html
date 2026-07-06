@@ -105,12 +105,12 @@
   /* MODAL */
   .ov{position:fixed;inset:0;background:rgba(15,25,40,.5);z-index:50;display:none;align-items:flex-end;justify-content:center}
   .ov.show{display:flex}
-  .sheet{background:var(--card);width:100%;max-width:540px;border-radius:22px 22px 0 0;max-height:94vh;overflow-y:auto;animation:up .28s cubic-bezier(.2,.8,.2,1)}
+  .sheet{background:var(--card);width:100%;max-width:540px;border-radius:22px 22px 0 0;max-height:92vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;animation:up .28s cubic-bezier(.2,.8,.2,1)}
   @keyframes up{from{transform:translateY(100%)}to{transform:none}}
   .sheet .hd{padding:16px 18px 8px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:2}
   .sheet .hd h3{font-size:17px;font-weight:800}
   .sheet .hd .x{background:var(--ln2);border:none;width:32px;height:32px;border-radius:50%;font-size:17px;color:var(--sub);cursor:pointer}
-  .sheet .bd{padding:4px 18px 24px}
+  .sheet .bd{padding:4px 18px calc(28px + env(safe-area-inset-bottom))}
   label{display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:var(--sub);margin:12px 0 5px}
   input,select,textarea{width:100%;padding:12px 13px;border:1px solid var(--ln);border-radius:12px;font-size:15px;background:#fbfcfe;outline:none;font-family:inherit;color:var(--ink)}
   input:focus,select:focus{border-color:var(--ind2);background:#fff}
@@ -1156,7 +1156,15 @@ function kaydetCari(tip,id){const ad=$('c-ad').value.trim();if(!ad)return toast(
   save();
   if(!id&&tip==='musteri'&&_cariReturn){const cb=_cariReturn;_cariReturn=null;$('ov').classList.remove('show');toast('Müşteri eklendi ✓');setTimeout(()=>cb(o.id),130);return}
   closeM();rCari();toast('Kaydedildi ✓')}
-function silCari(id){askConfirm('Silinsin mi?',()=>{db.cariler=db.cariler.filter(x=>x.id!==id);save();closeM();rCari();toast('Silindi')})}
+function silCari(id){
+  const c=cari(id);if(!c)return;
+  const satVar=db.satislar.some(s=>s.mid===id);
+  const cekVar=db.cekler.some(k=>k.cariId===id);
+  const harVar=(db.hareketler||[]).some(h=>h.cariId===id);
+  const borc=Math.abs(c.bakiye||0)>0.5||Math.abs(c.bakiyeUSD||0)>0.5;
+  if(borc){return toast('Silinemez: bakiyesi sıfır değil. Önce hesabı kapat.')}
+  if(satVar||cekVar||harVar){return toast('Silinemez: geçmiş kayıtları (satış/tahsilat/çek) var. Önce onlar silinmeli.')}
+  askConfirm(`${c.ad} silinsin mi?\n(Hiç kaydı ve borcu yok)`,()=>{db.cariler=db.cariler.filter(x=>x.id!==id);save();closeM();rCari();toast('Silindi')})}
 function cariKart(id){
   const c=cari(id);const isMus=c.tip==='musteri';const usd=c.doviz==='USD';
   const sat=db.satislar.filter(s=>s.mid===id).sort((a,b)=>b.tarih-a.tarih);
@@ -1190,7 +1198,7 @@ function cariKart(id){
     ${extra}
     <div class="g3" style="margin-top:14px">
       <button class="btn ${isMus?'g':''} sm" onclick="formOdeme(${id})">${isMus?'💰 Tahsilat':'💵 Ödeme'}</button>
-      ${isMus?`<button class="btn ghost sm" onclick="closeM();go('satis');setTimeout(()=>formSatis(),150)">🧾 Satış</button>`:`<button class="btn ghost sm" onclick="formAlim(${id})">📥 Alım</button>`}
+      ${isMus?`<button class="btn ghost sm" onclick="satisBaslat(${id})">🧾 Satış</button>`:`<button class="btn ghost sm" onclick="formAlim(${id})">📥 Alım</button>`}
       <button class="btn ghost sm" onclick="formCari('${c.tip}',${id})">✏️ Düzenle</button>
     </div>
     <button class="btn ghost sm" style="margin-top:10px" onclick="ekstreGoster(${id})">📄 Cari Ekstre (hesap dökümü)</button>
@@ -1220,11 +1228,13 @@ function musOdemeler(id){const arr=[];
   db.satislar.filter(s=>s.mid===id&&s.odenen>0).forEach(s=>{(s.odemeler&&s.odemeler.length?s.odemeler:[{tur:s.odemeTur||'Nakit',tutar:s.odenen,pb:s.pb}]).forEach(l=>{if(+l.tutar>0)arr.push({tarih:s.tarih,tur:l.tur,tutar:(+l.tutar||0)*pbKur(l.pb||s.pb),satis:true})})});
   return arr.sort((a,b)=>b.tarih-a.tarih);
 }
+function satisBaslat(musId){closeM();go('satis');setTimeout(()=>{formSatis();if(musId){sMusId=musId;const m=cari(musId);if($('s-mus-in'))$('s-mus-in').value=m?m.ad:'';if(m&&m.paraTercih&&m.paraTercih!=='TL')setPB(m.paraTercih);musBilgi()}},170)}
 function musKartAlt(id){
-  const urunGec=musUrunGecmis(id), odemeGec=musOdemeler(id);
+  const irs=db.satislar.filter(s=>s.mid===id).sort((a,b)=>b.tarih-a.tarih);
+  const odemeGec=musOdemeler(id);
   const cekGec=db.cekler.filter(k=>k.cariId===id&&k.tip==='alinan').sort((a,b)=>a.vade-b.vade);
-  let h=`<div class="sec" style="margin-top:16px">🛍️ Aldığı Ürünler (${urunGec.length})</div>`;
-  h+=urunGec.length?urunGec.slice(0,10).map(g=>`<div class="li"><div class="lt">${esc(g.urun)}<small>toplam ${g.adet} · son alım ${dstr(g.sonTarih)}</small></div><b>${TL(g.sonFiyat)}</b></div>`).join(''):'<div class="mini">Henüz ürün almadı</div>';
+  let h=`<div class="sec" style="margin-top:16px">📄 İrsaliyeler (${irs.length})</div>`;
+  h+=irs.length?irs.slice(0,12).map(s=>{const odendi=s.odenen>=s.tutar;return `<div class="li" style="cursor:pointer" onclick="satisFis(${s.id})"><div class="lt">İrsaliye #${s.id}${s.teslimDurum==='ayrildi'?' 🔖':''}<small>${dstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)+(k.renkler&&k.renkler.length?' ('+k.renkler.map(r=>r.ad+'×'+r.mik).join(',')+')':' ×'+k.mik)).join(', ').slice(0,50)}</small></div><div style="text-align:right"><b>${money(s.tutar,s.pb)}</b><div class="mini">${odendi?'✓ ödendi':'açık'}</div></div></div>`}).join(''):'<div class="mini">İrsaliye yok</div>';
   h+=`<div class="sec" style="margin-top:16px">💳 Ödeme Geçmişi (${odemeGec.length})</div>`;
   h+=odemeGec.length?odemeGec.slice(0,10).map(o=>`<div class="li"><div class="lt">${esc(o.tur)}${o.satis?' <small style="display:inline;color:var(--sub)">(satışta)</small>':''}<small>${tstr(o.tarih)}</small></div><b class="pos">${TL(o.tutar)}</b></div>`).join(''):'<div class="mini">Ödeme yok</div>';
   if(cekGec.length){h+=`<div class="sec" style="margin-top:16px">🏷️ Verdiği Çek / Kart (${cekGec.length})</div>`;
