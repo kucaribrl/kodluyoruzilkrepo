@@ -662,28 +662,37 @@ function kaydetUrun(id){
   const birim=$('sb-seri').classList.contains('on')?'seri':'adet';
   const bedenler=birim==='seri'?fBeden.filter(x=>x.beden).map(x=>({beden:x.beden.trim(),adet:Math.max(1,+x.adet||1)})):[];
   const renkler=fRenk.filter(r=>(r.ad||'').trim()||r.stok||r.foto).map(r=>({ad:(r.ad||'').trim(),hex:hexFromAd(r.ad)||r.hex||'#8a8f98',foto:r.foto||'',barkod:(r.barkod||'').trim()||genBarkod(),stok:+r.stok||0,kirik:(r.kirik&&Object.keys(r.kirik).length)?r.kirik:null}));
-  if(!renkler.length||!renkler.some(r=>r.ad)){urunTab('stok');return toast('En az bir renk gir (renksiz ürün olmaz)')}
+  if(!renkler.length){urunTab('stok');return toast('En az bir renk gir (renksiz ürün olmaz)')}
+  if(renkler.some(r=>!r.ad)){urunTab('stok');return toast('Her renge bir ad ver (Siyah, Beyaz...)')}
+  const kat=$('u-kat').value.trim();if(!kat){urunTab('genel');$('u-kat')&&$('u-kat').focus();return toast('Kategori gir')}
+  const alis=Math.max(0,+$('u-alis').value||0), satis=Math.max(0,+$('u-satis').value||0);
+  if(alis<=0){urunTab('genel');$('u-alis')&&$('u-alis').focus();return toast('Maliyet (alış fiyatı) gir — maliyetsiz ürün olmaz')}
+  if(satis<=0){urunTab('genel');$('u-satis')&&$('u-satis').focus();return toast('Satış fiyatı gir')}
+  if(birim==='seri'&&!bedenler.length){urunTab('genel');return toast('Seri içeriği (en az bir beden) gir')}
   const stok=renkler.reduce((a,r)=>a+r.stok,0);
   const seri=birim==='seri'?(bedenler.reduce((a,x)=>a+x.adet,0)||5):1;
-  const o={ad,kod,kat:$('u-kat').value.trim(),marka:$('u-marka').value.trim(),kaynak:uKaynak,birim,bedenler,seri,pb:uPB,alis:Math.max(0,+$('u-alis').value||0),karYuzde:Math.max(0,+$('u-kar').value||0),satis:Math.max(0,+$('u-satis').value||0),promosyon:Math.max(0,+($('u-promo').value||0)),kritik:+$('u-kritik').value||10,kumas:$('u-kumas').value.trim(),tedarikciId:uKaynak==='alim'?(+($('u-ted').value||0)||null):null,raf:$('u-raf').value.trim(),agirlik:+($('u-agirlik').value||0)||0,yil:$('u-yil').value.trim(),sezon:$('u-sezon').value,not:$('u-not').value.trim(),pasif:$('u-aktif')?!$('u-aktif').checked:false,renkler,stok,cesit:'Markalı'};
+  const o={ad,kod,kat,marka:$('u-marka').value.trim(),kaynak:uKaynak,birim,bedenler,seri,pb:uPB,alis,karYuzde:Math.max(0,+$('u-kar').value||0),satis,promosyon:Math.max(0,+($('u-promo').value||0)),kritik:+$('u-kritik').value||10,kumas:$('u-kumas').value.trim(),tedarikciId:uKaynak==='alim'?(+($('u-ted').value||0)||null):null,raf:$('u-raf').value.trim(),agirlik:+($('u-agirlik').value||0)||0,yil:$('u-yil').value.trim(),sezon:$('u-sezon').value,not:$('u-not').value.trim(),pasif:$('u-aktif')?!$('u-aktif').checked:false,renkler,stok,cesit:'Markalı'};
   const oldStok=id?(urun(id)?.stok||0):0;
-  if(id){Object.assign(urun(id),o)}else{o.id=nid('u');db.urunler.push(o)}
-  save();closeM();
-  // Hazır alım → tedarikçiye borç (yeni ürün veya stok artışı kadar)
-  const delta=id?Math.max(0,o.stok-oldStok):o.stok;
-  const ted=o.tedarikciId?cari(o.tedarikciId):null;
-  if(uKaynak==='alim'&&ted&&delta>0&&o.alis>0){
-    const tutar=delta*o.alis, pb=o.pb||'TL';
+  const kaydet2=()=>{
+    if(id){Object.assign(urun(id),o)}else{o.id=nid('u');db.urunler.push(o)}
+    save();closeM();
+    const delta=id?Math.max(0,o.stok-oldStok):o.stok;
+    const ted=o.tedarikciId?cari(o.tedarikciId):null;
+    if(uKaynak==='alim'&&ted&&delta>0&&o.alis>0){
+      const tutar=delta*o.alis, pb=o.pb||'TL';
+      render();toast('Ürün kaydedildi ✓');
+      askConfirm(`${delta} ${o.birim} × ${money(o.alis,pb)} = ${money(tutar,pb)}\n${ted.ad} firmasına borç yazılsın mı?`,()=>{
+        if(pb==='USD'){ted.doviz='USD';ted.bakiyeUSD=(ted.bakiyeUSD||0)+tutar}
+        else if(pb==='EUR'){ted.bakiye=(ted.bakiye||0)+tutar*db.kurEUR}
+        else{ted.bakiye=(ted.bakiye||0)+tutar}
+        save();render();toast(`${ted.ad} firmasına ${money(tutar,pb)} borç yazıldı`);
+      },'Borç Yaz');
+      return;
+    }
     render();toast('Ürün kaydedildi ✓');
-    askConfirm(`${delta} ${o.birim} × ${money(o.alis,pb)} = ${money(tutar,pb)}\n${ted.ad} firmasına borç yazılsın mı?`,()=>{
-      if(pb==='USD'){ted.doviz='USD';ted.bakiyeUSD=(ted.bakiyeUSD||0)+tutar}
-      else if(pb==='EUR'){ted.bakiye=(ted.bakiye||0)+tutar*db.kurEUR}
-      else{ted.bakiye=(ted.bakiye||0)+tutar}
-      save();render();toast(`${ted.ad} firmasına ${money(tutar,pb)} borç yazıldı`);
-    },'Borç Yaz');
-    return;
-  }
-  render();toast('Ürün kaydedildi ✓');
+  };
+  if(satis<alis)askConfirm(`Satış fiyatı (${money(satis,uPB)}) maliyetin (${money(alis,uPB)}) altında — zararına satış.\nYine de kaydedilsin mi?`,kaydet2,'Kaydet');
+  else kaydet2();
 }
 function silUrun(id){askConfirm('Ürün silinsin mi?',()=>{db.urunler=db.urunler.filter(x=>x.id!==id);save();closeM();render();toast('Silindi')})}
 /* ---- Ürün Çoğalt ---- */
