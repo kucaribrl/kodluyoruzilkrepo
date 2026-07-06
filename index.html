@@ -240,6 +240,19 @@
   .okbox{background:var(--good-s);color:var(--good);border-radius:11px;padding:10px 13px;font-size:12px;font-weight:700;margin-top:10px}
   .depoitem{display:flex;justify-content:space-between;align-items:center;padding:5px 0;font-size:13.5px;border-top:1px dashed var(--ln)}
   .depoitem:first-child{border-top:none}.depoitem span{color:var(--tx)}.depoitem b{font-weight:800}
+  .depoline{display:flex;align-items:center;gap:10px;padding:11px 12px;border-top:1px solid var(--ln);cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .depoline:first-child{border-top:none}
+  .depoline .dchk{font-size:22px;flex:0 0 auto;line-height:1}
+  .depoline .dmid{flex:1;min-width:0}
+  .depoline .dmid .du{font-weight:800;font-size:14px}
+  .depoline .dmid .dr{font-size:11.5px;color:var(--sub);font-weight:700}
+  .depoline .dmik{font-weight:800;font-size:15px;flex:0 0 auto;white-space:nowrap}
+  .depoline.done{background:var(--good-s)}
+  .depoline.done .du,.depoline.done .dmik{text-decoration:line-through;color:var(--sub)}
+  .depoprog{display:flex;align-items:center;gap:10px;margin:10px 0 4px}
+  .depoprog .bar{flex:1;height:9px;background:var(--ln2);border-radius:20px;overflow:hidden}
+  .depoprog .bar > i{display:block;height:100%;background:var(--good);border-radius:20px;transition:width .25s}
+  .depoprog .lbl{font-size:12px;font-weight:800;color:var(--sub);flex:0 0 auto}
   .logobox{width:88px;height:56px;border:1.5px dashed var(--ln);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--sub);font-weight:700;cursor:pointer;overflow:hidden;background:var(--card2,#fff);flex:0 0 auto}
   .logobox img{width:100%;height:100%;object-fit:contain}
   .kv{display:flex;justify-content:space-between;padding:7px 0;font-size:13.5px;border-bottom:1px solid var(--ln)}
@@ -304,9 +317,9 @@ function seed(){return{
   kurUSD:32.40, kurEUR:35.10,
   seq:{u:1000,h:1000,c:1000,s:1000,cek:1000,ie:1000,hr:1000,al:1000,oh:1000},
   urunler:[
-    {id:1,ad:'Polo Yaka Triko',kod:'2026Y118',kat:'Polo',marka:'Öz Marka',cesit:'Markalı',kaynak:'uretim',birim:'seri',seri:5,renkler:[{ad:'Lacivert',hex:'#1d2f52',stok:60},{ad:'Gri',hex:'#8a8f98',stok:55},{ad:'Bej',hex:'#e8e2d4',stok:42}],stok:157,alis:95,satis:133,karYuzde:40,kritik:15,sezon:'Yaz',yil:'2026'},
-    {id:2,ad:'Basic Tişört',kod:'2026Y087',kat:'Tişört',marka:'',cesit:'Markasız',kaynak:'uretim',birim:'seri',seri:5,renkler:[{ad:'Beyaz',hex:'#f2f2ee',stok:5},{ad:'Siyah',hex:'#111111',stok:3}],stok:8,alis:78,satis:118,karYuzde:35,kritik:15,sezon:'Yaz',yil:'2026'},
-    {id:3,ad:'Sweatshirt Kanguru',kod:'2026Y110',kat:'Sweat',marka:'Öz Marka',cesit:'Markalı',kaynak:'uretim',birim:'seri',seri:5,renkler:[{ad:'Gri',hex:'#8a8f98',stok:2},{ad:'Lacivert',hex:'#1d2f52',stok:1}],stok:3,alis:180,satis:245,karYuzde:36,kritik:10,sezon:'Kış',yil:'2026'},
+    {id:1,ad:'Polo Yaka Triko',kod:'2026Y118',raf:'A-12',kat:'Polo',marka:'Öz Marka',cesit:'Markalı',kaynak:'uretim',birim:'seri',seri:5,renkler:[{ad:'Lacivert',hex:'#1d2f52',stok:60},{ad:'Gri',hex:'#8a8f98',stok:55},{ad:'Bej',hex:'#e8e2d4',stok:42}],stok:157,alis:95,satis:133,karYuzde:40,kritik:15,sezon:'Yaz',yil:'2026'},
+    {id:2,ad:'Basic Tişört',kod:'2026Y087',raf:'A-14',kat:'Tişört',marka:'',cesit:'Markasız',kaynak:'uretim',birim:'seri',seri:5,renkler:[{ad:'Beyaz',hex:'#f2f2ee',stok:5},{ad:'Siyah',hex:'#111111',stok:3}],stok:8,alis:78,satis:118,karYuzde:35,kritik:15,sezon:'Yaz',yil:'2026'},
+    {id:3,ad:'Sweatshirt Kanguru',kod:'2026Y110',raf:'B-03',kat:'Sweat',marka:'Öz Marka',cesit:'Markalı',kaynak:'uretim',birim:'seri',seri:5,renkler:[{ad:'Gri',hex:'#8a8f98',stok:2},{ad:'Lacivert',hex:'#1d2f52',stok:1}],stok:3,alis:180,satis:245,karYuzde:36,kritik:10,sezon:'Kış',yil:'2026'},
     {id:4,ad:'Eşofman Altı',kod:'2026Y052',kat:'Eşofman',marka:'',cesit:'Markasız',kaynak:'uretim',birim:'adet',seri:1,renkler:[{ad:'Siyah',hex:'#111111',stok:240}],stok:240,alis:60,satis:95,karYuzde:38,kritik:40,sezon:'4 Mevsim',yil:'2026'},
     {id:5,ad:'Antep Triko Kazak',kod:'2026Y099',kat:'Kazak',marka:'Öz Marka',cesit:'Markalı',kaynak:'alim',birim:'seri',seri:6,renkler:[{ad:'Bordo',hex:'#5a1220',stok:34},{ad:'Antrasit',hex:'#2b2b2b',stok:30}],stok:64,alis:185,satis:260,karYuzde:40,kritik:12,sezon:'Kış',yil:'2026',tedarikciId:102},
   ],
@@ -1204,19 +1217,41 @@ function fisTermal(id){const s=db.satislar.find(x=>x.id===id);
 function satisDurum(id){const s=db.satislar.find(x=>x.id===id);s.teslimDurum=s.teslimDurum==='ayrildi'?'teslim':'ayrildi';save();closeM();go('satis');toast(s.teslimDurum==='ayrildi'?'Mal ayrıldı (rezerve) 🔖':'Teslim edildi ✓')}
 /* ---- Depo toplama/ayırma emri ---- */
 function depoBekleyen(){return db.satislar.filter(s=>s.depo==='bekliyor').sort((a,b)=>a.tarih-b.tarih)}
+function depoLines(s){ // rafa göre sıralı, tek tek toplanacak satırlar
+  const lines=[];
+  s.kalemler.forEach((k,ki)=>{const u=urun(k.uid);const raf=(u&&u.raf)?u.raf:'—';
+    if(k.renkler&&k.renkler.length)k.renkler.forEach((r,ri)=>lines.push({key:ki+'_'+ri,urun:k.urun,renk:r.ad,mik:r.mik,birim:k.birim,raf}));
+    else lines.push({key:ki+'_x',urun:k.urun,renk:'',mik:k.mik,birim:k.birim,raf});
+  });
+  return lines.sort((a,b)=>(''+a.raf).localeCompare(''+b.raf,'tr')||a.urun.localeCompare(b.urun,'tr'));
+}
 function depoEmri(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;
-  const items=s.kalemler.map(k=>{const u=urun(k.uid);const raf=(u&&u.raf)?u.raf:'—';
-    const rows=k.renkler&&k.renkler.length?k.renkler.map(r=>`<div class="depoitem"><span>${esc(r.ad)}</span><b>${r.mik} ${k.birim}</b></div>`).join(''):`<div class="depoitem"><span>—</span><b>${k.mik} ${k.birim}</b></div>`;
-    return `<div class="card" style="padding:11px;margin-bottom:9px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><b>${esc(k.urun)}</b><span class="pill low">RAF ${esc(raf)}</span></div>${rows}</div>`}).join('');
+  if(!s.depoCheck)s.depoCheck={};
+  const lines=depoLines(s);const toplam=lines.length;const yapilan=lines.filter(l=>s.depoCheck[l.key]).length;
+  const bitti=s.depo==='hazir';const pct=toplam?Math.round(yapilan/toplam*100):0;
+  const rows=lines.map(l=>{const done=bitti||s.depoCheck[l.key];
+    return `<div class="depoline ${done?'done':''}" ${bitti?'':`onclick="depoTik(${id},'${l.key}')"`}>
+      <span class="dchk">${done?'✅':'⬜'}</span>
+      <div class="dmid"><div class="du">${esc(l.urun)}${l.renk?' · '+esc(l.renk):''}</div><div class="dr">📍 RAF ${esc(l.raf)}</div></div>
+      <b class="dmik">${l.mik} ${esc(l.birim)}</b>
+    </div>`}).join('');
   open_('📦 Toplama Emri · İrsaliye #'+id,`
     <div class="mini">${esc(s.mus)} · ${tstr(s.tarih)}</div>
-    <div class="infobox">Aşağıdaki ürünleri renk renk ayır, hazırla. Bittiğinde "Hazırladım" bas.</div>
-    ${items}
-    ${s.sevkiyat?`<div class="okbox">📦 Sevkiyat: ${esc(s.sevkiyat)}</div>`:''}
-    ${s.depo==='hazir'?'<div class="okbox">✓ Bu sipariş hazırlandı</div>':`<button class="btn g" onclick="depoHazirla(${id})">✓ Hazırladım / Ayırdım</button>`}
+    ${bitti?'<div class="okbox">✓ Bu sipariş hazırlandı</div>':`<div class="infobox">Her ürünü rafından topla, ayırdıkça üstüne dokun ✅. Liste raf sırasına dizildi.</div>
+    <div class="depoprog"><div class="bar"><i style="width:${pct}%"></i></div><span class="lbl">${yapilan}/${toplam}</span></div>`}
+    <div class="card" style="padding:2px 4px;margin-top:8px">${rows}</div>
+    ${s.sevkiyat?`<div class="okbox" style="margin-top:10px">📦 Sevkiyat: ${esc(s.sevkiyat)}</div>`:''}
+    ${bitti?'':`<button class="btn ${yapilan===toplam?'g':'ghost'}" style="margin-top:12px" onclick="depoHazirla(${id})">✓ Hazırladım / Ayırdım</button>`}
   `);
 }
-function depoHazirla(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;s.depo='hazir';save();closeM();render();toast('Sipariş hazırlandı ✓ Patrona bildirildi')}
+function depoTik(id,key){const s=db.satislar.find(x=>x.id===id);if(!s||s.depo==='hazir')return;
+  if(!s.depoCheck)s.depoCheck={};s.depoCheck[key]=!s.depoCheck[key];save();depoEmri(id)}
+function depoHazirla(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;
+  const lines=depoLines(s);const eksik=lines.filter(l=>!(s.depoCheck&&s.depoCheck[l.key]));
+  const bitir=()=>{s.depo='hazir';save();closeM();render();toast('Sipariş hazırlandı ✓ Patrona bildirildi')};
+  if(eksik.length)askConfirm(`${eksik.length} kalem henüz işaretlenmedi (toplam ${lines.length}).\nYine de "hazırlandı" olarak kapatılsın mı?`,bitir,'Yine de kapat');
+  else bitir();
+}
 function silSatis(id){askConfirm('Satış iptal edilsin mi? Stok, bakiye, ödeme ve çek geri alınır.',()=>{
   const s=db.satislar.find(x=>x.id===id);revertSatis(s);
   db.satislar=db.satislar.filter(x=>x.id!==id);save();closeM();go('satis');toast('İptal edildi')})}
