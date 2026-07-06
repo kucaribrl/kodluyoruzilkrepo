@@ -208,30 +208,40 @@
   .thermwrap{background:repeating-linear-gradient(45deg,#e6e8ee,#e6e8ee 10px,#e1e3ea 10px,#e1e3ea 20px);border-radius:12px;padding:18px 10px;margin-top:10px;display:flex;justify-content:center}
   .thermpaper{background:#fff;width:300px;max-width:100%;padding:16px 16px 6px;box-shadow:0 4px 18px rgba(0,0,0,.22);clip-path:polygon(0 0,100% 0,100% calc(100% - 6px),97% 100%,94% calc(100% - 6px),91% 100%,88% calc(100% - 6px),85% 100%,82% calc(100% - 6px),79% 100%,76% calc(100% - 6px),73% 100%,70% calc(100% - 6px),67% 100%,64% calc(100% - 6px),61% 100%,58% calc(100% - 6px),55% 100%,52% calc(100% - 6px),49% 100%,46% calc(100% - 6px),43% 100%,40% calc(100% - 6px),37% 100%,34% calc(100% - 6px),31% 100%,28% calc(100% - 6px),25% 100%,22% calc(100% - 6px),19% 100%,16% calc(100% - 6px),13% 100%,10% calc(100% - 6px),7% 100%,4% calc(100% - 6px),1% 100%,0 calc(100% - 6px))}
   .thermpaper .fisT{color:#000;font-family:'Courier New',ui-monospace,monospace;font-size:12px;line-height:1.5;letter-spacing:.2px}
-  .fisT .th-name{text-align:center;font-size:20px;font-weight:800;letter-spacing:3px}
-  .fisT .th-tag{text-align:center;font-size:9.5px;letter-spacing:.6px;margin-top:2px}
-  .fisT .th-meta{text-align:center;font-size:9px;letter-spacing:.4px;margin-top:1px}
-  .fisT .rd{border-top:3px double #000;margin:7px 0}
+  .fisT .th-logo{text-align:center;margin:2px 0 4px}.fisT .th-logo img{max-height:48px;max-width:78%;object-fit:contain}
+  .fisT .th-name{text-align:center;font-size:21px;font-weight:800;letter-spacing:2px}
+  .fisT .th-title{text-align:center;font-size:18px;font-weight:800;letter-spacing:1px;margin:2px 0}
+  .fisT .th-ct{font-size:11px;margin:2px 0;display:flex;gap:6px;align-items:flex-start}.fisT .th-ct .ci{flex:0 0 auto}
   .fisT .rs{border-top:1px dashed #000;margin:6px 0}
-  .fisT .tc{text-align:center}.fisT .tb{font-weight:800}
-  .fisT .tl{display:flex;justify-content:space-between;gap:8px}
-  .fisT .kk{display:flex;gap:6px}.fisT .kk .lb{width:64px;flex:0 0 auto;color:#000}
-  .fisT .hd{font-size:9.5px;font-weight:800;letter-spacing:1.5px;margin:2px 0}
-  .fisT .ti{margin:6px 0}
-  .fisT .ti .nm{font-weight:800;font-size:12.5px}
-  .fisT .tsub{display:flex;justify-content:space-between;gap:8px;padding-left:12px;font-size:11px;margin-top:1px}
-  .fisT .tsub .cl{color:#000}
-  .fisT .box{border:2px solid #000;padding:6px 9px;margin:6px 0;display:flex;justify-content:space-between;align-items:center;font-size:16px;font-weight:800;letter-spacing:.5px}
-  .fisT .bal{display:flex;justify-content:space-between;font-weight:800;font-size:13.5px;margin-top:2px}
-  .fisT .th-bc{text-align:center;margin-top:8px}
-  .fisT .th-bc svg{max-width:200px}
-  .fisT .ft{text-align:center;font-size:10px;margin-top:2px;line-height:1.5}
-  .fisT .ftn{text-align:center;font-size:8.5px;margin-top:4px;letter-spacing:.3px}
+  .fisT .tc{text-align:center}.fisT .tb{font-weight:800}.fisT .r{text-align:right}
+  .fisT .mbox{border:1px dashed #000;padding:6px 9px;margin:6px 0}
+  .fisT .mbox .mtop{display:flex;justify-content:space-between;font-size:11px}
+  .fisT .mbox .mn{text-align:center;font-weight:800;font-size:15px;margin-top:3px}
+  .fisT .mbox .ml{text-align:center;font-size:11.5px;margin-top:1px}
+  .fisT .sat{display:flex;justify-content:space-between;font-size:11px;margin:4px 0 2px}
+  .fisT table.it{width:100%;border-collapse:collapse;font-size:11px;margin-top:2px}
+  .fisT table.it th{text-align:left;border-bottom:1.5px solid #000;padding:3px 2px 4px;font-size:10.5px;font-weight:800}
+  .fisT table.it td{padding:1px 2px;vertical-align:top}
+  .fisT table.it tr.itr td{padding-top:4px}
+  .fisT table.it .knm{font-weight:800}
+  .fisT table.it .cl{font-size:10.5px}
+  .fisT .toplamadet{border-top:1px dashed #000;padding-top:4px;margin-top:3px;font-weight:800;font-size:12px}
+  .fisT .tbox{border:1px solid #000;margin:7px 0}
+  .fisT .tbox .rw{display:flex;justify-content:space-between;padding:5px 9px;border-bottom:1px solid #000}
+  .fisT .tbox .rw:last-child{border-bottom:none}
+  .fisT .tbox .rw.big{font-weight:800;font-size:15px}
+  .fisT .tbox .rw .lb{font-weight:700}
+  .fisT .notbox{border:1px dashed #000;padding:6px 9px;margin:7px 0;min-height:34px;font-size:11px}
+  .fisT .th-bc{text-align:center;margin:9px 0 2px}
+  .fisT .th-bc svg{max-width:180px}
+  .fisT .ft{text-align:center;font-size:10px;margin-top:4px;line-height:1.5}
   .warnbox{background:var(--bad-s);color:var(--bad);border-radius:11px;padding:10px 13px;font-size:12px;font-weight:700;margin-top:10px}
   .infobox{background:var(--thr-s);color:var(--thr);border-radius:11px;padding:10px 13px;font-size:12px;font-weight:700;margin-top:10px}
   .okbox{background:var(--good-s);color:var(--good);border-radius:11px;padding:10px 13px;font-size:12px;font-weight:700;margin-top:10px}
   .depoitem{display:flex;justify-content:space-between;align-items:center;padding:5px 0;font-size:13.5px;border-top:1px dashed var(--ln)}
   .depoitem:first-child{border-top:none}.depoitem span{color:var(--tx)}.depoitem b{font-weight:800}
+  .logobox{width:88px;height:56px;border:1.5px dashed var(--ln);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--sub);font-weight:700;cursor:pointer;overflow:hidden;background:var(--card2,#fff);flex:0 0 auto}
+  .logobox img{width:100%;height:100%;object-fit:contain}
   .kv{display:flex;justify-content:space-between;padding:7px 0;font-size:13.5px;border-bottom:1px solid var(--ln)}
   .kv:last-child{border-bottom:none}.kv .k{color:var(--sub)}.kv .v{font-weight:800}
   .matrix{overflow-x:auto;border:1px solid var(--ln);border-radius:12px}
@@ -285,8 +295,11 @@ const KEY='oztekstil_v2';
 function seed(){return{
   firma:'Öz Tekstil',
   firmaSlogan:'Toptan Tekstil · Erkek Giyim',
-  firmaAdres:'Laleli / İstanbul',
+  firmaAdres:'Ulubatlı Hasan Sk. No:53/A · Güngören / İstanbul',
   firmaTel:'0212 000 00 00',
+  firmaWp:'0538 000 00 00',
+  firmaLogo:'',
+  satici:'',
   rol:'patron',
   kurUSD:32.40, kurEUR:35.10,
   seq:{u:1000,h:1000,c:1000,s:1000,cek:1000,ie:1000,hr:1000,al:1000,oh:1000},
@@ -1114,47 +1127,63 @@ function fisYazdir(id){const s=db.satislar.find(x=>x.id===id);
   document.body.classList.add('printing');setTimeout(()=>{window.print();document.body.classList.remove('printing')},150);
 }
 function fisTermalHTML(s){
-  const line=(l,r,cls)=>`<div class="tl${cls?' '+cls:''}"><span>${l}</span><span>${r}</span></div>`;
-  const kv=(l,r)=>`<div class="kk"><span class="lb">${l}</span><span>${r}</span></div>`;
-  const d=new Date(s.tarih);const tarih=d.toLocaleDateString('tr-TR',{day:'2-digit',month:'short',year:'numeric'})+' '+d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
+  const rw=(l,r,cls)=>`<div class="rw${cls?' '+cls:''}"><span class="lb">${l}</span><span>${r}</span></div>`;
+  const d=new Date(s.tarih);const tarih=d.getFullYear()+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+String(d.getDate()).padStart(2,'0')+' '+d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
+  const m=cari(s.mid);
+  // ürün tablosu (Kod · Ürün / Adet · Fiyat · Toplam)
+  let toplamAdet=0;
   const items=s.kalemler.map(k=>{
-    const cl=k.renkler&&k.renkler.length?k.renkler.map(r=>esc(r.ad)+'×'+r.mik).join(' · '):(k.mik+' '+k.birim);
-    return `<div class="ti"><div class="nm">${esc(k.urun)}</div><div class="tsub"><span class="cl">${cl} · ${k.mik}×${money(k.fiyat,s.pb)}</span><span>${money(k.mik*k.fiyat,s.pb)}</span></div></div>`;
+    const u=urun(k.uid);const kod=(u&&u.kod)||'—';toplamAdet+=k.mik;
+    const cl=k.renkler&&k.renkler.length?k.renkler.map(r=>esc(r.ad)+'×'+r.mik).join(' '):'';
+    return `<tr class="itr"><td class="knm">${esc(kod)}</td><td colspan="4">${esc(k.urun)}</td></tr>
+      <tr><td colspan="2" class="cl">${cl}</td><td class="r">${k.mik}</td><td class="r">${money(k.fiyat,s.pb)}</td><td class="r">${money(k.mik*k.fiyat,s.pb)}</td></tr>`;
   }).join('');
-  const hasAdj=s.iskonto||s.kdv||s.tasima||s.kesik;
+  // toplamlar
+  const iskT=(s.araToplam||0)*(s.iskonto||0)/100;
   const kalan=Math.max(0,s.tutar-s.odenen-(s.kesik||0));
-  const fazla=s.odenen-(s.tutar-(s.kesik||0));
-  const odemeler=(s.odemeler&&s.odemeler.length)?s.odemeler:(s.odenen>0?[{tur:s.odemeTur||'Nakit',tutar:s.odenen,pb:s.pb}]:[]);
-  const odDetay=t=>t.tur==='Çek'&&t.vade?' · v.'+dstr(t.vade):t.tur==='Kredi Kartı'?' · ≈34g':'';
+  // cari bakiye (TL) — bu satıştan önce / sonra
+  const div=pbKur(s.pb);const netTL=(s.tutar-s.odenen-(s.kesik||0))*div;
+  const sonBk=m?m.bakiye:null;const oncekiBk=sonBk!=null?sonBk-netTL:null;
+  const sat=(db.satici||'').trim();
+  const not=(s.sevkiyat||'').trim();
   return `<div class="fisT">
-    <div class="th-name">${esc((db.firma||'ÖZ TEKSTİL').toLocaleUpperCase('tr-TR'))}</div>
-    ${db.firmaSlogan?`<div class="th-tag">${esc(db.firmaSlogan)}</div>`:''}
-    ${(db.firmaAdres||db.firmaTel)?`<div class="th-meta">${esc([db.firmaAdres,db.firmaTel].filter(Boolean).join(' · '))}</div>`:''}
-    <div class="rd"></div>
-    <div class="tl tb"><span>SATIŞ FİŞİ</span><span>İrsaliye #${s.id}</span></div>
+    ${db.firmaLogo?`<div class="th-logo"><img src="${db.firmaLogo}"></div>`:`<div class="th-name">${esc((db.firma||'ÖZ TEKSTİL').toLocaleUpperCase('tr-TR'))}</div>`}
     <div class="rs"></div>
-    ${kv('Tarih',tarih)}
-    ${kv('Müşteri',esc(s.mus))}
-    ${s.pb!=='TL'?kv('Döviz',s.pb):''}
+    <div class="th-title">Sipariş Fişi</div>
     <div class="rs"></div>
-    <div class="hd">Ü R Ü N L E R</div>
-    ${items}
-    <div class="rs"></div>
-    ${hasAdj?line('Ara Toplam',money(s.araToplam||s.tutar,s.pb)):''}
-    ${s.iskonto?line('İskonto %'+s.iskonto,'−'+money((s.araToplam||0)*s.iskonto/100,s.pb)):''}
-    ${s.vadeFarki?line('Vade Farkı %'+s.vadeFarki,'+…'):''}
-    ${s.kdv?line('KDV %'+s.kdv,'+'+money(s.kdvTutar||0,s.pb)):''}
-    ${s.tasima?line('Taşıma / Kargo','+'+money(s.tasima,s.pb)):''}
-    ${s.kesik?line('Kesik (müşteri kırdı)','−'+money(s.kesik,s.pb)):''}
-    <div class="box"><span>TOPLAM</span><span>${money(s.tutar,s.pb)}</span></div>
-    <div class="bal"><span>Ödenen</span><span>${money(s.odenen,s.pb)}</span></div>
-    ${kalan>0.5?`<div class="bal"><span>KALAN</span><span>${money(kalan,s.pb)}</span></div>`:fazla>0.5?`<div class="bal"><span>FAZLA (alacak)</span><span>${money(fazla,s.pb)}</span></div>`:`<div class="bal"><span>DURUM</span><span>ÖDENDİ ✓</span></div>`}
-    ${odemeler.length?`<div class="rs"></div><div class="hd">Ö D E M E L E R</div>${odemeler.map(t=>line(esc(t.tur)+odDetay(t),money(t.tutar,t.pb||s.pb))).join('')}`:''}
-    ${s.sevkiyat?`<div class="rs"></div>${kv('Sevkiyat',esc(s.sevkiyat))}`:''}
-    <div class="rd"></div>
-    <div class="th-bc">${barkodSVG('IR'+s.id,38)}</div>
-    <div class="ft">Bizi tercih ettiğiniz için<br>teşekkür ederiz 🙏</div>
-    <div class="ftn">Bu belge irsaliye niteliğindedir, fatura yerine geçmez.</div>
+    ${db.firmaTel?`<div class="th-ct"><span class="ci">📞</span><span>Tel: ${esc(db.firmaTel)}</span></div>`:''}
+    ${db.firmaWp?`<div class="th-ct"><span class="ci">🟢</span><span>WhatsApp: ${esc(db.firmaWp)}</span></div>`:''}
+    <div class="th-ct"><span class="ci">🏪</span><span>${esc(db.firma||'')}</span></div>
+    ${db.firmaAdres?`<div class="th-ct"><span class="ci">📍</span><span>${esc(db.firmaAdres)}</span></div>`:''}
+    <div class="mbox">
+      <div class="mtop"><span><b>Müşteri:</b></span><span>${tarih}</span></div>
+      <div class="mn">${esc(s.mus)}</div>
+      <div class="ml">${esc([m&&m.ulke,m&&(m.sehir||m.il)].filter(Boolean).join(' — ')||'—')}</div>
+      ${m&&m.tel?`<div class="ml">${esc(m.tel)}</div>`:''}
+    </div>
+    <div class="sat"><span>Satıcı: ${esc(sat||db.firma||'')}</span><span>No. ${s.id}</span></div>
+    <table class="it">
+      <thead><tr><th>Kod</th><th>Ürün</th><th class="r">Adet</th><th class="r">Fiyat</th><th class="r">Toplam</th></tr></thead>
+      <tbody>${items}</tbody>
+    </table>
+    <div class="toplamadet">Toplam Adet: ${toplamAdet}</div>
+    <div class="tbox">
+      ${rw('Sipariş Tutarı',money(s.araToplam||s.tutar,s.pb))}
+      ${s.iskonto?rw('Fark / İndirim','−'+money(iskT,s.pb)):''}
+      ${s.tasima?rw('Taşıma / Kargo','+'+money(s.tasima,s.pb)):''}
+      ${s.kesik?rw('Kesik','−'+money(s.kesik,s.pb)):''}
+      ${(s.kdv!=null)?rw('KDV %'+(s.kdv||0),money(s.kdvTutar||0,s.pb)):''}
+      ${rw('TOPLAM',money(s.tutar,s.pb),'big')}
+    </div>
+    <div class="tbox">
+      ${rw('Ödeme',money(s.odenen,s.pb))}
+      ${rw('Kalan',money(kalan,s.pb))}
+      ${oncekiBk!=null?rw('Önceki Bakiye',money(oncekiBk,'TL')):''}
+      ${sonBk!=null?rw('Son Bakiye',money(sonBk,'TL')):''}
+    </div>
+    <div class="notbox">Not: ${esc(not)}</div>
+    <div class="th-bc">${barkodSVG('IR'+s.id,40)}</div>
+    <div class="ft">Bizi tercih ettiğiniz için teşekkür ederiz 🙏</div>
     <div style="height:14px"></div>
   </div>`;
 }
@@ -1604,13 +1633,19 @@ function rAyarlar(){
   html+=`<div class="mini" style="text-align:center;margin-top:18px">Öz Tekstil Toptan Yönetim · prototip v2</div>`;
   $('app').innerHTML=html;
 }
-function formFirma(){open_('Firma Bilgileri',`<div class="mini">Bu bilgiler termal fiş / A4 çıktısının başlığında görünür.</div>
+function formFirma(){open_('Firma Bilgileri',`<div class="mini">Bu bilgiler termal fiş / sipariş fişi çıktısının başlığında görünür.</div>
+  <label>Logo (fişin en üstünde)</label>
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:4px"><div class="logobox" onclick="$('f-logo-in').click()">${db.firmaLogo?`<img src="${db.firmaLogo}">`:'📷 Logo'}</div>${db.firmaLogo?`<button type="button" class="btn ghost sm" style="width:auto;margin:0" onclick="db.firmaLogo='';save();closeM();formFirma()">Kaldır</button>`:'<span class="mini">Yoksa firma adı yazı olarak basılır</span>'}</div>
+  <input type="file" id="f-logo-in" accept="image/*" style="display:none" onchange="firmaLogoSec(this)">
   <label>Firma Adı</label><input id="f-ad" value="${esc(db.firma)}">
   <label>Slogan / Alt başlık</label><input id="f-slo" value="${esc(db.firmaSlogan||'')}" placeholder="Toptan Tekstil · Erkek Giyim">
-  <label>Adres</label><input id="f-adr" value="${esc(db.firmaAdres||'')}" placeholder="Laleli / İstanbul">
+  <label>Adres</label><input id="f-adr" value="${esc(db.firmaAdres||'')}" placeholder="Ulubatlı Hasan Sk. No:53/A · Güngören / İstanbul">
   <label>Telefon</label><input id="f-tel" value="${esc(db.firmaTel||'')}" placeholder="0212 000 00 00">
+  <label>WhatsApp</label><input id="f-wp" value="${esc(db.firmaWp||'')}" placeholder="0538 000 00 00">
+  <label>Satıcı Adı (fişte görünür)</label><input id="f-sat" value="${esc(db.satici||'')}" placeholder="Örn. Ayşegül">
   <button class="btn" onclick="kaydetFirma()">Kaydet</button>`)}
-function kaydetFirma(){db.firma=$('f-ad').value.trim()||db.firma;db.firmaSlogan=$('f-slo').value.trim();db.firmaAdres=$('f-adr').value.trim();db.firmaTel=$('f-tel').value.trim();save();closeM();render();toast('Firma bilgileri kaydedildi ✓')}
+function firmaLogoSec(input){const f=input.files&&input.files[0];if(!f)return;resizeImg(f,d=>{db.firmaLogo=d;save();closeM();formFirma()},400,0.85)}
+function kaydetFirma(){db.firma=$('f-ad').value.trim()||db.firma;db.firmaSlogan=$('f-slo').value.trim();db.firmaAdres=$('f-adr').value.trim();db.firmaTel=$('f-tel').value.trim();db.firmaWp=$('f-wp').value.trim();db.satici=$('f-sat').value.trim();save();closeM();render();toast('Firma bilgileri kaydedildi ✓')}
 function formKur(){open_('Günün Kuru',`<button class="btn g" style="margin-top:0" onclick="kurGuncelle()">🔄 Otomatik Güncel Kuru Al</button>${db.kurTarih?`<div class="mini" style="text-align:center;margin-top:8px">Son güncelleme: ${kurYas()}</div>`:''}<div class="mini" style="text-align:center;margin:10px 0 4px">— veya elle gir —</div><div class="g2"><div><label>USD ($)</label><input id="k-usd" type="number" step="0.01" value="${db.kurUSD}"></div><div><label>EUR (€)</label><input id="k-eur" type="number" step="0.01" value="${db.kurEUR}"></div></div><div class="infobox">Dolar-endeksli ürünlerin TL fiyatı bu kura göre hesaplanır.</div><button class="btn" onclick="kaydetKur()">Elle Kaydet</button>`)}
 function kaydetKur(){db.kurUSD=+$('k-usd').value||db.kurUSD;db.kurEUR=+$('k-eur').value||db.kurEUR;db.kurTarih=Date.now();save();closeM();render();toast('Kur güncellendi ✓')}
 async function kurCek(){
