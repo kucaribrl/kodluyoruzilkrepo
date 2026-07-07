@@ -474,6 +474,9 @@ function hasRenkStok(u){return renkObjs(u).length>0}
 function syncStok(u){if(hasRenkStok(u))u.stok=renkObjs(u).reduce((a,r)=>a+(+r.stok||0),0)}
 function dots(r){return '<div class="chips">'+(r||[]).slice(0,6).map(c=>`<span class="chip" style="background:${renkHex(c)}"></span>`).join('')+'</div>'}
 function toplamElimizde(){return db.hesaplar.reduce((a,h)=>a+h.bakiye,0)}
+function kasaHareket(hesapId,yon,tutar,tur,aciklama,cariId){const h=hesap(hesapId);if(h)h.bakiye+=(yon==='in'?tutar:-tutar);
+  db.hareketler.push({id:nid('hr'),tarih:Date.now(),hesapId,yon,tutar,tur:tur||'',aciklama:aciklama||'',cariId:cariId||null});}
+function hesapTurToplam(t){return db.hesaplar.filter(h=>h.tur===t).reduce((a,h)=>a+h.bakiye,0)}
 function toplamAlacak(){return db.cariler.filter(c=>c.tip==='musteri').reduce((a,c)=>a+Math.max(0,c.bakiye),0)}
 function stokDegeri(){return db.urunler.reduce((a,u)=>a+u.stok*u.alis*(u.birim==='seri'?u.seri:1),0)}
 function bugunSatis(){const b=new Date().setHours(0,0,0,0);return db.satislar.filter(s=>s.tarih>=b).reduce((a,s)=>a+s.tutar,0)}
@@ -1594,7 +1597,8 @@ function kaydetOdeme(id){
     if(c.doviz==='USD'){c.bakiyeUSD=(c.bakiyeUSD||0)-(t/db.kurUSD)}else{c.bakiye-=t}
     if(tur==='Çek'){db.cekler.push({id:nid('cek'),tip:'verilen',cariId:c.id,cari:c.ad,tutar:t,vade:Date.now()+90*86400000,banka:'—',durum:'portfoyde',verilisKur:db.kurUSD})}else if(h){h.bakiye-=t}
   }
-  db.hareketler.push({id:nid('hr'),cariId:id,tip:isMus?'tahsilat':'odeme',tutar:t,kesik,tur,tarih:Date.now()});
+  const hitHesap=(tur!=='Çek'&&tur!=='Kredi Kartı')&&h&&t>0;
+  db.hareketler.push({id:nid('hr'),cariId:id,tip:isMus?'tahsilat':'odeme',tutar:t,kesik,tur,tarih:Date.now(),hesapId:hitHesap?h.id:null,yon:hitHesap?(isMus?'in':'out'):null});
   save();closeM();rCari();toast((isMus?'Tahsilat':'Ödeme')+' kaydedildi ✓ '+TL(t)+(isMus&&kesik>0?' + kesik '+TL(kesik):''))}
 function formAlim(id){
   const c=cari(id);
@@ -1614,12 +1618,50 @@ function kaydetAlim(id){const c=cari(id);const adet=+$('al-adet').value||0,fiyat
 function rKasa(){
   const toplam=toplamElimizde();
   const bekleyenCek=db.cekler.filter(c=>c.tip==='alinan'&&c.durum==='portfoyde').reduce((a,c)=>a+c.tutar,0);
-  let html=`<div class="tiles"><div class="tile b1" style="grid-column:1/-1"><div class="l">Toplam Elimizde (likit)</div><div class="v">${TL(toplam)}</div><div class="em">🏦</div><div style="font-size:11px;opacity:.9;margin-top:4px">Vadeyle gelecek: +${TL(bekleyenCek)} (çek)</div></div></div>
-    <div class="sec">Hesaplar <a onclick="formHesap()">+ Hesap</a></div><div class="card">`+db.hesaplar.map(h=>`<div class="row" onclick="hesapDetay(${h.id})"><div class="av" style="background:${h.tur==='nakit'?'var(--good)':'var(--ind)'}">${h.tur==='nakit'?'💵':'🏦'}</div><div class="mid"><div class="t">${esc(h.ad)}</div><div class="s">${h.tur}</div></div><div class="end"><div class="n">${TL(h.bakiye)}</div></div></div>`).join('')+`</div>`;
+  const bugun=new Date().toDateString();
+  const giren=(db.hareketler||[]).filter(x=>x.yon==='in'&&new Date(x.tarih).toDateString()===bugun).reduce((a,x)=>a+x.tutar,0);
+  const cikan=(db.hareketler||[]).filter(x=>x.yon==='out'&&new Date(x.tarih).toDateString()===bugun).reduce((a,x)=>a+x.tutar,0);
+  const nakit=hesapTurToplam('nakit'),banka=hesapTurToplam('banka'),pos=hesapTurToplam('pos');
+  let html=`<div class="tiles"><div class="tile b1" style="grid-column:1/-1"><div class="l">Toplam Elimizde (likit)</div><div class="v">${TL(toplam)}</div><div class="em">🏦</div><div style="font-size:11px;opacity:.9;margin-top:4px">💵 Nakit ${TL(nakit)} · 🏦 Banka ${TL(banka)}${pos?' · POS '+TL(pos):''} · vadeli çek +${TL(bekleyenCek)}</div></div></div>
+    <div class="g2"><div class="card" style="padding:11px;margin:0;text-align:center"><div class="mini">Bugün Giren</div><div style="font-weight:800;font-size:17px;color:var(--good)">+${TL(giren)}</div></div><div class="card" style="padding:11px;margin:0;text-align:center"><div class="mini">Bugün Çıkan</div><div style="font-weight:800;font-size:17px;color:var(--bad)">−${TL(cikan)}</div></div></div>
+    <div class="g2" style="margin-top:10px"><button class="btn sm" onclick="formTransfer()">⇄ Transfer</button><button class="btn ghost sm" onclick="formKasaHareket()">➕ Gelir / Gider</button></div>
+    <div class="sec">Hesaplar <a onclick="formHesap()">+ Hesap</a></div><div class="card">`+db.hesaplar.map(h=>`<div class="row" onclick="hesapDetay(${h.id})"><div class="av" style="background:${h.tur==='nakit'?'var(--good)':h.tur==='pos'?'var(--thr)':'var(--ind)'}">${h.tur==='nakit'?'💵':h.tur==='pos'?'💳':'🏦'}</div><div class="mid"><div class="t">${esc(h.ad)}</div><div class="s">${h.tur}</div></div><div class="end"><div class="n ${h.bakiye<0?'neg':''}">${TL(h.bakiye)}</div></div></div>`).join('')+`</div>`;
   html+=`<div class="sec">Ortak Harcamaları</div><div class="card">`+(()=>{const grp={};db.ortakHarcama.forEach(o=>grp[o.ortak]=(grp[o.ortak]||0)+o.tutar);return Object.keys(grp).length?Object.keys(grp).map(k=>`<div class="row"><div class="av p">⚖️</div><div class="mid"><div class="t">${esc(k)}</div><div class="s">çektiği toplam</div></div><div class="end"><div class="n neg">${TL(grp[k])}</div></div></div>`).join(''):emp('⚖️','Kayıt yok')})()+`</div>
     <div style="margin-top:12px"><button class="btn ghost sm" onclick="formHarcama()">➕ Ortak Harcaması Ekle</button></div>`;
   html+=`<div class="sec">Nakit Takvimi (yaklaşan)</div><div class="card">`+takvimList()+`</div>`;
   $('app').innerHTML=html;
+}
+/* --- Transfer & Gelir/Gider --- */
+function formTransfer(fromId){if(db.hesaplar.length<2)return toast('En az 2 hesap gerekli');
+  const f0=fromId||db.hesaplar[0].id,t0=db.hesaplar.find(h=>h.id!==f0)?.id;
+  open_('⇄ Hesaplar Arası Transfer',`
+    <label>Nereden</label><select id="tr-from">${db.hesaplar.map(h=>`<option value="${h.id}" ${h.id===f0?'selected':''}>${esc(h.ad)} · ${TL(h.bakiye)}</option>`).join('')}</select>
+    <label>Nereye</label><select id="tr-to">${db.hesaplar.map(h=>`<option value="${h.id}" ${h.id===t0?'selected':''}>${esc(h.ad)}</option>`).join('')}</select>
+    <label>Tutar (₺)</label><input id="tr-t" type="number" inputmode="numeric" placeholder="0">
+    <label>Açıklama</label><input id="tr-a" placeholder="ör. kasadan bankaya yatırdım">
+    <button class="btn" onclick="kaydetTransfer()">Transferi Yap</button>`);
+}
+function kaydetTransfer(){const f=+$('tr-from').value,t=+$('tr-to').value,tut=+$('tr-t').value||0;
+  if(tut<=0)return toast('Tutar gir');if(f===t)return toast('Aynı hesap seçilemez');
+  const a=($('tr-a').value||'').trim();
+  kasaHareket(f,'out',tut,'Transfer',a||('→ '+hesap(t).ad));
+  kasaHareket(t,'in',tut,'Transfer',a||('← '+hesap(f).ad));
+  save();closeM();rKasa();toast('Transfer yapıldı ✓ '+TL(tut));
+}
+let _khYon='in';
+function khTur(y){_khYon=y;$('kh-in')?.classList.toggle('on',y==='in');$('kh-out')?.classList.toggle('on',y==='out')}
+function formKasaHareket(hesapId){_khYon='in';
+  open_('➕ Gelir / Gider',`
+    <label>Ne oldu?</label><div class="seg2"><div class="o on" id="kh-in" onclick="khTur('in')">↓ Gelir (para girdi)</div><div class="o" id="kh-out" onclick="khTur('out')">↑ Gider (para çıktı)</div></div>
+    <label>Hesap</label><select id="kh-hesap">${db.hesaplar.map(h=>`<option value="${h.id}" ${h.id===hesapId?'selected':''}>${esc(h.ad)}</option>`).join('')}</select>
+    <label>Tutar (₺)</label><input id="kh-t" type="number" inputmode="numeric" placeholder="0">
+    <label>Kategori / Açıklama</label><input id="kh-a" list="kh-kat" placeholder="Kira, elektrik, maaş, nakit ekle...">
+    <datalist id="kh-kat">${['Kira','Elektrik','Su','Maaş','Personel','Yakıt','Nakliye','Vergi','Aidat','Nakit ekle','Diğer'].map(x=>`<option value="${x}">`).join('')}</datalist>
+    <button class="btn" onclick="kaydetKasaHareket()">Kaydet</button>`);
+}
+function kaydetKasaHareket(){const tut=+$('kh-t').value||0;if(tut<=0)return toast('Tutar gir');const hid=+$('kh-hesap').value;
+  const a=($('kh-a').value||'').trim()||(_khYon==='in'?'Gelir':'Gider');
+  kasaHareket(hid,_khYon,tut,_khYon==='in'?'Gelir':'Gider',a);save();closeM();rKasa();toast((_khYon==='in'?'Gelir':'Gider')+' kaydedildi ✓ '+TL(tut));
 }
 function takvimList(){
   const items=[];
@@ -1630,9 +1672,23 @@ function takvimList(){
 }
 function formHesap(){open_('Yeni Hesap',`<label>Hesap Adı</label><input id="he-ad" placeholder="Recep · Ziraat"><label>Tür</label><select id="he-tur"><option value="banka">Banka</option><option value="nakit">Nakit</option><option value="pos">POS</option></select><label>Başlangıç Bakiyesi</label><input id="he-bak" type="number" value="0"><button class="btn" onclick="kaydetHesap()">Kaydet</button>`)}
 function kaydetHesap(){const ad=$('he-ad').value.trim();if(!ad)return toast('Ad gerekli');db.hesaplar.push({id:nid('hr'),ad,tur:$('he-tur').value,bakiye:+$('he-bak').value||0});save();closeM();rKasa();toast('Hesap eklendi ✓')}
-function hesapDetay(id){const h=hesap(id);open_(h.ad,`<div class="total"><div class="l">Bakiye</div><div class="v">${TL(h.bakiye)}</div></div><div class="mini" style="margin-top:12px">Tür: ${h.tur}</div><button class="btn danger" onclick="askConfirm('Hesap silinsin mi?',()=>{db.hesaplar=db.hesaplar.filter(x=>x.id!==${id});save();closeM();rKasa()})">Hesabı Sil</button>`)}
+function hesapDetay(id){const h=hesap(id);
+  const hrs=(db.hareketler||[]).filter(x=>x.hesapId===id).sort((a,b)=>b.tarih-a.tarih);
+  const rows=hrs.length?hrs.map(x=>{const c=x.cariId?cari(x.cariId):null;const isTah=x.tip==='tahsilat';const yon=x.yon||(isTah?'in':'out');
+    const lbl=x.aciklama||(c?c.ad:'')||x.tur||(isTah?'Tahsilat':'Ödeme');
+    return `<div class="exrow"><div class="exl"><b>${esc(lbl)}</b><small>${tstr(x.tarih)}${c&&x.aciklama?' · '+esc(c.ad):''}${x.tur&&x.tur!==lbl?' · '+esc(x.tur):''}</small></div><div class="exb ${yon==='in'?'pos':'neg'}">${yon==='in'?'+':'−'}${TL(x.tutar)}</div></div>`}).join(''):emp('🏦','Hareket yok');
+  open_(h.ad,`
+    <div class="total"><div><div class="l">Bakiye</div><div class="v ${h.bakiye<0?'neg':''}">${TL(h.bakiye)}</div></div><div style="text-align:right"><div class="l">Tür</div><div class="v" style="font-size:15px">${h.tur==='nakit'?'💵 Nakit':h.tur==='pos'?'💳 POS':'🏦 Banka'}</div></div></div>
+    <div class="g2" style="margin-top:12px"><button class="btn sm" onclick="closeM();formTransfer(${id})">⇄ Transfer</button><button class="btn ghost sm" onclick="closeM();formKasaHareket(${id})">➕ Gelir/Gider</button></div>
+    <div class="sec" style="margin-top:14px">Hesap Ekstresi</div><div class="card" style="padding:4px 13px">${rows}</div>
+    <button class="btn danger" style="margin-top:12px" onclick="silHesap(${id})">Hesabı Sil</button>`);
+}
+function silHesap(id){const h=hesap(id);if(Math.abs(h.bakiye)>0.5)return toast('Bakiyesi sıfır değil — silinemez');
+  askConfirm('Hesap silinsin mi?',()=>{db.hesaplar=db.hesaplar.filter(x=>x.id!==id);save();closeM();rKasa();toast('Hesap silindi')})}
 function formHarcama(){open_('Ortak Harcaması',`<label>Kim</label><select id="oh-k"><option>Sen (Birol)</option><option>Ortak (Murat)</option></select><label>Tutar</label><input id="oh-t" type="number"><label>Açıklama</label><input id="oh-a" placeholder="araba, ev, tatil..."><label>Hangi hesaptan</label><select id="oh-h">${db.hesaplar.map(h=>`<option value="${h.id}">${esc(h.ad)}</option>`).join('')}</select><button class="btn" onclick="kaydetHarcama()">Kaydet</button>`)}
-function kaydetHarcama(){const t=+$('oh-t').value;if(!t||t<=0)return toast('Tutar girin');const h=hesap(+$('oh-h').value);if(h)h.bakiye-=t;db.ortakHarcama.push({id:nid('oh'),ortak:$('oh-k').value,tutar:t,aciklama:$('oh-a').value.trim(),hesapId:h?.id,tarih:Date.now()});save();closeM();rKasa();toast('Harcama kaydedildi')}
+function kaydetHarcama(){const t=+$('oh-t').value;if(!t||t<=0)return toast('Tutar girin');const h=hesap(+$('oh-h').value);const ort=$('oh-k').value,ac=$('oh-a').value.trim();
+  if(h)kasaHareket(h.id,'out',t,'Ortak Harcama',ort+(ac?' · '+ac:''));
+  db.ortakHarcama.push({id:nid('oh'),ortak:ort,tutar:t,aciklama:ac,hesapId:h?.id,tarih:Date.now()});save();closeM();rKasa();toast('Harcama kaydedildi')}
 
 /* ---------- ÇEK ---------- */
 let cekTab='alinan';
