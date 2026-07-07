@@ -484,7 +484,7 @@ const ROLLER={
   ortak:{ad:'Ortak',ic:'🤝',kar:true,para:true,urunYaz:true,hammadde:true,views:'panel,satis,stok,cari,kasa,cek,uretim,portal,rapor,ayarlar,daha'},
   magaza:{ad:'Mağaza Elemanı',ic:'🏪',kar:false,para:false,urunYaz:false,hammadde:false,views:'panel,satis,stok,cari,ayarlar,daha'},
   depocu:{ad:'Depocu',ic:'📦',kar:false,para:false,urunYaz:false,hammadde:false,views:'panel,stok,ayarlar,daha'},
-  fason:{ad:'Fason Takipçi',ic:'🧵',kar:false,para:false,urunYaz:false,hammadde:true,views:'panel,uretim,ayarlar,daha'},
+  fason:{ad:'Fasoncu (Üretim)',ic:'🧵',kar:false,para:false,urunYaz:false,hammadde:true,views:'panel,uretim,stok,ayarlar,daha'},
 };
 function yetki(){return ROLLER[db.rol]||ROLLER.patron}
 function karGoster(){return !!yetki().kar}
@@ -496,7 +496,7 @@ function rolRenk(k){return {patron:'#b5820a',ortak:'#24487a',magaza:'#0f9d63',de
 function navFor(){
   const r=db.rol;
   if(r==='depocu')return [['panel','📊','Panel'],['stok','📦','Stok']];
-  if(r==='fason')return [['panel','📊','Panel'],['uretim','🏭','Üretim']];
+  if(r==='fason')return [['panel','📊','Panel'],['uretim','🏭','Üretim'],['stok','📦','Stok']];
   return [['panel','📊','Panel'],['satis','🧾','Satış'],['stok','📦','Stok'],['cari','👥','Cari']];
 }
 
