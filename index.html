@@ -474,8 +474,11 @@ function hasRenkStok(u){return renkObjs(u).length>0}
 function syncStok(u){if(hasRenkStok(u))u.stok=renkObjs(u).reduce((a,r)=>a+(+r.stok||0),0)}
 function dots(r){return '<div class="chips">'+(r||[]).slice(0,6).map(c=>`<span class="chip" style="background:${renkHex(c)}"></span>`).join('')+'</div>'}
 function toplamElimizde(){return db.hesaplar.reduce((a,h)=>a+h.bakiye,0)}
-function kasaHareket(hesapId,yon,tutar,tur,aciklama,cariId){const h=hesap(hesapId);if(h)h.bakiye+=(yon==='in'?tutar:-tutar);
-  db.hareketler.push({id:nid('hr'),tarih:Date.now(),hesapId,yon,tutar,tur:tur||'',aciklama:aciklama||'',cariId:cariId||null});}
+function kasaHareket(hesapId,yon,tutar,tur,aciklama,cariId){const h=hesap(hesapId);
+  if(yon==='out'&&h&&h.bakiye<tutar-0.001){toast('⚠️ '+h.ad+' bakiyesi yetersiz ('+TL(h.bakiye)+'). Hesap eksiye düşemez.');return false}
+  if(h)h.bakiye+=(yon==='in'?tutar:-tutar);
+  db.hareketler.push({id:nid('hr'),tarih:Date.now(),hesapId,yon,tutar,tur:tur||'',aciklama:aciklama||'',cariId:cariId||null});return true;}
+function hesapYeter(hesapId,tutar){const h=hesap(hesapId);return !h||h.bakiye>=tutar-0.001}
 function hesapTurToplam(t){return db.hesaplar.filter(h=>h.tur===t).reduce((a,h)=>a+h.bakiye,0)}
 function toplamAlacak(){return db.cariler.filter(c=>c.tip==='musteri').reduce((a,c)=>a+Math.max(0,c.bakiye),0)}
 function stokDegeri(){return db.urunler.reduce((a,u)=>a+u.stok*u.alis*(u.birim==='seri'?u.seri:1),0)}
@@ -1592,6 +1595,7 @@ function formOdeme(id){
 function kaydetOdeme(id){
   const t=+$('o-t').value||0;const kesik=Math.max(0,+($('o-kesik')?.value||0));if(t<=0&&kesik<=0)return toast('Tutar girin');
   const c=cari(id);const isMus=c.tip==='musteri';const tur=$('o-tur').value;const h=hesap(+$('o-hesap').value);
+  if(!isMus&&tur!=='Çek'&&h&&t>0&&!hesapYeter(h.id,t))return toast('⚠️ '+h.ad+' bakiyesi yetersiz. Hesap eksiye düşemez.');
   if(isMus){c.bakiye-=(t+kesik);if(kesik>0)c.kesikToplam=(c.kesikToplam||0)+kesik;if(t>0){if(tur==='Çek'){db.cekler.push({id:nid('cek'),tur:'cek',tip:'alinan',cariId:c.id,cari:c.ad,tutar:t,vade:Date.now()+30*86400000,banka:'—',durum:'portfoyde'})}else if(tur==='Kredi Kartı'){db.cekler.push({id:nid('cek'),tur:'kk',tip:'alinan',cariId:c.id,cari:c.ad,tutar:t,vade:Date.now()+34*86400000,banka:'Kredi Kartı POS',durum:'portfoyde'})}else if(h){h.bakiye+=t}}}
   else{ // tedarikçi/fason/gider ödeme
     if(c.doviz==='USD'){c.bakiyeUSD=(c.bakiyeUSD||0)-(t/db.kurUSD)}else{c.bakiye-=t}
@@ -1622,9 +1626,19 @@ function rKasa(){
   const giren=(db.hareketler||[]).filter(x=>x.yon==='in'&&new Date(x.tarih).toDateString()===bugun).reduce((a,x)=>a+x.tutar,0);
   const cikan=(db.hareketler||[]).filter(x=>x.yon==='out'&&new Date(x.tarih).toDateString()===bugun).reduce((a,x)=>a+x.tutar,0);
   const nakit=hesapTurToplam('nakit'),banka=hesapTurToplam('banka'),pos=hesapTurToplam('pos');
+  const now=new Date(),ay=now.getMonth(),yil=now.getFullYear();
+  const buAy=x=>{const d=new Date(x.tarih);return d.getMonth()===ay&&d.getFullYear()===yil};
+  const ayGiren=(db.hareketler||[]).filter(x=>x.yon==='in'&&buAy(x)).reduce((a,x)=>a+x.tutar,0);
+  const ayCikan=(db.hareketler||[]).filter(x=>x.yon==='out'&&buAy(x)).reduce((a,x)=>a+x.tutar,0);
+  const giderGrup={};(db.hareketler||[]).filter(x=>x.yon==='out'&&buAy(x)&&(x.tur==='Gider'||x.tur==='Ortak Harcama'||x.tur==='odeme')).forEach(x=>{const k=x.tur==='Ortak Harcama'?'Ortak Harcama':x.tur==='odeme'?'Fason/Tedarik':((x.aciklama||'Diğer').split('·')[0].trim()||'Diğer');giderGrup[k]=(giderGrup[k]||0)+x.tutar});
+  const topGider=Object.entries(giderGrup).sort((a,b)=>b[1]-a[1]).slice(0,5);
   let html=`<div class="tiles"><div class="tile b1" style="grid-column:1/-1"><div class="l">Toplam Elimizde (likit)</div><div class="v">${TL(toplam)}</div><div class="em">🏦</div><div style="font-size:11px;opacity:.9;margin-top:4px">💵 Nakit ${TL(nakit)} · 🏦 Banka ${TL(banka)}${pos?' · POS '+TL(pos):''} · vadeli çek +${TL(bekleyenCek)}</div></div></div>
     <div class="g2"><div class="card" style="padding:11px;margin:0;text-align:center"><div class="mini">Bugün Giren</div><div style="font-weight:800;font-size:17px;color:var(--good)">+${TL(giren)}</div></div><div class="card" style="padding:11px;margin:0;text-align:center"><div class="mini">Bugün Çıkan</div><div style="font-weight:800;font-size:17px;color:var(--bad)">−${TL(cikan)}</div></div></div>
     <div class="g2" style="margin-top:10px"><button class="btn sm" onclick="formTransfer()">⇄ Transfer</button><button class="btn ghost sm" onclick="formKasaHareket()">➕ Gelir / Gider</button></div>
+    <div class="sec">Bu Ay Nakit Akışı</div><div class="card" style="padding:12px 13px">
+      <div style="display:flex;gap:8px;text-align:center"><div style="flex:1"><div class="mini">Giren</div><div style="font-weight:800;color:var(--good)">+${TL(ayGiren)}</div></div><div style="flex:1"><div class="mini">Çıkan</div><div style="font-weight:800;color:var(--bad)">−${TL(ayCikan)}</div></div><div style="flex:1"><div class="mini">Net</div><div style="font-weight:800;color:${ayGiren-ayCikan>=0?'var(--good)':'var(--bad)'}">${ayGiren-ayCikan>=0?'+':'−'}${TL(Math.abs(ayGiren-ayCikan))}</div></div></div>
+      ${topGider.length?`<div class="mini" style="margin:10px 0 4px;font-weight:700">En çok gider:</div>`+topGider.map(([k,v])=>{const pct=ayCikan?Math.round(v/ayCikan*100):0;return `<div style="margin-top:5px"><div style="display:flex;justify-content:space-between;font-size:12.5px"><span>${esc(k)}</span><b>${TL(v)}</b></div><div style="height:6px;border-radius:5px;background:var(--ln2);overflow:hidden;margin-top:2px"><i style="display:block;height:100%;width:${pct}%;background:var(--bad)"></i></div></div>`}).join(''):''}
+    </div>
     <div class="sec">Hesaplar <a onclick="formHesap()">+ Hesap</a></div><div class="card">`+db.hesaplar.map(h=>`<div class="row" onclick="hesapDetay(${h.id})"><div class="av" style="background:${h.tur==='nakit'?'var(--good)':h.tur==='pos'?'var(--thr)':'var(--ind)'}">${h.tur==='nakit'?'💵':h.tur==='pos'?'💳':'🏦'}</div><div class="mid"><div class="t">${esc(h.ad)}</div><div class="s">${h.tur}</div></div><div class="end"><div class="n ${h.bakiye<0?'neg':''}">${TL(h.bakiye)}</div></div></div>`).join('')+`</div>`;
   html+=`<div class="sec">Ortak Harcamaları</div><div class="card">`+(()=>{const grp={};db.ortakHarcama.forEach(o=>grp[o.ortak]=(grp[o.ortak]||0)+o.tutar);return Object.keys(grp).length?Object.keys(grp).map(k=>`<div class="row"><div class="av p">⚖️</div><div class="mid"><div class="t">${esc(k)}</div><div class="s">çektiği toplam</div></div><div class="end"><div class="n neg">${TL(grp[k])}</div></div></div>`).join(''):emp('⚖️','Kayıt yok')})()+`</div>
     <div style="margin-top:12px"><button class="btn ghost sm" onclick="formHarcama()">➕ Ortak Harcaması Ekle</button></div>`;
@@ -1644,7 +1658,7 @@ function formTransfer(fromId){if(db.hesaplar.length<2)return toast('En az 2 hesa
 function kaydetTransfer(){const f=+$('tr-from').value,t=+$('tr-to').value,tut=+$('tr-t').value||0;
   if(tut<=0)return toast('Tutar gir');if(f===t)return toast('Aynı hesap seçilemez');
   const a=($('tr-a').value||'').trim();
-  kasaHareket(f,'out',tut,'Transfer',a||('→ '+hesap(t).ad));
+  if(!kasaHareket(f,'out',tut,'Transfer',a||('→ '+hesap(t).ad)))return;
   kasaHareket(t,'in',tut,'Transfer',a||('← '+hesap(f).ad));
   save();closeM();rKasa();toast('Transfer yapıldı ✓ '+TL(tut));
 }
@@ -1661,7 +1675,7 @@ function formKasaHareket(hesapId){_khYon='in';
 }
 function kaydetKasaHareket(){const tut=+$('kh-t').value||0;if(tut<=0)return toast('Tutar gir');const hid=+$('kh-hesap').value;
   const a=($('kh-a').value||'').trim()||(_khYon==='in'?'Gelir':'Gider');
-  kasaHareket(hid,_khYon,tut,_khYon==='in'?'Gelir':'Gider',a);save();closeM();rKasa();toast((_khYon==='in'?'Gelir':'Gider')+' kaydedildi ✓ '+TL(tut));
+  if(!kasaHareket(hid,_khYon,tut,_khYon==='in'?'Gelir':'Gider',a))return;save();closeM();rKasa();toast((_khYon==='in'?'Gelir':'Gider')+' kaydedildi ✓ '+TL(tut));
 }
 function takvimList(){
   const items=[];
@@ -1676,7 +1690,8 @@ function hesapDetay(id){const h=hesap(id);
   const hrs=(db.hareketler||[]).filter(x=>x.hesapId===id).sort((a,b)=>b.tarih-a.tarih);
   const rows=hrs.length?hrs.map(x=>{const c=x.cariId?cari(x.cariId):null;const isTah=x.tip==='tahsilat';const yon=x.yon||(isTah?'in':'out');
     const lbl=x.aciklama||(c?c.ad:'')||x.tur||(isTah?'Tahsilat':'Ödeme');
-    return `<div class="exrow"><div class="exl"><b>${esc(lbl)}</b><small>${tstr(x.tarih)}${c&&x.aciklama?' · '+esc(c.ad):''}${x.tur&&x.tur!==lbl?' · '+esc(x.tur):''}</small></div><div class="exb ${yon==='in'?'pos':'neg'}">${yon==='in'?'+':'−'}${TL(x.tutar)}</div></div>`}).join(''):emp('🏦','Hareket yok');
+    const silinir=x.tur==='Gelir'||x.tur==='Gider'||x.tur==='Ortak Harcama';
+    return `<div class="exrow"><div class="exl"><b>${esc(lbl)}</b><small>${tstr(x.tarih)}${c&&x.aciklama?' · '+esc(c.ad):''}${x.tur&&x.tur!==lbl?' · '+esc(x.tur):''}</small></div><div class="exb ${yon==='in'?'pos':'neg'}">${yon==='in'?'+':'−'}${TL(x.tutar)}</div>${silinir?`<span onclick="event.stopPropagation();silHareket(${x.id})" style="cursor:pointer;color:var(--sub);padding-left:8px;font-weight:800">✕</span>`:''}</div>`}).join(''):emp('🏦','Hareket yok');
   open_(h.ad,`
     <div class="total"><div><div class="l">Bakiye</div><div class="v ${h.bakiye<0?'neg':''}">${TL(h.bakiye)}</div></div><div style="text-align:right"><div class="l">Tür</div><div class="v" style="font-size:15px">${h.tur==='nakit'?'💵 Nakit':h.tur==='pos'?'💳 POS':'🏦 Banka'}</div></div></div>
     <div class="g2" style="margin-top:12px"><button class="btn sm" onclick="closeM();formTransfer(${id})">⇄ Transfer</button><button class="btn ghost sm" onclick="closeM();formKasaHareket(${id})">➕ Gelir/Gider</button></div>
@@ -1685,9 +1700,16 @@ function hesapDetay(id){const h=hesap(id);
 }
 function silHesap(id){const h=hesap(id);if(Math.abs(h.bakiye)>0.5)return toast('Bakiyesi sıfır değil — silinemez');
   askConfirm('Hesap silinsin mi?',()=>{db.hesaplar=db.hesaplar.filter(x=>x.id!==id);save();closeM();rKasa();toast('Hesap silindi')})}
+function silHareket(hid){const x=(db.hareketler||[]).find(h=>h.id===hid);if(!x)return;
+  askConfirm('Bu kayıt silinsin mi? Hesap bakiyesi geri düzeltilecek.',()=>{
+    const h=hesap(x.hesapId);if(h)h.bakiye+=(x.yon==='in'?-x.tutar:x.tutar);
+    if(x.tur==='Ortak Harcama')db.ortakHarcama=db.ortakHarcama.filter(o=>o.tarih!==x.tarih||o.tutar!==x.tutar);
+    db.hareketler=db.hareketler.filter(h=>h.id!==hid);save();closeM();rKasa();toast('Kayıt silindi, bakiye düzeltildi ✓');
+  },'Sil');
+}
 function formHarcama(){open_('Ortak Harcaması',`<label>Kim</label><select id="oh-k"><option>Sen (Birol)</option><option>Ortak (Murat)</option></select><label>Tutar</label><input id="oh-t" type="number"><label>Açıklama</label><input id="oh-a" placeholder="araba, ev, tatil..."><label>Hangi hesaptan</label><select id="oh-h">${db.hesaplar.map(h=>`<option value="${h.id}">${esc(h.ad)}</option>`).join('')}</select><button class="btn" onclick="kaydetHarcama()">Kaydet</button>`)}
 function kaydetHarcama(){const t=+$('oh-t').value;if(!t||t<=0)return toast('Tutar girin');const h=hesap(+$('oh-h').value);const ort=$('oh-k').value,ac=$('oh-a').value.trim();
-  if(h)kasaHareket(h.id,'out',t,'Ortak Harcama',ort+(ac?' · '+ac:''));
+  if(h&&!kasaHareket(h.id,'out',t,'Ortak Harcama',ort+(ac?' · '+ac:'')))return;
   db.ortakHarcama.push({id:nid('oh'),ortak:ort,tutar:t,aciklama:ac,hesapId:h?.id,tarih:Date.now()});save();closeM();rKasa();toast('Harcama kaydedildi')}
 
 /* ---------- ÇEK ---------- */
@@ -1718,7 +1740,9 @@ function cekTahsil(id){
   const c=db.cekler.find(x=>x.id===id);
   if(c.tip==='alinan'){c.durum='tahsil';const h=db.hesaplar[0];if(h)h.bakiye+=c.tutar;toast('Tahsil edildi ✓ '+TL(c.tutar))}
   else{ // verilen - B yöntemi kur farkı
-    c.durum='tahsil';const h=db.hesaplar.find(x=>x.tur==='banka')||db.hesaplar[0];if(h)h.bakiye-=c.tutar;
+    const h=db.hesaplar.find(x=>x.tur==='banka')||db.hesaplar[0];
+    if(h&&h.bakiye<c.tutar-0.001)return toast('⚠️ '+h.ad+' bakiyesi yetersiz. Çek ödenemez (hesap eksiye düşemez).');
+    c.durum='tahsil';if(h)h.bakiye-=c.tutar;
     if(c.verilisKur){const su=c.tutar/db.kurUSD, il=c.tutar/c.verilisKur;const fark=il-su;const cc=cari(c.cariId);
       if(cc&&cc.doviz==='USD'){cc.bakiyeUSD=(cc.bakiyeUSD||0)-su; toast(`Ödendi · $${Math.round(su)} düştü${fark>1?', $'+Math.round(fark)+' kur farkı borç kaldı':''}`)}
       else toast('Ödendi ✓')}
@@ -1786,10 +1810,10 @@ function rUretim(){
   const geciken=aktif.filter(i=>ieGecikme(i)>0).length;
   let html=`<div class="greet"><div><div class="h">Üretim Panosu 🏭</div><div class="d">Malın nerede — canlı takip</div></div></div>
     <div class="tiles">
-      <div class="tile b1" style="background:linear-gradient(135deg,#7a4fd0,#9b6ee0)"><div class="l">Fasonda Mal</div><div class="v ${fasondaTop>9999?'sm':''}">${fasondaTop} ad</div><div class="em">🧵</div></div>
-      <div class="tile b2"><div class="l">Firmada</div><div class="v sm">${firmalar.size} fason</div><div class="em">🏭</div></div>
-      <div class="tile b1" style="background:linear-gradient(135deg,${geciken?'#c0392b,#e0455f':'#0f9d63,#12b673'})"><div class="l">Geciken</div><div class="v">${geciken} iş</div><div class="em">⏱️</div></div>
-      <div class="tile b4"><div class="l">Aktif İş</div><div class="v sm">${aktif.length}</div><div class="em">📋</div></div>
+      <div class="tile b1" style="background:linear-gradient(135deg,#7a4fd0,#9b6ee0);cursor:pointer" onclick="uretimListe('fasonda')"><div class="l">Fasonda Mal</div><div class="v ${fasondaTop>9999?'sm':''}">${fasondaTop} ad</div><div class="em">🧵</div></div>
+      <div class="tile b2" style="cursor:pointer" onclick="uretimListe('firma')"><div class="l">Firmada</div><div class="v sm">${firmalar.size} fason</div><div class="em">🏭</div></div>
+      <div class="tile b1" style="background:linear-gradient(135deg,${geciken?'#c0392b,#e0455f':'#0f9d63,#12b673'});cursor:pointer" onclick="uretimListe('geciken')"><div class="l">Geciken</div><div class="v">${geciken} iş</div><div class="em">⏱️</div></div>
+      <div class="tile b4" style="cursor:pointer" onclick="uretimListe('aktif')"><div class="l">Aktif İş</div><div class="v sm">${aktif.length}</div><div class="em">📋</div></div>
     </div>
     <div class="g2" style="margin-top:6px">
       <div class="card" style="padding:12px;background:linear-gradient(135deg,#0f9d63,#12b673);color:#fff;cursor:pointer;margin:0" onclick="maliyetSim()"><div style="font-size:22px">💡</div><div style="font-weight:800;font-size:13.5px;margin-top:3px">Üretsem kaça gelir?</div><div style="font-size:10.5px;opacity:.92">maliyet simülasyonu</div></div>
@@ -1808,6 +1832,17 @@ function rUretim(){
   }).join(''):`<div class="card">${emp('📋','Aktif iş emri yok.')}</div>`;
   if(bitmis.length)html+=`<div class="sec">✅ Tamamlananlar</div>`+bitmis.slice(-4).reverse().map(i=>`<div class="card" style="margin-bottom:8px;padding:11px;opacity:.85;cursor:pointer" onclick="uretimDetay(${i.id})"><div style="display:flex;align-items:center;gap:10px"><div class="av g">✅</div><div class="mid"><div class="t">#${i.id} · ${esc(i.urun)}</div><div class="s">${ieSaglam(i)} ${esc(i.birim||'ad')} stoğa girdi${karGoster()?' · birim '+TL(ieBirimMaliyet(i)):''}</div></div></div></div>`).join('');
   $('app').innerHTML=html;
+}
+function uretimListe(tur){
+  const aktif=db.isemirleri.filter(i=>i.durum!=='tamam');let title,items=[];
+  if(tur==='fasonda'||tur==='firma'){const wip=[];aktif.forEach(i=>ieFasondaki(i).forEach(d=>wip.push({i,d})));
+    title=tur==='firma'?'🏭 Firmadaki Mallar':'🧵 Fasondaki Mallar';
+    items=wip.map(({i,d})=>({id:i.id,ic:DURAK_IC[d.ad]||'🏭',t:(fasonAd(d)||'firma yok')+' · '+d.ad,s:i.urun+' · '+durakYolda(d)+' '+(i.birim||'ad')+' fasonda'}));
+  }else if(tur==='geciken'){title='⏱️ Geciken İşler';
+    items=aktif.filter(i=>ieGecikme(i)>0).sort((a,b)=>ieGecikme(b)-ieGecikme(a)).map(i=>{const ad=ieAktifDurak(i);return {id:i.id,ic:'⏱️',t:'#'+i.id+' · '+i.urun,s:ieGecikme(i)+' gün geç · '+(ad?ad.ad+(fasonAd(ad)?' ('+fasonAd(ad)+')':''):'')}});
+  }else{title='📋 Aktif İş Emirleri';
+    items=aktif.map(i=>{const ad=ieAktifDurak(i);return {id:i.id,ic:'📋',t:'#'+i.id+' · '+i.urun,s:(ad?ad.ad:'—')+' · '+ieSaglam(i)+'/'+i.hedef+' '+(i.birim||'ad')}});}
+  open_(title,items.length?items.map(m=>`<div class="row" onclick="closeM();setTimeout(()=>uretimDetay(${m.id}),120)"><div class="av gray">${m.ic}</div><div class="mid"><div class="t">${esc(m.t)}</div><div class="s">${esc(m.s)}</div></div><span style="color:var(--sub)">›</span></div>`).join(''):emp('✅','Kayıt yok'));
 }
 /* --- Maliyet simülasyonu (üretsem kaça gelir?) --- */
 function maliyetSim(){
@@ -2025,12 +2060,13 @@ function durakTeslimAl(id,x){
   d.renkGelen=d.renkGelen||{};d.renkDefo=d.renkDefo||{};dFoto=d.foto||'';_teslimRenk=false;
   const renkler=Object.keys(gr);
   const kalanTop=renkler.reduce((a,c)=>a+Math.max(0,(gr[c]||0)-(d.renkGelen[c]||0)-(d.renkDefo[c]||0)),0);
+  window._teslimKalan=kalanTop;window._teslimBirim=i.birim||'ad';
   const rows=renkler.map((c,k)=>{const gon=gr[c]||0,gel=d.renkGelen[c]||0,def=d.renkDefo[c]||0,kalan=Math.max(0,gon-gel-def);
     return `<div class="syrow"><span class="sw sm" style="background:${hexFromAd(c)||'#ccc'}"></span><div style="flex:1;min-width:0"><div class="synm" style="font-size:13px">${esc(c)}</div><div class="mini">gön ${gon} · geldi ${gel} · kalan <b>${kalan}</b></div></div><input id="tr-${k}" data-c="${esc(c)}" type="number" inputmode="numeric" value="${kalan||''}" placeholder="sağlam" class="syin" style="width:62px"><input id="td-${k}" type="number" inputmode="numeric" value="" placeholder="defo" class="syin" style="width:52px"></div>`}).join('');
   open_(d.ad+' · Teslim Al',`
     <div class="mini">${esc(fasonAd(d)||'Fason')} · fasonda kalan <b>${kalanTop}</b> ${esc(i.birim||'ad')}</div>
     ${!d.ucret?`<label>₺ / adet (anlaşılan ücret)</label><input id="t-uc" type="number" inputmode="numeric" placeholder="0">`:''}
-    <div id="t-simple"><div class="g2" style="margin-top:8px"><div><label>Gelen (sağlam)</label><input id="t-adet" type="number" inputmode="numeric" value="${kalanTop||''}"></div><div><label>Defo / fire</label><input id="t-defo" type="number" inputmode="numeric" value=""></div></div></div>
+    <div id="t-simple"><div class="g2" style="margin-top:8px"><div><label>Gelen (sağlam)</label><input id="t-adet" type="number" inputmode="numeric" value="${kalanTop||''}" oninput="teslimHint()"></div><div><label>Defo / fire</label><input id="t-defo" type="number" inputmode="numeric" value="" oninput="teslimHint()"></div></div><div class="mini" id="t-hint" style="margin-top:5px"></div></div>
     <div id="t-renkbox" style="display:none"><div class="card" style="padding:6px 12px;margin-top:8px">${rows}</div></div>
     ${renkler.length>1?`<a id="t-renk-link" onclick="teslimRenkToggle()" style="display:inline-block;margin-top:8px;font-size:12.5px;color:var(--ind2);font-weight:800;cursor:pointer">🎨 Renk renk gir</a>`:''}
     <label style="margin-top:8px">Not</label><input id="t-not" placeholder="ör. lacivert 2 top eksik">
@@ -2039,32 +2075,45 @@ function durakTeslimAl(id,x){
     <button class="btn g" onclick="durakTeslimKaydet(${id},${x})">📥 Teslim Al</button>`);
   cizDurakFoto();
 }
+function teslimHint(){const el=$('t-hint');if(!el||_teslimRenk)return;const a=(+($('t-adet')?.value||0))+(+($('t-defo')?.value||0));const kalan=window._teslimKalan||0;const bir=window._teslimBirim||'ad';
+  if(a>kalan)el.innerHTML=`<span style="color:var(--bad);font-weight:700">⚠️ Kalandan ${a-kalan} ${bir} FAZLA giriyorsun</span>`;
+  else if(a>0&&a<kalan)el.innerHTML=`<span style="color:var(--thr);font-weight:700">${kalan-a} ${bir} eksik kalacak (kısmi teslim)</span>`;
+  else if(a>0&&a===kalan)el.innerHTML=`<span style="color:var(--good);font-weight:700">✓ Tam kalan kadar</span>`;
+  else el.innerHTML='';
+}
 function durakTeslimKaydet(id,x){
   const i=db.isemirleri.find(v=>v.id===id);const d=i.duraklar[x];const gr=durakGonderRenk(i,x);
   if($('t-uc'))d.ucret=+$('t-uc').value||d.ucret||0;
   d.renkGelen=d.renkGelen||{};d.renkDefo=d.renkDefo||{};
-  let tAdet=0,tDefo=0;const batch={};
+  let tAdet=0,tDefo=0;const bg={},bd={};
   if(_teslimRenk){ // renk renk elle
     document.querySelectorAll('#mB #t-renkbox input[id^="tr-"]').forEach(el=>{const c=el.getAttribute('data-c');const adet=Math.max(0,+el.value||0);
       const di=el.parentElement.querySelector('input[id^="td-"]');const defo=Math.max(0,+((di&&di.value)||0));
-      if(adet){d.renkGelen[c]=(d.renkGelen[c]||0)+adet;tAdet+=adet}if(defo){d.renkDefo[c]=(d.renkDefo[c]||0)+defo;tDefo+=defo}
-      if(adet||defo)batch[c]={adet,defo}});
+      if(adet){bg[c]=(bg[c]||0)+adet;tAdet+=adet}if(defo){bd[c]=(bd[c]||0)+defo;tDefo+=defo}});
   }else{ // tek toplam → renk planına göre dağıt
     tAdet=Math.max(0,+($('t-adet')?.value||0));tDefo=Math.max(0,+($('t-defo')?.value||0));
     const kalanW={};Object.keys(gr).forEach(c=>kalanW[c]=Math.max(0,(gr[c]||0)-(d.renkGelen[c]||0)-(d.renkDefo[c]||0)));
     const ag=dagit(tAdet,kalanW),ad=dagit(tDefo,kalanW);
-    Object.keys(ag).forEach(c=>{if(ag[c]){d.renkGelen[c]=(d.renkGelen[c]||0)+ag[c];batch[c]={adet:ag[c],defo:ad[c]||0}}});
-    Object.keys(ad).forEach(c=>{if(ad[c])d.renkDefo[c]=(d.renkDefo[c]||0)+ad[c]});
+    Object.keys(ag).forEach(c=>{if(ag[c])bg[c]=ag[c]});Object.keys(ad).forEach(c=>{if(ad[c])bd[c]=ad[c]});
   }
   if(tAdet+tDefo<=0)return toast('Gelen adet gir');
-  d.gelen=Object.values(d.renkGelen).reduce((a,v)=>a+v,0);d.defolu=Object.values(d.renkDefo).reduce((a,v)=>a+v,0);
-  d.teslimatlar=d.teslimatlar||[];d.teslimatlar.push({tarih:Date.now(),adet:tAdet,defo:tDefo,renk:batch,not:($('t-not')?.value||'').trim()});
-  d.foto=dFoto;ieBorcGuncelle(d);
-  const gonTop=Object.values(d.gonderilenRenk||{}).reduce((a,v)=>a+v,0)||d.gonderilen;
-  const bitti=(d.gelen+d.defolu)>=gonTop;
-  if(bitti){d.durum='tamam';if(x<i.duraklar.length-1){const nx=i.duraklar[x+1];if(nx.durum==='bekliyor'){nx.gonderilenRenk={...d.renkGelen};nx.gonderilen=d.gelen;nx.durum='devam';nx.baslama=Date.now()}}}
-  else d.durum='devam';
-  save();closeM();uretimDetay(id);toast(bitti?'Durak tamamlandı ✓':tAdet+' adet teslim alındı ✓');
+  const gonTop=Object.values(gr).reduce((a,v)=>a+v,0)||d.gonderilen||0;
+  const oncekiTop=Object.values(d.renkGelen).reduce((a,v)=>a+v,0)+Object.values(d.renkDefo).reduce((a,v)=>a+v,0);
+  const yeniTop=oncekiTop+tAdet+tDefo;
+  const commit=()=>{
+    Object.keys(bg).forEach(c=>d.renkGelen[c]=(d.renkGelen[c]||0)+bg[c]);
+    Object.keys(bd).forEach(c=>d.renkDefo[c]=(d.renkDefo[c]||0)+bd[c]);
+    const batch={};[...new Set([...Object.keys(bg),...Object.keys(bd)])].forEach(c=>batch[c]={adet:bg[c]||0,defo:bd[c]||0});
+    d.gelen=Object.values(d.renkGelen).reduce((a,v)=>a+v,0);d.defolu=Object.values(d.renkDefo).reduce((a,v)=>a+v,0);
+    d.teslimatlar=d.teslimatlar||[];d.teslimatlar.push({tarih:Date.now(),adet:tAdet,defo:tDefo,renk:batch,not:($('t-not')?.value||'').trim()});
+    d.foto=dFoto;ieBorcGuncelle(d);
+    const bitti=(d.gelen+d.defolu)>=gonTop;
+    if(bitti){d.durum='tamam';if(x<i.duraklar.length-1){const nx=i.duraklar[x+1];if(nx.durum==='bekliyor'){nx.gonderilenRenk={...d.renkGelen};nx.gonderilen=d.gelen;nx.durum='devam';nx.baslama=Date.now()}}}
+    else d.durum='devam';
+    save();closeM();uretimDetay(id);toast(bitti?'Durak tamamlandı ✓':tAdet+' adet teslim alındı ✓');
+  };
+  if(yeniTop>gonTop+0.001)askConfirm(`Bu durağa ${gonTop} ${i.birim||'adet'} gönderilmişti.\nBu teslimatla toplam ${yeniTop} olacak — ${yeniTop-gonTop} FAZLA.\n\nYine de kaydedilsin mi?`,commit,'Yine de kaydet');
+  else commit();
 }
 /* --- Tamamla → stoğa al --- */
 function isEmriTamamla(id){
