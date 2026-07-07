@@ -1921,33 +1921,54 @@ function durakKaydet(id,x){
   d.fasonId=+($('d-fas').value||0)||null;d.ucret=+$('d-uc').value||0;d.not=($('d-not')?.value||'').trim();d.foto=dFoto;
   ieBorcGuncelle(d);save();closeM();uretimDetay(id);toast('Kaydedildi ✓');
 }
-/* --- Renk renk kısmi teslimat --- */
+/* --- Teslimat: varsayılan tek toplam, istenirse renk renk --- */
+function dagit(total,weights){const keys=Object.keys(weights);const sumW=keys.reduce((a,k)=>a+(weights[k]||0),0);const out={};
+  if(total<=0)return out;if(sumW<=0){if(keys.length)out[keys[0]]=total;return out}
+  let acc=0;keys.forEach((k,idx)=>{if(idx===keys.length-1)out[k]=Math.max(0,total-acc);else{const v=Math.round(total*(weights[k]||0)/sumW);out[k]=v;acc+=v}});return out;
+}
+let _teslimRenk=false;
+function teslimRenkToggle(){_teslimRenk=!_teslimRenk;
+  const s=$('t-simple'),r=$('t-renkbox'),l=$('t-renk-link');if(!s||!r)return;
+  s.style.display=_teslimRenk?'none':'block';r.style.display=_teslimRenk?'block':'none';
+  if(l)l.textContent=_teslimRenk?'↩︎ Tek toplam gir':'🎨 Renk renk gir';
+}
 function durakTeslimAl(id,x){
   const i=db.isemirleri.find(v=>v.id===id);const d=i.duraklar[x];const gr=durakGonderRenk(i,x);
   d.gonderilenRenk=(d.gonderilenRenk&&Object.keys(d.gonderilenRenk).length)?d.gonderilenRenk:{...gr};
-  d.renkGelen=d.renkGelen||{};d.renkDefo=d.renkDefo||{};dFoto=d.foto||'';
+  d.renkGelen=d.renkGelen||{};d.renkDefo=d.renkDefo||{};dFoto=d.foto||'';_teslimRenk=false;
   const renkler=Object.keys(gr);
+  const kalanTop=renkler.reduce((a,c)=>a+Math.max(0,(gr[c]||0)-(d.renkGelen[c]||0)-(d.renkDefo[c]||0)),0);
   const rows=renkler.map((c,k)=>{const gon=gr[c]||0,gel=d.renkGelen[c]||0,def=d.renkDefo[c]||0,kalan=Math.max(0,gon-gel-def);
     return `<div class="syrow"><span class="sw sm" style="background:${hexFromAd(c)||'#ccc'}"></span><div style="flex:1;min-width:0"><div class="synm" style="font-size:13px">${esc(c)}</div><div class="mini">gön ${gon} · geldi ${gel} · kalan <b>${kalan}</b></div></div><input id="tr-${k}" data-c="${esc(c)}" type="number" inputmode="numeric" value="${kalan||''}" placeholder="sağlam" class="syin" style="width:62px"><input id="td-${k}" type="number" inputmode="numeric" value="" placeholder="defo" class="syin" style="width:52px"></div>`}).join('');
   open_(d.ad+' · Teslim Al',`
-    <div class="mini">${esc(fasonAd(d)||'Fason')} — renk renk gelen mal (sağlam / defo)</div>
+    <div class="mini">${esc(fasonAd(d)||'Fason')} · fasonda kalan <b>${kalanTop}</b> ${esc(i.birim||'ad')}</div>
     ${!d.ucret?`<label>₺ / adet (anlaşılan ücret)</label><input id="t-uc" type="number" inputmode="numeric" placeholder="0">`:''}
-    <div class="card" style="padding:6px 12px;margin-top:8px">${rows}</div>
-    <label>Not</label><input id="t-not" placeholder="ör. lacivert 2 top eksik">
+    <div id="t-simple"><div class="g2" style="margin-top:8px"><div><label>Gelen (sağlam)</label><input id="t-adet" type="number" inputmode="numeric" value="${kalanTop||''}"></div><div><label>Defo / fire</label><input id="t-defo" type="number" inputmode="numeric" value=""></div></div></div>
+    <div id="t-renkbox" style="display:none"><div class="card" style="padding:6px 12px;margin-top:8px">${rows}</div></div>
+    ${renkler.length>1?`<a id="t-renk-link" onclick="teslimRenkToggle()" style="display:inline-block;margin-top:8px;font-size:12.5px;color:var(--ind2);font-weight:800;cursor:pointer">🎨 Renk renk gir</a>`:''}
+    <label style="margin-top:8px">Not</label><input id="t-not" placeholder="ör. lacivert 2 top eksik">
     <label>📷 Fotoğraf</label><div id="d-foto-box"></div>
-    <div class="infobox">Fason parça parça getirdikçe gir. Kalan otomatik hesaplanır, ücret geldiği adet üzerinden fasona borç yazılır.</div>
+    <div class="infobox">Atölye genelde toplam adet söyler — tek rakam gir. Garni/nakış gibi renge göre değişen işte <b>🎨 renk renk gir</b>. Ücret gelen adet üzerinden fasona borç yazılır.</div>
     <button class="btn g" onclick="durakTeslimKaydet(${id},${x})">📥 Teslim Al</button>`);
   cizDurakFoto();
 }
 function durakTeslimKaydet(id,x){
-  const i=db.isemirleri.find(v=>v.id===id);const d=i.duraklar[x];
+  const i=db.isemirleri.find(v=>v.id===id);const d=i.duraklar[x];const gr=durakGonderRenk(i,x);
   if($('t-uc'))d.ucret=+$('t-uc').value||d.ucret||0;
   d.renkGelen=d.renkGelen||{};d.renkDefo=d.renkDefo||{};
   let tAdet=0,tDefo=0;const batch={};
-  document.querySelectorAll('#mB input[id^="tr-"]').forEach(el=>{const c=el.getAttribute('data-c');const adet=Math.max(0,+el.value||0);
-    const di=el.parentElement.querySelector('input[id^="td-"]');const defo=Math.max(0,+((di&&di.value)||0));
-    if(adet){d.renkGelen[c]=(d.renkGelen[c]||0)+adet;tAdet+=adet}if(defo){d.renkDefo[c]=(d.renkDefo[c]||0)+defo;tDefo+=defo}
-    if(adet||defo)batch[c]={adet,defo}});
+  if(_teslimRenk){ // renk renk elle
+    document.querySelectorAll('#mB #t-renkbox input[id^="tr-"]').forEach(el=>{const c=el.getAttribute('data-c');const adet=Math.max(0,+el.value||0);
+      const di=el.parentElement.querySelector('input[id^="td-"]');const defo=Math.max(0,+((di&&di.value)||0));
+      if(adet){d.renkGelen[c]=(d.renkGelen[c]||0)+adet;tAdet+=adet}if(defo){d.renkDefo[c]=(d.renkDefo[c]||0)+defo;tDefo+=defo}
+      if(adet||defo)batch[c]={adet,defo}});
+  }else{ // tek toplam → renk planına göre dağıt
+    tAdet=Math.max(0,+($('t-adet')?.value||0));tDefo=Math.max(0,+($('t-defo')?.value||0));
+    const kalanW={};Object.keys(gr).forEach(c=>kalanW[c]=Math.max(0,(gr[c]||0)-(d.renkGelen[c]||0)-(d.renkDefo[c]||0)));
+    const ag=dagit(tAdet,kalanW),ad=dagit(tDefo,kalanW);
+    Object.keys(ag).forEach(c=>{if(ag[c]){d.renkGelen[c]=(d.renkGelen[c]||0)+ag[c];batch[c]={adet:ag[c],defo:ad[c]||0}}});
+    Object.keys(ad).forEach(c=>{if(ad[c])d.renkDefo[c]=(d.renkDefo[c]||0)+ad[c]});
+  }
   if(tAdet+tDefo<=0)return toast('Gelen adet gir');
   d.gelen=Object.values(d.renkGelen).reduce((a,v)=>a+v,0);d.defolu=Object.values(d.renkDefo).reduce((a,v)=>a+v,0);
   d.teslimatlar=d.teslimatlar||[];d.teslimatlar.push({tarih:Date.now(),adet:tAdet,defo:tDefo,renk:batch,not:($('t-not')?.value||'').trim()});
