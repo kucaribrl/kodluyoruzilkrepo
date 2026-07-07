@@ -484,7 +484,7 @@ const ROLLER={
   ortak:{ad:'Ortak',ic:'🤝',kar:true,para:true,urunYaz:true,hammadde:true,views:'panel,satis,stok,cari,kasa,cek,uretim,portal,rapor,ayarlar,daha'},
   magaza:{ad:'Mağaza Elemanı',ic:'🏪',kar:false,para:false,urunYaz:false,hammadde:false,views:'panel,satis,stok,cari,ayarlar,daha'},
   depocu:{ad:'Depocu',ic:'📦',kar:false,para:false,urunYaz:false,hammadde:false,views:'panel,stok,ayarlar,daha'},
-  fason:{ad:'Fasoncu (Üretim)',ic:'🧵',kar:false,para:false,urunYaz:false,hammadde:true,views:'panel,uretim,stok,ayarlar,daha'},
+  fason:{ad:'Fasoncu (Üretim)',ic:'🧵',kar:false,para:false,urunYaz:false,hammadde:true,views:'panel,uretim,stok,cari,ayarlar,daha'},
 };
 function yetki(){return ROLLER[db.rol]||ROLLER.patron}
 function karGoster(){return !!yetki().kar}
@@ -1385,7 +1385,9 @@ function silSatis(id){askConfirm('Satış iptal edilsin mi? Stok, bakiye, ödeme
 /* ---------- CARİ ---------- */
 let cariTab='musteri';
 function rCari(){
-  const tabs=[['musteri','👥 Müşteri'],['tedarikci','🚚 Tedarikçi'],['fason','🧵 Fason'],['gider','☕ Gider']];
+  const fasoncu=db.rol==='fason';
+  const tabs=fasoncu?[['fason','🧵 Fason'],['tedarikci','🚚 Tedarikçi']]:[['musteri','👥 Müşteri'],['tedarikci','🚚 Tedarikçi'],['fason','🧵 Fason'],['gider','☕ Gider']];
+  if(fasoncu&&(cariTab==='musteri'||cariTab==='gider'))cariTab='fason';
   let html=`<div class="tabs">`+tabs.map(t=>`<div class="tb ${cariTab===t[0]?'on':''}" onclick="cariTab='${t[0]}';rCari()">${t[1]}</div>`).join('')+`</div>`;
   html+=`<input class="search" id="ara-cari" placeholder="🔍 Ara..." oninput="rCariList()">`;
   if(cariTab==='musteri'){
