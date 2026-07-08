@@ -2296,7 +2296,7 @@ function portalOnay(id){
 function portalRed(id){db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);save();rPortal();toast('Sipariş reddedildi')}
 
 /* ---------- RAPOR ---------- */
-let rapDonem='ay', rapTab='ozet';
+let rapDonem='ay', rapTab='ozet', rapMusId=0;
 function rapSek(t){rapTab=t;rRapor()}
 const RAP_PAL=['#2d6cdf','#e0455f','#0f9d63','#c67b2c','#7a4fd0','#2fa8bd','#d9639a','#8a97a8'];
 function rapAralik(){
@@ -2424,6 +2424,16 @@ function rapOzet(R){let h='';
   h+=`<div class="card" style="padding:11px 12px;margin:0"><div class="mini">İşlem Sayısı</div><div style="font-weight:800;font-size:18px">${R.sat.length}</div>${R.onc?`<div style="font-size:11px;margin-top:1px">${rapDelta(R.sat.length,R.islemOnc)}</div>`:''}</div>`;
   h+=`</div>`;
   h+=`<div class="g2" style="margin-top:9px"><div class="card" style="padding:10px;margin:0;text-align:center"><div class="mini">Satılan Adet</div><div style="font-weight:800;font-size:16px">${R.adet}</div></div><div class="card" style="padding:10px;margin:0;text-align:center"><div class="mini">Ort. Sepet</div><div style="font-weight:800;font-size:16px">${TL(R.sat.length?R.ciro/R.sat.length:0)}</div></div></div>`;
+  // hedef takibi (ay/yıl)
+  if(rapDonem==='ay'||rapDonem==='yil'){
+    const hedef=(+db.hedef||0)*(rapDonem==='yil'?12:1),per=rapDonem==='yil'?'Yıllık':'Aylık';
+    if(hedef>0){const pct=Math.round(R.ciro/hedef*100),kalan=Math.max(0,hedef-R.ciro);
+      h+=`<div class="sec">🎯 ${per} Ciro Hedefi <a onclick="hedefBelirle()">düzenle</a></div><div class="card" style="padding:13px 15px">
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:6px"><span>${TL(R.ciro)} / <b>${TL(hedef)}</b></span><span style="font-weight:800;color:${pct>=100?'var(--good)':'var(--ind)'}">%${pct}</span></div>
+        <div style="height:13px;border-radius:8px;background:var(--ln2);overflow:hidden"><i style="display:block;height:100%;width:${Math.min(100,pct)}%;background:${pct>=100?'var(--good)':'linear-gradient(90deg,var(--ind2),#7fb0f0)'}"></i></div>
+        <div class="mini" style="margin-top:6px">${pct>=100?'🎉 Hedefi geçtin, tebrikler!':'Hedefe <b>'+TL(kalan)+'</b> kaldı'}</div></div>`;
+    }else h+=`<button class="btn ghost" style="margin-top:11px" onclick="hedefBelirle()">🎯 ${per} ciro hedefi belirle</button>`;
+  }
   if(R.kar){const net=R.brutKar-R.giderTop;
     h+=`<div class="card" style="margin-top:11px;padding:13px 15px;display:flex;justify-content:space-between;align-items:center;background:${net>=0?'var(--good-s)':'var(--bad-s)'};border-color:${net>=0?'var(--good)':'var(--bad)'}"><div><div style="font-size:11.5px;font-weight:700;color:var(--sub)">NET KÂR (brüt − giderler)</div><div class="mini">${TL(R.brutKar)} kâr − ${TL(R.giderTop)} gider</div></div><div style="font-size:21px;font-weight:800;color:${net>=0?'var(--good)':'var(--bad)'}">${TL(net)}</div></div>`;
     // dönem kıyas tablosu
@@ -2445,7 +2455,7 @@ function rapOzet(R){let h='';
     // KDV
     h+=`<div class="sec">KDV Özeti <span class="mini" style="text-transform:none;font-weight:600">${R.donemAd}</span></div><div class="card" style="padding:13px 15px"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11.5px;font-weight:700;color:var(--sub)">HESAPLANAN KDV (satış)</div><div class="mini">satış fişlerindeki toplam KDV</div></div><div style="font-size:20px;font-weight:800;color:var(--ind)">${TL(R.kdv)}</div></div></div>`;
   }
-  h+=`<button class="btn ghost" style="margin-top:14px" onclick="rapPaylas()">📤 Özeti Paylaş (WhatsApp)</button>`;
+  h+=`<div class="g2" style="margin-top:14px"><button class="btn ghost sm" onclick="rapPaylas()">📤 Metin Paylaş</button><button class="btn sm" onclick="rapGorselPaylas()">🖼️ Görsel Paylaş</button></div>`;
   return h;
 }
 function rapSatis(R){let h='';
@@ -2544,6 +2554,14 @@ function rapMusteri(R){let h='';
     const topKar=Object.entries(musKar).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([ad,v])=>({ad,v:Math.max(0,v),g:kisaTL(v)}));
     h+=`<div class="sec">Müşteri Kârlılığı <span class="mini" style="text-transform:none;font-weight:600">kâra göre · ${R.donemAd}</span></div><div class="card" style="padding:14px">${barsHtml(topKar,'linear-gradient(90deg,#0f9d63,#6fce9f)')}</div>`;
   }
+  // müşteri × ürün çapraz — "kim ne alıyor"
+  const musList=[...new Set(R.sat.map(s=>s.mid).filter(Boolean))].map(id=>({id,ad:(cari(id)||{}).ad||'—',ciro:R.sat.filter(s=>s.mid===id).reduce((a,s)=>a+R.toTL(s),0)})).sort((a,b)=>b.ciro-a.ciro);
+  if(musList.length){
+    const mid=rapMusId&&musList.some(m=>m.id===rapMusId)?rapMusId:musList[0].id;
+    const uMap={};R.sat.filter(s=>s.mid===mid).forEach(s=>s.kalemler.forEach(k=>{(uMap[k.urun]=uMap[k.urun]||{adet:0,ciro:0}).adet+=(+k.mik||0);uMap[k.urun].ciro+=(+k.mik||0)*(+k.fiyat||0)*pbKur(s.pb)}));
+    const topU=Object.entries(uMap).sort((a,b)=>b[1].ciro-a[1].ciro).slice(0,8).map(([ad,v])=>({ad,v:v.ciro,g:v.adet+' · '+kisaTL(v.ciro)}));
+    h+=`<div class="sec">Müşteri Ne Alıyor? <span class="mini" style="text-transform:none;font-weight:600">seç → en çok aldıkları</span></div><div class="card" style="padding:12px 13px"><select onchange="rapMusId=+this.value;rRapor()">`+musList.map(m=>`<option value="${m.id}" ${m.id===mid?'selected':''}>${esc(m.ad)} · ${kisaTL(m.ciro)}</option>`).join('')+`</select><div style="margin-top:10px">${barsHtml(topU,'linear-gradient(90deg,#7a4fd0,#b9a3ea)')}</div></div>`;
+  }
   // en sık alan (işlem sayısı)
   const sikMap={};R.sat.forEach(s=>{const key=s.mus||'—';sikMap[key]=(sikMap[key]||0)+1});
   const topSik=Object.entries(sikMap).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([ad,v])=>({ad,v,g:v+' sipariş'}));
@@ -2627,6 +2645,42 @@ async function rapPaylas(){
   const t=rapMetni();
   try{if(navigator.share){await navigator.share({text:t});return}}catch(e){if(e&&e.name==='AbortError')return}
   try{await navigator.clipboard.writeText(t);toast('Rapor panoya kopyalandı ✓')}catch(e){open_('Rapor Özeti',`<textarea readonly style="width:100%;height:230px;font-size:12px">${esc(t)}</textarea><div class="mini" style="margin-top:6px">Metni kopyalayıp WhatsApp'tan gönderebilirsin.</div>`)}
+}
+function hedefBelirle(){open_('🎯 Ciro Hedefi',`<label>Aylık ciro hedefin (₺)</label><input id="hd-t" type="number" inputmode="numeric" value="${+db.hedef||''}" placeholder="ör. 200000"><div class="infobox">Bu ay ne kadar ciro hedefliyorsun? Özet sekmesinde ne kadarına ulaştığın çubukla gösterilir. Yıllık görünümde hedef otomatik ×12 sayılır.</div><button class="btn" onclick="hedefKaydet()">Kaydet</button>${+db.hedef?`<button class="btn ghost" style="margin-top:8px" onclick="db.hedef=0;save();closeM();rRapor();toast('Hedef kaldırıldı')">Hedefi Kaldır</button>`:''}`)}
+function hedefKaydet(){db.hedef=Math.max(0,+$('hd-t').value||0);save();closeM();rRapor();toast(db.hedef?'Hedef belirlendi 🎯 '+TL(db.hedef)+'/ay':'Hedef kaldırıldı')}
+// rapor özetini görsel (PNG) olarak çiz
+function rapGorsel(){
+  const R=rapCtx(),net=R.brutKar-R.giderTop;
+  const satMap={};R.sat.forEach(s=>s.kalemler.forEach(k=>{satMap[k.urun]=(satMap[k.urun]||0)+(+k.mik||0)}));
+  const top=Object.entries(satMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const W=760,H=470+Math.max(1,top.length)*40,dpr=2;
+  const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;
+  const x=c.getContext('2d');x.scale(dpr,dpr);x.textBaseline='alphabetic';
+  x.fillStyle='#fff';x.fillRect(0,0,W,H);
+  const g=x.createLinearGradient(0,0,W,150);g.addColorStop(0,'#24487a');g.addColorStop(1,'#2d6cdf');x.fillStyle=g;x.fillRect(0,0,W,150);
+  x.fillStyle='#fff';x.font='800 30px sans-serif';x.fillText(db.firma||'Öz Tekstil',36,60);
+  x.font='600 18px sans-serif';x.globalAlpha=.92;x.fillText(R.donemAd+' Raporu',36,92);
+  x.font='600 14px sans-serif';x.globalAlpha=.8;x.fillText(new Date().toLocaleDateString('tr-TR'),36,120);x.globalAlpha=1;
+  let y=200;x.fillStyle='#67788d';x.font='700 14px sans-serif';x.fillText('CİRO · '+R.donemAd.toUpperCase(),36,y);
+  x.fillStyle='#141d2b';x.font='800 44px sans-serif';x.fillText(TL(R.ciro),36,y+46);y+=96;
+  const cols=[['Brüt Kâr',TL(R.brutKar),'#0f9d63'],['Gider',TL(R.giderTop),'#e0455f'],['Net Kâr',TL(net),net>=0?'#0f9d63':'#e0455f']];
+  cols.forEach((col,i)=>{const cx=36+i*242;x.fillStyle='#67788d';x.font='600 13px sans-serif';x.fillText(col[0],cx,y);x.fillStyle=col[2];x.font='800 22px sans-serif';x.fillText(col[1],cx,y+28)});
+  y+=66;x.fillStyle='#67788d';x.font='600 14px sans-serif';
+  x.fillText('İşlem: '+R.sat.length+'   ·   Satılan: '+R.adet+' adet   ·   Tahsilat: %'+R.tahOran,36,y);y+=30;
+  x.strokeStyle='#e7ecf3';x.lineWidth=1;x.beginPath();x.moveTo(36,y);x.lineTo(W-36,y);x.stroke();y+=34;
+  x.fillStyle='#141d2b';x.font='800 17px sans-serif';x.fillText('En Çok Satanlar',36,y);
+  const mx=top.length?top[0][1]:1;
+  if(top.length)top.forEach(t=>{y+=40;x.fillStyle='#141d2b';x.font='600 15px sans-serif';x.fillText((t[0]||'').slice(0,24),36,y);
+    x.fillStyle='#eef2f9';x.fillRect(360,y-13,W-360-72,15);x.fillStyle='#2d6cdf';x.fillRect(360,y-13,(W-360-72)*(t[1]/mx),15);
+    x.fillStyle='#141d2b';x.font='700 14px sans-serif';x.textAlign='right';x.fillText(''+t[1],W-36,y);x.textAlign='left'});
+  else{y+=34;x.fillStyle='#a9b6c6';x.font='500 14px sans-serif';x.fillText('Bu dönemde satış yok',36,y)}
+  x.fillStyle='#a9b6c6';x.font='600 12px sans-serif';x.fillText((db.firmaSlogan||'Öz Tekstil Yönetim'),36,H-24);
+  return c.toDataURL('image/png');
+}
+async function rapGorselPaylas(){
+  let durl;try{durl=rapGorsel()}catch(e){return toast('Görsel oluşturulamadı')}
+  try{if(navigator.share&&navigator.canShare){const f=dataURLtoFile(durl,'rapor.png');if(navigator.canShare({files:[f]})){await navigator.share({files:[f],text:rapMetni()});return}}}catch(e){if(e&&e.name==='AbortError')return}
+  const a=document.createElement('a');a.href=durl;a.download='rapor-'+Date.now()+'.png';document.body.appendChild(a);a.click();a.remove();toast('Rapor görseli indirildi ✓');
 }
 function rRapor(){
   const R=rapCtx();
