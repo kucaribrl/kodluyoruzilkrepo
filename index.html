@@ -2519,10 +2519,19 @@ function rPortal(){
   // stoğa girince haber ver talepleri
   const bil=db.stokBildirim||[];
   if(bil.length){const grp={};bil.forEach(x=>{grp[x.uid]=grp[x.uid]||{n:0,mus:new Set()};grp[x.uid].n++;grp[x.uid].mus.add(x.mus)});
-    html+=`<div class="sec">🔔 Talep Edilen (tükenen) Ürünler</div><div class="card" style="padding:4px 13px">`+Object.entries(grp).sort((a,b)=>b[1].n-a[1].n).map(([uid,v])=>{const u=urun(+uid);return `<div class="exrow"><div class="exl"><b>${esc(u?u.ad:'—')}</b><small>${[...v.mus].slice(0,3).join(', ')}${v.mus.size>3?'...':''}</small></div><div class="exb" style="color:var(--warn);font-weight:800">${v.n} kişi bekliyor</div></div>`}).join('')+`<div class="mini" style="padding:6px 0">💡 Bu ürünleri üretim/alım listene alabilirsin — hazır müşteri var.</div></div>`;
+    html+=`<div class="sec">🔔 Talep Edilen (tükenen) Ürünler</div>`+Object.entries(grp).sort((a,b)=>b[1].n-a[1].n).map(([uid,v])=>{const u=urun(+uid);const yeter=v.n>=3;return `<div class="card" style="padding:12px 13px;margin-bottom:9px"><div style="display:flex;justify-content:space-between;align-items:center"><div style="min-width:0"><b>${esc(u?u.ad:'—')}</b><div class="mini">${[...v.mus].slice(0,3).join(', ')}${v.mus.size>3?' +'+(v.mus.size-3):''}</div></div><div style="text-align:right;flex:0 0 auto"><div style="font-weight:800;color:${yeter?'var(--good)':'var(--warn)'}">${v.n} istek</div>${yeter?'<div class="mini" style="color:var(--good)">✓ üretime değer</div>':''}</div></div>
+      <div class="g2" style="margin-top:9px"><button class="btn ghost sm" onclick="portalHaberVer(${uid})">📤 Hazır · Haber Ver</button><button class="btn ghost sm" onclick="portalUretimeAl(${uid})">🏭 Üretime Al</button></div></div>`}).join('')+`<div class="mini" style="margin:2px 3px 0">💡 Yeterli talep birikince (3+) üretime alıp, "Haber Ver" ile isteyen müşterilere ulaş.</div>`;
   }
   $('app').innerHTML=html;
 }
+function portalUretimeAl(uid){const u=urun(uid);go('uretim');setTimeout(()=>{if(typeof formIsEmri==='function'){formIsEmri();setTimeout(()=>{const el=$('ie-ad');if(el&&u){el.value=u.ad;if(typeof ieUrunAra==='function')ieUrunAra()}},130)}},60);}
+function portalHaberVer(uid){const u=urun(uid);const list=(db.stokBildirim||[]).filter(x=>x.uid===uid);if(!list.length)return;
+  const kisiler=list.map(x=>'• '+x.mus+(x.tel?' ('+x.tel+')':'')).join('\n');
+  const full=`📢 ${u?u.ad:''} tekrar hazır! Artık sipariş verebilirsiniz.\n\nBekleyenler:\n`+kisiler;
+  askConfirm(`${list.length} kişiye haber verilecek:\n${kisiler}\n\nMesaj WhatsApp'a/panoya alınıp bu istekler kapatılsın mı?`,()=>{
+    if(navigator.share)navigator.share({text:full}).catch(()=>{});else if(navigator.clipboard)navigator.clipboard.writeText(full).then(()=>toast('Mesaj kopyalandı ✓')).catch(()=>{});
+    db.stokBildirim=(db.stokBildirim||[]).filter(x=>x.uid!==uid);save();rPortal();toast('İstekler kapatıldı, haber mesajı hazır ✓');
+  },'Haber Ver');}
 function portalOnay(id,override){
   const o=db.bekleyenPortal.find(x=>x.id===id);if(!o)return;
   let m=cari(o.mid)||db.cariler.find(c=>c.tip==='musteri'&&c.ad.toLowerCase()===(o.mus||'').toLowerCase());
@@ -2570,11 +2579,15 @@ function portalMik(uid,d){const u=urun(uid);if(!u)return;
   else{it.mik+=d;if(it.mik<=0)portalSepet=portalSepet.filter(k=>k.uid!==uid)}
   portalCiz();
 }
-// renk renk seri seçimi (müşteri hangi renkten kaç seri)
-function portalRenkMik(uid,ad,d){const u=urun(uid);if(!u)return;let it=portalSepet.find(k=>k.uid===uid);
+// renk renk seri seçimi — elimizdeki stoktan fazla seçilemez
+function portalRenkMik(uid,ad,d){const u=urun(uid);if(!u)return;
+  const ro=renkObjs(u).find(x=>x.ad===ad);const rstok=ro?(+ro.stok||0):0;
+  let it=portalSepet.find(k=>k.uid===uid);
+  const cur=(it&&it.renkler&&(it.renkler.find(x=>x.ad===ad)||{}).mik)||0;
+  if(d>0){if(rstok<=0)return toast(ad+' tükendi — sipariş verilemez');if(cur>=rstok)return toast('Bu renkten elimizde '+rstok+' '+esc(u.birim||'seri')+' var');}
   if(!it){if(d<=0)return;it={uid,urun:u.ad,birim:u.birim,fiyat:portalFiyat(u),renkler:[],mik:0};portalSepet.push(it)}
   it.renkler=it.renkler||[];let r=it.renkler.find(x=>x.ad===ad);
-  if(!r){if(d>0)it.renkler.push({ad,mik:d})}else{r.mik+=d;if(r.mik<=0)it.renkler=it.renkler.filter(x=>x.ad!==ad)}
+  if(!r){if(d>0)it.renkler.push({ad,mik:Math.min(d,rstok)})}else{r.mik=Math.max(0,Math.min(r.mik+d,rstok));if(r.mik<=0)it.renkler=it.renkler.filter(x=>x.ad!==ad)}
   it.mik=it.renkler.reduce((a,x)=>a+x.mik,0);
   if(it.mik<=0)portalSepet=portalSepet.filter(k=>k.uid!==uid);
   portalCiz();
@@ -2591,8 +2604,14 @@ function portalGonder(){
   db.bekleyenPortal.push(o);
   save();portalSepet=[];portalNot='';portalView='tesekkur';portalCiz();
 }
-function portalStokBildir(uid){const u=urun(uid);if(!u)return;db.stokBildirim=db.stokBildirim||[];
-  db.stokBildirim.push({uid,mus:(portalMusAd||'').trim()||'Müşteri',tarih:Date.now()});save();toast('🔔 Stoğa girince haber verilecek ✓');}
+function portalStokBildir(uid){portalIstek(uid)}
+function portalIstek(uid){const u=urun(uid);if(!u)return;db.stokBildirim=db.stokBildirim||[];
+  const ad=(portalMusAd||'').trim();
+  if(!ad)return open_('🔔 İstek Oluştur',`<div class="mini">Bu ürün üretilince/gelince size haber verelim. İletişim bilginizi bırakın.</div><label>Adınız / Firmanız</label><input id="ist-ad" placeholder="ör. Yılmaz Tekstil"><label>Telefon</label><input id="ist-tel" type="tel" placeholder="0532..."><button class="btn" onclick="portalIstekKaydet(${uid})">İstek Oluştur</button>`);
+  db.stokBildirim.push({uid,mus:ad,tel:(portalTel||'').trim(),tarih:Date.now()});save();closeM&&closeM();portalCiz();
+  const n=(db.stokBildirim||[]).filter(x=>x.uid===uid).length;
+  toast('🔔 İsteğin alındı ✓'+(n>1?' · bu ürünü '+n+' kişi istedi':''));}
+function portalIstekKaydet(uid){const ad=($('ist-ad')?.value||'').trim();if(!ad)return toast('Adınızı yazın');portalMusAd=ad;portalTel=($('ist-tel')?.value||'').trim();closeM();portalIstek(uid)}
 function isFav(uid){return (db.portalFav||[]).includes(uid)}
 function portalFavToggle(uid){db.portalFav=db.portalFav||[];const i=db.portalFav.indexOf(uid);if(i<0){db.portalFav.push(uid);toast('❤️ Favorilere eklendi')}else{db.portalFav.splice(i,1)}save();portalCiz()}
 function portalMusteriBul(){const ad=(portalMusAd||'').trim();if(!ad)return null;return db.cariler.find(c=>c.tip==='musteri'&&c.ad.toLowerCase()===ad.toLowerCase())||null}
@@ -2667,11 +2686,15 @@ function portalCiz(){
       <div class="mini" style="margin-top:3px">${esc(u.kod||'')}${u.marka?' · '+esc(u.marka):''}${u.kat?' · '+esc(u.kat):''}</div>
       <div style="font-size:26px;font-weight:800;color:var(--ind);margin:10px 0">${TL(portalFiyat(u))}<span class="mini" style="font-weight:600">/${esc(u.birim||'')}</span></div>
       ${kademeler().length?`<div class="card" style="padding:11px 13px;background:var(--good-s);border-color:var(--good)"><div style="font-weight:800;font-size:13px;color:var(--good)">📦 Çok al, ucuza gel!</div>${kademeler().map(k=>`<div style="display:flex;justify-content:space-between;font-size:12.5px;margin-top:5px"><span>${k.min}+ ${esc(u.birim||'adet')} alana</span><b style="color:var(--good)">%${k.ind} indirim → ${TL(Math.round(portalFiyat(u)*(1-k.ind/100)))}</b></div>`).join('')}</div>`:''}
-      ${st<=0?`<div class="warnbox">⚠️ Şu an stokta yok. <a onclick="portalStokBildir(${u.id})" style="color:var(--ind2);font-weight:800;cursor:pointer">🔔 Stoğa girince haber ver</a></div>`:(st<=(+u.kritik||0)?`<div class="warnbox" style="background:var(--bad-s);color:var(--bad);border:none">⚡ Son ${st} ${esc(u.birim||'adet')}! Hızlı tükeniyor.</div>`:'')}
+      ${st<=0?`<div class="warnbox" style="background:var(--bad-s);color:var(--bad);border:none">⚠️ Bu ürün şu an tükendi — sipariş verilemez. Aşağıdan <b>istek oluşturabilirsin</b>, yeterli talep olunca üretilir ve sana haber gelir.</div>`:''}
       ${(u.birim==='seri'&&urunBedenler(u).length)?`<div class="sec" style="margin-top:14px">Seri İçeriği ${urunBattal(u)?'<span class="tag" style="background:var(--thr-s);color:var(--thr)">💪 BATTAL</span>':''}</div><div class="card" style="padding:11px 13px"><div style="display:flex;gap:6px;flex-wrap:wrap">${(u.bedenler||[]).map(x=>{const bd=typeof x==='object'?x.beden:x,ad=typeof x==='object'?(x.adet||1):1;return `<span class="pchip on" style="cursor:default">${esc(bd)}${ad>1?' ×'+ad:''}</span>`}).join('')}</div><div class="mini" style="margin-top:8px">1 seri = <b>${u.seri||urunBedenler(u).length} parça</b>${u.kumas?' · '+esc(u.kumas):''}</div></div>`:(u.kumas?`<div class="mini" style="margin-top:12px">🧵 Kumaş: <b>${esc(u.kumas)}</b></div>`:'')}
-      ${objs.length?`<div class="sec" style="margin-top:14px">Renk & Seri Seç <span class="mini" style="text-transform:none;font-weight:600">hangi renkten kaç ${esc(u.birim||'seri')}</span></div><div class="card" style="padding:5px 12px">${objs.map(r=>{const rq=portalRenkAdet(u.id,r.ad),rst=+r.stok||0,rc=(''+r.ad).replace(/'/g,"\\'");return `<div class="exrow"><div class="exl" style="display:flex;align-items:center;gap:9px"><span style="width:26px;height:26px;border-radius:8px;background:${r.hex||'#ccc'};border:1px solid var(--ln);flex:0 0 26px"></span><div><b>${esc(r.ad||'')}</b>${rst<=0?' <small style="color:var(--bad)">tükendi</small>':(rst<=(+u.kritik||0)?' <small style="color:var(--warn)">az kaldı</small>':'')}</div></div><div class="pstep sm"><button onclick="portalRenkMik(${u.id},'${rc}',-1)">−</button><b>${rq}</b><button onclick="portalRenkMik(${u.id},'${rc}',1)">+</button></div></div>`}).join('')}</div>`:''}
+      ${objs.length?`<div class="sec" style="margin-top:14px">Renk & Seri Seç <span class="mini" style="text-transform:none;font-weight:600">hangi renkten kaç ${esc(u.birim||'seri')}</span></div><div class="card" style="padding:5px 12px">${objs.map(r=>{const rq=portalRenkAdet(u.id,r.ad),rst=+r.stok||0,rc=(''+r.ad).replace(/'/g,"\\'"),bir=esc(u.birim||'seri');
+        const lbl=rst<=0?'<small style="color:var(--bad);font-weight:800">tükendi</small>':(rst<=3?'<small style="color:var(--bad);font-weight:800">⚡ son '+rst+' '+bir+'</small>':(rst<=(+u.kritik||0)?'<small style="color:var(--warn)">az kaldı</small>':'<small style="color:var(--sub)">stokta</small>'));
+        const artiDis=rst<=0||rq>=rst;
+        return `<div class="exrow" style="${rst<=0?'opacity:.55':''}"><div class="exl" style="display:flex;align-items:center;gap:9px"><span style="width:26px;height:26px;border-radius:8px;background:${r.hex||'#ccc'};border:1px solid var(--ln);flex:0 0 26px"></span><div><b>${esc(r.ad||'')}</b> ${lbl}</div></div>${rst<=0?`<span class="mini">—</span>`:`<div class="pstep sm"><button onclick="portalRenkMik(${u.id},'${rc}',-1)">−</button><b>${rq}</b><button ${artiDis?'style="opacity:.35"':''} onclick="portalRenkMik(${u.id},'${rc}',1)">+</button></div>`}</div>`}).join('')}</div>`:''}
       </div></div>`;
-    body+=`<div style="position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;background:var(--card);border-top:1px solid var(--ln);padding:12px 16px;display:flex;gap:12px;align-items:center;box-shadow:0 -3px 14px rgba(0,0,0,.1)">${q>0?`<button class="btn g" style="flex:1;margin:0" onclick="portalView='sepet';portalCiz()">🛒 Sepete Git · ${q} ${esc(u.birim||'')} · ${TL(cartT)}</button>`:(objs.length?`<div class="mini" style="flex:1;text-align:center;padding:6px">👆 Renk ve seri adedini seç</div>`:(st>0?`<button class="btn" style="flex:1;margin:0" onclick="portalMik(${u.id},1)">🛒 Sepete Ekle · ${TL(portalFiyat(u))}</button>`:`<div class="mini" style="flex:1;text-align:center">Stokta yok</div>`))}</div>`;
+    const istedim=(db.stokBildirim||[]).some(x=>x.uid===u.id&&(x.mus||'').toLowerCase()===(portalMusAd||'').trim().toLowerCase()&&portalMusAd.trim());
+    body+=`<div style="position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;background:var(--card);border-top:1px solid var(--ln);padding:12px 16px;display:flex;gap:12px;align-items:center;box-shadow:0 -3px 14px rgba(0,0,0,.1)">${st<=0?(istedim?`<div class="okbox" style="flex:1;margin:0">✓ İsteğin alındı — üretilince haber vereceğiz</div>`:`<button class="btn" style="flex:1;margin:0;background:var(--warn)" onclick="portalIstek(${u.id})">🔔 İstek Oluştur · üretilince haber ver</button>`):(q>0?`<button class="btn g" style="flex:1;margin:0" onclick="portalView='sepet';portalCiz()">🛒 Sepete Git · ${q} ${esc(u.birim||'')} · ${TL(cartT)}</button>`:(objs.length?`<div class="mini" style="flex:1;text-align:center;padding:6px">👆 Renk ve seri adedini seç</div>`:`<button class="btn" style="flex:1;margin:0" onclick="portalMik(${u.id},1)">🛒 Sepete Ekle · ${TL(portalFiyat(u))}</button>`))}</div>`;
   }else if(portalView==='sepet'){
     const t=portalTotal();
     body=`<div style="padding:14px">
