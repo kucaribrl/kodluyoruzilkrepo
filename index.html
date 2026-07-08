@@ -2606,10 +2606,14 @@ function portalPaylas(){const url=location.href.split('#')[0]+'#siparis';const t
   else open_('Sipariş Linki',`<textarea readonly style="width:100%;height:100px;font-size:12px">${esc(t)}</textarea>`);
 }
 /* ---------- MÜŞTERİ PORTALI (müşteri tarafı) ---------- */
-let portalSepet=[], portalMusAd='', portalNot='', portalKat='', portalView='katalog', portalUrunId=0, portalArama='', portalKumas='', portalBattal=false, portalFiltreAcik=false, portalTel='', portalAdres='', portalSehir='', portalFotoIx=0;
+let portalSepet=[], portalMusAd='', portalNot='', portalKat='', portalView='katalog', portalUrunId=0, portalArama='', portalKumas='', portalBattal=false, portalFiltreAcik=false, portalTel='', portalAdres='', portalSehir='', portalFotoIx=0, portalSezon='';
 function portalAc(){portalView='katalog';document.getElementById('pov').style.display='block';window.scrollTo(0,0);portalCiz()}
-function portalKapat(){document.getElementById('pov').style.display='none';if(_geriT){clearInterval(_geriT);_geriT=null}portalSepet=[];portalView='katalog';portalKat='';portalKumas='';portalBattal=false;portalFiltreAcik=false;portalArama='';if(location.hash==='#siparis')history.replaceState(null,'',''+location.pathname);if(typeof cur!=='undefined')go('portal')}
-function portalFiyat(u){return +u.satis||0}
+function portalKapat(){document.getElementById('pov').style.display='none';if(_geriT){clearInterval(_geriT);_geriT=null}portalSepet=[];portalView='katalog';portalKat='';portalKumas='';portalSezon='';portalBattal=false;portalFiltreAcik=false;portalArama='';if(location.hash==='#siparis')history.replaceState(null,'',''+location.pathname);if(typeof cur!=='undefined')go('portal')}
+// güncel birim fiyat: promosyon (indirimli) varsa o, yoksa satış
+function portalFiyat(u){const s=+u.satis||0,p=+u.promosyon||0;return (p>0&&p<s)?p:s}
+// indirim varsa üstü çizgili eski fiyat (yoksa 0)
+function portalEskiFiyat(u){const s=+u.satis||0,p=+u.promosyon||0;return (p>0&&p<s)?s:0}
+function portalIndirimYuzde(u){const e=portalEskiFiyat(u);return e?Math.round((e-portalFiyat(u))/e*100):0}
 const BATTAL_BED=['XXL','2XL','3XL','4XL','5XL','6XL'];
 function urunBedenler(u){return (u.bedenler||[]).map(x=>typeof x==='object'?x.beden:x).filter(Boolean)}
 function urunBattal(u){return urunBedenler(u).some(b=>BATTAL_BED.includes((''+b).toUpperCase()))}
@@ -2712,26 +2716,29 @@ function kampanyaBannerHtml(){const k=kampanyaAktif();if(!k)return '';const u=k.
     <div style="position:relative"><div style="font-size:11px;font-weight:800;letter-spacing:.5px;opacity:.92">📣 KAMPANYA</div>
     <div style="font-size:18px;font-weight:800;margin-top:3px;line-height:1.15">${esc(k.baslik)}</div>
     ${k.metin?`<div style="font-size:12.5px;opacity:.95;margin-top:4px">${esc(k.metin)}</div>`:''}
-    ${u?`<div style="display:flex;align-items:center;gap:8px;margin-top:9px;background:rgba(255,255,255,.16);border-radius:11px;padding:7px 10px"><div style="width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:18px;overflow:hidden;flex:0 0 34px">${urunKapak(u)?`<img src="${urunKapak(u)}" style="width:100%;height:100%;object-fit:cover">`:portalEmoji(u)}</div><div style="min-width:0;flex:1"><div style="font-size:13px;font-weight:800">${esc(u.ad)}</div><div style="font-size:12px;opacity:.9">${TL(portalFiyat(u))}/${esc(u.birim||'')}</div></div><span style="font-size:12px;font-weight:800;flex:0 0 auto">İncele ›</span></div>`:''}
+    ${u?`<div style="display:flex;align-items:center;gap:8px;margin-top:9px;background:rgba(255,255,255,.16);border-radius:11px;padding:7px 10px"><div style="width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:18px;overflow:hidden;flex:0 0 34px">${urunKapak(u)?`<img src="${urunKapak(u)}" style="width:100%;height:100%;object-fit:cover">`:portalEmoji(u)}</div><div style="min-width:0;flex:1"><div style="font-size:13px;font-weight:800">${esc(u.ad)}</div><div style="font-size:12px;opacity:.9">${portalEskiFiyat(u)?`<s style="opacity:.7">${TL(portalEskiFiyat(u))}</s> `:''}${TL(portalFiyat(u))}/${esc(u.birim||'')}</div></div><span style="font-size:12px;font-weight:800;flex:0 0 auto">İncele ›</span></div>`:''}
     ${k.bitis?`<div id="p-geri" style="margin-top:9px;display:inline-block;background:rgba(0,0,0,.22);border-radius:9px;padding:5px 11px;font-size:13px;font-weight:800">⏳ ${geriSayimStr(k.bitis)}</div>`:''}</div></div>`;}
 function portalBadge(u,cok){const st=stokTop(u);
   if(st<=0)return {t:'TÜKENDİ',c:'#8a97a8'};
+  if(portalIndirimYuzde(u)>0)return {t:'%'+portalIndirimYuzde(u)+' İNDİRİM',c:'var(--bad)'};
   if(st<=(+u.kritik||0))return {t:'⚡ SON '+st,c:'var(--bad)'};
   if(cok&&cok.has(u.id))return {t:'🔥 ÇOK SATAN',c:'var(--thr)'};
   if(u.yil&&(''+u.yil)>='2026')return {t:'YENİ',c:'var(--good)'};
   if(u.sezon&&u.sezon!=='4 Mevsim')return {t:u.sezon.toUpperCase(),c:'var(--ind2)'};
   return null;
 }
+// çizgili eski fiyat + güncel fiyat html'i
+function portalFiyatHtml(u,birim){const e=portalEskiFiyat(u);return e?`<s style="color:var(--sub);font-weight:600;font-size:.82em">${TL(e)}</s> <b style="color:var(--bad)">${TL(portalFiyat(u))}</b>${birim?`<small>/${esc(u.birim||'')}</small>`:''}`:`${TL(portalFiyat(u))}${birim?`<small>/${esc(u.birim||'')}</small>`:''}`;}
 function portalKart(u,cok){const kap=urunKapak(u),b=portalBadge(u,cok),st=stokTop(u),q=(portalSepet.find(k=>k.uid===u.id)||{}).mik||0;
   const dots=renkObjs(u).slice(0,5).map(r=>`<i style="background:${r.hex||'#ccc'}"></i>`).join('');
   return `<div class="pcard" onclick="portalUrunAc(${u.id})">
     <div class="pimg">${kap?`<img src="${kap}">`:portalEmoji(u)}${b?`<span class="pbadge" style="background:${b.c}">${b.t}</span>`:''}<button onclick="event.stopPropagation();portalFavToggle(${u.id})" style="position:absolute;top:7px;right:7px;width:31px;height:31px;border-radius:50%;background:rgba(255,255,255,.92);border:none;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.15)">${isFav(u.id)?'❤️':'🤍'}</button>${st>0?`<button class="padd" onclick="event.stopPropagation();portalMik(${u.id},1)">${q>0?'✓':'+'}</button>`:''}</div>
-    <div class="pbody"><div class="pnm">${esc(u.ad)}</div>${dots?`<div class="pdots">${dots}${renkObjs(u).length>5?`<span class="mini">+${renkObjs(u).length-5}</span>`:''}</div>`:''}<div class="pfy">${TL(portalFiyat(u))}<small>/${esc(u.birim||'')}</small></div>${q>0?`<div class="mini" style="color:var(--good);font-weight:800;margin-top:3px">🛒 Sepette ${q}</div>`:''}</div>
+    <div class="pbody"><div class="pnm">${esc(u.ad)}</div>${dots?`<div class="pdots">${dots}${renkObjs(u).length>5?`<span class="mini">+${renkObjs(u).length-5}</span>`:''}</div>`:''}<div class="pfy">${portalFiyatHtml(u,true)}</div>${q>0?`<div class="mini" style="color:var(--good);font-weight:800;margin-top:3px">🛒 Sepette ${q}</div>`:''}</div>
   </div>`;
 }
 function portalRafKart(u){const kap=urunKapak(u);return `<div onclick="portalUrunAc(${u.id})" style="flex:0 0 128px;width:128px;background:var(--card);border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(20,29,43,.07);cursor:pointer">
   <div style="width:100%;aspect-ratio:1;background:linear-gradient(135deg,#eef2f8,#dde6f2);display:flex;align-items:center;justify-content:center;font-size:38px">${kap?`<img src="${kap}" style="width:100%;height:100%;object-fit:cover">`:portalEmoji(u)}</div>
-  <div style="padding:8px 9px 10px"><div style="font-size:12px;font-weight:700;line-height:1.2;height:2.4em;overflow:hidden">${esc(u.ad)}</div><div style="font-weight:800;color:var(--ind);margin-top:3px;font-size:14px">${TL(portalFiyat(u))}</div></div></div>`;}
+  <div style="padding:8px 9px 10px"><div style="font-size:12px;font-weight:700;line-height:1.2;height:2.4em;overflow:hidden">${esc(u.ad)}</div><div style="font-weight:800;color:${portalEskiFiyat(u)?'var(--bad)':'var(--ind)'};margin-top:3px;font-size:14px">${portalEskiFiyat(u)?`<s style="color:var(--sub);font-weight:600;font-size:.8em">${TL(portalEskiFiyat(u))}</s> `:''}${TL(portalFiyat(u))}</div></div></div>`;}
 function portalRaf(baslik,list){if(!list.length)return '';return `<div style="margin:2px -14px 16px"><div style="font-size:15px;font-weight:800;padding:0 14px 9px">${baslik}</div><div style="display:flex;gap:10px;overflow-x:auto;padding:0 14px 4px">${list.map(portalRafKart).join('')}</div></div>`;}
 function portalCiz(){
   const pov=document.getElementById('pov');if(!pov)return;
@@ -2768,7 +2775,7 @@ function portalCiz(){
       ${galeri.length>1?`<div style="display:flex;gap:7px;overflow-x:auto;padding:9px 15px 2px">${galeri.map((g,i)=>`<div onclick="portalFoto(${i})" style="flex:0 0 56px;width:56px;height:56px;border-radius:10px;overflow:hidden;cursor:pointer;border:2px solid ${i===fix?'var(--ind2)':'transparent'}"><img src="${g.foto}" style="width:100%;height:100%;object-fit:cover"></div>`).join('')}</div>`:''}
       <div style="padding:16px 16px 0"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div style="font-size:20px;font-weight:800">${esc(u.ad)}</div><button onclick="portalFavToggle(${u.id})" style="flex:0 0 auto;background:none;border:none;font-size:26px;cursor:pointer;line-height:1">${isFav(u.id)?'❤️':'🤍'}</button></div>
       <div class="mini" style="margin-top:3px">${esc(u.kod||'')}${u.marka?' · '+esc(u.marka):''}${u.kat?' · '+esc(u.kat):''}</div>
-      <div style="font-size:26px;font-weight:800;color:var(--ind);margin:10px 0">${TL(portalFiyat(u))}<span class="mini" style="font-weight:600">/${esc(u.birim||'')}</span></div>
+      <div style="margin:10px 0;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">${portalEskiFiyat(u)?`<s style="font-size:18px;color:var(--sub);font-weight:600">${TL(portalEskiFiyat(u))}</s>`:''}<span style="font-size:26px;font-weight:800;color:${portalEskiFiyat(u)?'var(--bad)':'var(--ind)'}">${TL(portalFiyat(u))}</span><span class="mini" style="font-weight:600">/${esc(u.birim||'')}</span>${portalEskiFiyat(u)?`<span class="tag" style="background:var(--bad-s);color:var(--bad)">%${portalIndirimYuzde(u)} indirim</span>`:''}</div>
       ${kademeler().length?`<div class="card" style="padding:11px 13px;background:var(--good-s);border-color:var(--good)"><div style="font-weight:800;font-size:13px;color:var(--good)">📦 Çok al, ucuza gel!</div>${kademeler().map(k=>`<div style="display:flex;justify-content:space-between;font-size:12.5px;margin-top:5px"><span>${k.min}+ ${esc(u.birim||'adet')} alana</span><b style="color:var(--good)">%${k.ind} indirim → ${TL(Math.round(portalFiyat(u)*(1-k.ind/100)))}</b></div>`).join('')}</div>`:''}
       ${st<=0?`<div class="warnbox" style="background:var(--bad-s);color:var(--bad);border:none">⚠️ Bu ürün şu an tükendi — sipariş verilemez. Aşağıdan <b>istek oluşturabilirsin</b>, yeterli talep olunca üretilir ve sana haber gelir.</div>`:''}
       ${(u.birim==='seri'&&urunBedenler(u).length)?`<div class="sec" style="margin-top:14px">Seri İçeriği ${urunBattal(u)?'<span class="tag" style="background:var(--thr-s);color:var(--thr)">💪 BATTAL</span>':''}</div><div class="card" style="padding:11px 13px"><div style="display:flex;gap:6px;flex-wrap:wrap">${(u.bedenler||[]).map(x=>{const bd=typeof x==='object'?x.beden:x,ad=typeof x==='object'?(x.adet||1):1;return `<span class="pchip on" style="cursor:default">${esc(bd)}${ad>1?' ×'+ad:''}</span>`}).join('')}</div><div class="mini" style="margin-top:8px">1 seri = <b>${u.seri||urunBedenler(u).length} parça</b>${u.kumas?' · '+esc(u.kumas):''}</div></div>`:(u.kumas?`<div class="mini" style="margin-top:12px">🧵 Kumaş: <b>${esc(u.kumas)}</b></div>`:'')}
@@ -2802,14 +2809,17 @@ function portalCiz(){
     const aktifAll=db.urunler.filter(u=>!u.pasif);
     const kats=[...new Set(aktifAll.map(u=>u.kat).filter(Boolean))];
     const kumaslar=[...new Set(aktifAll.map(u=>u.kumas).filter(Boolean))];
+    const SEZ_SIRA=['Yaz','Kış','İlkbahar','Sonbahar','4 Mevsim'];
+    const sezonlar=[...new Set(aktifAll.map(u=>u.sezon).filter(Boolean))].sort((a,b)=>SEZ_SIRA.indexOf(a)-SEZ_SIRA.indexOf(b));
     const bedenler=[...new Set(aktifAll.flatMap(u=>urunBedenler(u)))].filter(b=>!BATTAL_BED.includes((''+b).toUpperCase()));
     const q=portalArama.trim().toLowerCase();
     let list=aktifAll;
     if(portalKat)list=list.filter(u=>u.kat===portalKat);
     if(portalKumas)list=list.filter(u=>u.kumas===portalKumas);
+    if(portalSezon)list=list.filter(u=>u.sezon===portalSezon);
     if(portalBattal)list=list.filter(urunBattal);
     if(q)list=list.filter(u=>(u.ad||'').toLowerCase().includes(q)||(u.kod||'').toLowerCase().includes(q));
-    const filtN=(portalKumas?1:0)+(portalBattal?1:0);
+    const filtN=(portalKumas?1:0)+(portalBattal?1:0)+(portalSezon?1:0);
     body=`<div style="padding:13px 14px ${cartN?'82px':'16px'}">
       <div style="display:flex;gap:8px;margin-bottom:12px"><div style="position:relative;flex:1"><span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:15px;opacity:.5">🔍</span><input class="psearch" value="${esc(portalArama)}" placeholder="Ürün ara..." oninput="portalArama=this.value;portalCiz();const el=document.getElementById('p-search');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}" id="p-search"></div>
       <button onclick="portalFiltreAcik=!portalFiltreAcik;portalCiz()" style="flex:0 0 auto;border:none;border-radius:13px;background:${filtN||portalFiltreAcik?'var(--ind2)':'var(--card)'};color:${filtN||portalFiltreAcik?'#fff':'var(--ink)'};font-weight:700;font-size:13px;padding:0 14px;box-shadow:0 2px 8px rgba(20,29,43,.06);cursor:pointer">⚙️${filtN?' '+filtN:''}</button></div>`;
@@ -2821,10 +2831,12 @@ function portalCiz(){
       else if(son)body+=`<div class="card" style="padding:11px 13px;margin-bottom:11px;background:var(--good-s);border-color:var(--good);display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><b style="font-size:13px">🔁 Son siparişini tekrarla</b><div class="mini">${son.kalemler.map(k=>esc(k.urun)+' ×'+k.mik).join(', ')}</div></div><button class="btn g sm" style="width:auto;margin:0;padding:7px 13px;flex:0 0 auto" onclick="portalTekrar(${son.id})">Sepete Ekle</button></div>`;
     }
     if(portalFiltreAcik){
+      const SEZ_IC={'Yaz':'☀️','Kış':'❄️','İlkbahar':'🌱','Sonbahar':'🍂','4 Mevsim':'🗓️'};
       body+=`<div class="card" style="padding:12px 13px;margin-bottom:12px">`;
+      if(sezonlar.length){body+=`<div class="mini" style="font-weight:800;margin-bottom:6px">Sezon</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">`+sezonlar.map(s=>`<div onclick="portalSezon=portalSezon==='${esc(s)}'?'':'${esc(s)}';portalCiz()" class="pchip${portalSezon===s?' on':''}">${SEZ_IC[s]||''} ${esc(s)}</div>`).join('')+`</div>`}
       if(kumaslar.length){body+=`<div class="mini" style="font-weight:800;margin-bottom:6px">Kumaş</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">`+kumaslar.map(k=>`<div onclick="portalKumas=portalKumas==='${esc(k)}'?'':'${esc(k)}';portalCiz()" class="pchip${portalKumas===k?' on':''}">${esc(k)}</div>`).join('')+`</div>`}
       body+=`<div class="mini" style="font-weight:800;margin-bottom:6px">Tür</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"><div onclick="portalBattal=!portalBattal;portalCiz()" class="pchip${portalBattal?' on':''}" style="${portalBattal?'':'background:var(--thr-s);color:var(--thr);border-color:var(--thr)'}">💪 BATTAL beden serileri</div></div>`;
-      if(filtN)body+=`<a onclick="portalKumas='';portalBattal=false;portalCiz()" style="color:var(--bad);font-weight:700;font-size:12.5px;cursor:pointer">✕ Filtreleri temizle</a>`;
+      if(filtN)body+=`<a onclick="portalKumas='';portalSezon='';portalBattal=false;portalCiz()" style="color:var(--bad);font-weight:700;font-size:12.5px;cursor:pointer">✕ Filtreleri temizle</a>`;
       body+=`</div>`;
     }
     if(kats.length)body+=`<div style="display:flex;gap:7px;overflow-x:auto;padding-bottom:13px;margin:0 -2px"><div onclick="portalKat='';portalCiz()" class="pchip${portalKat?'':' on'}">Tümü</div>`+kats.map(k=>`<div onclick="portalKat='${esc(k).replace(/'/g,"\\'")}';portalCiz()" class="pchip${portalKat===k?' on':''}">${esc(k)}</div>`).join('')+`</div>`;
@@ -2833,6 +2845,7 @@ function portalCiz(){
     if(!portalKat&&!q&&!filtN){
       const aktif=db.urunler.filter(u=>!u.pasif);
       body+=portalRaf('❤️ Favorilerim',(db.portalFav||[]).map(id=>urun(id)).filter(u=>u&&!u.pasif));
+      body+=portalRaf('🏷️ İndirimdekiler',aktif.filter(u=>portalIndirimYuzde(u)>0&&stokTop(u)>0));
       body+=portalRaf('🔥 Çok Satanlar',aktif.filter(u=>cok.has(u.id)));
       body+=portalRaf('✨ Yeni Gelenler',aktif.filter(u=>u.yil&&(''+u.yil)>='2026').slice(0,10));
       body+=portalRaf('⚡ Son Fırsatlar',aktif.filter(u=>{const st=stokTop(u);return st>0&&st<=(+u.kritik||0)}));
