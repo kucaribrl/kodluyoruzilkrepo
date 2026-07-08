@@ -2313,7 +2313,25 @@ function rapOncekiAralik(){
   if(rapDonem==='yil')return [new Date(y-1,0,1).getTime(),new Date(y,0,1).getTime()];
   return null;
 }
+// aynı dönemin geçen seneki hali
+function rapGecenYilAralik(){
+  const now=new Date(),y=now.getFullYear(),m=now.getMonth();
+  if(rapDonem==='ay')return [new Date(y-1,m,1).getTime(),new Date(y-1,m+1,1).getTime(),'Geçen yıl aynı ay'];
+  if(rapDonem==='gecen')return [new Date(y-1,m-1,1).getTime(),new Date(y-1,m,1).getTime(),'Geçen yıl aynı ay'];
+  if(rapDonem==='yil')return [new Date(y-1,0,1).getTime(),new Date(y,0,1).getTime(),'Geçen yıl'];
+  return null;
+}
+const SEZON_AY={'İlkbahar':[2,3,4],'Yaz':[5,6,7],'Sonbahar':[8,9,10],'Kış':[11,0,1]};
+let rapSzn='Yaz';
+function rapSznSet(s){rapSzn=s;rRapor()}
 function rapDon(d){rapDonem=d;rRapor()}
+// renk→hex haritası (ürün kartlarından)
+function renkHexMap(){const m={};db.urunler.forEach(u=>(u.renkler||[]).forEach(r=>{if(r&&r.ad&&r.hex&&!m[r.ad])m[r.ad]=r.hex}));return m}
+// satışlardan renk bazlı adet
+function renkSatis(arr){const map={};arr.forEach(s=>s.kalemler.forEach(k=>{if(k.renkler&&k.renkler.length)k.renkler.forEach(r=>{map[r.ad]=(map[r.ad]||0)+(+r.mik||0)})}));return map}
+function renkBarsHtml(rows){const mx=rows.length?Math.max(...rows.map(r=>r.v)):1;
+  return rows.length?`<div class="bars">`+rows.map(r=>`<div class="bar"><div class="nm" style="display:flex;align-items:center;gap:5px"><span style="width:13px;height:13px;border-radius:3px;border:1px solid var(--ln);background:${r.hex||'#bbb'};flex:0 0 13px"></span>${esc(r.ad)}</div><div class="tr"><i style="width:${Math.max(4,Math.round(r.v/(mx||1)*100))}%;background:${r.hex||'var(--ind2)'};${r.hex&&/^#f/i.test(r.hex)?'border:1px solid var(--ln)':''}"></i></div><div class="am">${r.g}</div></div>`).join('')+`</div>`:`<div class="mini">Bu dönemde renk bilgili satış yok — satışta renk seçtiğinde burada görünür</div>`;
+}
 function kisaTL(n){n=Math.round(+n||0);const a=Math.abs(n);if(a>=1e6)return '₺'+(n/1e6).toFixed(a>=1e7?0:1).replace('.',',')+'M';if(a>=1000)return '₺'+Math.round(n/1000)+'B';return '₺'+n}
 function rapDelta(cur,prev){if(prev==null)return '';if(!prev)return cur>0?`<span style="color:var(--good);font-weight:800">▲ yeni</span>`:`<span style="color:var(--sub)">—</span>`;
   const p=Math.round((cur-prev)/Math.abs(prev)*100);const up=p>=0;return `<span style="color:${up?'var(--good)':'var(--bad)'};font-weight:800">${up?'▲':'▼'} %${Math.abs(p)}</span>`;}
@@ -2387,8 +2405,11 @@ function rapCtx(){
   const acikAlacak=db.cariler.filter(c=>c.tip==='musteri'&&c.bakiye>0).reduce((a,c)=>a+c.bakiye,0);
   const kdv=sat.reduce((a,s)=>a+(+s.kdvTutar||0)*pbKur(s.pb),0);
   const giderTop=(db.hareketler||[]).filter(x=>x.yon==='out'&&x.tur!=='Transfer'&&inRange(x.tarih)).reduce((a,x)=>a+(+x.tutar||0),0);
+  const gy=rapGecenYilAralik();
+  const satGY=gy?filt(ts=>ts>=gy[0]&&ts<gy[1]):null;
   return {bas,bit,donemAd,inRange,onc,kar,toTL,sat,satOnc,ciroOf,karOf,ciro,brutKar,marj,adet,kesikTop,tahsil,acikDonem,tahOran,acikAlacak,kdv,giderTop,
-    ciroOnc:satOnc?ciroOf(satOnc):null,karOncV:satOnc?karOf(satOnc):null,islemOnc:satOnc?satOnc.length:null,tahOnc:satOnc?satOnc.reduce((a,s)=>a+(+s.odenen||0)*pbKur(s.pb),0):null};
+    ciroOnc:satOnc?ciroOf(satOnc):null,karOncV:satOnc?karOf(satOnc):null,islemOnc:satOnc?satOnc.length:null,tahOnc:satOnc?satOnc.reduce((a,s)=>a+(+s.odenen||0)*pbKur(s.pb),0):null,
+    gyAd:gy?gy[2]:null,ciroGY:satGY?ciroOf(satGY):null,karGY:satGY?karOf(satGY):null,islemGY:satGY?satGY.length:null,adetGY:satGY?satGY.reduce((a,s)=>a+s.kalemler.reduce((x,k)=>x+(+k.mik||0),0),0):null};
 }
 // dönem kıyas satırı
 function rapKiyasRow(ad,cur,prev,fmt){fmt=fmt||TL;return `<tr><td style="padding:7px 4px;font-size:12.5px">${ad}</td><td style="padding:7px 4px;text-align:right;font-weight:700;font-size:12.5px">${fmt(cur)}</td><td style="padding:7px 4px;text-align:right;font-size:12px;color:var(--sub)">${prev==null?'—':fmt(prev)}</td><td style="padding:7px 4px;text-align:right">${prev==null?'':rapDelta(cur,prev)}</td></tr>`}
@@ -2412,6 +2433,15 @@ function rapOzet(R){let h='';
       +rapKiyasRow('İşlem',R.sat.length,R.islemOnc,x=>x)
       +rapKiyasRow('Tahsilat',R.tahsil,R.tahOnc)
       +`</tbody></table></div>`;
+    // geçen yıl aynı dönem kıyası
+    if(R.gyAd){const dY=R.ciroGY?Math.round((R.ciro-R.ciroGY)/Math.abs(R.ciroGY)*100):null;
+      h+=`<div class="sec">Geçen Yıla Göre <span class="mini" style="text-transform:none;font-weight:600">${esc(R.gyAd)}</span></div>
+      <div class="card" style="padding:13px 15px"><div style="display:flex;justify-content:space-between;align-items:center">
+        <div><div style="font-size:11.5px;font-weight:700;color:var(--sub)">${esc(R.gyAd.toUpperCase())} CİRO</div><div style="font-size:19px;font-weight:800">${TL(R.ciroGY||0)}</div></div>
+        <div style="text-align:center;font-size:22px">${R.ciroGY?(R.ciro>=R.ciroGY?'📈':'📉'):'🆕'}</div>
+        <div style="text-align:right"><div style="font-size:11.5px;font-weight:700;color:var(--sub)">BU DÖNEM</div><div style="font-size:19px;font-weight:800;color:var(--ind)">${TL(R.ciro)}</div></div>
+      </div>${R.ciroGY?`<div class="mini" style="margin-top:8px;text-align:center">Geçen yıla göre ${dY>=0?'<b style="color:var(--good)">%'+dY+' artış</b> 📈':'<b style="color:var(--bad)">%'+Math.abs(dY)+' düşüş</b> 📉'} · ${R.adetGY} → ${R.adet} adet</div>`:`<div class="mini" style="margin-top:8px;text-align:center">Geçen yıl bu dönemde satış kaydı yok</div>`}</div>`;
+    }
     // KDV
     h+=`<div class="sec">KDV Özeti <span class="mini" style="text-transform:none;font-weight:600">${R.donemAd}</span></div><div class="card" style="padding:13px 15px"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11.5px;font-weight:700;color:var(--sub)">HESAPLANAN KDV (satış)</div><div class="mini">satış fişlerindeki toplam KDV</div></div><div style="font-size:20px;font-weight:800;color:var(--ind)">${TL(R.kdv)}</div></div></div>`;
   }
@@ -2433,6 +2463,10 @@ function rapSatis(R){let h='';
   const musMap={};R.sat.forEach(s=>{const key=s.mus||'—';musMap[key]=(musMap[key]||0)+R.toTL(s)});
   const topMus=Object.entries(musMap).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([ad,v])=>({ad,v,g:kisaTL(v)}));
   h+=`<div class="sec">En İyi Müşteriler <span class="mini" style="text-transform:none;font-weight:600">ciroya göre</span></div><div class="card" style="padding:14px">${barsHtml(topMus,'linear-gradient(90deg,var(--ind),#9db4e8)')}</div>`;
+  // en çok satan renkler
+  const rMap=renkSatis(R.sat),rhex=renkHexMap();
+  const topRenk=Object.entries(rMap).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([ad,v])=>({ad,v,g:v,hex:rhex[ad]}));
+  h+=`<div class="sec">En Çok Satan Renkler</div><div class="card" style="padding:14px">${renkBarsHtml(topRenk)}</div>`;
   const odeMap={};R.sat.forEach(s=>{const ls=(s.odemeler&&s.odemeler.length)?s.odemeler:(s.odenen>0?[{tur:s.odemeTur||'Nakit',tutar:s.odenen,pb:s.pb}]:[]);ls.forEach(l=>{if(+l.tutar<=0)return;const t=l.tur||'Nakit';odeMap[t]=(odeMap[t]||0)+(+l.tutar||0)*pbKur(l.pb||s.pb)})});
   const odeRows=Object.entries(odeMap).sort((a,b)=>b[1]-a[1]).map(([ad,v])=>({ad,v}));
   if(odeRows.length){const ot=odeRows.reduce((a,r)=>a+r.v,0);
@@ -2546,6 +2580,36 @@ function rapUretim(R){let h='';
   </div>`;
   return h;
 }
+function rapSezon(R){let h='';
+  const aylar=SEZON_AY[rapSzn];
+  const inSzn=ts=>aylar.includes(new Date(ts).getMonth());
+  const sat=db.satislar.filter(s=>s.tip!=='iade'&&inSzn(s.tarih));
+  const toTL=s=>(+s.tutar||0)*pbKur(s.pb);
+  const ciro=sat.reduce((a,s)=>a+toTL(s),0);
+  const adet=sat.reduce((a,s)=>a+s.kalemler.reduce((x,k)=>x+(+k.mik||0),0),0);
+  // sezon seçici
+  h+=`<div class="tabs" style="overflow-x:auto;margin-bottom:4px">`+Object.keys(SEZON_AY).map(s=>`<div class="tb ${rapSzn===s?'on':''}" onclick="rapSznSet('${s}')" style="white-space:nowrap">${({'İlkbahar':'🌱','Yaz':'☀️','Sonbahar':'🍂','Kış':'❄️'})[s]} ${s}</div>`).join('')+`</div>`;
+  const AYAD={0:'Oca',1:'Şub',2:'Mar',3:'Nis',4:'May',5:'Haz',6:'Tem',7:'Ağu',8:'Eyl',9:'Eki',10:'Kas',11:'Ara'};
+  h+=`<div class="card" style="padding:13px 15px;background:linear-gradient(135deg,#24487a,#2d6cdf);border:none;color:#fff"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11.5px;opacity:.85;font-weight:700">${rapSzn.toUpperCase()} SEZONU · TÜM YILLAR</div><div style="font-size:24px;font-weight:800;margin-top:2px">${TL(ciro)}</div><div style="font-size:12px;opacity:.9;margin-top:2px">${aylar.map(m=>AYAD[m]).join(' · ')} · ${adet} adet · ${sat.length} işlem</div></div><div style="font-size:30px">${({'İlkbahar':'🌱','Yaz':'☀️','Sonbahar':'🍂','Kış':'❄️'})[rapSzn]}</div></div></div>`;
+  if(!sat.length){h+=`<div class="card" style="padding:20px;margin-top:11px"><div class="mini" style="text-align:center">${rapSzn} sezonunda henüz satış kaydı yok</div></div>`;return h}
+  // yıllara göre sezon cirosu
+  const yilMap={};sat.forEach(s=>{const d=new Date(s.tarih);let y=d.getFullYear();if(rapSzn==='Kış'&&d.getMonth()===11)y=y+1;yilMap[y]=(yilMap[y]||0)+toTL(s)});
+  const yilRows=Object.keys(yilMap).map(Number).sort((a,b)=>a-b).map(y=>({ad:rapSzn==='Kış'?(y-1)+'/'+(''+y).slice(2):''+y,v:yilMap[y],g:kisaTL(yilMap[y])}));
+  if(yilRows.length>1)h+=`<div class="sec">Yıllara Göre ${rapSzn} Cirosu</div><div class="card" style="padding:14px">${barsHtml(yilRows,'linear-gradient(90deg,var(--thr),#e6b06a)')}</div>`;
+  // en çok satan ürünler bu sezonda
+  const uMap={};sat.forEach(s=>s.kalemler.forEach(k=>{(uMap[k.urun]=uMap[k.urun]||{adet:0,ciro:0}).adet+=(+k.mik||0);uMap[k.urun].ciro+=(+k.mik||0)*(+k.fiyat||0)*pbKur(s.pb)}));
+  const topU=Object.entries(uMap).sort((a,b)=>b[1].adet-a[1].adet).slice(0,8).map(([ad,v])=>({ad,v:v.adet,g:v.adet}));
+  h+=`<div class="sec">${rapSzn}'da En Çok Satan Ürünler</div><div class="card" style="padding:14px">${barsHtml(topU)}</div>`;
+  // en çok satan renkler bu sezonda
+  const rMap=renkSatis(sat),rhex=renkHexMap();
+  const topR=Object.entries(rMap).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([ad,v])=>({ad,v,g:v,hex:rhex[ad]}));
+  h+=`<div class="sec">${rapSzn}'da En Çok Satan Renkler</div><div class="card" style="padding:14px">${renkBarsHtml(topR)}</div>`;
+  // sezon etiketli ürünlerin stok durumu (bu sezona hazırlık)
+  const sznUrun=db.urunler.filter(u=>u.sezon===rapSzn||(rapSzn==='Yaz'&&u.sezon==='4 Mevsim'));
+  if(sznUrun.length){const toplamStok=sznUrun.reduce((a,u)=>a+(+u.stok||0),0);
+    h+=`<div class="mini" style="margin:6px 3px">🏷️ "${rapSzn}" etiketli ${sznUrun.length} ürün · toplam ${toplamStok} adet stok</div>`;}
+  return h;
+}
 function rapMetni(){
   const R=rapCtx();
   const net=R.brutKar-R.giderTop;
@@ -2566,13 +2630,13 @@ async function rapPaylas(){
 }
 function rRapor(){
   const R=rapCtx();
-  const sel=[['ay','Bu Ay'],['gecen','Geçen Ay'],['yil','Bu Yıl'],['tum','Tümü']];
-  let html=`<div class="tabs" style="overflow-x:auto">`+sel.map(([k,l])=>`<div class="tb ${rapDonem===k?'on':''}" onclick="rapDon('${k}')" style="white-space:nowrap">${l}</div>`).join('')+`</div>`;
-  const tabs=[['ozet','📈','Özet'],['satis','🛒','Satış'],['para','💰','Tahsilat'],['gider','💸','Gider'],['stok','📦','Stok'],['musteri','👥','Müşteri'],['uretim','🏭','Üretim']];
+  const tabs=[['ozet','📈','Özet'],['satis','🛒','Satış'],['sezon','🌤️','Sezon'],['para','💰','Tahsilat'],['gider','💸','Gider'],['stok','📦','Stok'],['musteri','👥','Müşteri'],['uretim','🏭','Üretim']];
   if(!tabs.some(t=>t[0]===rapTab))rapTab='ozet';
-  html+=`<div class="tabs" style="overflow-x:auto;margin-top:6px">`+tabs.map(([k,ic,l])=>`<div class="tb ${rapTab===k?'on':''}" onclick="rapSek('${k}')" style="white-space:nowrap">${ic} ${l}</div>`).join('')+`</div>`;
+  let html=`<div class="tabs" style="overflow-x:auto">`+tabs.map(([k,ic,l])=>`<div class="tb ${rapTab===k?'on':''}" onclick="rapSek('${k}')" style="white-space:nowrap">${ic} ${l}</div>`).join('')+`</div>`;
+  const sel=[['ay','Bu Ay'],['gecen','Geçen Ay'],['yil','Bu Yıl'],['tum','Tümü']];
+  if(rapTab!=='sezon')html+=`<div class="tabs" style="overflow-x:auto;margin-top:6px">`+sel.map(([k,l])=>`<div class="tb ${rapDonem===k?'on':''}" onclick="rapDon('${k}')" style="white-space:nowrap">${l}</div>`).join('')+`</div>`;
   const R2={...R};
-  const body={ozet:rapOzet,satis:rapSatis,para:rapPara,gider:rapGider,stok:rapStok,musteri:rapMusteri,uretim:rapUretim}[rapTab](R2);
+  const body={ozet:rapOzet,satis:rapSatis,sezon:rapSezon,para:rapPara,gider:rapGider,stok:rapStok,musteri:rapMusteri,uretim:rapUretim}[rapTab](R2);
   html+=`<div style="margin-top:4px">${body}</div><div style="height:8px"></div>`;
   $('app').innerHTML=html;
 }
