@@ -2190,7 +2190,7 @@ function isEmriStokla(id){
   else u.stok=(+u.stok||0)+toplam;
   if(setMal&&birim>0)u.alis=Math.round(birim);
   (i.duraklar||[]).forEach(d=>{ieBorcGuncelle(d);d.durum='tamam'});
-  i.durum='tamam';i.stoklandi=true;
+  i.durum='tamam';i.stoklandi=true;i.kapanis=Date.now();
   save();closeM();rUretim();toast(`${toplam} ${u.birim} stoğa girdi ✓${setMal?' · maliyet ₺'+Math.round(birim):''}`);
 }
 /* --- Malzeme sonradan ekle / düzenle --- */
@@ -2296,21 +2296,86 @@ function portalOnay(id){
 function portalRed(id){db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);save();rPortal();toast('Sipariş reddedildi')}
 
 /* ---------- RAPOR ---------- */
+let rapDonem='ay';
+function rapAralik(){
+  const now=new Date(),y=now.getFullYear(),m=now.getMonth();
+  if(rapDonem==='ay')return [new Date(y,m,1).getTime(),Infinity,'Bu Ay'];
+  if(rapDonem==='gecen')return [new Date(y,m-1,1).getTime(),new Date(y,m,1).getTime(),'Geçen Ay'];
+  if(rapDonem==='yil')return [new Date(y,0,1).getTime(),Infinity,'Bu Yıl'];
+  return [0,Infinity,'Tüm Zamanlar'];
+}
+function rapDon(d){rapDonem=d;rRapor()}
+function barsHtml(rows,renk){const mx=rows.length?Math.max(...rows.map(r=>r.v)):1;
+  return rows.length?`<div class="bars">`+rows.map(r=>`<div class="bar"><div class="nm">${esc(r.ad)}</div><div class="tr"><i style="width:${Math.max(4,Math.round(r.v/(mx||1)*100))}%;background:${renk||'linear-gradient(90deg,var(--ind2),#8fb3ec)'}"></i></div><div class="am">${r.g}</div></div>`).join('')+`</div>`:`<div class="mini">Bu dönemde veri yok</div>`;
+}
 function rRapor(){
-  const ciro=db.satislar.reduce((a,s)=>a+(s.pb==='TL'?s.tutar:s.tutar*(s.pb==='USD'?db.kurUSD:db.kurEUR)),0);
-  let maliyet=0;db.satislar.forEach(s=>s.kalemler.forEach(k=>{const u=urun(k.uid);if(u)maliyet+=u.alis*k.mik*(k.birim==='seri'?(u.seri||1):1)}));
-  const kar=ciro-maliyet;
-  // en çok satan
-  const satMap={};db.satislar.forEach(s=>s.kalemler.forEach(k=>satMap[k.urun]=(satMap[k.urun]||0)+k.mik));
-  const top=Object.entries(satMap).sort((a,b)=>b[1]-a[1]).slice(0,4);
-  const maxT=top.length?top[0][1]:1;
-  let html=`<div class="tiles"><div class="tile b2"><div class="l">Toplam Ciro</div><div class="v sm">${TL(ciro)}</div></div>`;
-  if(karGoster())html+=`<div class="tile b1"><div class="l">Tahmini Kâr</div><div class="v sm">${TL(kar)}</div></div>`;
-  else html+=`<div class="tile b1"><div class="l">Satış Adedi</div><div class="v sm">${db.satislar.length}</div></div>`;
+  const [bas,bit,donemAd]=rapAralik();
+  const inRange=ts=>ts>=bas&&ts<bit;
+  const kar=karGoster();
+  const sat=db.satislar.filter(s=>s.tip!=='iade'&&inRange(s.tarih));
+  const toTL=s=>(+s.tutar||0)*pbKur(s.pb);
+  const ciro=sat.reduce((a,s)=>a+toTL(s),0);
+  let maliyet=0;sat.forEach(s=>s.kalemler.forEach(k=>{const u=urun(k.uid);if(u)maliyet+=(+u.alis||0)*k.mik*(k.birim==='seri'?(u.seri||1):1)}));
+  const brutKar=ciro-maliyet, marj=ciro?Math.round(brutKar/ciro*100):0;
+  const adet=sat.reduce((a,s)=>a+s.kalemler.reduce((x,k)=>x+(+k.mik||0),0),0);
+  const kesikTop=sat.reduce((a,s)=>a+(+s.kesik||0)*pbKur(s.pb),0);
+  // dönem selektörü
+  const sel=[['ay','Bu Ay'],['gecen','Geçen Ay'],['yil','Bu Yıl'],['tum','Tümü']];
+  let html=`<div class="tabs" style="overflow-x:auto">`+sel.map(([k,l])=>`<div class="tb ${rapDonem===k?'on':''}" onclick="rapDon('${k}')" style="white-space:nowrap">${l}</div>`).join('')+`</div>`;
+  // özet kutular
+  html+=`<div class="tiles"><div class="tile b2"><div class="l">Ciro · ${donemAd}</div><div class="v sm">${TL(ciro)}</div><div class="em">💰</div></div>`;
+  if(kar)html+=`<div class="tile b1"><div class="l">Brüt Kâr <span style="opacity:.85">(%${marj})</span></div><div class="v sm">${TL(brutKar)}</div><div class="em">📈</div></div>`;
+  else html+=`<div class="tile b1"><div class="l">Satılan Adet</div><div class="v sm">${adet}</div></div>`;
   html+=`</div>`;
-  html+=`<div class="sec">En Çok Satanlar</div><div class="card" style="padding:14px"><div class="bars">`+(top.length?top.map(t=>`<div class="bar"><div class="nm">${esc(t[0])}</div><div class="tr"><i style="width:${Math.round(t[1]/maxT*100)}%;background:linear-gradient(90deg,var(--ind2),#8fb3ec)"></i></div><div class="am">${t[1]}</div></div>`).join(''):'<div class="mini">Veri yok</div>')+`</div></div>`;
-  if(karGoster()){
-    html+=`<div class="sec">Yuvarlama / Kırma Kaçağı</div><div class="card" style="padding:14px"><div style="font-size:22px;font-weight:800;color:var(--warn)">${TL(db.kirmaToplam||0)}</div><div class="mini">Tahsilatlarda müşterilerin kırdığı toplam (eksik ödeme). Sıfırdan başlar, tahsilatta eksik girdikçe artar.</div></div>`;
+  html+=`<div class="g2" style="margin-top:2px"><div class="card" style="padding:10px;margin:0;text-align:center"><div class="mini">İşlem</div><div style="font-weight:800;font-size:16px">${sat.length}</div></div><div class="card" style="padding:10px;margin:0;text-align:center"><div class="mini">Satılan Adet</div><div style="font-weight:800;font-size:16px">${adet}</div></div><div class="card" style="padding:10px;margin:0;text-align:center"><div class="mini">Ort. Sepet</div><div style="font-weight:800;font-size:16px">${TL(sat.length?ciro/sat.length:0)}</div></div></div>`;
+  // en çok satan ürünler (adet)
+  const satMap={};sat.forEach(s=>s.kalemler.forEach(k=>{const key=k.urun;(satMap[key]=satMap[key]||{adet:0,ciro:0}).adet+=(+k.mik||0);satMap[key].ciro+=(+k.mik||0)*(+k.fiyat||0)*pbKur(s.pb)}));
+  const topAdet=Object.entries(satMap).sort((a,b)=>b[1].adet-a[1].adet).slice(0,6).map(([ad,v])=>({ad,v:v.adet,g:v.adet}));
+  html+=`<div class="sec">En Çok Satan Ürünler</div><div class="card" style="padding:14px">${barsHtml(topAdet)}</div>`;
+  // en çok ciro getiren ürünler
+  const topCiro=Object.entries(satMap).sort((a,b)=>b[1].ciro-a[1].ciro).slice(0,6).map(([ad,v])=>({ad,v:v.ciro,g:TL(v.ciro)}));
+  html+=`<div class="sec">En Çok Kazandıran Ürünler</div><div class="card" style="padding:14px">${barsHtml(topCiro,'linear-gradient(90deg,#2fb673,#7fd8a6)')}</div>`;
+  // en iyi müşteriler
+  const musMap={};sat.forEach(s=>{const key=s.mus||'—';musMap[key]=(musMap[key]||0)+toTL(s)});
+  const topMus=Object.entries(musMap).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([ad,v])=>({ad,v,g:TL(v)}));
+  html+=`<div class="sec">En İyi Müşteriler</div><div class="card" style="padding:14px">${barsHtml(topMus,'linear-gradient(90deg,var(--ind),#9db4e8)')}</div>`;
+  // gider analizi (hareketler out, kategori)
+  if(paraGoster()){
+    const gGrup={};(db.hareketler||[]).filter(x=>x.yon==='out'&&x.tur!=='Transfer'&&inRange(x.tarih)).forEach(x=>{
+      const k=x.tur==='Ortak Harcama'?'Ortak Harcama':(x.tur==='odeme'||x.tip==='odeme')?'Fason / Tedarik':((x.aciklama||x.tur||'Diğer').split('·')[0].trim()||'Diğer');
+      gGrup[k]=(gGrup[k]||0)+(+x.tutar||0);
+    });
+    const topGid=Object.entries(gGrup).sort((a,b)=>b[1]-a[1]).slice(0,7).map(([ad,v])=>({ad,v,g:TL(v)}));
+    const gToplam=Object.values(gGrup).reduce((a,b)=>a+b,0);
+    html+=`<div class="sec">Giderler · ${donemAd} <span style="color:var(--bad);font-weight:800">${TL(gToplam)}</span></div><div class="card" style="padding:14px">${barsHtml(topGid,'linear-gradient(90deg,#e05a5a,#f2a0a0)')}</div>`;
+  }
+  // üretim özeti
+  const ie=db.isemirleri||[];
+  const aktif=ie.filter(i=>i.durum!=='tamam');
+  const tamamDonem=ie.filter(i=>i.durum==='tamam'&&inRange(i.kapanis||i.baslangic||0));
+  let fasondaAdet=0,defoAdet=0,fasonMal=0;
+  ie.forEach(i=>{(i.duraklar||[]).forEach(d=>{
+    defoAdet+=Object.values(d.renkDefo||{}).reduce((a,b)=>a+(+b||0),0)||(+d.defolu||0);
+    const yol=(+d.gonderilen||0)-(+d.gelen||0)-(+d.defolu||0);if(d.durum!=='tamam'&&yol>0)fasondaAdet+=yol;
+  });fasonMal+=ieFasonMaliyet?ieFasonMaliyet(i):0;});
+  const fasonDonem=ie.reduce((a,i)=>{if(!inRange(i.baslangic||0))return a;return a+((i.duraklar||[]).reduce((x,d)=>x+(+d.ucret||0)*(+d.gelen||0)*(ieCarpan?ieCarpan(i):1),0))},0);
+  html+=`<div class="sec">Üretim</div><div class="card" style="padding:6px 4px"><div style="display:flex;text-align:center">
+    <div style="flex:1;padding:8px 4px;border-right:1px solid var(--ln2)"><div style="font-weight:800;font-size:19px;color:var(--ind)">${aktif.length}</div><div class="mini">aktif iş emri</div></div>
+    <div style="flex:1;padding:8px 4px;border-right:1px solid var(--ln2)"><div style="font-weight:800;font-size:19px;color:var(--good)">${tamamDonem.length}</div><div class="mini">tamamlanan</div></div>
+    <div style="flex:1;padding:8px 4px"><div style="font-weight:800;font-size:19px;color:var(--warn)">${fasondaAdet}</div><div class="mini">fasonda mal</div></div>
+  </div></div>`;
+  if(kar)html+=`<div class="mini" style="margin:6px 3px">🧵 ${donemAd} fason işçiliği: <b>${TL(fasonDonem)}</b></div>`;
+  // fason bazlı iş hacmi (borçlanan)
+  const fasMap={};ie.forEach(i=>(i.duraklar||[]).forEach(d=>{if(!d.fasonId)return;const c=cari(d.fasonId);if(!c)return;const tut=(+d.ucret||0)*(+d.gelen||0)*(ieCarpan?ieCarpan(i):1);if(tut>0)fasMap[c.ad]=(fasMap[c.ad]||0)+tut}));
+  const topFas=Object.entries(fasMap).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([ad,v])=>({ad,v,g:TL(v)}));
+  if(topFas.length)html+=`<div class="sec">En Çok İş Verdiğin Fasoncular</div><div class="card" style="padding:14px">${barsHtml(topFas,'linear-gradient(90deg,#8a6cd4,#b9a3ea)')}</div>`;
+  // kaçak / fire
+  if(kar){
+    html+=`<div class="sec">Kaçak / Fire</div><div class="card" style="padding:13px">
+      <div class="exrow"><div class="exl"><b>Müşteri kesik/kırma</b><small>satışta verilen indirim/eksik (${donemAd})</small></div><div class="exb neg">−${TL(kesikTop)}</div></div>
+      <div class="exrow"><div class="exl"><b>Üretim defo (fire)</b><small>tüm iş emirlerinde defolu adet</small></div><div class="exb neg">${defoAdet} adet</div></div>
+      ${db.kirmaToplam?`<div class="exrow"><div class="exl"><b>Tahsilat kırması</b><small>tahsilatta müşterinin kırdığı</small></div><div class="exb neg">−${TL(db.kirmaToplam)}</div></div>`:''}
+    </div>`;
   }
   $('app').innerHTML=html;
 }
