@@ -1069,7 +1069,7 @@ function musBilgi(){const m=sMusId?cari(sMusId):null;const el=$('s-musinfo');if(
   el.innerHTML=`<div class="${asim?'warnbox':'infobox'}" style="margin-top:8px">${asim?'⚠️':'ℹ️'} Borç: <b>${TL(Math.max(0,m.bakiye))}</b>${m.limit?` / limit ${TL(m.limit)}`:''}${m.grup?` · ${m.grup}${gi?' (−%'+gi+' indirim)':''}`:''}${asim?' · limite yakın!':''}</div>${ek}`}
 function satisHesap(){
   const ara=sepet.reduce((a,k)=>a+k.mik*k.fiyat,0);
-  const isk=+($('s-isk')?.value||0), vf=vadeFarkiYuzde(), kdv=+($('s-kdv')?.value||0), tasima=+($('s-tasima')?.value||0);
+  const isk=Math.min(100,Math.max(0,+($('s-isk')?.value||0))), vf=vadeFarkiYuzde(), kdv=Math.max(0,+($('s-kdv')?.value||0)), tasima=Math.max(0,+($('s-tasima')?.value||0));
   const div=sPB==='USD'?db.kurUSD:sPB==='EUR'?db.kurEUR:1;
   const mal=ara*(1-isk/100)*(1+vf/100);   // TL bazı, indirim + vade farkı sonrası
   const kdvTutar=mal*kdv/100;
@@ -1129,7 +1129,7 @@ function cizSepet(){
   $('s-top').innerHTML=money(h.tutar,sPB)+(parts.length?`<div style="font-size:11px;color:var(--thr);font-weight:700">${parts.join(' · ')}</div>`:'');
   if($('s-odeme-ozet'))odemeOzet();
 }
-function satisDiv(s){return s.pb==='USD'?db.kurUSD:s.pb==='EUR'?db.kurEUR:1}
+function satisDiv(s){return s.satisKur||(s.pb==='USD'?db.kurUSD:s.pb==='EUR'?db.kurEUR:1)}
 function stokUygula(k,mult){ // mult=-1 satış (düş), +1 iptal (geri)
   const u=urun(k.uid);if(!u)return;
   if(k.renkler&&k.renkler.length&&Array.isArray(u.renkler)){
@@ -1180,7 +1180,7 @@ function kaydetSatis(){
   let kesik=Math.max(0,+($('s-kesik')?.value||0));kesik=Math.min(kesik,Math.max(0,tutar-oden)); // kalanı aşamaz
   const odetur=odemeler.length>1?'Karışık':(odemeler[0]?odemeler[0].tur:'—');
   const old=sEdit?db.satislar.find(x=>x.id===sEdit):null;
-  const data={tip:'satis',mid:m.id,mus:m.ad,kalemler:sepet.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:k.fiyat,renkler:k.renkler?k.renkler.map(r=>({...r})):undefined})),araToplam:h.ara,iskonto:h.isk,vadeFarki:h.vf,kdv:h.kdv,kdvTutar:h.kdvPB,tasima:h.tasima,sevkiyat:($('s-sevk')?.value||'').trim(),tutar,odenen:oden,kesik,pb:sPB,durum:'tamam',teslimDurum:sDurum,depo:$('s-depo')?.checked?((old&&old.depo==='hazir')?'hazir':'bekliyor'):null,foto:sFoto||'',odemeler,odemeTur:odetur};
+  const data={tip:'satis',mid:m.id,mus:m.ad,kalemler:sepet.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:k.fiyat,renkler:k.renkler?k.renkler.map(r=>({...r})):undefined})),araToplam:h.ara,iskonto:h.isk,vadeFarki:h.vf,kdv:h.kdv,kdvTutar:h.kdvPB,tasima:h.tasima,sevkiyat:($('s-sevk')?.value||'').trim(),tutar,odenen:oden,kesik,pb:sPB,satisKur:div,durum:'tamam',teslimDurum:sDurum,depo:$('s-depo')?.checked?((old&&old.depo==='hazir')?'hazir':'bekliyor'):null,foto:sFoto||'',odemeler,odemeTur:odetur};
   const commit=()=>{
     if(old)revertSatis(old);
     if(sEdit&&old){data.id=old.id;data.tarih=old.tarih;Object.assign(old,data);applySatis(old);save();closeM();go('satis');toast('Satış güncellendi ✓')}
@@ -1188,8 +1188,11 @@ function kaydetSatis(){
   };
   const eskiBorc=old?(old.tutar-old.odenen-(old.kesik||0))*satisDiv(old):0;
   const yeniBorc=m.bakiye-eskiBorc+(tutar-oden-kesik)*div;
-  if(m.limit&&yeniBorc>m.limit)askConfirm(`${m.ad} kredi limitini aşıyor:\nYeni borç ${TL(yeniBorc)} / limit ${TL(m.limit)}\n\nYine de kaydedilsin mi?`,commit,'Kaydet');
-  else commit();
+  const doLimit=()=>{if(m.limit&&yeniBorc>m.limit)askConfirm(`${m.ad} kredi limitini aşıyor:\nYeni borç ${TL(yeniBorc)} / limit ${TL(m.limit)}\n\nYine de kaydedilsin mi?`,commit,'Kaydet');else commit()};
+  // stok yeterlilik kontrolü (düzenlemede eski adet geri sayılır)
+  const stokAsim=[];sepet.forEach(k=>{const u=urun(k.uid);if(!u)return;let mevcut=stokTop(u);if(old){const ok=old.kalemler.find(z=>z.uid===k.uid);if(ok)mevcut+=ok.mik}if(k.mik>mevcut+0.001)stokAsim.push(`${u.ad}: elde ${mevcut}, satılan ${k.mik}`)});
+  if(stokAsim.length)askConfirm(`⚠️ Stok yetersiz — stok eksiye düşecek:\n${stokAsim.join('\n')}\n\nYine de satılsın mı?`,doLimit,'Yine de Sat');
+  else doLimit();
 }
 function satisFis(id){
   const s=db.satislar.find(x=>x.id===id);
@@ -1604,7 +1607,7 @@ function kaydetOdeme(id){
   if(isMus){c.bakiye-=(t+kesik);if(kesik>0)c.kesikToplam=(c.kesikToplam||0)+kesik;if(t>0){if(tur==='Çek'){db.cekler.push({id:nid('cek'),tur:'cek',tip:'alinan',cariId:c.id,cari:c.ad,tutar:t,vade:Date.now()+30*86400000,banka:'—',durum:'portfoyde'})}else if(tur==='Kredi Kartı'){db.cekler.push({id:nid('cek'),tur:'kk',tip:'alinan',cariId:c.id,cari:c.ad,tutar:t,vade:Date.now()+34*86400000,banka:'Kredi Kartı POS',durum:'portfoyde'})}else if(h){h.bakiye+=t}}}
   else{ // tedarikçi/fason/gider ödeme
     if(c.doviz==='USD'){c.bakiyeUSD=(c.bakiyeUSD||0)-(t/db.kurUSD)}else{c.bakiye-=t}
-    if(tur==='Çek'){db.cekler.push({id:nid('cek'),tip:'verilen',cariId:c.id,cari:c.ad,tutar:t,vade:Date.now()+90*86400000,banka:'—',durum:'portfoyde',verilisKur:db.kurUSD})}else if(h){h.bakiye-=t}
+    if(tur==='Çek'){db.cekler.push({id:nid('cek'),tur:'cek',tip:'verilen',cariId:c.id,cari:c.ad,tutar:t,vade:Date.now()+90*86400000,banka:'—',durum:'portfoyde'})}else if(h){h.bakiye-=t}
   }
   const hitHesap=(tur!=='Çek'&&tur!=='Kredi Kartı')&&h&&t>0;
   db.hareketler.push({id:nid('hr'),cariId:id,tip:isMus?'tahsilat':'odeme',tutar:t,kesik,tur,tarih:Date.now(),hesapId:hitHesap?h.id:null,yon:hitHesap?(isMus?'in':'out'):null});
@@ -1812,7 +1815,7 @@ function cekKurHint(){const el=$('ck-kur-hint');if(!el)return;const tut=+$('ck-t
   else el.textContent='Tutar ve veriş kurunu gir → döviz karşılığı burada görünür';
 }
 // kur farkı hesabı — çek TL sabit, ödeme günü döviz farkı
-function cekKurFarki(c){if(!c||(!c.kurTakip&&!c.verilisKur))return null;const vk=+c.verilisKur;if(!vk)return null;
+function cekKurFarki(c){if(!c||!c.kurTakip)return null;const vk=+c.verilisKur;if(!vk)return null;
   const gk=(c.kurPB==='EUR')?db.kurEUR:db.kurUSD,doviz=c.tutar/vk;return {doviz,gk,vk,fark:doviz*(gk-vk),pb:c.kurPB||'USD'};}
 // cari yaz-seç (autocomplete)
 function cekCariAra(){const inp=$('ck-cari-in'),box=$('ck-cari-list');if(!inp||!box)return;
@@ -1845,7 +1848,14 @@ function kaydetCek(editId){
   const banka=($('ck-banka').value||'').trim()||'—',cekNo=($('ck-no').value||'').trim(),sube=($('ck-sube').value||'').trim();
   const kesideci=($('ck-kesideci')?.value||'').trim();
   const kurTakip=!!$('ck-kur')?.checked,kurPB=$('ck-kurpb')?.value||'USD',verilisKur=kurTakip?(+$('ck-kurv').value||0):0;
-  if(editId&&c0){c0.cariId=cc?cc.id:null;if(cc)c0.cari=cc.ad;c0.kesideci=kesideci;c0.tutar=tut;c0.vade=vade;c0.banka=banka;c0.cekNo=cekNo;c0.sube=sube;c0.foto=ckFotoOn;c0.fotoArka=ckFotoArka;c0.kurTakip=kurTakip;c0.kurPB=kurPB;c0.verilisKur=verilisKur;save();closeM();rCek();return toast('Çek güncellendi ✓')}
+  if(editId&&c0){
+    // cariIsle ile bakiye düşülmüş portföyde çekte: eski etkiyi geri al, yeniyi uygula (tutar/cari değişince kayma olmasın)
+    if(c0.cariIsle&&c0.durum==='portfoyde'){
+      const oldC=c0.cariId?cari(c0.cariId):null;
+      if(oldC){if(oldC.doviz==='USD')oldC.bakiyeUSD=(oldC.bakiyeUSD||0)+(+c0.tutar||0)/db.kurUSD;else oldC.bakiye+=(+c0.tutar||0)}
+      if(cc){if(cc.doviz==='USD')cc.bakiyeUSD=(cc.bakiyeUSD||0)-tut/db.kurUSD;else cc.bakiye-=tut}
+    }
+    c0.cariId=cc?cc.id:null;if(cc)c0.cari=cc.ad;c0.kesideci=kesideci;c0.tutar=tut;c0.vade=vade;c0.banka=banka;c0.cekNo=cekNo;c0.sube=sube;c0.foto=ckFotoOn;c0.fotoArka=ckFotoArka;c0.kurTakip=kurTakip;c0.kurPB=kurPB;c0.verilisKur=verilisKur;save();closeM();rCek();return toast('Çek güncellendi ✓')}
   const isle=$('ck-isle')?.checked&&!!cc;
   const c={id:nid('cek'),tur:'cek',tip:al?'alinan':'verilen',cariId:cc?cc.id:null,cari:cc?cc.ad:(al?'Bilinmeyen':'—'),kesideci,tutar:tut,vade,banka,cekNo,sube,foto:ckFotoOn,fotoArka:ckFotoArka,durum:'portfoyde',cariIsle:isle,kurTakip,kurPB,verilisKur};
   if(isle){if(cc.doviz==='USD')cc.bakiyeUSD=(cc.bakiyeUSD||0)-tut/db.kurUSD;else cc.bakiye-=tut}
@@ -1929,8 +1939,9 @@ function cekKarsiliksiz(id){const c=db.cekler.find(x=>x.id===id);
   },'Karşılıksız');
 }
 function cekSil(id){const c=db.cekler.find(x=>x.id===id);if(!c)return;
-  askConfirm('Bu çek kaydı silinsin mi?'+(c.cariIsle&&c.durum==='portfoyde'?'\nCari bakiyesi geri düzeltilecek.':''),()=>{
-    if(c.cariIsle&&c.durum==='portfoyde'){const cc=cari(c.cariId);if(cc){if(cc.doviz==='USD')cc.bakiyeUSD=(cc.bakiyeUSD||0)+c.tutar/db.kurUSD;else cc.bakiye+=c.tutar}}
+  if(c.durum!=='portfoyde')return toast('İşlem görmüş çek silinemez (tahsil/ciro/karşılıksız) — kayıt geçmişte kalır');
+  askConfirm('Bu çek kaydı silinsin mi?'+(c.cariIsle?'\nCari bakiyesi geri düzeltilecek.':''),()=>{
+    if(c.cariIsle){const cc=cari(c.cariId);if(cc){if(cc.doviz==='USD')cc.bakiyeUSD=(cc.bakiyeUSD||0)+c.tutar/db.kurUSD;else cc.bakiye+=c.tutar}}
     db.cekler=db.cekler.filter(x=>x.id!==id);save();closeM();rCek();toast('Çek silindi');
   },'Sil');
 }
@@ -1960,9 +1971,9 @@ function ieAktifDurak(i){return (i.duraklar||[]).find(d=>d.durum==='devam')||(i.
 function durakYolda(d){return Math.max(0,(+d.gonderilen||0)-(+d.gelen||0)-(+d.defolu||0))}
 function ieFasondaki(i){return (i.duraklar||[]).filter(d=>d.durum==='devam'&&d.fasonId&&(+d.gonderilen||0)>0)}
 function ieGecikme(i){return Math.floor((Date.now()-(i.baslangic+(i.gun||0)*86400000))/86400000)}
-function ieBorcGuncelle(d){if(!d.fasonId)return;
-  if(d.borclanan==null)d.borclanan=d.borclandi?Math.round((+d.ucret||0)*(+d.gelen||0)):0;
-  const target=Math.round((+d.ucret||0)*(+d.gelen||0));const delta=target-(+d.borclanan||0);
+function ieBorcGuncelle(d,carpan){if(!d.fasonId)return;const c=carpan||1;
+  if(d.borclanan==null)d.borclanan=d.borclandi?Math.round((+d.ucret||0)*(+d.gelen||0)*c):0;
+  const target=Math.round((+d.ucret||0)*(+d.gelen||0)*c);const delta=target-(+d.borclanan||0);
   if(delta!==0){const f=cari(d.fasonId);if(f)f.bakiye=(f.bakiye||0)+delta;d.borclanan=target;d.borclandi=target>0}
 }
 const DURAK_IC={'Kesim':'✂️','Nakış':'🎨','Baskı':'🖨️','Dikim':'🧵','Ütü / Paket':'👔'};
@@ -2256,7 +2267,7 @@ function durakFotoSec(input){const f=input.files&&input.files[0];if(!f)return;re
 function durakKaydet(id,x){
   const i=db.isemirleri.find(v=>v.id===id);const d=i.duraklar[x];
   d.fasonId=+($('d-fas').value||0)||null;d.ucret=+$('d-uc').value||0;d.not=($('d-not')?.value||'').trim();d.foto=dFoto;
-  ieBorcGuncelle(d);save();closeM();uretimDetay(id);toast('Kaydedildi ✓');
+  ieBorcGuncelle(d,ieCarpan(i));save();closeM();uretimDetay(id);toast('Kaydedildi ✓');
 }
 /* --- Teslimat: varsayılan tek toplam, istenirse renk renk --- */
 function dagit(total,weights){const keys=Object.keys(weights);const sumW=keys.reduce((a,k)=>a+(weights[k]||0),0);const out={};
@@ -2327,19 +2338,29 @@ function durakTeslimKaydet(id,x){
     const eksNed=($('t-eksik')?.value||'').trim();
     d.teslimatlar=d.teslimatlar||[];d.teslimatlar.push({tarih:Date.now(),adet:tAdet,defo:tDefo,renk:batch,not:($('t-not')?.value||'').trim(),eksikNeden:eksNed});
     if(eksNed)d.eksikNeden=eksNed;
-    d.foto=dFoto;ieBorcGuncelle(d);
+    d.foto=dFoto;ieBorcGuncelle(d,ieCarpan(i));
     const bitti=(d.gelen+d.defolu)>=gonTop;
     if(bitti){d.durum='tamam';if(x<i.duraklar.length-1){const nx=i.duraklar[x+1];if(nx.durum==='bekliyor'){nx.gonderilenRenk={...d.renkGelen};nx.gonderilen=d.gelen;nx.durum='devam';nx.baslama=Date.now()}}}
     else d.durum='devam';
     save();closeM();uretimDetay(id);toast(bitti?'Durak tamamlandı ✓':tAdet+' adet teslim alındı ✓');
   };
+  const renkAsim=[...new Set([...Object.keys(bg),...Object.keys(bd)])].filter(c=>((d.renkGelen[c]||0)+(d.renkDefo[c]||0)+(bg[c]||0)+(bd[c]||0))>(gr[c]||0)+0.001);
   if(yeniTop>gonTop+0.001)askConfirm(`Bu durağa ${gonTop} ${i.birim||'adet'} gönderilmişti.\nBu teslimatla toplam ${yeniTop} olacak — ${yeniTop-gonTop} FAZLA.\n\nYine de kaydedilsin mi?`,commit,'Yine de kaydet');
+  else if(renkAsim.length)askConfirm(`Renk bazında fazla giriş var:\n${renkAsim.map(c=>c+': '+((d.renkGelen[c]||0)+(bg[c]||0))+'/'+(gr[c]||0)+' gönderilen').join('\n')}\n\nYine de kaydedilsin mi?`,commit,'Yine de kaydet');
   else commit();
 }
 /* --- Tamamla → stoğa al --- */
 function isEmriTamamla(id){
   const i=db.isemirleri.find(v=>v.id===id);const u=i.urunId?urun(i.urunId):null;const saglam=ieSaglam(i);
   if(saglam<=0)return toast('Önce bir duraktan gelen (sağlam) adet gir');
+  const ds=i.duraklar||[],sonD=ds[ds.length-1];
+  if(sonD&&(+sonD.gelen||0)<=0)return toast('⚠️ Son durak ('+(sonD.ad||'')+') henüz mal vermedi. Yarım üretim stoğa alınamaz — önce oradan teslim al.');
+  const fasonda=ds.reduce((a,d)=>a+durakYolda(d),0);
+  if(fasonda>0)return askConfirm(`Hâlâ fasonda ${fasonda} adet mal var (teslim alınmadı).\nSadece elindeki ${saglam} adet stoğa alınıp iş emri kapatılacak, kalan takipten düşecek.\n\nYine de tamamlansın mı?`,()=>isEmriTamamlaGoster(id),'Yine de Tamamla');
+  isEmriTamamlaGoster(id);
+}
+function isEmriTamamlaGoster(id){
+  const i=db.isemirleri.find(v=>v.id===id);const u=i.urunId?urun(i.urunId):null;const saglam=ieSaglam(i);
   const birim=ieBirimMaliyet(i);
   // son duraktan gerçek renk renk sağlam adetler
   const sonRenk=(()=>{const ds=i.duraklar||[];for(let k=ds.length-1;k>=0;k--)if(ds[k].renkGelen&&Object.keys(ds[k].renkGelen).length)return ds[k].renkGelen;return null})();
@@ -2368,7 +2389,7 @@ function isEmriStokla(id){
   if(renkObjs(u).length){rowsData.forEach(rd=>{let r=renkObjs(u).find(x=>x.ad===rd.ad);if(!r&&renkObjs(u).length===1)r=renkObjs(u)[0];if(r)r.stok=(+r.stok||0)+rd.adet});u.stok=stokTop(u)}
   else u.stok=(+u.stok||0)+toplam;
   if(setMal&&birim>0)u.alis=Math.round(birim);
-  (i.duraklar||[]).forEach(d=>{ieBorcGuncelle(d);d.durum='tamam'});
+  (i.duraklar||[]).forEach(d=>{ieBorcGuncelle(d,ieCarpan(i));d.durum='tamam'});
   i.durum='tamam';i.stoklandi=true;i.kapanis=Date.now();
   save();closeM();rUretim();toast(`${toplam} ${u.birim} stoğa girdi ✓${setMal?' · maliyet ₺'+Math.round(birim):''}`);
 }
@@ -2384,10 +2405,10 @@ function ieMalDuzenle(id){const i=db.isemirleri.find(v=>v.id===id);if(!i||i.duru
   cizIeMal();
 }
 function ieMalKaydet(id){const i=db.isemirleri.find(v=>v.id===id);
-  const yeni=ieMal.filter(m=>(m.ad||'').trim()).map(m=>{const h=db.hammadde.find(x=>x.ad.toLowerCase()===m.ad.trim().toLowerCase());return {ad:m.ad.trim(),mik:+m.mik||0,birim:m.birim||(h?h.birim:''),tutar:+m.tutar||0,durum:m.durum||'var',hid:h?h.id:null}});
-  // yeni eklenen 'var' malzemelerden stok düş (öncekiler zaten düşmüştü — sadece yeni olanları düş)
-  const oncekiAd=new Set((i.malzeme||[]).map(m=>m.ad+'|'+m.mik));
-  yeni.forEach(m=>{if(m.durum==='var'&&m.hid&&!oncekiAd.has(m.ad+'|'+m.mik)){const h=db.hammadde.find(x=>x.id===m.hid);if(h)h.stok=Math.max(0,h.stok-m.mik)}});
+  const yeni=ieMal.filter(m=>(m.ad||'').trim()).map(m=>{const h=db.hammadde.find(x=>x.ad.toLowerCase()===m.ad.trim().toLowerCase());return {ad:m.ad.trim(),mik:+m.mik||0,birim:m.birim||(h?h.birim:''),tutar:+m.tutar||0,pb:m.pb||'TL',durum:m.durum||'var',hid:h?h.id:null}});
+  // önce eski 'var' malzemelerin stoğunu geri ekle, sonra güncel 'var' olanları düş → net fark uygulanır (miktar düzenlemesinde çift düşme olmaz)
+  (i.malzeme||[]).forEach(m=>{if(m.durum==='var'&&m.hid){const h=db.hammadde.find(x=>x.id===m.hid);if(h)h.stok=(+h.stok||0)+(+m.mik||0)}});
+  yeni.forEach(m=>{if(m.durum==='var'&&m.hid){const h=db.hammadde.find(x=>x.id===m.hid);if(h)h.stok=Math.max(0,(+h.stok||0)-m.mik)}});
   i.malzeme=yeni;save();closeM();uretimDetay(id);toast('Malzeme güncellendi ✓');
 }
 /* --- İş emri paylaşım (WhatsApp) + A4 form --- */
