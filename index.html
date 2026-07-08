@@ -1725,7 +1725,7 @@ function cekDurBilgi(){return {portfoyde:['n','Portföyde'],tahsil:['ok','Tahsil
 function cekRow(c){const g=gunFark(c.vade),D=cekDurBilgi()[c.durum]||['n','—'];
   const av=c.durum==='karsiliksiz'?'r':c.durum==='tahsil'?'g':c.durum==='ciro'?'p':g<0?'r':g<=7?'o':'gray';
   const sub=c.durum==='portfoyde'?`${dstr(c.vade)} · ${esc(c.banka||'—')} · ${g<0?Math.abs(g)+' gün geçti':g===0?'bugün!':g+' gün kaldı'}`:(c.durum==='ciro'?`→ ${esc(c.ciroCari||'')} · ${dstr(c.ciroTarih||c.vade)}`:`${dstr(c.vade)} · ${esc(c.banka||'—')}`);
-  return `<div class="row" onclick="cekIslem(${c.id})"><div class="av ${av}">🏷️</div><div class="mid"><div class="t">${esc(c.cari||'—')}${c.foto?' <span style="font-size:11px">📷</span>':''}</div><div class="s">${sub}</div></div><div class="end"><div class="n">${TL(c.tutar)}</div><span class="pill ${D[0]}">${D[1]}</span></div></div>`;
+  return `<div class="row" onclick="cekIslem(${c.id})"><div class="av ${av}">🏷️</div><div class="mid"><div class="t">${esc(c.cari||'—')}${c.kurTakip?' <span style="font-size:10px" title="dövizli">💱</span>':''}${c.foto?' <span style="font-size:11px">📷</span>':''}</div><div class="s">${sub}</div></div><div class="end"><div class="n">${TL(c.tutar)}</div><span class="pill ${D[0]}">${D[1]}</span></div></div>`;
 }
 function rCek(){
   const al=cekTab==='alinan';
@@ -1786,15 +1786,30 @@ function cekForm(editId){
   const vv=c?new Date(c.vade).toISOString().slice(0,10):new Date(Date.now()+30*86400000).toISOString().slice(0,10);
   open_(editId?'✏️ Çek Düzenle':(al?'📥 Alınan Çek Ekle':'📤 Verilen Çek Ekle'),`
     <label>${al?'Kimden aldın?':'Kime verdin?'}</label><select id="ck-cari"><option value="0">— ${al?'müşteri':'tedarikçi/fason'} seç —</option>${opts.map(o=>`<option value="${o.id}" ${c&&c.cariId===o.id?'selected':''}>${esc(o.ad)}${o.bakiye>0?' · borç '+TL(o.bakiye):''}</option>`).join('')}</select>
-    <div class="g2"><div><label>Tutar (₺)</label><input id="ck-tut" type="number" inputmode="numeric" value="${c?c.tutar:''}" placeholder="0"></div><div><label>Vade</label><input id="ck-vade" type="date" value="${vv}"></div></div>
+    <div class="g2"><div><label>Tutar (₺)</label><input id="ck-tut" type="number" inputmode="numeric" value="${c?c.tutar:''}" placeholder="0" oninput="cekKurHint()"></div><div><label>Vade</label><input id="ck-vade" type="date" value="${vv}"></div></div>
     <div class="g2"><div><label>Banka</label><input id="ck-banka" list="ck-bankalar" value="${c?esc(c.banka||''):''}" placeholder="Ziraat"><datalist id="ck-bankalar">${CEK_BANKA.map(b=>`<option value="${b}">`).join('')}</datalist></div><div><label>Çek No</label><input id="ck-no" value="${c?esc(c.cekNo||''):''}" placeholder="opsiyonel"></div></div>
     <label>Şube (opsiyonel)</label><input id="ck-sube" value="${c?esc(c.sube||''):''}" placeholder="ör. Laleli">
+    <label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-weight:600"><input type="checkbox" id="ck-kur" ${c&&c.kurTakip?'checked':''} onchange="cekKurToggle()" style="width:auto"> 💱 Kur farkı takibi (dövizli çek)</label>
+    <div id="ck-kur-box" style="display:${c&&c.kurTakip?'block':'none'};margin-top:6px">
+      <div class="g2"><div><label>Döviz</label><select id="ck-kurpb" onchange="cekKurHint()"><option value="USD" ${c&&c.kurPB==='EUR'?'':'selected'}>USD $</option><option value="EUR" ${c&&c.kurPB==='EUR'?'selected':''}>EUR €</option></select></div><div><label>Veriş günü kuru</label><input id="ck-kurv" type="number" step="0.01" value="${c&&c.verilisKur?c.verilisKur:db.kurUSD}" oninput="cekKurHint()"></div></div>
+      <div class="mini" id="ck-kur-hint" style="margin-top:4px"></div>
+      <div class="mini" style="margin-top:2px">Çek TL olarak sabit kalır. Ödeme günü kur farkı hesaplanıp <b>${al?'müşterinin':'tedarikçinin'} bakiyesine</b> eklenir.</div>
+    </div>
     <label>Çek Fotoğrafı</label>
     <div class="g2"><div id="ck-foto-on"></div><div id="ck-foto-arka"></div></div>
     ${!editId?`<label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-weight:600"><input type="checkbox" id="ck-isle" checked style="width:auto"> ${al?'Müşterinin borcundan düş':'Tedarikçinin borcundan düş'}</label><div class="mini" style="margin-top:4px">İşaretliyse çek tutarı carinin bakiyesinden düşülür. Karşılıksız çıkarsa geri eklenir.</div>`:''}
     <button class="btn" onclick="kaydetCek(${editId||0})">Kaydet</button>`);
-  cizCekFoto();
+  cizCekFoto();cekKurHint();
 }
+function cekKurToggle(){const on=$('ck-kur')?.checked;const b=$('ck-kur-box');if(b)b.style.display=on?'block':'none';cekKurHint()}
+function cekKurHint(){const el=$('ck-kur-hint');if(!el)return;const tut=+$('ck-tut')?.value||0,vk=+$('ck-kurv')?.value||0,pb=$('ck-kurpb')?.value||'USD',sym=pb==='EUR'?'€':'$';
+  if(tut>0&&vk>0){const d=tut/vk,gk=pb==='EUR'?db.kurEUR:db.kurUSD,fark=d*(gk-vk);
+    el.innerHTML=`= ${sym}${d.toLocaleString('tr-TR',{maximumFractionDigits:0})} · bugünkü kur ${gk.toFixed(2)} → tahmini kur farkı <b style="color:${Math.abs(fark)<1?'var(--sub)':fark>0?'var(--bad)':'var(--good)'}">${fark>=0?'+':'−'}${TL(Math.abs(fark))}</b>`;}
+  else el.textContent='Tutar ve veriş kurunu gir → döviz karşılığı burada görünür';
+}
+// kur farkı hesabı — çek TL sabit, ödeme günü döviz farkı
+function cekKurFarki(c){if(!c||(!c.kurTakip&&!c.verilisKur))return null;const vk=+c.verilisKur;if(!vk)return null;
+  const gk=(c.kurPB==='EUR')?db.kurEUR:db.kurUSD,doviz=c.tutar/vk;return {doviz,gk,vk,fark:doviz*(gk-vk),pb:c.kurPB||'USD'};}
 function cizCekFoto(){const on=$('ck-foto-on'),arka=$('ck-foto-arka');if(!on)return;
   on.innerHTML=`<div class="satfoto" style="height:104px" onclick="$('ckf-on-in').click()">${ckFotoOn?`<img src="${ckFotoOn}"><span class="rm" onclick="event.stopPropagation();ckFotoOn='';cizCekFoto()">✕</span>`:'<span class="ph">📷 ön yüz</span>'}</div><input type="file" id="ckf-on-in" accept="image/*" capture="environment" style="display:none" onchange="ckFotoSec('on',this)">`;
   arka.innerHTML=`<div class="satfoto" style="height:104px" onclick="$('ckf-arka-in').click()">${ckFotoArka?`<img src="${ckFotoArka}"><span class="rm" onclick="event.stopPropagation();ckFotoArka='';cizCekFoto()">✕</span>`:'<span class="ph">📷 arka yüz</span>'}</div><input type="file" id="ckf-arka-in" accept="image/*" capture="environment" style="display:none" onchange="ckFotoSec('arka',this)">`;
@@ -1806,10 +1821,10 @@ function kaydetCek(editId){
   if(tut<=0)return toast('Tutar gir');const vd=$('ck-vade').value;if(!vd)return toast('Vade tarihi gir');
   const cc=cid?cari(cid):null;const vade=+new Date(vd+'T12:00:00');
   const banka=($('ck-banka').value||'').trim()||'—',cekNo=($('ck-no').value||'').trim(),sube=($('ck-sube').value||'').trim();
-  if(editId&&c0){c0.cariId=cid||null;if(cc)c0.cari=cc.ad;c0.tutar=tut;c0.vade=vade;c0.banka=banka;c0.cekNo=cekNo;c0.sube=sube;c0.foto=ckFotoOn;c0.fotoArka=ckFotoArka;save();closeM();rCek();return toast('Çek güncellendi ✓')}
+  const kurTakip=!!$('ck-kur')?.checked,kurPB=$('ck-kurpb')?.value||'USD',verilisKur=kurTakip?(+$('ck-kurv').value||0):0;
+  if(editId&&c0){c0.cariId=cid||null;if(cc)c0.cari=cc.ad;c0.tutar=tut;c0.vade=vade;c0.banka=banka;c0.cekNo=cekNo;c0.sube=sube;c0.foto=ckFotoOn;c0.fotoArka=ckFotoArka;c0.kurTakip=kurTakip;c0.kurPB=kurPB;c0.verilisKur=verilisKur;save();closeM();rCek();return toast('Çek güncellendi ✓')}
   const isle=$('ck-isle')?.checked&&!!cc;
-  const c={id:nid('cek'),tur:'cek',tip:al?'alinan':'verilen',cariId:cid||null,cari:cc?cc.ad:(al?'Bilinmeyen':'—'),tutar:tut,vade,banka,cekNo,sube,foto:ckFotoOn,fotoArka:ckFotoArka,durum:'portfoyde',cariIsle:isle};
-  if(!al&&cc&&cc.doviz==='USD')c.verilisKur=db.kurUSD;
+  const c={id:nid('cek'),tur:'cek',tip:al?'alinan':'verilen',cariId:cid||null,cari:cc?cc.ad:(al?'Bilinmeyen':'—'),tutar:tut,vade,banka,cekNo,sube,foto:ckFotoOn,fotoArka:ckFotoArka,durum:'portfoyde',cariIsle:isle,kurTakip,kurPB,verilisKur};
   if(isle){if(cc.doviz==='USD')cc.bakiyeUSD=(cc.bakiyeUSD||0)-tut/db.kurUSD;else cc.bakiye-=tut}
   db.cekler.push(c);save();closeM();rCek();toast('Çek eklendi ✓ '+TL(tut));
 }
@@ -1825,7 +1840,9 @@ async function cekPaylas(id){const c=db.cekler.find(x=>x.id===id);if(!c)return;
 }
 function cekIslem(id){
   const c=db.cekler.find(x=>x.id===id);if(!c)return;
-  const detay=`${c.cekNo?`<div class="kv"><span class="k">Çek No</span><span class="v">${esc(c.cekNo)}</span></div>`:''}${c.sube?`<div class="kv"><span class="k">Şube</span><span class="v">${esc(c.sube)}</span></div>`:''}`;
+  const kf0=cekKurFarki(c);
+  const kurBil=(c.kurTakip&&c.verilisKur)?`<div class="kv"><span class="k">Kur takibi</span><span class="v">${c.kurPB||'USD'} · veriş ${(+c.verilisKur).toFixed(2)}${kf0?` (${c.kurPB==='EUR'?'€':'$'}${Math.round(kf0.doviz).toLocaleString('tr-TR')})`:''}</span></div>${c.kurFarki!=null?`<div class="kv"><span class="k">Ödeme kur farkı</span><span class="v" style="color:${c.kurFarki>=0?'var(--bad)':'var(--good)'}">${c.kurFarki>=0?'+':'−'}${TL(Math.abs(c.kurFarki))}</span></div>`:''}`:'';
+  const detay=`${c.cekNo?`<div class="kv"><span class="k">Çek No</span><span class="v">${esc(c.cekNo)}</span></div>`:''}${c.sube?`<div class="kv"><span class="k">Şube</span><span class="v">${esc(c.sube)}</span></div>`:''}${kurBil}`;
   const altBtn=`<div class="g2" style="margin-top:12px"><button class="btn ghost sm" onclick="cekPaylas(${id})">📤 Paylaş</button><button class="btn ghost sm" onclick="cekForm(${id})">✏️ Düzenle</button></div><button class="btn ghost" style="margin-top:8px;color:var(--sub)" onclick="cekSil(${id})">Sil</button>`;
   if(c.durum!=='portfoyde')return open_('Çek Detayı',`
     <div class="kv"><span class="k">${esc(c.cari||'—')}</span><span class="v">${TL(c.tutar)}</span></div>
@@ -1834,9 +1851,10 @@ function cekIslem(id){
     <div class="kv"><span class="k">Durum</span><span class="v">${(cekDurBilgi()[c.durum]||['','—'])[1]}</span></div>
     ${c.durum==='ciro'?`<div class="kv"><span class="k">Ciro edilen</span><span class="v">${esc(c.ciroCari||'')}</span></div>`:''}
     ${cekFotoStrip(c)}${altBtn}`);
+  const kurPrev=kf0&&Math.abs(kf0.fark)>=1?`<div class="infobox">💱 Dövizli çek: veriş ${kf0.vk.toFixed(2)} → bugün ${kf0.gk.toFixed(2)}. ${c.tip==='alinan'?'Tahsil':'Öde'}rsen kur farkı <b>${kf0.fark>=0?'+':'−'}${TL(Math.abs(kf0.fark))}</b> ${c.cari} bakiyesine eklenecek.</div>`:'';
   open_('Çek İşlemi',`
     <div class="kv"><span class="k">${esc(c.cari||'—')}</span><span class="v">${TL(c.tutar)}</span></div>
-    <div class="kv"><span class="k">Vade</span><span class="v">${dstr(c.vade)} · ${gunFark(c.vade)<0?Math.abs(gunFark(c.vade))+' gün geçti':gunFark(c.vade)+' gün kaldı'}</span></div>${detay}${cekFotoStrip(c)}
+    <div class="kv"><span class="k">Vade</span><span class="v">${dstr(c.vade)} · ${gunFark(c.vade)<0?Math.abs(gunFark(c.vade))+' gün geçti':gunFark(c.vade)+' gün kaldı'}</span></div>${detay}${cekFotoStrip(c)}${kurPrev}
     <label>İşlem</label>
     ${c.tip==='alinan'?`
     <button class="btn g" onclick="cekTahsil(${id})">✓ Tahsil Et (hesaba geç)</button>
@@ -1847,18 +1865,18 @@ function cekIslem(id){
   `);
 }
 function cekTahsil(id){
-  const c=db.cekler.find(x=>x.id===id);
-  if(c.tip==='alinan'){c.durum='tahsil';c.islemTarih=Date.now();const h=db.hesaplar.find(x=>/nakit|kasa/i.test(x.ad))||db.hesaplar[0];if(h)h.bakiye+=c.tutar;toast('Tahsil edildi ✓ '+TL(c.tutar))}
+  const c=db.cekler.find(x=>x.id===id);let msg;
+  if(c.tip==='alinan'){const h=db.hesaplar.find(x=>/nakit|kasa/i.test(x.ad))||db.hesaplar[0];c.durum='tahsil';c.islemTarih=Date.now();if(h)h.bakiye+=c.tutar;msg='Tahsil edildi ✓ '+TL(c.tutar)}
   else{
     const h=db.hesaplar.find(x=>x.tur==='banka')||db.hesaplar[0];
     if(h&&h.bakiye<c.tutar-0.001)return toast('⚠️ '+h.ad+' bakiyesi yetersiz. Çek ödenemez (hesap eksiye düşemez).');
-    c.durum='tahsil';c.islemTarih=Date.now();if(h)h.bakiye-=c.tutar;
-    if(c.verilisKur){const su=c.tutar/db.kurUSD, il=c.tutar/c.verilisKur;const fark=il-su;const cc=cari(c.cariId);
-      if(cc&&cc.doviz==='USD'){cc.bakiyeUSD=(cc.bakiyeUSD||0)-su; toast(`Ödendi · $${Math.round(su)} düştü${fark>1?', $'+Math.round(fark)+' kur farkı borç kaldı':''}`)}
-      else toast('Ödendi ✓')}
-    else toast('Ödendi ✓');
+    c.durum='tahsil';c.islemTarih=Date.now();if(h)h.bakiye-=c.tutar;msg='Ödendi ✓ '+TL(c.tutar);
   }
-  save();closeM();rCek();
+  // kur farkı: çek TL sabit ödendi, ödeme günü döviz farkı cariye eklenir
+  const kf=cekKurFarki(c);
+  if(kf&&Math.abs(kf.fark)>=1){const cc=cari(c.cariId);if(cc){cc.bakiye+=kf.fark;c.kurFarki=kf.fark;c.odemeKur=kf.gk;
+    msg+=` · 💱 kur farkı ${kf.fark>=0?'+':'−'}${TL(Math.abs(kf.fark))} → ${c.cari} bakiyesine işlendi`;}}
+  save();closeM();rCek();toast(msg);
 }
 function cekCiro(id){const c=db.cekler.find(x=>x.id===id);if(!c)return;
   const opts=db.cariler.filter(x=>x.tip==='tedarikci'||x.tip==='fason');
