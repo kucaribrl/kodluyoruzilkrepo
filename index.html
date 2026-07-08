@@ -433,9 +433,11 @@ function seed(){return{
   kirmaToplam:0,
   kademe:[{min:20,ind:3},{min:50,ind:6},{min:100,ind:10}],
   portalFav:[],
+  minSiparis:0,
+  portalTaslak:[],
 };}
 let db=load();
-function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(!d||!d.urunler)return seed();seqFix(d);if(!d.kademe)d.kademe=[{min:20,ind:3},{min:50,ind:6},{min:100,ind:10}];if(!d.portalFav)d.portalFav=[];return d}catch(e){return seed()}}
+function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(!d||!d.urunler)return seed();seqFix(d);if(!d.kademe)d.kademe=[{min:20,ind:3},{min:50,ind:6},{min:100,ind:10}];if(!d.portalFav)d.portalFav=[];if(d.minSiparis==null)d.minSiparis=0;if(!d.portalTaslak)d.portalTaslak=[];return d}catch(e){return seed()}}
 function kademeler(){return (db.kademe&&db.kademe.length)?db.kademe.slice().filter(k=>+k.min>0).sort((a,b)=>a.min-b.min):[]}
 function kademeIsk(mik){let ind=0;kademeler().forEach(k=>{if((+mik||0)>=(+k.min||0))ind=+k.ind||0});return ind}
 function portalKalemFiyat(k){const u=urun(k.uid);const base=u?portalFiyat(u):(+k.fiyat||0);const ind=kademeIsk(k.mik);return {base,ind,net:ind?Math.round(base*(1-ind/100)):base}}
@@ -2507,7 +2509,7 @@ function isEmriA4(id){
 /* ---------- PORTAL ---------- */
 function rPortal(){
   let html=`<div class="g2"><button class="btn sm" onclick="portalAc()">👁️ Müşteri Sipariş Ekranı</button><button class="btn ghost sm" onclick="portalPaylas()">🔗 Linki Paylaş</button></div>
-    <div style="margin-top:8px"><button class="btn ghost sm" onclick="kademeDuzenle()">⚙️ Toptan İndirim Kademeleri${kademeler().length?' · '+kademeler().map(k=>k.min+'+%'+k.ind).join(' '):''}</button></div>
+    <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="kademeDuzenle()">⚙️ Toptan İndirim Kademeleri${kademeler().length?' · '+kademeler().map(k=>k.min+'+%'+k.ind).join(' '):''}</button><button class="btn ghost sm" onclick="minSiparisDuzenle()">📦 Min. Sipariş${+db.minSiparis>0?' · '+(+db.minSiparis)+' seri':''}</button></div>
     <div class="mini" style="margin:8px 3px">Müşteriler katalogdan seçip sipariş verir. Aynı cihazda demo/kiosk çalışır; farklı cihazdan gelmesi için sunucuda yayınlanması gerekir.</div>`;
   html+=`<div class="sec">Onay Bekleyen Siparişler (${db.bekleyenPortal.length})</div>`;
   html+=db.bekleyenPortal.length?db.bekleyenPortal.map(o=>{const kayitli=o.mid&&cari(o.mid);return `<div class="card" style="margin-bottom:11px;padding:13px"><div style="display:flex;align-items:center;gap:10px"><div class="av">${ii(o.mus)}</div><div class="mid"><div class="t">${esc(o.mus)}${kayitli?' <span class="tag" style="background:var(--good-s);color:var(--good)">kayıtlı</span>':' <span class="tag">yeni</span>'}</div><div class="s">${tstr(o.tarih)}${o.tel?' · 📞 '+esc(o.tel):''}</div></div></div>
@@ -2578,6 +2580,7 @@ function kademeDuzenle(){_kad=kademeler().map(k=>({...k}));if(!_kad.length)_kad=
   open_('⚙️ Toptan İndirim Kademeleri',`<div class="mini">Belirli adet/seri üstünde <b>otomatik iskonto</b>. Müşteri katalogda görür, sepette kendiliğinden uygulanır — çok almaya teşvik eder.</div><div id="kad-list" style="margin-top:12px"></div><button class="btn ghost sm" onclick="kademeSatirEkle()">+ kademe ekle</button><button class="btn" style="margin-top:12px" onclick="kademeKaydet()">Kaydet</button>`);cizKademe()}
 function cizKademe(){const el=$('kad-list');if(!el)return;el.innerHTML=(_kad.length?_kad.map((k,i)=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="number" value="${k.min}" oninput="_kad[${i}].min=+this.value" placeholder="adet" style="margin:0"><span class="mini" style="flex:0 0 auto">+ üstüne</span><input type="number" value="${k.ind}" oninput="_kad[${i}].ind=+this.value" placeholder="%" style="margin:0;max-width:72px"><span class="mini">%</span><button class="btn ghost sm" style="width:auto;margin:0;padding:7px 10px" onclick="_kad.splice(${i},1);cizKademe()">✕</button></div>`).join(''):'<div class="mini">Kademe yok</div>')}
 function kademeSatirEkle(){_kad.push({min:0,ind:0});cizKademe()}
+function minSiparisDuzenle(){open_('📦 Minimum Sipariş',`<div class="mini">Toplam kaç <b>seri</b> altında sipariş alınmasın? Müşteri sepette uyarı görür, altındaysa gönderemez. 0 = sınır yok.</div><label>Minimum seri</label><input id="min-sip" type="number" inputmode="numeric" value="${+db.minSiparis||0}" placeholder="ör. 10"><button class="btn" style="margin-top:12px" onclick="db.minSiparis=Math.max(0,+document.getElementById('min-sip').value||0);save();closeM();rPortal();toast('Minimum sipariş güncellendi ✓')">Kaydet</button>`)}
 function kademeKaydet(){db.kademe=_kad.filter(k=>+k.min>0&&+k.ind>0).sort((a,b)=>a.min-b.min);save();closeM();rPortal();toast('İndirim kademeleri kaydedildi ✓')}
 function portalRed(id){db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);save();rPortal();toast('Sipariş reddedildi')}
 function portalPaylas(){const url=location.href.split('#')[0]+'#siparis';const t=`${db.firma||'Öz Tekstil'} toptan sipariş kataloğu:\n${url}\n\nKatalogdan ürün seçip sipariş verebilirsiniz.`;
@@ -2614,17 +2617,39 @@ function portalRenkMik(uid,ad,d){const u=urun(uid);if(!u)return;
   portalCiz();
 }
 function portalRenkAdet(uid,ad){const it=portalSepet.find(k=>k.uid===uid);if(!it||!it.renkler)return 0;const r=it.renkler.find(x=>x.ad===ad);return r?r.mik:0}
+function portalSepetSeri(){return portalSepet.reduce((a,k)=>a+(+k.mik||0),0)}
+function portalMinEksik(){const min=+db.minSiparis||0;if(min<=0)return 0;const eks=min-portalSepetSeri();return eks>0?eks:0}
 function portalGonder(){
   const ad=(portalMusAd||'').trim();if(!ad)return toast('Adınızı / firma adınızı yazın');
   if(!portalSepet.length)return toast('Sepetiniz boş');
+  const eks=portalMinEksik();if(eks>0)return toast('Minimum sipariş '+(+db.minSiparis)+' seri — '+eks+' seri daha ekleyin');
   const tel=(portalTel||'').trim();if(!tel)return toast('Telefon numaranızı yazın');
   const m=db.cariler.find(c=>c.tip==='musteri'&&c.ad.toLowerCase()===ad.toLowerCase());
   const kalemler=portalSepet.map(k=>{const f=portalKalemFiyat(k);return {uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:f.net,listeFiyat:f.base,kademeInd:f.ind,renkler:k.renkler&&k.renkler.length?k.renkler.map(r=>({...r})):undefined}});
   const t=portalTotal();
   const o={id:nid('bp'),mus:m?m.ad:ad,mid:m?m.id:0,tarih:Date.now(),kalemler,tutar:t,not:(portalNot||'').trim(),tel,adres:(portalAdres||'').trim(),sehir:(portalSehir||'').trim()};
   db.bekleyenPortal.push(o);
+  db.portalTaslak=(db.portalTaslak||[]).filter(t=>(t.ad||'').toLowerCase()!==ad.toLowerCase()); // gönderilince taslak temizlenir
   save();portalSepet=[];portalNot='';portalView='tesekkur';portalCiz();
 }
+// sepeti WhatsApp/panoya paylaş (patrona/ortağa onaya göndermek için)
+function portalSepetPaylas(){if(!portalSepet.length)return toast('Sepetiniz boş');
+  const sat=portalSepet.map(k=>{const f=portalKalemFiyat(k);const rk=k.renkler&&k.renkler.length?' ('+k.renkler.map(r=>r.ad+'×'+r.mik).join(', ')+')':'';return `• ${k.urun} ×${k.mik} ${k.birim}${rk} — ${TL(k.mik*f.net)}`}).join('\n');
+  const txt=`🛒 ${db.firma||'Öz Tekstil'} sipariş sepetim:\n\n${sat}\n\nToplam: ${TL(portalTotal())}${portalMusAd?'\n\n'+portalMusAd:''}`;
+  if(navigator.share){navigator.share({text:txt}).catch(()=>{});return}
+  if(navigator.clipboard)navigator.clipboard.writeText(txt).then(()=>toast('Sepet kopyalandı ✓')).catch(()=>open_('Sepet',`<textarea readonly style="width:100%;height:150px;font-size:12px">${esc(txt)}</textarea>`));
+  else open_('Sepet',`<textarea readonly style="width:100%;height:150px;font-size:12px">${esc(txt)}</textarea>`);
+}
+// sepeti taslak olarak sakla (sonra devam et)
+function portalTaslakKaydet(){if(!portalSepet.length)return toast('Sepetiniz boş');const ad=(portalMusAd||'').trim();if(!ad)return toast('Önce adınızı yazın');
+  db.portalTaslak=(db.portalTaslak||[]).filter(t=>(t.ad||'').toLowerCase()!==ad.toLowerCase());
+  db.portalTaslak.push({ad,tarih:Date.now(),sepet:portalSepet.map(k=>({...k,renkler:k.renkler?k.renkler.map(r=>({...r})):undefined})),not:portalNot,tel:portalTel,sehir:portalSehir,adres:portalAdres});
+  save();toast('📝 Sepet kaydedildi — istediğinde geri yükleyebilirsin');}
+function portalTaslakVar(){const ad=(portalMusAd||'').trim().toLowerCase();if(!ad)return null;return (db.portalTaslak||[]).find(t=>(t.ad||'').toLowerCase()===ad)||null}
+function portalTaslakYukle(){const t=portalTaslakVar();if(!t)return;portalSepet=t.sepet.map(k=>({...k,renkler:k.renkler?k.renkler.map(r=>({...r})):undefined}));portalNot=t.not||'';if(t.tel)portalTel=t.tel;if(t.sehir)portalSehir=t.sehir;if(t.adres)portalAdres=t.adres;portalView='sepet';portalCiz();toast('Kayıtlı sepetin yüklendi 🛒');}
+function portalTaslakSil(){const ad=(portalMusAd||'').trim().toLowerCase();db.portalTaslak=(db.portalTaslak||[]).filter(t=>(t.ad||'').toLowerCase()!==ad);save();portalCiz()}
+// katalogda son siparişi hızlı tekrarla
+function portalSonSiparis(){const g=portalSiparislerim().gecmis;return g.length?g[0]:null}
 function portalStokBildir(uid){portalIstek(uid)}
 function portalIstek(uid){const u=urun(uid);if(!u)return;db.stokBildirim=db.stokBildirim||[];
   const ad=(portalMusAd||'').trim();
@@ -2730,7 +2755,9 @@ function portalCiz(){
       <label>Telefon *</label><input id="p-tel" type="tel" value="${esc(portalTel)}" placeholder="0532 000 00 00" oninput="portalTel=this.value">
       <div class="g2"><div><label>Şehir</label><input id="p-sehir" value="${esc(portalSehir)}" placeholder="İstanbul" oninput="portalSehir=this.value"></div><div><label>Adres</label><input id="p-adres" value="${esc(portalAdres)}" placeholder="mahalle / cadde" oninput="portalAdres=this.value"></div></div>
       <label>Sipariş notu</label><input id="p-not" value="${esc(portalNot)}" placeholder="teslimat, özel istek..." oninput="portalNot=this.value">
-      <button class="btn g" style="margin-top:14px" onclick="portalGonder()">✓ Siparişi Gönder · ${TL(t)}</button>`:`<div style="text-align:center;padding:40px 20px"><div style="font-size:44px;opacity:.4">🛒</div><div class="mini" style="margin-top:10px">Sepetiniz boş</div><button class="btn ghost" style="margin:16px auto 0;max-width:220px" onclick="portalView='katalog';portalCiz()">Ürünlere Göz At</button></div>`}
+      ${(()=>{const eks=portalMinEksik();return eks>0?`<div class="warnbox" style="margin-top:12px">📦 Minimum sipariş <b>${+db.minSiparis} seri</b> — <b>${eks} seri</b> daha ekleyin</div>`:''})()}
+      <button class="btn g" style="margin-top:14px${portalMinEksik()>0?';opacity:.5':''}" onclick="portalGonder()">✓ Siparişi Gönder · ${TL(t)}</button>
+      <div class="g2" style="margin-top:9px"><button class="btn ghost sm" onclick="portalSepetPaylas()">📤 Sepeti Paylaş</button><button class="btn ghost sm" onclick="portalTaslakKaydet()">📝 Taslak Kaydet</button></div>`:`<div style="text-align:center;padding:40px 20px"><div style="font-size:44px;opacity:.4">🛒</div><div class="mini" style="margin-top:10px">Sepetiniz boş</div>${portalTaslakVar()?`<button class="btn" style="margin:16px auto 0;max-width:260px" onclick="portalTaslakYukle()">📝 Kayıtlı sepetini yükle</button>`:''}<button class="btn ghost" style="margin:12px auto 0;max-width:220px" onclick="portalView='katalog';portalCiz()">Ürünlere Göz At</button></div>`}
     </div>`;
   }else{
     const aktifAll=db.urunler.filter(u=>!u.pasif);
@@ -2747,6 +2774,11 @@ function portalCiz(){
     body=`<div style="padding:13px 14px ${cartN?'82px':'16px'}">
       <div style="display:flex;gap:8px;margin-bottom:12px"><div style="position:relative;flex:1"><span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:15px;opacity:.5">🔍</span><input class="psearch" value="${esc(portalArama)}" placeholder="Ürün ara..." oninput="portalArama=this.value;portalCiz();const el=document.getElementById('p-search');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}" id="p-search"></div>
       <button onclick="portalFiltreAcik=!portalFiltreAcik;portalCiz()" style="flex:0 0 auto;border:none;border-radius:13px;background:${filtN||portalFiltreAcik?'var(--ind2)':'var(--card)'};color:${filtN||portalFiltreAcik?'#fff':'var(--ink)'};font-weight:700;font-size:13px;padding:0 14px;box-shadow:0 2px 8px rgba(20,29,43,.06);cursor:pointer">⚙️${filtN?' '+filtN:''}</button></div>`;
+    // hızlı erişim: kayıtlı taslak veya son sipariş
+    if(!q&&!filtN&&!portalKat){const tsl=portalTaslakVar(),son=portalSonSiparis();
+      if(tsl)body+=`<div class="card" style="padding:11px 13px;margin-bottom:11px;background:var(--thr-s);border-color:var(--thr);display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><b style="font-size:13px">📝 Kayıtlı sepetin var</b><div class="mini">${tsl.sepet.reduce((a,k)=>a+k.mik,0)} ${esc((tsl.sepet[0]||{}).birim||'seri')} · ${tstr(tsl.tarih)}</div></div><div style="display:flex;gap:6px;flex:0 0 auto"><button class="btn ghost sm" style="width:auto;margin:0;padding:7px 9px" onclick="portalTaslakSil()">✕</button><button class="btn g sm" style="width:auto;margin:0;padding:7px 13px" onclick="portalTaslakYukle()">Yükle</button></div></div>`;
+      else if(son)body+=`<div class="card" style="padding:11px 13px;margin-bottom:11px;background:var(--good-s);border-color:var(--good);display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><b style="font-size:13px">🔁 Son siparişini tekrarla</b><div class="mini">${son.kalemler.map(k=>esc(k.urun)+' ×'+k.mik).join(', ')}</div></div><button class="btn g sm" style="width:auto;margin:0;padding:7px 13px;flex:0 0 auto" onclick="portalTekrar(${son.id})">Sepete Ekle</button></div>`;
+    }
     if(portalFiltreAcik){
       body+=`<div class="card" style="padding:12px 13px;margin-bottom:12px">`;
       if(kumaslar.length){body+=`<div class="mini" style="font-weight:800;margin-bottom:6px">Kumaş</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">`+kumaslar.map(k=>`<div onclick="portalKumas=portalKumas==='${esc(k)}'?'':'${esc(k)}';portalCiz()" class="pchip${portalKumas===k?' on':''}">${esc(k)}</div>`).join('')+`</div>`}
