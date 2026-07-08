@@ -2511,7 +2511,8 @@ function isEmriA4(id){
 
 /* ---------- PORTAL ---------- */
 function rPortal(){
-  let html=`<div class="g2"><button class="btn sm" onclick="portalAc()">👁️ Müşteri Sipariş Ekranı</button><button class="btn ghost sm" onclick="portalPaylas()">🔗 Linki Paylaş</button></div>
+  let html=`<div class="g2"><button class="btn sm" onclick="portalOnizle()">👁️ Müşteri Sipariş Ekranı</button><button class="btn ghost sm" onclick="portalPaylas()">🔗 Linki Paylaş</button></div>
+    <div style="margin-top:8px"><button class="btn ghost sm" onclick="portalKullanicilar()">👤 Müşteri Giriş Bilgileri (kullanıcı adı / şifre)</button></div>
     <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="kademeDuzenle()">⚙️ Toptan İndirim Kademeleri${kademeler().length?' · '+kademeler().map(k=>k.min+'+%'+k.ind).join(' '):''}</button><button class="btn ghost sm" onclick="minSiparisDuzenle()">📦 Min. Sipariş${+db.minSiparis>0?' · '+(+db.minSiparis)+' seri':''}</button></div>
     <div style="margin-top:8px"><button class="btn ghost sm" onclick="kampanyaDuzenle()">📣 Kampanya / Vitrin${kampanyaAktif()?' · <b style="color:var(--good)">yayında</b>':''}</button></div>
     <div class="mini" style="margin:8px 3px">Müşteriler katalogdan seçip sipariş verir. Aynı cihazda demo/kiosk çalışır; farklı cihazdan gelmesi için sunucuda yayınlanması gerekir.</div>`;
@@ -2600,6 +2601,26 @@ function kampanyaKaydet(){const bas=($('kmp-bas')?.value||'').trim();if(!bas)ret
   save();closeM();rPortal();toast('📣 Kampanya yayınlandı ✓');}
 function kademeKaydet(){db.kademe=_kad.filter(k=>+k.min>0&&+k.ind>0).sort((a,b)=>a.min-b.min);save();closeM();rPortal();toast('İndirim kademeleri kaydedildi ✓')}
 function portalRed(id){db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);save();rPortal();toast('Sipariş reddedildi')}
+// müşteri portal giriş bilgileri (kullanıcı adı / şifre)
+function portalKullanicilar(){open_('👤 Müşteri Giriş Bilgileri',`<div class="mini">Her müşteriye portal için <b>kullanıcı adı ve şifre</b> verin. Müşteri bunlarla girip yalnızca kendi siparişlerini ve cari durumunu görür. (Gerçekten kendi telefonundan girebilmesi için uygulamanın sunucuda yayınlanması gerekir.)</div><input id="pk-ara" placeholder="🔍 müşteri ara" oninput="cizPortalKul(this.value)" style="margin-top:10px"><div id="pk-list" style="margin-top:10px;max-height:60vh;overflow:auto"></div>`);cizPortalKul('')}
+function cizPortalKul(q){const el=$('pk-list');if(!el)return;q=(q||'').trim().toLowerCase();
+  const ms=db.cariler.filter(c=>c.tip==='musteri'&&(!q||(c.ad||'').toLowerCase().includes(q)));
+  el.innerHTML=ms.length?ms.map(m=>`<div class="card" style="padding:10px 12px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center"><b>${esc(m.ad)}</b>${m.kullanici?`<span class="tag" style="background:var(--good-s);color:var(--good)">✓ tanımlı</span>`:`<span class="tag">giriş yok</span>`}</div>
+    <div class="g2" style="margin-top:8px"><div><label style="font-size:11px">Kullanıcı adı</label><input value="${esc(m.kullanici||'')}" placeholder="ör. yilmaz" autocapitalize="off" oninput="cariKulSet(${m.id},'kullanici',this.value)" style="margin:2px 0 0"></div><div><label style="font-size:11px">Şifre</label><input value="${esc(m.sifre||'')}" placeholder="şifre" oninput="cariKulSet(${m.id},'sifre',this.value)" style="margin:2px 0 0"></div></div>
+    <div style="display:flex;gap:7px;margin-top:8px"><button class="btn ghost sm" style="margin:0" onclick="cariKulUret(${m.id})">🎲 Otomatik oluştur</button>${m.kullanici?`<button class="btn ghost sm" style="margin:0" onclick="cariKulPaylas(${m.id})">📤 Bilgileri Gönder</button><button class="btn ghost sm danger" style="margin:0;flex:0 0 auto" onclick="cariKulSil(${m.id})">✕</button>`:''}</div></div>`).join(''):'<div class="mini" style="text-align:center;padding:20px">Müşteri bulunamadı</div>';}
+function cariKulSet(id,f,v){const c=cari(id);if(c){c[f]=(v||'').trim();save()}}
+function cariKulUret(id){const c=cari(id);if(!c)return;const tr={'ç':'c','ğ':'g','ı':'i','ö':'o','ş':'s','ü':'u'};
+  let base=(c.ad||'m').toLowerCase().replace(/[çğıöşü]/g,x=>tr[x]).replace(/[^a-z0-9]/g,'').slice(0,10)||'musteri';
+  // benzersiz kullanıcı adı
+  let kad=base,n=1;while(db.cariler.some(x=>x.id!==id&&(x.kullanici||'').toLowerCase()===kad)){kad=base+(++n)}
+  c.kullanici=kad;c.sifre=''+Math.floor(1000+Math.random()*9000);save();cizPortalKul(($('pk-ara')||{}).value||'');toast('Giriş bilgisi oluşturuldu ✓')}
+function cariKulSil(id){const c=cari(id);if(!c)return;askConfirm(esc(c.ad)+' portal girişini silmek istiyor musun?',()=>{c.kullanici='';c.sifre='';save();cizPortalKul(($('pk-ara')||{}).value||'');toast('Giriş bilgisi silindi')},'Sil')}
+function cariKulPaylas(id){const c=cari(id);if(!c||!c.kullanici)return;const url=location.href.split('#')[0]+'#siparis';
+  const t=`${db.firma||'Öz Tekstil'} toptan sipariş portalı giriş bilgileriniz:\n\n🔗 ${url}\n👤 Kullanıcı adı: ${c.kullanici}\n🔑 Şifre: ${c.sifre}\n\nGiriş yapıp katalogdan sipariş verebilirsiniz.`;
+  let ph=((c.tel||'').replace(/\D/g,''));if(ph){if(ph.length===10)ph='90'+ph;else if(ph[0]==='0')ph='9'+ph}
+  if(navigator.share){navigator.share({text:t}).catch(()=>{});return}
+  if(ph)window.open(`https://wa.me/${ph}?text=${encodeURIComponent(t)}`,'_blank');
+  else if(navigator.clipboard)navigator.clipboard.writeText(t).then(()=>toast('Bilgiler kopyalandı ✓')).catch(()=>{});}
 function portalPaylas(){const url=location.href.split('#')[0]+'#siparis';const t=`${db.firma||'Öz Tekstil'} toptan sipariş kataloğu:\n${url}\n\nKatalogdan ürün seçip sipariş verebilirsiniz.`;
   if(navigator.share)navigator.share({text:t}).catch(()=>{});
   else if(navigator.clipboard)navigator.clipboard.writeText(t).then(()=>toast('Sipariş linki kopyalandı ✓')).catch(()=>open_('Sipariş Linki',`<textarea readonly style="width:100%;height:100px;font-size:12px">${esc(t)}</textarea>`));
@@ -2607,7 +2628,20 @@ function portalPaylas(){const url=location.href.split('#')[0]+'#siparis';const t
 }
 /* ---------- MÜŞTERİ PORTALI (müşteri tarafı) ---------- */
 let portalSepet=[], portalMusAd='', portalNot='', portalKat='', portalView='katalog', portalUrunId=0, portalArama='', portalKumas='', portalBattal=false, portalFiltreAcik=false, portalTel='', portalAdres='', portalSehir='', portalFotoIx=0, portalSezon='';
-function portalAc(){portalView='katalog';document.getElementById('pov').style.display='block';window.scrollTo(0,0);portalCiz()}
+let portalGirisId=0, portalPreview=false, portalGKad='', portalGSif='';
+try{portalGirisId=+localStorage.getItem('oz_portal_oturum')||0}catch(e){}
+function portalMusteriGiris(){return portalGirisId?cari(portalGirisId):null}
+function portalAc(){portalPreview=false;const m=portalMusteriGiris();if(m){portalMusAd=m.ad;portalView='katalog'}else portalView='giris';document.getElementById('pov').style.display='block';window.scrollTo(0,0);portalCiz()}
+function portalOnizle(){portalPreview=true;portalView='katalog';document.getElementById('pov').style.display='block';window.scrollTo(0,0);portalCiz()}
+function portalLogin(){const k=(portalGKad||'').trim().toLowerCase(),s=(portalGSif||'');
+  if(!k||!s)return toast('Kullanıcı adı ve şifre girin');
+  const m=db.cariler.find(c=>c.tip==='musteri'&&(c.kullanici||'').trim().toLowerCase()===k&&(c.sifre||'')===s);
+  if(!m)return toast('Kullanıcı adı veya şifre hatalı');
+  portalGirisId=m.id;portalMusAd=m.ad;portalPreview=false;portalGKad='';portalGSif='';
+  if(m.tel)portalTel=m.tel;if(m.sehir)portalSehir=m.sehir;if(m.adres)portalAdres=m.adres;
+  try{localStorage.setItem('oz_portal_oturum',m.id)}catch(e){}
+  portalView='katalog';portalCiz();toast('Hoş geldin '+m.ad+' 👋');}
+function portalCikis(){portalGirisId=0;portalMusAd='';portalSepet=[];portalTel='';portalSehir='';portalAdres='';try{localStorage.removeItem('oz_portal_oturum')}catch(e){}portalPreview=false;portalView='giris';portalCiz()}
 function portalKapat(){document.getElementById('pov').style.display='none';if(_geriT){clearInterval(_geriT);_geriT=null}portalSepet=[];portalView='katalog';portalKat='';portalKumas='';portalSezon='';portalBattal=false;portalFiltreAcik=false;portalArama='';if(location.hash==='#siparis')history.replaceState(null,'',''+location.pathname);if(typeof cur!=='undefined')go('portal')}
 // güncel birim fiyat: promosyon (indirimli) varsa o, yoksa satış
 function portalFiyat(u){const s=+u.satis||0,p=+u.promosyon||0;return (p>0&&p<s)?p:s}
@@ -2742,12 +2776,30 @@ function portalRafKart(u){const kap=urunKapak(u);return `<div onclick="portalUru
 function portalRaf(baslik,list){if(!list.length)return '';return `<div style="margin:2px -14px 16px"><div style="font-size:15px;font-weight:800;padding:0 14px 9px">${baslik}</div><div style="display:flex;gap:10px;overflow-x:auto;padding:0 14px 4px">${list.map(portalRafKart).join('')}</div></div>`;}
 function portalCiz(){
   const pov=document.getElementById('pov');if(!pov)return;
+  // giriş kapısı: giriş yapılmamış ve önizleme değilse giriş ekranı
+  if(!portalPreview&&!portalMusteriGiris())portalView='giris';
   const cartN=portalSepet.reduce((a,k)=>a+k.mik,0),cartT=portalTotal();
   const kadHint=kademeler().length?kademeler().map(k=>`${k.min}+ %${k.ind}`).join(' · '):'';
   const logo=db.firmaLogo?`<img src="${db.firmaLogo}" style="height:30px">`:`<div style="font-size:19px;font-weight:800">${esc(db.firma||'Öz Tekstil')}</div>`;
   const cartBtn=`<button onclick="portalView='sepet';portalCiz()" style="position:relative;background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:11px;padding:9px 12px;font-size:17px;cursor:pointer">🛒${cartN?`<span class="pcartbadge">${cartN}</span>`:''}</button>`;
   const hesapBtn=`<button onclick="portalView='hesap';portalCiz()" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:11px;padding:9px 12px;font-size:17px;cursor:pointer">👤</button>`;
-  const head=`<div style="background:linear-gradient(135deg,#24487a,#2d6cdf);color:#fff;padding:16px 15px 15px;position:sticky;top:0;z-index:5"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0">${logo}<div style="font-size:11.5px;opacity:.9;margin-top:1px">🛍️ Toptan Katalog</div></div><div style="display:flex;gap:7px;flex:0 0 auto">${hesapBtn}${cartBtn}<button onclick="portalKapat()" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:11px;padding:9px 11px;font-size:12px;font-weight:700;cursor:pointer">✕</button></div></div></div>`;
+  if(portalView==='giris'){
+    pov.innerHTML=`<div style="max-width:520px;margin:0 auto;min-height:100%"><div style="background:linear-gradient(135deg,#24487a,#2d6cdf);color:#fff;padding:16px 15px 15px;display:flex;justify-content:space-between;align-items:center">${logo}<button onclick="portalKapat()" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:11px;padding:9px 11px;font-size:12px;font-weight:700;cursor:pointer">✕</button></div>
+      <div style="padding:40px 22px;text-align:center"><div style="font-size:52px">🛍️</div>
+      <div style="font-size:21px;font-weight:800;margin-top:10px">${esc(db.firma||'Öz Tekstil')} Toptan</div>
+      <div class="mini" style="margin-top:5px">Sipariş vermek için giriş yapın</div>
+      <div style="max-width:330px;margin:22px auto 0;text-align:left">
+        <label>Kullanıcı adı</label><input id="pg-kad" value="${esc(portalGKad)}" placeholder="ör. yilmaz" oninput="portalGKad=this.value" autocapitalize="off" autocomplete="username">
+        <label>Şifre</label><input id="pg-sif" type="password" value="${esc(portalGSif)}" placeholder="••••••" oninput="portalGSif=this.value" autocomplete="current-password" onkeydown="if(event.key==='Enter')portalLogin()">
+        <button class="btn g" style="margin-top:15px" onclick="portalLogin()">Giriş Yap</button>
+        <div class="mini" style="text-align:center;margin-top:16px;line-height:1.5">Giriş bilginiz yoksa <b>${esc(db.firma||'firma')}</b> ile iletişime geçin.</div>
+      </div></div></div>`;
+    if(_geriT){clearInterval(_geriT);_geriT=null}
+    return;
+  }
+  const cikisBtn=portalMusteriGiris()?`<button onclick="portalCikis()" title="Çıkış" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:11px;padding:9px 11px;font-size:14px;cursor:pointer">⎋</button>`:'';
+  const onizChip=portalPreview?`<div style="background:#111a2b;color:#fff;text-align:center;font-size:11.5px;font-weight:700;padding:5px">👁️ Yönetici önizlemesi — giriş atlandı</div>`:'';
+  const head=onizChip+`<div style="background:linear-gradient(135deg,#24487a,#2d6cdf);color:#fff;padding:16px 15px 15px;position:sticky;top:0;z-index:5"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0">${logo}<div style="font-size:11.5px;opacity:.9;margin-top:1px">🛍️ Toptan Katalog${portalMusteriGiris()?' · '+esc(portalMusteriGiris().ad):''}</div></div><div style="display:flex;gap:7px;flex:0 0 auto">${hesapBtn}${cartBtn}${cikisBtn}<button onclick="portalKapat()" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:11px;padding:9px 11px;font-size:12px;font-weight:700;cursor:pointer">✕</button></div></div></div>`;
   let body='';
   if(portalView==='tesekkur'){
     body=`<div style="padding:56px 24px;text-align:center"><div style="font-size:58px">✅</div><div style="font-size:21px;font-weight:800;margin-top:12px">Siparişiniz Alındı!</div><div class="mini" style="margin-top:8px;font-size:14px;line-height:1.6">${esc(db.firma||'Öz Tekstil')} siparişinizi inceleyip onaylayacak. Onaylandığında hazırlanıp size bilgi verilecek.</div><button class="btn" style="margin:24px auto 0;max-width:280px" onclick="portalView='katalog';portalCiz()">🛍️ Alışverişe Devam</button><button class="btn ghost" style="margin:8px auto 0;max-width:280px" onclick="portalKapat()">Kapat</button></div>`;
@@ -2757,8 +2809,7 @@ function portalCiz(){
     body=`<div style="padding:14px">
       <div onclick="portalView='katalog';portalCiz()" style="color:var(--ind2);font-weight:700;font-size:13.5px;cursor:pointer;margin-bottom:10px">‹ Katalog</div>
       <div class="sec" style="margin-top:0">👤 Hesabım</div>
-      <label>Adınız / Firmanız</label><input id="p-hes-ad" value="${esc(portalMusAd)}" placeholder="ör. Yılmaz Tekstil" oninput="portalMusAd=this.value" onchange="portalCiz()">
-      <div class="mini" style="margin-top:4px">Sipariş geçmişinizi ve bakiyenizi görmek için adınızı girin.</div>
+      ${portalMusteriGiris()?`<div class="card" style="padding:12px 14px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:800;font-size:15px">${esc(portalMusteriGiris().ad)}</div><div class="mini">${esc(portalMusteriGiris().tel||'')||'giriş yapıldı'}</div></div><button class="btn ghost sm" style="width:auto;margin:0;padding:8px 13px" onclick="portalCikis()">⎋ Çıkış</button></div>`:`<label>Adınız / Firmanız</label><input id="p-hes-ad" value="${esc(portalMusAd)}" placeholder="ör. Yılmaz Tekstil" oninput="portalMusAd=this.value" onchange="portalCiz()"><div class="mini" style="margin-top:4px">Sipariş geçmişinizi ve bakiyenizi görmek için adınızı girin.</div>`}
       ${m?`<div class="card" style="margin-top:12px;padding:13px 15px;background:${m.bakiye>0?'var(--warn-s)':'var(--good-s)'};border-color:${m.bakiye>0?'var(--warn)':'var(--good)'}"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11.5px;font-weight:700;color:var(--sub)">💳 CARİ DURUMUM</div><div class="mini">${m.limit?'limit '+TL(m.limit):'kayıtlı müşteri'}${bekleyen.length?' · '+bekleyen.length+' bekleyen sipariş':''}</div></div><div style="text-align:right"><div style="font-size:19px;font-weight:800;color:${m.bakiye>0?'var(--warn)':'var(--good)'}">${TL(Math.abs(m.bakiye))}</div><div class="mini">${m.bakiye>0?'borç':m.bakiye<0?'alacak':'kapalı'}</div></div></div></div>`:''}
       ${favs.length?`<div class="sec">❤️ Favorilerim (${favs.length})</div><div class="pgrid">${favs.map(u=>portalKart(u,portalCokSatan())).join('')}</div>`:''}
       ${bekleyen.length?`<div class="sec">⏳ Bekleyen Siparişlerim</div>`+bekleyen.map(o=>`<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between"><b style="font-size:13px">${tstr(o.tarih)}${o.teklif?' · <span style="color:var(--pur)">teklifli</span>':''}</b><b style="color:var(--ind)">${TL(o.teklif?o.teklifTutar:o.tutar)}</b></div><div class="mini" style="margin-top:3px">${o.kalemler.map(k=>esc(k.urun)+' ×'+k.mik).join(', ')}</div><div class="mini" style="color:var(--warn);margin-top:3px">onay bekliyor</div></div>`).join(''):''}
@@ -2796,7 +2847,7 @@ function portalCiz(){
       +(()=>{const liste=portalListeTotal(),net=portalTotal(),kazanc=liste-net;return kazanc>0?`<div class="okbox" style="margin-top:4px">🎉 Miktar indirimiyle <b>${TL(kazanc)}</b> kazandınız!</div>`:(kadHint?`<div class="mini" style="margin:8px 3px">💡 Toptan indirim: ${kadHint} — daha çok al, birim fiyat düşsün</div>`:'')})()
       +`<div class="total" style="margin-top:12px"><div><div class="l">Toplam</div><div class="v">${TL(t)}</div></div></div>
       <div class="sec">İletişim & Teslimat</div>
-      <label>Adınız / Firmanız *</label><input id="p-ad" value="${esc(portalMusAd)}" placeholder="ör. Yılmaz Tekstil" oninput="portalMusAd=this.value" onchange="portalMusEslesme()">
+      <label>Adınız / Firmanız *</label><input id="p-ad" value="${esc(portalMusAd)}" placeholder="ör. Yılmaz Tekstil" ${portalMusteriGiris()?'readonly style="opacity:.7"':'oninput="portalMusAd=this.value" onchange="portalMusEslesme()"'}>
       <div id="p-eslesme"></div>
       <label>Telefon *</label><input id="p-tel" type="tel" value="${esc(portalTel)}" placeholder="0532 000 00 00" oninput="portalTel=this.value">
       <div class="g2"><div><label>Şehir</label><input id="p-sehir" value="${esc(portalSehir)}" placeholder="İstanbul" oninput="portalSehir=this.value"></div><div><label>Adres</label><input id="p-adres" value="${esc(portalAdres)}" placeholder="mahalle / cadde" oninput="portalAdres=this.value"></div></div>
