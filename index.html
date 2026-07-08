@@ -1902,14 +1902,10 @@ function formIsEmri(){
     <div class="sec" style="margin-top:12px">🧵 Malzeme / Kumaş <a onclick="kumasStok()">📦 stoğum</a> · <a onclick="ieMalEkle()">+ malzeme</a></div>
     <div class="mini">Adını yaz — stokta varsa öneriden seç. Yoksa <b>＋ stoğa tanımla</b> ile ekle. Kilo/metre + TL/dolar seçebilirsin. Elinde yoksa <b>🛒 alınacak</b> işaretle.</div>
     <div id="ie-mal" style="margin-top:6px"></div>
-    <div class="sec" style="margin-top:12px">🏭 Üretim Durakları</div>
-    <div class="mini">Kesim · Dikim · Ütü <b>zorunlu</b>. Nakış/Baskı ürüne göre işaretle. Her durağa fason + ₺/adet gir.</div>
-    ${fs.length?'':'<div class="warnbox" style="margin-top:6px">Hiç fason firma yok. Cari › Fason\'dan ekleyebilirsin.</div>'}
-    <div id="ie-durak" style="margin-top:6px">${ISTASYON.map((s,x)=>{const mec=MECBURI.includes(s);return `
-      <label class="ckrow" style="margin:8px 0 0"><input type="checkbox" id="dk-${x}" ${mec||x===0?'checked':''} ${mec?'disabled':''} onchange="$('dkf-${x}').style.display=this.checked?'block':'none'"><span>${s}${mec?' <span class="pill low" style="vertical-align:middle">zorunlu</span>':''}</span></label>
-      <div id="dkf-${x}" style="display:${mec||x===0?'block':'none'};padding-left:8px">
-        <div class="g2"><div><label style="margin-top:4px">Fason firma</label><select id="dkfas-${x}" onchange="ieDurakFiyat(${x})"><option value="0">— seç / dışarı —</option>${fs.map(f=>`<option value="${f.id}">${esc(f.ad)}${(f.fiyatlar&&f.fiyatlar[s])?' · ₺'+f.fiyatlar[s]:''}</option>`).join('')}</select></div><div><label style="margin-top:4px">₺ / adet</label><input id="dkuc-${x}" type="number" inputmode="numeric" placeholder="0"></div></div>
-      </div>`}).join('')}</div>
+    <div class="sec" style="margin-top:12px">✂️ Kesim (ilk durak)</div>
+    <div class="mini">İş emri önce <b>kesime</b> gider. Nereye dikileceği/nakış olup olmayacağı sonra belli olur — o aşamaları <b>kesim bitince "Durak Ekle" ile</b> eklersin.</div>
+    ${fs.length?'':'<div class="warnbox" style="margin-top:6px">Hiç fason firma yok. Cari › Fason\'dan ekleyebilirsin (yine de açabilirsin).</div>'}
+    <div class="g2" style="margin-top:6px"><div><label>Kesimci (fason)</label><select id="dk-kesim-fas" onchange="ieKesimFiyat()"><option value="0">— seç / dışarı —</option>${fs.map(f=>`<option value="${f.id}">${esc(f.ad)}${(f.fiyatlar&&f.fiyatlar['Kesim'])?' · ₺'+f.fiyatlar['Kesim']:''}</option>`).join('')}</select></div><div><label>₺ / adet</label><input id="dk-kesim-uc" type="number" inputmode="numeric" placeholder="0"></div></div>
     <label style="margin-top:12px">Genel Gider (₺/adet)</label><input id="ie-gg" type="number" inputmode="numeric" value="12" placeholder="10-15">
     <div class="mini">Elektrik, işçilik payı, nakliye vb. — birim maliyete eklenir.</div>
     <button class="btn" style="margin-top:14px" onclick="kaydetIsEmri()">İş Emri Aç</button>`);
@@ -1937,6 +1933,26 @@ function cizIeFoto(){const b=$('ie-foto-box');if(!b)return;
 function ieFotoSec(input){const f=input.files&&input.files[0];if(!f)return;resizeImg(f,d=>{ieFoto=d;cizIeFoto()},1200,0.75)}
 function ieDurakFiyat(x){const fid=+($('dkfas-'+x)?.value||0);const uc=$('dkuc-'+x);if(!fid||!uc)return;const f=cari(fid);const s=ISTASYON[x];
   if(f&&f.fiyatlar&&f.fiyatlar[s])uc.value=f.fiyatlar[s];}
+function ieKesimFiyat(){const fid=+($('dk-kesim-fas')?.value||0);const uc=$('dk-kesim-uc');if(!fid||!uc)return;const f=cari(fid);if(f&&f.fiyatlar&&f.fiyatlar['Kesim'])uc.value=f.fiyatlar['Kesim'];}
+/* --- Sonraki durak ekle (dinamik pipeline) --- */
+function formDurakEkle(id){const i=db.isemirleri.find(v=>v.id===id);if(!i||i.durum==='tamam')return;const fs=fasonlar();
+  const secenek=ISTASYON.filter(s=>s!=='Kesim');
+  open_('➕ Sonraki Durak Ekle · #'+id,`
+    <div class="mini">Mal şimdi nereye gidiyor? İşlemi seç, fasonu ve ücreti gir. Önceki duraktan çıkan mal buraya akar.</div>
+    <label>İşlem</label><select id="de-islem" onchange="deFiyat()">${secenek.map(s=>`<option>${s}</option>`).join('')}<option value="__x">Diğer (yaz)</option></select>
+    <input id="de-ozel" placeholder="işlem adı" style="display:none;margin-top:6px">
+    <div class="g2"><div><label>Fason firma</label><select id="de-fas" onchange="deFiyat()"><option value="0">— seç / dışarı —</option>${fs.map(f=>`<option value="${f.id}">${esc(f.ad)}</option>`).join('')}</select></div><div><label>₺ / adet</label><input id="de-uc" type="number" inputmode="numeric" placeholder="0"></div></div>
+    <button class="btn" onclick="durakEkleKaydet(${id})">Durağı Ekle</button>`);
+  const sel=$('de-islem');if(sel)sel.onchange=function(){$('de-ozel').style.display=this.value==='__x'?'block':'none';deFiyat()};
+}
+function deFiyat(){const fid=+($('de-fas')?.value||0);const uc=$('de-uc');const op=$('de-islem')?.value;if(!fid||!uc||op==='__x')return;const f=cari(fid);if(f&&f.fiyatlar&&f.fiyatlar[op]&&!uc.value)uc.value=f.fiyatlar[op];}
+function durakEkleKaydet(id){const i=db.isemirleri.find(v=>v.id===id);const op=$('de-islem').value;const ad=op==='__x'?($('de-ozel').value||'').trim():op;
+  if(!ad)return toast('İşlem adı gir');
+  const yeni={ad,fasonId:+($('de-fas').value||0)||null,ucret:+($('de-uc').value||0)||0,gonderilen:0,gelen:0,defolu:0,gonderilenRenk:{},renkGelen:{},renkDefo:{},durum:'bekliyor',borclandi:false,borclanan:0,foto:'',not:''};
+  const prev=i.duraklar[i.duraklar.length-1];i.duraklar.push(yeni);
+  if(prev&&prev.durum==='tamam'){yeni.gonderilenRenk={...prev.renkGelen};yeni.gonderilen=prev.gelen;yeni.durum='devam';yeni.baslama=Date.now()}
+  save();closeM();uretimDetay(id);toast(ad+' durağı eklendi ✓');
+}
 function ieRenkEkle(){ieRenk.push({ad:'',adet:0});cizIeRenk();ieToplamCiz()}
 function ieRenkSil(i){ieRenk.splice(i,1);cizIeRenk();ieToplamCiz()}
 function ieRenkSet(i,k,v){const r=ieRenk[i];if(!r)return;if(k==='adet'){r.adet=+v||0;ieToplamCiz()}else{r.ad=v;const sw=document.querySelector('#ie-renk .rrow[data-i="'+i+'"] .sw');if(sw)sw.style.background=hexFromAd(v)||'#ccc'}}
@@ -1981,13 +1997,9 @@ function kaydetIsEmri(){
   if(!renkDagilim.length)return toast('En az bir renk ve adet gir (toplam buradan hesaplanır)');
   const hedef=renkDagilim.reduce((a,r)=>a+r.adet,0);
   const gun=+$('ie-gun').value||15;const birim=$('ie-birim').value||'seri';
-  // zorunlu duraklar
-  const eksikMec=MECBURI.filter(s=>{const x=ISTASYON.indexOf(s);return !($('dk-'+x)&&$('dk-'+x).checked)});
-  if(eksikMec.length)return toast('Zorunlu durak(lar) seçili olmalı: '+eksikMec.join(', '));
-  const duraklar=[];ISTASYON.forEach((s,x)=>{if($('dk-'+x)&&$('dk-'+x).checked){duraklar.push({ad:s,fasonId:+($('dkfas-'+x)?.value||0)||null,ucret:+($('dkuc-'+x)?.value||0)||0,gonderilen:0,gelen:0,defolu:0,gonderilenRenk:{},renkGelen:{},renkDefo:{},durum:'bekliyor',borclandi:false,borclanan:0,foto:'',not:''})}});
-  if(!duraklar.length)return toast('En az bir durak seç');
   const renkMap={};renkDagilim.forEach(r=>renkMap[r.ad]=r.adet);
-  duraklar[0].gonderilen=hedef;duraklar[0].gonderilenRenk={...renkMap};duraklar[0].durum='devam';duraklar[0].baslama=Date.now();
+  // sadece Kesim ile başla — sonraki duraklar üretim ilerledikçe eklenir
+  const duraklar=[{ad:'Kesim',fasonId:+($('dk-kesim-fas')?.value||0)||null,ucret:+($('dk-kesim-uc')?.value||0)||0,gonderilen:hedef,gelen:0,defolu:0,gonderilenRenk:{...renkMap},renkGelen:{},renkDefo:{},durum:'devam',borclandi:false,borclanan:0,baslama:Date.now(),foto:'',not:''}];
   const malzeme=ieMal.filter(m=>(m.ad||'').trim()).map(m=>{const h=db.hammadde.find(x=>x.ad.toLowerCase()===m.ad.trim().toLowerCase());return {ad:m.ad.trim(),mik:+m.mik||0,birim:m.birim||(h?h.birim:'kg'),tutar:+m.tutar||0,pb:m.pb||'TL',durum:m.durum||'var',hid:h?h.id:null}});
   malzeme.forEach(m=>{if(m.durum==='var'&&m.hid){const h=db.hammadde.find(x=>x.id===m.hid);if(h)h.stok=Math.max(0,h.stok-m.mik)}});
   const seriAdet=birim==='seri'?Math.max(1,+$('ie-seriadet').value||1):1;
@@ -2030,6 +2042,8 @@ function uretimDetay(id){
       </div></div>`;
   });
   html+=`</div>`;
+  if(i.durum!=='tamam'){const sonD=i.duraklar[i.duraklar.length-1];const sonBitti=sonD&&sonD.durum==='tamam';
+    html+=`<button class="btn ${sonBitti?'g':'ghost'} sm" style="margin-top:10px" onclick="formDurakEkle(${id})">➕ Sonraki Durak Ekle${sonBitti?' — mal '+ieSaglam(i)+' '+(i.birim||'ad')+' hazır, nereye?':' (dikim / nakış / baskı / ütü...)'}</button>`;}
   html+=`<div class="sec">Malzeme / Kumaş <a onclick="ieMalDuzenle(${id})">${i.durum==='tamam'?'':'+ ekle / düzenle'}</a></div><div class="card" style="padding:4px 13px">`+((i.malzeme&&i.malzeme.length)?i.malzeme.map(m=>`<div class="kv"><span class="k">${esc(m.ad)}${m.durum==='alinacak'?' <span class="pill low">🛒 alınacak</span>':''}</span><span class="v">${m.mik?m.mik.toLocaleString('tr-TR')+' '+esc(m.birim||''):''}${kar&&m.tutar?' · '+money(m.tutar,m.pb||'TL'):''}</span></div>`).join(''):'<div class="mini" style="padding:8px 0">Malzeme eklenmedi.</div>')+`</div>`;
   if(i.durum!=='tamam'){html+=`<button class="btn g" style="margin-top:14px" onclick="isEmriTamamla(${id})">📦 Tamamla → ${saglam||'?'} ${esc(i.birim||'adet')} stoğa al</button>`;}
   else{html+=`<div class="okbox" style="margin-top:14px">✅ ${ieSaglam(i)} ${esc(i.birim||'adet')} stoğa girdi${kar?` · birim maliyet ${TL(birim)}`:''}</div>`;
@@ -2079,18 +2093,20 @@ function teslimRenkToggle(){_teslimRenk=!_teslimRenk;
 function durakTeslimAl(id,x){
   const i=db.isemirleri.find(v=>v.id===id);const d=i.duraklar[x];const gr=durakGonderRenk(i,x);
   d.gonderilenRenk=(d.gonderilenRenk&&Object.keys(d.gonderilenRenk).length)?d.gonderilenRenk:{...gr};
-  d.renkGelen=d.renkGelen||{};d.renkDefo=d.renkDefo||{};dFoto=d.foto||'';_teslimRenk=false;
+  d.renkGelen=d.renkGelen||{};d.renkDefo=d.renkDefo||{};dFoto=d.foto||'';
   const renkler=Object.keys(gr);
+  _teslimRenk=(d.ad==='Kesim')&&renkler.length>1; // kesimci renk renk sayar
   const kalanTop=renkler.reduce((a,c)=>a+Math.max(0,(gr[c]||0)-(d.renkGelen[c]||0)-(d.renkDefo[c]||0)),0);
   window._teslimKalan=kalanTop;window._teslimBirim=i.birim||'ad';
   const rows=renkler.map((c,k)=>{const gon=gr[c]||0,gel=d.renkGelen[c]||0,def=d.renkDefo[c]||0,kalan=Math.max(0,gon-gel-def);
     return `<div class="syrow"><span class="sw sm" style="background:${hexFromAd(c)||'#ccc'}"></span><div style="flex:1;min-width:0"><div class="synm" style="font-size:13px">${esc(c)}</div><div class="mini">gön ${gon} · geldi ${gel} · kalan <b>${kalan}</b></div></div><input id="tr-${k}" data-c="${esc(c)}" type="number" inputmode="numeric" value="${kalan||''}" placeholder="sağlam" class="syin" style="width:62px"><input id="td-${k}" type="number" inputmode="numeric" value="" placeholder="defo" class="syin" style="width:52px"></div>`}).join('');
   open_(d.ad+' · Teslim Al',`
     <div class="mini">${esc(fasonAd(d)||'Fason')} · fasonda kalan <b>${kalanTop}</b> ${esc(i.birim||'ad')}</div>
+    ${d.ad==='Kesim'?`<div class="infobox" style="margin-top:6px">✂️ Kesimde renk renk say — hangi renkten kaç kesildi.</div>`:''}
     ${!d.ucret?`<label>₺ / adet (anlaşılan ücret)</label><input id="t-uc" type="number" inputmode="numeric" placeholder="0">`:''}
-    <div id="t-simple"><div class="g2" style="margin-top:8px"><div><label>Gelen (sağlam)</label><input id="t-adet" type="number" inputmode="numeric" value="${kalanTop||''}" oninput="teslimHint()"></div><div><label>Defo / fire</label><input id="t-defo" type="number" inputmode="numeric" value="" oninput="teslimHint()"></div></div><div class="mini" id="t-hint" style="margin-top:5px"></div></div>
-    <div id="t-renkbox" style="display:none"><div class="card" style="padding:6px 12px;margin-top:8px">${rows}</div></div>
-    ${renkler.length>1?`<a id="t-renk-link" onclick="teslimRenkToggle()" style="display:inline-block;margin-top:8px;font-size:12.5px;color:var(--ind2);font-weight:800;cursor:pointer">🎨 Renk renk gir</a>`:''}
+    <div id="t-simple" style="display:${_teslimRenk?'none':'block'}"><div class="g2" style="margin-top:8px"><div><label>Gelen (sağlam)</label><input id="t-adet" type="number" inputmode="numeric" value="${kalanTop||''}" oninput="teslimHint()"></div><div><label>Defo / fire</label><input id="t-defo" type="number" inputmode="numeric" value="" oninput="teslimHint()"></div></div><div class="mini" id="t-hint" style="margin-top:5px"></div></div>
+    <div id="t-renkbox" style="display:${_teslimRenk?'block':'none'}"><div class="card" style="padding:6px 12px;margin-top:8px">${rows}</div></div>
+    ${renkler.length>1?`<a id="t-renk-link" onclick="teslimRenkToggle()" style="display:inline-block;margin-top:8px;font-size:12.5px;color:var(--ind2);font-weight:800;cursor:pointer">${_teslimRenk?'↩︎ Tek toplam gir':'🎨 Renk renk gir'}</a>`:''}
     <label style="margin-top:8px">Not</label><input id="t-not" placeholder="ör. lacivert 2 top eksik">
     <datalist id="t-eksik-dl">${['Kesim hatası','Boya / leke','Dikiş hatası','Fasonda kaldı','Sonra gelecek','Kayıp / eksik geldi','Ölçü/kalıp hatası'].map(x=>`<option value="${x}">`).join('')}</datalist>
     <label>Eksik / defo nedeni <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub)">(varsa)</span></label><input id="t-eksik" list="t-eksik-dl" placeholder="neden eksik/defo çıktı?">
