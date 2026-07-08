@@ -2338,11 +2338,13 @@ function rapDelta(cur,prev){if(prev==null)return '';if(!prev)return cur>0?`<span
 function barsHtml(rows,renk){const mx=rows.length?Math.max(...rows.map(r=>r.v)):1;
   return rows.length?`<div class="bars">`+rows.map(r=>`<div class="bar"><div class="nm">${esc(r.ad)}</div><div class="tr"><i style="width:${Math.max(4,Math.round(r.v/(mx||1)*100))}%;background:${renk||'linear-gradient(90deg,var(--ind2),#8fb3ec)'}"></i></div><div class="am">${r.g}</div></div>`).join('')+`</div>`:`<div class="mini">Bu dönemde veri yok</div>`;
 }
-// SVG alan/çizgi grafiği — pts:[{x,v}]
-function svgArea(pts,renk){
+// SVG alan/çizgi grafiği — pts:[{x,v,k?}] · karRenk verilirse ikinci (kâr) çizgisi
+function svgArea(pts,renk,karRenk){
   if(!pts.length)return `<div class="mini" style="text-align:center;padding:26px 0">Bu dönemde satış yok</div>`;
-  if(pts.length===1)pts=[{x:'',v:0},pts[0]];
-  const W=328,H=132,PB=20,PT=14,max=Math.max(...pts.map(p=>p.v),1),n=pts.length;
+  if(pts.length===1)pts=[{x:'',v:0,k:0},pts[0]];
+  const hasK=karRenk&&pts.some(p=>p.k!=null);
+  const W=328,H=132,PB=20,PT=14,n=pts.length;
+  const max=Math.max(...pts.map(p=>Math.max(+p.v||0,hasK?(+p.k||0):0)),1);
   const X=i=>(i/(n-1))*(W-14)+7,Y=v=>H-PB-(v/max)*(H-PB-PT);
   const lp=pts.map((p,i)=>`${i?'L':'M'}${X(i).toFixed(1)} ${Y(p.v).toFixed(1)}`).join(' ');
   const ap=`M${X(0).toFixed(1)} ${H-PB} `+pts.map((p,i)=>`L${X(i).toFixed(1)} ${Y(p.v).toFixed(1)}`).join(' ')+` L${X(n-1).toFixed(1)} ${H-PB} Z`;
@@ -2350,10 +2352,11 @@ function svgArea(pts,renk){
   const step=Math.max(1,Math.ceil(n/6));let lbl='';
   for(let i=0;i<n;i+=step)lbl+=`<text x="${X(i).toFixed(1)}" y="${H-5}" font-size="8.5" fill="var(--sub)" text-anchor="middle">${esc(pts[i].x)}</text>`;
   const gid='ga'+Math.round(max%99999)+n;
+  const karLine=hasK?`<path d="${pts.map((p,i)=>`${i?'L':'M'}${X(i).toFixed(1)} ${Y(+p.k||0).toFixed(1)}`).join(' ')}" fill="none" stroke="${karRenk}" stroke-width="2" stroke-dasharray="4 3" stroke-linejoin="round" stroke-linecap="round"/>`:'';
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;height:auto">
     <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${renk}" stop-opacity=".32"/><stop offset="1" stop-color="${renk}" stop-opacity="0"/></linearGradient></defs>
     <line x1="7" y1="${H-PB}" x2="${W-7}" y2="${H-PB}" stroke="var(--ln)" stroke-width="1"/>
-    <path d="${ap}" fill="url(#${gid})"/><path d="${lp}" fill="none" stroke="${renk}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="${ap}" fill="url(#${gid})"/><path d="${lp}" fill="none" stroke="${renk}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>${karLine}
     <circle cx="${X(pk).toFixed(1)}" cy="${Y(pts[pk].v).toFixed(1)}" r="3.4" fill="${renk}" stroke="#fff" stroke-width="1.5"/>
     <text x="${X(pk).toFixed(1)}" y="${Math.max(11,Y(pts[pk].v)-6).toFixed(1)}" font-size="9" font-weight="800" fill="${renk}" text-anchor="middle">${kisaTL(pts[pk].v)}</text>
     ${lbl}</svg>`;
@@ -2368,20 +2371,20 @@ function svgDonut(rows){
     <text x="${cx}" y="${cy-3}" font-size="10" fill="var(--sub)" text-anchor="middle">Toplam</text>
     <text x="${cx}" y="${cy+13}" font-size="14" font-weight="800" fill="var(--ink)" text-anchor="middle">${kisaTL(tot)}</text></svg>`;
 }
-function rapTrend(sat,toTL){
+function rapTrend(sat,toTL,karTL){
   const now=new Date(),AY=['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'],pts=[];
-  const [bas]=rapAralik();
+  const [bas]=rapAralik();const kf=karTL||(()=>null);
   if(rapDonem==='ay'||rapDonem==='gecen'){
     const d0=new Date(bas),yy=d0.getFullYear(),mm=d0.getMonth(),dim=new Date(yy,mm+1,0).getDate();
     const last=(rapDonem==='ay'&&now.getFullYear()===yy&&now.getMonth()===mm)?now.getDate():dim;
-    const buk=Array(dim+1).fill(0);sat.forEach(s=>{const d=new Date(s.tarih);buk[d.getDate()]+=toTL(s)});
-    for(let i=1;i<=last;i++)pts.push({x:''+i,v:buk[i]});
+    const bv=Array(dim+1).fill(0),bk=Array(dim+1).fill(0);sat.forEach(s=>{const d=new Date(s.tarih).getDate();bv[d]+=toTL(s);bk[d]+=(kf(s)||0)});
+    for(let i=1;i<=last;i++)pts.push({x:''+i,v:bv[i],k:karTL?bk[i]:null});
   }else if(rapDonem==='yil'){
-    const buk=Array(12).fill(0);sat.forEach(s=>{buk[new Date(s.tarih).getMonth()]+=toTL(s)});
-    for(let i=0;i<=now.getMonth();i++)pts.push({x:AY[i],v:buk[i]});
+    const bv=Array(12).fill(0),bk=Array(12).fill(0);sat.forEach(s=>{const m=new Date(s.tarih).getMonth();bv[m]+=toTL(s);bk[m]+=(kf(s)||0)});
+    for(let i=0;i<=now.getMonth();i++)pts.push({x:AY[i],v:bv[i],k:karTL?bk[i]:null});
   }else{
-    const map={};sat.forEach(s=>{const d=new Date(s.tarih),k=d.getFullYear()*12+d.getMonth();map[k]=(map[k]||0)+toTL(s)});
-    Object.keys(map).map(Number).sort((a,b)=>a-b).slice(-12).forEach(k=>pts.push({x:AY[k%12]+' '+(''+Math.floor(k/12)).slice(2),v:map[k]}));
+    const mv={},mk={};sat.forEach(s=>{const d=new Date(s.tarih),k=d.getFullYear()*12+d.getMonth();mv[k]=(mv[k]||0)+toTL(s);mk[k]=(mk[k]||0)+(kf(s)||0)});
+    Object.keys(mv).map(Number).sort((a,b)=>a-b).slice(-12).forEach(k=>pts.push({x:AY[k%12]+' '+(''+Math.floor(k/12)).slice(2),v:mv[k],k:karTL?mk[k]:null}));
   }
   return pts;
 }
@@ -2395,7 +2398,9 @@ function rapCtx(){
   const sat=filt(inRange);
   const satOnc=onc?filt(ts=>ts>=onc[0]&&ts<onc[1]):null;
   const ciroOf=arr=>arr.reduce((a,s)=>a+toTL(s),0);
-  const karOf=arr=>{let m=0;arr.forEach(s=>s.kalemler.forEach(k=>{const u=urun(k.uid);if(u)m+=(+u.alis||0)*k.mik*(k.birim==='seri'?(u.seri||1):1)}));return ciroOf(arr)-m};
+  const malOf=s=>{let m=0;s.kalemler.forEach(k=>{const u=urun(k.uid);if(u)m+=(+u.alis||0)*k.mik*(k.birim==='seri'?(u.seri||1):1)});return m};
+  const karTLof=s=>toTL(s)-malOf(s);
+  const karOf=arr=>{let m=0;arr.forEach(s=>{m+=malOf(s)});return ciroOf(arr)-m};
   const ciro=ciroOf(sat),brutKar=karOf(sat),marj=ciro?Math.round(brutKar/ciro*100):0;
   const adet=sat.reduce((a,s)=>a+s.kalemler.reduce((x,k)=>x+(+k.mik||0),0),0);
   const kesikTop=sat.reduce((a,s)=>a+(+s.kesik||0)*pbKur(s.pb),0);
@@ -2407,7 +2412,7 @@ function rapCtx(){
   const giderTop=(db.hareketler||[]).filter(x=>x.yon==='out'&&x.tur!=='Transfer'&&inRange(x.tarih)).reduce((a,x)=>a+(+x.tutar||0),0);
   const gy=rapGecenYilAralik();
   const satGY=gy?filt(ts=>ts>=gy[0]&&ts<gy[1]):null;
-  return {bas,bit,donemAd,inRange,onc,kar,toTL,sat,satOnc,ciroOf,karOf,ciro,brutKar,marj,adet,kesikTop,tahsil,acikDonem,tahOran,acikAlacak,kdv,giderTop,
+  return {bas,bit,donemAd,inRange,onc,kar,toTL,karTLof,sat,satOnc,ciroOf,karOf,ciro,brutKar,marj,adet,kesikTop,tahsil,acikDonem,tahOran,acikAlacak,kdv,giderTop,
     ciroOnc:satOnc?ciroOf(satOnc):null,karOncV:satOnc?karOf(satOnc):null,islemOnc:satOnc?satOnc.length:null,tahOnc:satOnc?satOnc.reduce((a,s)=>a+(+s.odenen||0)*pbKur(s.pb),0):null,
     gyAd:gy?gy[2]:null,ciroGY:satGY?ciroOf(satGY):null,karGY:satGY?karOf(satGY):null,islemGY:satGY?satGY.length:null,adetGY:satGY?satGY.reduce((a,s)=>a+s.kalemler.reduce((x,k)=>x+(+k.mik||0),0),0):null};
 }
@@ -2417,7 +2422,8 @@ function rapKiyasRow(ad,cur,prev,fmt){fmt=fmt||TL;return `<tr><td style="padding
 function rapOzet(R){let h='';
   h+=`<div class="card" style="padding:14px 15px 8px;background:linear-gradient(135deg,#24487a,#2d6cdf);border:none;color:#fff">
     <div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-size:11.5px;opacity:.85;font-weight:700;letter-spacing:.3px">CİRO · ${R.donemAd.toUpperCase()}</div><div style="font-size:27px;font-weight:800;margin-top:2px">${TL(R.ciro)}</div>${R.onc?`<div style="font-size:12px;margin-top:3px;opacity:.95">${rapDelta(R.ciro,R.ciroOnc).replace(/var\(--good\)/g,'#7ef2b6').replace(/var\(--bad\)/g,'#ffb3bf').replace(/var\(--sub\)/g,'#cfe0f5')} <span style="opacity:.8">önceki döneme göre</span></div>`:''}</div><div style="font-size:30px">💰</div></div>
-    <div style="margin:10px -6px 0">${svgArea(rapTrend(R.sat,R.toTL),'#bfd4f7').replace('fill="var(--ln)"','fill="none"').replace('stroke="var(--ln)"','stroke="rgba(255,255,255,.25)"').replace(/fill="var\(--sub\)"/g,'fill="rgba(255,255,255,.75)"')}</div></div>`;
+    <div style="margin:10px -6px 0">${svgArea(rapTrend(R.sat,R.toTL,R.kar?R.karTLof:null),'#bfd4f7',R.kar?'#7ef2b6':null).replace('fill="var(--ln)"','fill="none"').replace('stroke="var(--ln)"','stroke="rgba(255,255,255,.25)"').replace(/fill="var\(--sub\)"/g,'fill="rgba(255,255,255,.75)"')}</div>
+    ${R.kar?`<div style="display:flex;gap:14px;justify-content:center;font-size:11px;padding:2px 0 6px;opacity:.95"><span><span style="display:inline-block;width:14px;height:3px;background:#bfd4f7;vertical-align:middle;border-radius:2px"></span> Ciro</span><span><span style="display:inline-block;width:14px;height:0;border-top:2px dashed #7ef2b6;vertical-align:middle"></span> Kâr</span></div>`:''}</div>`;
   h+=`<div class="tiles" style="margin-top:11px">`;
   if(R.kar)h+=`<div class="card" style="padding:11px 12px;margin:0"><div class="mini">Brüt Kâr · %${R.marj}</div><div style="font-weight:800;font-size:18px;color:var(--good)">${TL(R.brutKar)}</div>${R.onc?`<div style="font-size:11px;margin-top:1px">${rapDelta(R.brutKar,R.karOncV)}</div>`:''}</div>`;
   else h+=`<div class="card" style="padding:11px 12px;margin:0"><div class="mini">Satılan Adet</div><div style="font-weight:800;font-size:18px">${R.adet}</div></div>`;
@@ -2482,6 +2488,28 @@ function rapSatis(R){let h='';
   if(odeRows.length){const ot=odeRows.reduce((a,r)=>a+r.v,0);
     h+=`<div class="sec">Ödeme Yöntemi Dağılımı</div><div class="card" style="padding:14px;display:flex;gap:14px;align-items:center">${svgDonut(odeRows)}<div style="flex:1;min-width:0">`+odeRows.map((r,i)=>`<div style="display:flex;align-items:center;gap:7px;margin:5px 0"><span style="width:11px;height:11px;border-radius:3px;background:${RAP_PAL[i%RAP_PAL.length]};flex:0 0 11px"></span><span style="flex:1;font-size:12.5px;font-weight:600">${esc(r.ad)}</span><b style="font-size:12.5px">${kisaTL(r.v)}</b><span class="mini" style="width:34px;text-align:right">%${Math.round(r.v/ot*100)}</span></div>`).join('')+`</div></div>`;
   }
+  // şehir bazlı satış
+  const sehMap={};R.sat.forEach(s=>{const c=cari(s.mid);const sh=c&&c.sehir?c.sehir.split('/')[0].trim():'Diğer';sehMap[sh]=(sehMap[sh]||0)+R.toTL(s)});
+  const sehRows=Object.entries(sehMap).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([ad,v])=>({ad,v,g:kisaTL(v)}));
+  if(sehRows.length)h+=`<div class="sec">Şehir Bazlı Satış</div><div class="card" style="padding:14px">${barsHtml(sehRows,'linear-gradient(90deg,#2fa8bd,#8fd6e2)')}</div>`;
+  // marka & müşteri grubu kırılımı
+  const markaMap={};R.sat.forEach(s=>s.kalemler.forEach(k=>{const u=urun(k.uid);const mk=(u&&u.marka)?u.marka:'Markasız';markaMap[mk]=(markaMap[mk]||0)+(+k.mik||0)*(+k.fiyat||0)*pbKur(s.pb)}));
+  const grupMap={};R.sat.forEach(s=>{const c=cari(s.mid);const gr=(c&&c.grup)?c.grup:'—';grupMap[gr]=(grupMap[gr]||0)+R.toTL(s)});
+  const miniBreak=(title,map)=>{const rows=Object.entries(map).sort((a,b)=>b[1]-a[1]);const tot=rows.reduce((a,r)=>a+r[1],0);if(!rows.length||!tot)return '';
+    return `<div class="sec">${title}</div><div class="card" style="padding:13px 14px">`+rows.slice(0,5).map(([ad,v],i)=>`<div style="margin:6px 0"><div style="display:flex;justify-content:space-between;font-size:12.5px"><span style="font-weight:600">${esc(ad)}</span><span><b>${kisaTL(v)}</b> <span class="mini">%${Math.round(v/tot*100)}</span></span></div><div style="height:7px;border-radius:5px;background:var(--ln2);overflow:hidden;margin-top:2px"><i style="display:block;height:100%;width:${Math.round(v/tot*100)}%;background:${RAP_PAL[i%RAP_PAL.length]}"></i></div></div>`).join('')+`</div>`};
+  h+=miniBreak('Marka Kırılımı (Öz Marka / Markasız)',markaMap);
+  h+=miniBreak('Müşteri Grubu (Bayi / Perakende)',grupMap);
+  // haftanın günü analizi
+  const GUN=['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];const gArr=[0,0,0,0,0,0,0];
+  R.sat.forEach(s=>{const d=(new Date(s.tarih).getDay()+6)%7;gArr[d]+=R.toTL(s)});
+  if(gArr.some(v=>v>0)){const gmx=Math.max(...gArr),enG=GUN[gArr.indexOf(gmx)];
+    h+=`<div class="sec">Haftanın Günü <span class="mini" style="text-transform:none;font-weight:600">en yoğun: ${enG}</span></div><div class="card" style="padding:14px 12px 10px"><div style="display:flex;align-items:flex-end;gap:6px;height:90px">`+gArr.map((v,i)=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%"><div style="width:100%;background:${v===gmx?'var(--ind2)':'#bcd0ee'};border-radius:5px 5px 0 0;height:${gmx?Math.max(3,Math.round(v/gmx*72)):3}px"></div><div class="mini" style="margin-top:4px;font-weight:${v===gmx?'800':'600'}">${GUN[i]}</div></div>`).join('')+`</div></div>`;
+  }
+  // iskonto analizi
+  const iskTop=R.sat.reduce((a,s)=>a+(+s.iskonto||0)*pbKur(s.pb),0);
+  if(iskTop>0){const oran=R.ciro?(iskTop/(R.ciro+iskTop)*100):0;
+    h+=`<div class="sec">İskonto / İndirim</div><div class="card" style="padding:13px 15px"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11.5px;font-weight:700;color:var(--sub)">VERİLEN İNDİRİM · ${R.donemAd}</div><div class="mini">ciro üstünden ortalama %${oran.toFixed(1)} indirim</div></div><div style="font-size:20px;font-weight:800;color:var(--warn)">−${TL(iskTop)}</div></div></div>`;
+  }
   return h;
 }
 function rapPara(R){let h='';
@@ -2506,6 +2534,11 @@ function rapPara(R){let h='';
   const fasonBorc=db.cariler.filter(c=>(c.tip==='fason'||c.tip==='tedarikci')&&c.bakiye>0).reduce((a,c)=>a+c.bakiye,0);
   h+=`<div class="sec">Nakit Akış Projeksiyonu <span class="mini" style="text-transform:none;font-weight:600">çek vadelerine göre</span></div><div class="card" style="padding:6px 4px"><div style="display:flex;text-align:center">`+proj.map((r,i)=>{const net=r.gir-r.cik;return `<div style="flex:1;padding:9px 4px;${i<2?'border-right:1px solid var(--ln2)':''}"><div class="mini" style="font-weight:700">${r.w} gün</div><div style="font-size:12px;color:var(--good);margin-top:3px">+${kisaTL(r.gir)}</div><div style="font-size:12px;color:var(--bad)">−${kisaTL(r.cik)}</div><div style="font-weight:800;font-size:14px;margin-top:3px;color:${net>=0?'var(--good)':'var(--bad)'}">${net>=0?'+':'−'}${kisaTL(Math.abs(net))}</div></div>`}).join('')+`</div></div>`;
   h+=`<div class="mini" style="margin:6px 3px">Vadesiz beklenen: müşteri alacağı <b style="color:var(--good)">+${TL(R.acikAlacak)}</b> · fason/tedarik borcu <b style="color:var(--bad)">−${TL(fasonBorc)}</b></div>`;
+  // limit aşan / yaklaşan riskli müşteriler
+  const risk=db.cariler.filter(c=>c.tip==='musteri'&&c.limit>0&&c.bakiye>c.limit*0.8).map(c=>({ad:c.ad,id:c.id,bakiye:c.bakiye,limit:c.limit,oran:c.bakiye/c.limit,asti:c.bakiye>c.limit})).sort((a,b)=>b.oran-a.oran);
+  if(risk.length){
+    h+=`<div class="sec">Riskli Müşteriler <span class="mini" style="text-transform:none;font-weight:600">limit aşan / yaklaşan</span></div><div class="card" style="padding:4px 13px">`+risk.slice(0,8).map(x=>`<div class="exrow" onclick="cariKart(${x.id})" style="cursor:pointer"><div class="exl"><b>${esc(x.ad)}</b><small>${TL(x.bakiye)} / ${TL(x.limit)} limit · %${Math.round(x.oran*100)}</small></div><span class="pill ${x.asti?'bad':'low'}">${x.asti?'aştı':'yaklaştı'}</span></div>`).join('')+`<div class="mini" style="padding:8px 0 4px">⚠️ Limit aşan müşterilere mal keserken dikkat — tahsilat riski</div></div>`;
+  }
   return h;
 }
 function rapGider(R){let h='';
@@ -2529,6 +2562,15 @@ function rapGider(R){let h='';
   return h;
 }
 function rapStok(R){let h='';
+  // kritik / tükenen stok
+  const kritik=db.urunler.filter(u=>(+u.stok||0)<=(+u.kritik||0)).map(u=>({ad:u.ad,stok:+u.stok||0,kritik:+u.kritik||0,kaynak:u.kaynak})).sort((a,b)=>a.stok-b.stok);
+  const tuken=kritik.filter(x=>x.stok<=0).length;
+  h+=`<div class="sec">Kritik / Tükenen Stok ${kritik.length?`<span style="color:var(--bad);font-weight:800">${kritik.length} ürün</span>`:''}</div><div class="card" style="padding:${kritik.length?'4px 13px':'14px'}">`;
+  if(kritik.length){
+    h+=kritik.slice(0,10).map(x=>{const bitti=x.stok<=0;return `<div class="exrow"><div class="exl"><b>${esc(x.ad)}</b><small>${bitti?'stok bitti':x.stok+' adet kaldı'} · kritik ${x.kritik}${x.kaynak==='alim'?' · al':' · üret'}</small></div><span class="pill ${bitti?'bad':'low'}">${bitti?'tükendi':'kritik'}</span></div>`}).join('');
+    h+=`<div class="mini" style="padding:8px 0 4px">${tuken?'🔴 '+tuken+' ürün tükendi · ':''}⚠️ ${kritik.length-tuken} ürün kritik seviyede — acil ${db.urunler.some(u=>(+u.stok||0)<=(+u.kritik||0)&&u.kaynak==='alim')?'al/üret':'üret'}</div>`;
+  }else h+=`<div class="mini">Tüm stoklar yeterli 👍</div>`;
+  h+=`</div>`;
   if(R.kar){
     const marjList=db.urunler.map(u=>{const bk=(+u.satis||0)-(+u.alis||0);return {ad:u.ad,bk,m:u.satis?Math.round(bk/u.satis*100):0,satis:+u.satis||0}}).filter(x=>x.satis>0);
     const enKarli=[...marjList].sort((a,b)=>b.m-a.m).slice(0,8);
@@ -2591,6 +2633,19 @@ function rapUretim(R){let h='';
   const fasMap={};ie.forEach(i=>(i.duraklar||[]).forEach(d=>{if(!d.fasonId)return;const c=cari(d.fasonId);if(!c)return;const tut=(+d.ucret||0)*(+d.gelen||0)*(ieCarpan?ieCarpan(i):1);if(tut>0)fasMap[c.ad]=(fasMap[c.ad]||0)+tut}));
   const topFas=Object.entries(fasMap).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([ad,v])=>({ad,v,g:kisaTL(v)}));
   if(topFas.length)h+=`<div class="sec">En Çok İş Verdiğin Fasoncular</div><div class="card" style="padding:14px">${barsHtml(topFas,'linear-gradient(90deg,#7a4fd0,#b9a3ea)')}</div>`;
+  // fasoncu fire karnesi (kalite)
+  const fireMap={};ie.forEach(i=>(i.duraklar||[]).forEach(d=>{if(!d.fasonId)return;const c=cari(d.fasonId);if(!c)return;const defo=Object.values(d.renkDefo||{}).reduce((a,b)=>a+(+b||0),0)||(+d.defolu||0);const gelen=+d.gelen||0;const k=fireMap[c.ad]=fireMap[c.ad]||{gelen:0,defo:0};k.gelen+=gelen;k.defo+=defo}));
+  const fireRows=Object.entries(fireMap).filter(([,v])=>v.gelen+v.defo>0).map(([ad,v])=>({ad,fire:v.defo/(v.gelen+v.defo)*100,defo:v.defo,gelen:v.gelen})).sort((a,b)=>b.fire-a.fire);
+  if(fireRows.length)h+=`<div class="sec">Fasoncu Fire Karnesi <span class="mini" style="text-transform:none;font-weight:600">düşük = kaliteli</span></div><div class="card" style="padding:4px 13px">`+fireRows.map(x=>{const iyi=x.fire<2,orta=x.fire<5;return `<div class="exrow"><div class="exl"><b>${esc(x.ad)}</b><small>${x.defo} defo / ${x.gelen+x.defo} toplam</small></div><div class="exb" style="color:${iyi?'var(--good)':orta?'var(--warn)':'var(--bad)'};font-weight:800">%${x.fire.toFixed(1)} ${iyi?'✔':orta?'':'⚠️'}</div></div>`}).join('')+`</div>`;
+  // ortalama üretim süresi
+  const sureler=ie.filter(i=>i.durum==='tamam'&&i.kapanis&&i.baslangic).map(i=>Math.round((i.kapanis-i.baslangic)/86400000)).filter(g=>g>=0);
+  if(sureler.length){const ort=Math.round(sureler.reduce((a,b)=>a+b,0)/sureler.length),enHizli=Math.min(...sureler),enYavas=Math.max(...sureler);
+    h+=`<div class="sec">Üretim Süresi <span class="mini" style="text-transform:none;font-weight:600">tamamlanan işler</span></div><div class="card" style="padding:6px 4px"><div style="display:flex;text-align:center">
+      <div style="flex:1;padding:8px 4px;border-right:1px solid var(--ln2)"><div style="font-weight:800;font-size:19px;color:var(--ind)">${ort} gün</div><div class="mini">ortalama</div></div>
+      <div style="flex:1;padding:8px 4px;border-right:1px solid var(--ln2)"><div style="font-weight:800;font-size:19px;color:var(--good)">${enHizli} gün</div><div class="mini">en hızlı</div></div>
+      <div style="flex:1;padding:8px 4px"><div style="font-weight:800;font-size:19px;color:var(--warn)">${enYavas} gün</div><div class="mini">en yavaş</div></div>
+    </div></div>`;
+  }
   if(R.kar)h+=`<div class="sec">Kaçak / Fire</div><div class="card" style="padding:13px">
     <div class="exrow"><div class="exl"><b>Müşteri kesik/kırma</b><small>satışta verilen indirim/eksik (${R.donemAd})</small></div><div class="exb neg">−${TL(R.kesikTop)}</div></div>
     <div class="exrow"><div class="exl"><b>Üretim defo (fire)</b><small>tüm iş emirlerinde defolu adet</small></div><div class="exb neg">${defoAdet} adet</div></div>
