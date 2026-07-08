@@ -2516,6 +2516,14 @@ function rPortal(){
     ${o.not?`<div class="mini" style="margin-bottom:8px">📝 ${esc(o.not)}</div>`:''}
     <div style="display:flex;justify-content:space-between;align-items:center"><div class="v" style="font-size:16px;font-weight:800;color:var(--ind)">${TL(o.tutar)}</div><div style="display:flex;gap:8px"><button class="btn danger sm" onclick="portalRed(${o.id})">Reddet</button><button class="btn ghost sm" onclick="portalFiyatBelirle(${o.id})">Fiyat</button><button class="btn g sm" onclick="portalOnay(${o.id})">✓ Onayla</button></div></div></div>`}).join(''):emp('🛍️','Onay bekleyen sipariş yok');
   html+=`<div class="okbox">✓ Onaylayınca sipariş satışa dönüşür, stok düşer, mal <b>ayrılır</b> (rezerve) ve müşteri carisine işlenir.</div>`;
+  // takip: hazırlanan / yoldaki portal siparişleri
+  const aktifSip=db.satislar.filter(s=>s.kaynak==='portal'&&sipAsamaIx(s)<SIP_ASAMA.length-1).sort((a,b)=>b.tarih-a.tarih);
+  if(aktifSip.length){
+    html+=`<div class="sec">🚚 Sipariş Takibi (${aktifSip.length})</div>`+aktifSip.map(s=>{const ix=sipAsamaIx(s),a=SIP_ASAMA[ix],nx=SIP_ASAMA[ix+1];const m=cari(s.mid);
+      return `<div class="card" style="padding:12px 13px;margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center"><div style="min-width:0"><b>${esc(s.mus)}</b><div class="mini">${tstr(s.tarih)} · ${TL(s.tutar)}${(m&&m.tel)||s.tel?' · 📞 '+esc((m&&m.tel)||s.tel):''}</div></div><span class="tag" style="background:#e7effb;color:var(--ind2);flex:0 0 auto">${a.ic} ${a.t}</span></div>
+      <div style="margin:11px 2px 3px">${sipStepperHtml(s)}</div>
+      <div class="g2" style="margin-top:11px"><button class="btn ghost sm" onclick="sipBildir(${s.id})">📱 Müşteriye Bildir</button>${nx?`<button class="btn g sm" onclick="sipIlerlet(${s.id})">${nx.ic} ${nx.t} ›</button>`:''}</div></div>`}).join('')+`<div class="mini" style="margin:2px 3px 0">💡 Her aşamada "Müşteriye Bildir" ile WhatsApp'tan durum mesajı gönderebilirsin.</div>`;
+  }
   // stoğa girince haber ver talepleri
   const bil=db.stokBildirim||[];
   if(bil.length){const grp={};bil.forEach(x=>{grp[x.uid]=grp[x.uid]||{n:0,mus:new Set()};grp[x.uid].n++;grp[x.uid].mus.add(x.mus)});
@@ -2532,6 +2540,19 @@ function portalHaberVer(uid){const u=urun(uid);const list=(db.stokBildirim||[]).
     if(navigator.share)navigator.share({text:full}).catch(()=>{});else if(navigator.clipboard)navigator.clipboard.writeText(full).then(()=>toast('Mesaj kopyalandı ✓')).catch(()=>{});
     db.stokBildirim=(db.stokBildirim||[]).filter(x=>x.uid!==uid);save();rPortal();toast('İstekler kapatıldı, haber mesajı hazır ✓');
   },'Haber Ver');}
+/* ---- Sipariş takibi (fulfillment) ---- */
+const SIP_ASAMA=[{k:'onaylandi',t:'Onaylandı',ic:'✅'},{k:'hazirlaniyor',t:'Hazırlanıyor',ic:'📦'},{k:'kargoda',t:'Kargoda',ic:'🚚'},{k:'teslim',t:'Teslim',ic:'🎉'}];
+function sipAsamaIx(s){const i=SIP_ASAMA.findIndex(a=>a.k===((s&&s.sipDurum)||'onaylandi'));return i<0?0:i}
+function sipStepperHtml(s){const ix=sipAsamaIx(s);return `<div style="display:flex;align-items:flex-start">${SIP_ASAMA.map((a,i)=>{const done=i<=ix;return `<div style="flex:1;text-align:center;position:relative"><div style="width:27px;height:27px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:13px;background:${done?'var(--good)':'var(--ln2)'};color:${done?'#fff':'var(--sub)'}">${done?a.ic:i+1}</div><div class="mini" style="font-size:9.5px;margin-top:4px;line-height:1.1;color:${done?'var(--ink)':'var(--sub)'};font-weight:${i===ix?'800':'500'}">${a.t}</div>${i<SIP_ASAMA.length-1?`<div style="position:absolute;top:13px;left:62%;right:-38%;height:2px;background:${i<ix?'var(--good)':'var(--ln)'}"></div>`:''}</div>`}).join('')}</div>`}
+function sipIlerlet(sid){const s=db.satislar.find(x=>x.id===sid);if(!s)return;const ix=sipAsamaIx(s);if(ix>=SIP_ASAMA.length-1)return;const nx=SIP_ASAMA[ix+1];
+  s.sipDurum=nx.k;s.sipGecmis=s.sipGecmis||[];s.sipGecmis.push({k:nx.k,t:Date.now()});if(nx.k==='teslim')s.teslimDurum='teslim';save();rPortal();toast(nx.ic+' '+nx.t+' olarak işaretlendi');}
+function sipBildir(sid){const s=db.satislar.find(x=>x.id===sid);if(!s)return;const m=cari(s.mid);const a=SIP_ASAMA[sipAsamaIx(s)];
+  const durum={onaylandi:'onaylandı, hazırlığa alınıyor ✅',hazirlaniyor:'hazırlanıyor 📦',kargoda:'kargoya verildi, yolda 🚚',teslim:'teslim edildi 🎉 teşekkürler'}[a.k]||a.t;
+  const kal=(s.kalemler||[]).map(k=>'• '+k.urun+' ×'+k.mik).join('\n');
+  const txt=`Merhaba${m?' '+m.ad:''},\n${db.firma||'Öz Tekstil'} siparişiniz *${durum}*.\n\n${kal}\nToplam: ${TL(s.tutar)}\nSipariş no: #${s.id}`;
+  let ph=(((m&&m.tel)||s.tel||'')).replace(/\D/g,'');if(ph){if(ph.length===10)ph='90'+ph;else if(ph[0]==='0')ph='9'+ph}
+  if(navigator.share){navigator.share({text:txt}).catch(()=>{});return}
+  window.open(`https://wa.me/${ph}?text=${encodeURIComponent(txt)}`,'_blank');}
 function portalOnay(id,override){
   const o=db.bekleyenPortal.find(x=>x.id===id);if(!o)return;
   let m=cari(o.mid)||db.cariler.find(c=>c.tip==='musteri'&&c.ad.toLowerCase()===(o.mus||'').toLowerCase());
@@ -2541,7 +2562,7 @@ function portalOnay(id,override){
   const oran=(override&&baseT>0)?override/baseT:1;
   const kalemler=o.kalemler.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:oran===1?k.fiyat:Math.round((+k.fiyat||0)*oran),renkler:k.renkler?k.renkler.map(r=>({...r})):undefined}));
   const tutar=override||o.tutar;
-  const sat={id:nid('s'),tip:'satis',mid:m.id,mus:m.ad,tarih:Date.now(),kalemler,araToplam:tutar,iskonto:0,tutar,odenen:0,kesik:0,pb:'TL',satisKur:1,durum:'tamam',teslimDurum:'ayrildi',odemeler:[],kaynak:'portal'};
+  const sat={id:nid('s'),tip:'satis',mid:m.id,mus:m.ad,tarih:Date.now(),kalemler,araToplam:tutar,iskonto:0,tutar,odenen:0,kesik:0,pb:'TL',satisKur:1,durum:'tamam',teslimDurum:'ayrildi',odemeler:[],kaynak:'portal',sipDurum:'onaylandi',sipGecmis:[{k:'onaylandi',t:Date.now()}]};
   db.satislar.push(sat);applySatis(sat);
   db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);
   save();closeM&&closeM();go('portal');toast('Sipariş onaylandı ✓ '+TL(tutar)+' · mal ayrıldı');
@@ -2673,7 +2694,7 @@ function portalCiz(){
       ${m?`<div class="card" style="margin-top:12px;padding:13px 15px;background:${m.bakiye>0?'var(--warn-s)':'var(--good-s)'};border-color:${m.bakiye>0?'var(--warn)':'var(--good)'}"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11.5px;font-weight:700;color:var(--sub)">💳 CARİ DURUMUM</div><div class="mini">${m.limit?'limit '+TL(m.limit):'kayıtlı müşteri'}${bekleyen.length?' · '+bekleyen.length+' bekleyen sipariş':''}</div></div><div style="text-align:right"><div style="font-size:19px;font-weight:800;color:${m.bakiye>0?'var(--warn)':'var(--good)'}">${TL(Math.abs(m.bakiye))}</div><div class="mini">${m.bakiye>0?'borç':m.bakiye<0?'alacak':'kapalı'}</div></div></div></div>`:''}
       ${favs.length?`<div class="sec">❤️ Favorilerim (${favs.length})</div><div class="pgrid">${favs.map(u=>portalKart(u,portalCokSatan())).join('')}</div>`:''}
       ${bekleyen.length?`<div class="sec">⏳ Bekleyen Siparişlerim</div>`+bekleyen.map(o=>`<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between"><b style="font-size:13px">${tstr(o.tarih)}${o.teklif?' · <span style="color:var(--pur)">teklifli</span>':''}</b><b style="color:var(--ind)">${TL(o.teklif?o.teklifTutar:o.tutar)}</b></div><div class="mini" style="margin-top:3px">${o.kalemler.map(k=>esc(k.urun)+' ×'+k.mik).join(', ')}</div><div class="mini" style="color:var(--warn);margin-top:3px">onay bekliyor</div></div>`).join(''):''}
-      ${gecmis.length?`<div class="sec">📦 Geçmiş Siparişlerim</div>`+gecmis.slice(0,10).map(s=>`<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center"><div style="min-width:0"><b style="font-size:13px">${tstr(s.tarih)}</b><div class="mini" style="margin-top:2px">${s.kalemler.map(k=>esc(k.urun)+' ×'+k.mik).join(', ')}</div></div><div style="text-align:right;flex:0 0 auto;margin-left:8px"><div style="font-weight:800;color:var(--ind)">${TL(s.tutar)}</div><button class="btn ghost sm" style="width:auto;margin:4px 0 0;padding:6px 11px" onclick="portalTekrar(${s.id})">🔁 Tekrar</button></div></div></div>`).join(''):(portalMusAd.trim()?`<div class="mini" style="text-align:center;padding:24px">Bu isimle geçmiş sipariş bulunamadı</div>`:'')}
+      ${gecmis.length?`<div class="sec">📦 Geçmiş Siparişlerim</div>`+gecmis.slice(0,10).map(s=>{const takip=s.kaynak==='portal'&&s.sipDurum,ax=takip?SIP_ASAMA[sipAsamaIx(s)]:null;return `<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center"><div style="min-width:0"><b style="font-size:13px">${tstr(s.tarih)}</b>${ax?` <span class="tag" style="background:${ax.k==='teslim'?'var(--good-s)':'#e7effb'};color:${ax.k==='teslim'?'var(--good)':'var(--ind2)'}">${ax.ic} ${ax.t}</span>`:''}<div class="mini" style="margin-top:2px">${s.kalemler.map(k=>esc(k.urun)+' ×'+k.mik).join(', ')}</div></div><div style="text-align:right;flex:0 0 auto;margin-left:8px"><div style="font-weight:800;color:var(--ind)">${TL(s.tutar)}</div><button class="btn ghost sm" style="width:auto;margin:4px 0 0;padding:6px 11px" onclick="portalTekrar(${s.id})">🔁 Tekrar</button></div></div>${takip?`<div style="margin:11px 2px 3px">${sipStepperHtml(s)}</div>`:''}</div>`}).join(''):(portalMusAd.trim()?`<div class="mini" style="text-align:center;padding:24px">Bu isimle geçmiş sipariş bulunamadı</div>`:'')}
     </div>`;
   }else if(portalView==='urun'){
     const u=urun(portalUrunId);
@@ -2891,7 +2912,7 @@ function rapOzet(R){let h='';
     const hedef=(+db.hedef||0)*(rapDonem==='yil'?12:1),per=rapDonem==='yil'?'Yıllık':'Aylık';
     if(hedef>0){const pct=Math.round(R.ciro/hedef*100),kalan=Math.max(0,hedef-R.ciro);
       h+=`<div class="sec">🎯 ${per} Ciro Hedefi <a onclick="hedefBelirle()">düzenle</a></div><div class="card" style="padding:13px 15px">
-        <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:6px"><span>${TL(R.ciro)} / <b>${TL(hedef)}</b></span><span style="font-weight:800;color:${pct>=100?'var(--good)':'var(--ind)'}">%${pct}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:6px"><span>${TL(R.ciro)} / <b>${TL(hedef)}</b></span><span style="font-weight:800;color:${pct>=100?'var(--good)':'var(--ind2)'}">%${pct}</span></div>
         <div style="height:13px;border-radius:8px;background:var(--ln2);overflow:hidden"><i style="display:block;height:100%;width:${Math.min(100,pct)}%;background:${pct>=100?'var(--good)':'linear-gradient(90deg,var(--ind2),#7fb0f0)'}"></i></div>
         <div class="mini" style="margin-top:6px">${pct>=100?'🎉 Hedefi geçtin, tebrikler!':'Hedefe <b>'+TL(kalan)+'</b> kaldı'}</div></div>`;
     }else h+=`<button class="btn ghost" style="margin-top:11px" onclick="hedefBelirle()">🎯 ${per} ciro hedefi belirle</button>`;
