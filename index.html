@@ -1718,35 +1718,84 @@ function kaydetHarcama(){const t=+$('oh-t').value;if(!t||t<=0)return toast('Tuta
 
 /* ---------- ÇEK ---------- */
 let cekTab='alinan';
+const CEK_BUK=[{t:'🔴 Vadesi Geçti',c:'var(--bad)'},{t:'🟠 Bu Hafta',c:'var(--warn)'},{t:'🟡 Bu Ay',c:'var(--thr)'},{t:'⚪ Sonra',c:'var(--sub)'}];
+function cekBucket(g){return g<0?0:g<=7?1:g<=30?2:3}
+function cekDurBilgi(){return {portfoyde:['n','Portföyde'],tahsil:['ok','Tahsil ✓'],ciro:['p','Ciro edildi'],karsiliksiz:['bad','Karşılıksız']}}
+function cekRow(c){const g=gunFark(c.vade),D=cekDurBilgi()[c.durum]||['n','—'];
+  const av=c.durum==='karsiliksiz'?'r':c.durum==='tahsil'?'g':c.durum==='ciro'?'p':g<0?'r':g<=7?'o':'gray';
+  const sub=c.durum==='portfoyde'?`${dstr(c.vade)} · ${esc(c.banka||'—')} · ${g<0?Math.abs(g)+' gün geçti':g===0?'bugün!':g+' gün kaldı'}`:(c.durum==='ciro'?`→ ${esc(c.ciroCari||'')} · ${dstr(c.ciroTarih||c.vade)}`:`${dstr(c.vade)} · ${esc(c.banka||'—')}`);
+  return `<div class="row" onclick="cekIslem(${c.id})"><div class="av ${av}">🏷️</div><div class="mid"><div class="t">${esc(c.cari||'—')}</div><div class="s">${sub}</div></div><div class="end"><div class="n">${TL(c.tutar)}</div><span class="pill ${D[0]}">${D[1]}</span></div></div>`;
+}
 function rCek(){
-  const bakiye=db.cekler.filter(c=>c.tip===cekTab&&c.durum==='portfoyde').reduce((a,c)=>a+c.tutar,0);
-  let html=`<div class="tabs"><div class="tb ${cekTab==='alinan'?'on':''}" onclick="cekTab='alinan';rCek()">📥 Alınan</div><div class="tb ${cekTab==='verilen'?'on':''}" onclick="cekTab='verilen';rCek()">📤 Verilen</div></div>
-    <div class="tiles"><div class="tile b3" style="grid-column:1/-1"><div class="l">Portföydeki ${cekTab==='alinan'?'Alacak':'Borç'} Çek</div><div class="v">${TL(bakiye)}</div><div class="em">🏷️</div></div></div>`;
-  const list=db.cekler.filter(c=>c.tip===cekTab).sort((a,b)=>a.vade-b.vade);
-  html+=`<div class="sec">Çekler</div><div class="card">`+(list.length?list.map(c=>{const g=gunFark(c.vade);const dur={portfoyde:'n',tahsil:'ok',ciro:'p',karsiliksiz:'bad'}[c.durum];const durt={portfoyde:'Portföyde',tahsil:'Tahsil ✓',ciro:'Ciro',karsiliksiz:'Karşılıksız'}[c.durum];
-    return `<div class="row" onclick="cekIslem(${c.id})"><div class="av ${c.durum==='karsiliksiz'?'r':g<=7&&c.durum==='portfoyde'?'o':'gray'}" style="${c.durum!=='karsiliksiz'&&!(g<=7&&c.durum==='portfoyde')?'':''}">🏷️</div><div class="mid"><div class="t">${esc(c.cari)}</div><div class="s">${dstr(c.vade)} · ${c.banka||'—'}${c.durum==='portfoyde'?' · '+(g<0?Math.abs(g)+' gün geçti':g+' gün kaldı'):''}</div></div><div class="end"><div class="n">${TL(c.tutar)}</div><span class="pill ${dur}">${durt}</span></div></div>`}).join(''):emp('🏷️','Çek yok'))+`</div>`;
+  const al=cekTab==='alinan';
+  const all=db.cekler.filter(c=>c.tip===cekTab);
+  const port=all.filter(c=>c.durum==='portfoyde');
+  const bakiye=port.reduce((a,c)=>a+c.tutar,0);
+  const gecti=port.filter(c=>gunFark(c.vade)<0),buHafta=port.filter(c=>{const g=gunFark(c.vade);return g>=0&&g<=7});
+  const karsiliksiz=all.filter(c=>c.durum==='karsiliksiz').reduce((a,c)=>a+c.tutar,0);
+  let html=`<div class="tabs"><div class="tb ${al?'on':''}" onclick="cekTab='alinan';rCek()">📥 Alınan</div><div class="tb ${!al?'on':''}" onclick="cekTab='verilen';rCek()">📤 Verilen</div></div>
+    <div class="tiles"><div class="tile b3" style="grid-column:1/-1"><div class="l">Portföydeki ${al?'Alacak':'Borç'} Çek</div><div class="v">${TL(bakiye)}</div><div class="em">🏷️</div><div style="font-size:11px;opacity:.92;margin-top:4px">${port.length} çek${gecti.length?' · ⏰ '+gecti.length+' vadesi geçti':''}${buHafta.length?' · '+buHafta.length+' bu hafta':''}</div></div></div>`;
+  if(gecti.length)html+=`<div class="okbox" style="background:var(--bad-s);color:var(--bad);border:none">⏰ ${gecti.length} ${al?'alacak':'borç'} çekin vadesi geçti — ${TL(gecti.reduce((a,c)=>a+c.tutar,0))}. ${al?'Tahsil etmen':'Ödemen'} gerekiyor.</div>`;
+  html+=`<button class="btn sm" style="margin-top:10px" onclick="cekEkle()">➕ ${al?'Alınan':'Verilen'} Çek Ekle</button>`;
+  html+=`<div class="sec">Vade Takvimi</div>`;
+  if(port.length){
+    const gr=[[],[],[],[]];[...port].sort((a,b)=>a.vade-b.vade).forEach(c=>gr[cekBucket(gunFark(c.vade))].push(c));
+    gr.forEach((arr,i)=>{if(!arr.length)return;const sum=arr.reduce((a,c)=>a+c.tutar,0);
+      html+=`<div style="display:flex;justify-content:space-between;margin:12px 4px 5px"><span style="font-size:11.5px;font-weight:800;color:${CEK_BUK[i].c}">${CEK_BUK[i].t} · ${arr.length}</span><span style="font-size:11.5px;font-weight:800;color:${CEK_BUK[i].c}">${TL(sum)}</span></div><div class="card">`+arr.map(cekRow).join('')+`</div>`;
+    });
+  }else html+=emp('🏷️','Portföyde çek yok');
+  const gecmis=all.filter(c=>c.durum!=='portfoyde').sort((a,b)=>(b.ciroTarih||b.islemTarih||b.vade)-(a.ciroTarih||a.islemTarih||a.vade));
+  if(gecmis.length)html+=`<div class="sec">İşlem Görenler${karsiliksiz?` <span style="color:var(--bad);font-weight:800">${TL(karsiliksiz)} karşılıksız</span>`:''}</div><div class="card">`+gecmis.map(cekRow).join('')+`</div>`;
   $('app').innerHTML=html;
 }
+function cekEkle(){const al=cekTab==='alinan';
+  const opts=al?db.cariler.filter(c=>c.tip==='musteri'):db.cariler.filter(c=>c.tip==='tedarikci'||c.tip==='fason');
+  const varsayvade=new Date(Date.now()+30*86400000).toISOString().slice(0,10);
+  open_(al?'📥 Alınan Çek Ekle':'📤 Verilen Çek Ekle',`
+    <label>${al?'Kimden aldın?':'Kime verdin?'}</label><select id="ck-cari"><option value="0">— ${al?'müşteri':'tedarikçi/fason'} seç —</option>${opts.map(o=>`<option value="${o.id}">${esc(o.ad)}${o.bakiye>0?' · borç '+TL(o.bakiye):''}</option>`).join('')}</select>
+    <label>Tutar (₺)</label><input id="ck-tut" type="number" inputmode="numeric" placeholder="0">
+    <label>Vade tarihi</label><input id="ck-vade" type="date" value="${varsayvade}">
+    <label>Banka (opsiyonel)</label><input id="ck-banka" list="ck-bankalar" placeholder="Ziraat, İş Bankası..."><datalist id="ck-bankalar">${['Ziraat','İş Bankası','Garanti','Akbank','Yapı Kredi','Halkbank','Vakıfbank','QNB','Denizbank','TEB'].map(b=>`<option value="${b}">`).join('')}</datalist>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-weight:600"><input type="checkbox" id="ck-isle" checked style="width:auto"> ${al?'Müşterinin borcundan düş':'Tedarikçinin borcundan düş'}</label>
+    <div class="mini" style="margin-top:4px">İşaretliyse çek tutarı carinin bakiyesinden düşülür (çek karşılığında borç kapanır). Karşılıksız çıkarsa geri eklenir.</div>
+    <button class="btn" onclick="kaydetCek()">Kaydet</button>`);
+}
+function kaydetCek(){const al=cekTab==='alinan';const cid=+$('ck-cari').value;const tut=+$('ck-tut').value||0;
+  if(tut<=0)return toast('Tutar gir');const vd=$('ck-vade').value;if(!vd)return toast('Vade tarihi gir');
+  const cc=cid?cari(cid):null;const vade=+new Date(vd+'T12:00:00');const isle=$('ck-isle')?.checked&&!!cc;
+  const c={id:nid('cek'),tur:'cek',tip:al?'alinan':'verilen',cariId:cid||null,cari:cc?cc.ad:(al?'Bilinmeyen':'—'),tutar:tut,vade,banka:($('ck-banka').value||'').trim()||'—',durum:'portfoyde',cariIsle:isle};
+  if(!al&&cc&&cc.doviz==='USD')c.verilisKur=db.kurUSD;
+  if(isle){if(cc.doviz==='USD')cc.bakiyeUSD=(cc.bakiyeUSD||0)-tut/db.kurUSD;else cc.bakiye-=tut}
+  db.cekler.push(c);save();closeM();rCek();toast('Çek eklendi ✓ '+TL(tut));
+}
 function cekIslem(id){
-  const c=db.cekler.find(x=>x.id===id);
-  if(c.durum!=='portfoyde')return open_('Çek',`<div class="kv"><span class="k">Kişi</span><span class="v">${esc(c.cari)}</span></div><div class="kv"><span class="k">Tutar</span><span class="v">${TL(c.tutar)}</span></div><div class="kv"><span class="k">Vade</span><span class="v">${dstr(c.vade)}</span></div><div class="kv"><span class="k">Durum</span><span class="v">${c.durum}</span></div>`);
-  open_('Çek İşlemi',`
-    <div class="kv"><span class="k">${esc(c.cari)}</span><span class="v">${TL(c.tutar)}</span></div>
+  const c=db.cekler.find(x=>x.id===id);if(!c)return;
+  if(c.durum!=='portfoyde')return open_('Çek Detayı',`
+    <div class="kv"><span class="k">${esc(c.cari||'—')}</span><span class="v">${TL(c.tutar)}</span></div>
     <div class="kv"><span class="k">Vade</span><span class="v">${dstr(c.vade)}</span></div>
+    <div class="kv"><span class="k">Banka</span><span class="v">${esc(c.banka||'—')}</span></div>
+    <div class="kv"><span class="k">Durum</span><span class="v">${(cekDurBilgi()[c.durum]||['','—'])[1]}</span></div>
+    ${c.durum==='ciro'?`<div class="kv"><span class="k">Ciro edilen</span><span class="v">${esc(c.ciroCari||'')}</span></div>`:''}
+    <button class="btn ghost" style="margin-top:12px" onclick="cekSil(${id})">Kaydı Sil</button>`);
+  open_('Çek İşlemi',`
+    <div class="kv"><span class="k">${esc(c.cari||'—')}</span><span class="v">${TL(c.tutar)}</span></div>
+    <div class="kv"><span class="k">Vade</span><span class="v">${dstr(c.vade)} · ${gunFark(c.vade)<0?Math.abs(gunFark(c.vade))+' gün geçti':gunFark(c.vade)+' gün kaldı'}</span></div>
     <label>İşlem</label>
     ${c.tip==='alinan'?`
     <button class="btn g" onclick="cekTahsil(${id})">✓ Tahsil Et (hesaba geç)</button>
+    <button class="btn" style="background:var(--pur)" onclick="cekCiro(${id})">🔄 Ciro Et (tedarikçiye devret)</button>
     <button class="btn ghost" onclick="cekKarsiliksiz(${id})">Karşılıksız çıktı</button>`:`
     <button class="btn g" onclick="cekTahsil(${id})">✓ Ödendi (vade kuruyla)</button>`}
+    <button class="btn ghost" style="margin-top:10px;color:var(--sub)" onclick="cekSil(${id})">Sil</button>
   `);
 }
 function cekTahsil(id){
   const c=db.cekler.find(x=>x.id===id);
-  if(c.tip==='alinan'){c.durum='tahsil';const h=db.hesaplar[0];if(h)h.bakiye+=c.tutar;toast('Tahsil edildi ✓ '+TL(c.tutar))}
-  else{ // verilen - B yöntemi kur farkı
+  if(c.tip==='alinan'){c.durum='tahsil';c.islemTarih=Date.now();const h=db.hesaplar.find(x=>/nakit|kasa/i.test(x.ad))||db.hesaplar[0];if(h)h.bakiye+=c.tutar;toast('Tahsil edildi ✓ '+TL(c.tutar))}
+  else{
     const h=db.hesaplar.find(x=>x.tur==='banka')||db.hesaplar[0];
     if(h&&h.bakiye<c.tutar-0.001)return toast('⚠️ '+h.ad+' bakiyesi yetersiz. Çek ödenemez (hesap eksiye düşemez).');
-    c.durum='tahsil';if(h)h.bakiye-=c.tutar;
+    c.durum='tahsil';c.islemTarih=Date.now();if(h)h.bakiye-=c.tutar;
     if(c.verilisKur){const su=c.tutar/db.kurUSD, il=c.tutar/c.verilisKur;const fark=il-su;const cc=cari(c.cariId);
       if(cc&&cc.doviz==='USD'){cc.bakiyeUSD=(cc.bakiyeUSD||0)-su; toast(`Ödendi · $${Math.round(su)} düştü${fark>1?', $'+Math.round(fark)+' kur farkı borç kaldı':''}`)}
       else toast('Ödendi ✓')}
@@ -1754,7 +1803,33 @@ function cekTahsil(id){
   }
   save();closeM();rCek();
 }
-function cekKarsiliksiz(id){const c=db.cekler.find(x=>x.id===id);c.durum='karsiliksiz';const cc=cari(c.cariId);if(cc)cc.bakiye+=c.tutar;save();closeM();rCek();toast('Karşılıksız işlendi, borç geri eklendi')}
+function cekCiro(id){const c=db.cekler.find(x=>x.id===id);if(!c)return;
+  const opts=db.cariler.filter(x=>x.tip==='tedarikci'||x.tip==='fason');
+  if(!opts.length)return toast('Ciro edilecek tedarikçi/fason yok');
+  open_('🔄 Çeki Ciro Et (devret)',`<div class="mini">Bu müşteri çekini bir tedarikçi/fasona vererek borcunu kapatabilirsin. Çek onların eline geçer, portföyünden çıkar.</div>
+    <div class="kv" style="margin-top:10px"><span class="k">${esc(c.cari||'—')} çeki</span><span class="v">${TL(c.tutar)}</span></div>
+    <div class="kv"><span class="k">Vade</span><span class="v">${dstr(c.vade)}</span></div>
+    <label>Kime ciro edilecek?</label><select id="ci-cari">${opts.map(o=>`<option value="${o.id}">${esc(o.ad)}${o.bakiye>0?' · borç '+TL(o.bakiye):o.bakiyeUSD>0?' · $'+Math.round(o.bakiyeUSD):''}</option>`).join('')}</select>
+    <button class="btn" onclick="cekCiroKaydet(${id})">Ciro Et</button>`);
+}
+function cekCiroKaydet(id){const c=db.cekler.find(x=>x.id===id);const cid=+$('ci-cari').value;const cc=cari(cid);if(!cc)return toast('Seç');
+  c.durum='ciro';c.ciroCariId=cid;c.ciroCari=cc.ad;c.ciroTarih=Date.now();
+  if(cc.doviz==='USD')cc.bakiyeUSD=(cc.bakiyeUSD||0)-c.tutar/db.kurUSD;else cc.bakiye-=c.tutar;
+  save();closeM();rCek();toast('Çek ciro edildi → '+cc.ad+' ('+TL(c.tutar)+')');
+}
+function cekKarsiliksiz(id){const c=db.cekler.find(x=>x.id===id);
+  askConfirm(`"${c.cari}" çeki (${TL(c.tutar)}) karşılıksız mı çıktı?\nCariye borç geri eklenecek.`,()=>{
+    c.durum='karsiliksiz';c.islemTarih=Date.now();const cc=cari(c.cariId);
+    if(cc){if(cc.doviz==='USD')cc.bakiyeUSD=(cc.bakiyeUSD||0)+c.tutar/db.kurUSD;else cc.bakiye+=c.tutar}
+    save();closeM();rCek();toast('Karşılıksız işlendi, borç geri eklendi');
+  },'Karşılıksız');
+}
+function cekSil(id){const c=db.cekler.find(x=>x.id===id);if(!c)return;
+  askConfirm('Bu çek kaydı silinsin mi?'+(c.cariIsle&&c.durum==='portfoyde'?'\nCari bakiyesi geri düzeltilecek.':''),()=>{
+    if(c.cariIsle&&c.durum==='portfoyde'){const cc=cari(c.cariId);if(cc){if(cc.doviz==='USD')cc.bakiyeUSD=(cc.bakiyeUSD||0)+c.tutar/db.kurUSD;else cc.bakiye+=c.tutar}}
+    db.cekler=db.cekler.filter(x=>x.id!==id);save();closeM();rCek();toast('Çek silindi');
+  },'Sil');
+}
 
 /* ---------- ÜRETİM ---------- */
 /* ---------- ÜRETİM / FASON ---------- */
