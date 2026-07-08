@@ -435,9 +435,10 @@ function seed(){return{
   portalFav:[],
   minSiparis:0,
   portalTaslak:[],
+  kampanya:null,
 };}
 let db=load();
-function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(!d||!d.urunler)return seed();seqFix(d);if(!d.kademe)d.kademe=[{min:20,ind:3},{min:50,ind:6},{min:100,ind:10}];if(!d.portalFav)d.portalFav=[];if(d.minSiparis==null)d.minSiparis=0;if(!d.portalTaslak)d.portalTaslak=[];return d}catch(e){return seed()}}
+function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(!d||!d.urunler)return seed();seqFix(d);if(!d.kademe)d.kademe=[{min:20,ind:3},{min:50,ind:6},{min:100,ind:10}];if(!d.portalFav)d.portalFav=[];if(d.minSiparis==null)d.minSiparis=0;if(!d.portalTaslak)d.portalTaslak=[];if(d.kampanya===undefined)d.kampanya=null;return d}catch(e){return seed()}}
 function kademeler(){return (db.kademe&&db.kademe.length)?db.kademe.slice().filter(k=>+k.min>0).sort((a,b)=>a.min-b.min):[]}
 function kademeIsk(mik){let ind=0;kademeler().forEach(k=>{if((+mik||0)>=(+k.min||0))ind=+k.ind||0});return ind}
 function portalKalemFiyat(k){const u=urun(k.uid);const base=u?portalFiyat(u):(+k.fiyat||0);const ind=kademeIsk(k.mik);return {base,ind,net:ind?Math.round(base*(1-ind/100)):base}}
@@ -2512,6 +2513,7 @@ function isEmriA4(id){
 function rPortal(){
   let html=`<div class="g2"><button class="btn sm" onclick="portalAc()">👁️ Müşteri Sipariş Ekranı</button><button class="btn ghost sm" onclick="portalPaylas()">🔗 Linki Paylaş</button></div>
     <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="kademeDuzenle()">⚙️ Toptan İndirim Kademeleri${kademeler().length?' · '+kademeler().map(k=>k.min+'+%'+k.ind).join(' '):''}</button><button class="btn ghost sm" onclick="minSiparisDuzenle()">📦 Min. Sipariş${+db.minSiparis>0?' · '+(+db.minSiparis)+' seri':''}</button></div>
+    <div style="margin-top:8px"><button class="btn ghost sm" onclick="kampanyaDuzenle()">📣 Kampanya / Vitrin${kampanyaAktif()?' · <b style="color:var(--good)">yayında</b>':''}</button></div>
     <div class="mini" style="margin:8px 3px">Müşteriler katalogdan seçip sipariş verir. Aynı cihazda demo/kiosk çalışır; farklı cihazdan gelmesi için sunucuda yayınlanması gerekir.</div>`;
   html+=`<div class="sec">Onay Bekleyen Siparişler (${db.bekleyenPortal.length})</div>`;
   html+=db.bekleyenPortal.length?db.bekleyenPortal.map(o=>{const kayitli=o.mid&&cari(o.mid);return `<div class="card" style="margin-bottom:11px;padding:13px"><div style="display:flex;align-items:center;gap:10px"><div class="av">${ii(o.mus)}</div><div class="mid"><div class="t">${esc(o.mus)}${kayitli?' <span class="tag" style="background:var(--good-s);color:var(--good)">kayıtlı</span>':' <span class="tag">yeni</span>'}</div><div class="s">${tstr(o.tarih)}${o.tel?' · 📞 '+esc(o.tel):''}</div></div></div>
@@ -2583,6 +2585,19 @@ function kademeDuzenle(){_kad=kademeler().map(k=>({...k}));if(!_kad.length)_kad=
 function cizKademe(){const el=$('kad-list');if(!el)return;el.innerHTML=(_kad.length?_kad.map((k,i)=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="number" value="${k.min}" oninput="_kad[${i}].min=+this.value" placeholder="adet" style="margin:0"><span class="mini" style="flex:0 0 auto">+ üstüne</span><input type="number" value="${k.ind}" oninput="_kad[${i}].ind=+this.value" placeholder="%" style="margin:0;max-width:72px"><span class="mini">%</span><button class="btn ghost sm" style="width:auto;margin:0;padding:7px 10px" onclick="_kad.splice(${i},1);cizKademe()">✕</button></div>`).join(''):'<div class="mini">Kademe yok</div>')}
 function kademeSatirEkle(){_kad.push({min:0,ind:0});cizKademe()}
 function minSiparisDuzenle(){open_('📦 Minimum Sipariş',`<div class="mini">Toplam kaç <b>seri</b> altında sipariş alınmasın? Müşteri sepette uyarı görür, altındaysa gönderemez. 0 = sınır yok.</div><label>Minimum seri</label><input id="min-sip" type="number" inputmode="numeric" value="${+db.minSiparis||0}" placeholder="ör. 10"><button class="btn" style="margin-top:12px" onclick="db.minSiparis=Math.max(0,+document.getElementById('min-sip').value||0);save();closeM();rPortal();toast('Minimum sipariş güncellendi ✓')">Kaydet</button>`)}
+function kampanyaDuzenle(){const k=db.kampanya||{};const bit=k.bitis?new Date(k.bitis-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16):'';
+  const urunOpts=db.urunler.filter(u=>!u.pasif).map(u=>`<option value="${u.id}" ${k.urunId===u.id?'selected':''}>${esc(u.ad)}</option>`).join('');
+  open_('📣 Kampanya / Vitrin',`<div class="mini">Katalog başında görünen büyük kampanya afişi. Ürün seçersen "haftanın ürünü" gibi tıklanabilir olur; bitiş verirsen canlı geri sayım gösterir.</div>
+    <label>Başlık *</label><input id="kmp-bas" value="${esc(k.baslik||'')}" placeholder="ör. Kışa Özel %15 İndirim">
+    <label>Alt metin</label><input id="kmp-met" value="${esc(k.metin||'')}" placeholder="ör. Tüm mont ve kabanlarda">
+    <label>Öne çıkan ürün (opsiyonel)</label><select id="kmp-urun" style="width:100%"><option value="">— yok —</option>${urunOpts}</select>
+    <label>Bitiş (opsiyonel · geri sayım)</label><input id="kmp-bitis" type="datetime-local" value="${bit}">
+    <button class="btn g" style="margin-top:13px" onclick="kampanyaKaydet()">Yayınla</button>
+    ${k.baslik?`<button class="btn danger" style="margin-top:8px" onclick="db.kampanya=null;save();closeM();rPortal();toast('Kampanya kaldırıldı')">Kampanyayı Kaldır</button>`:''}`)}
+function kampanyaKaydet(){const bas=($('kmp-bas')?.value||'').trim();if(!bas)return toast('Başlık girin');
+  const uid=+($('kmp-urun')?.value||0)||0;const bt=$('kmp-bitis')?.value||'';
+  db.kampanya={baslik:bas,metin:($('kmp-met')?.value||'').trim(),urunId:uid,bitis:bt?new Date(bt).getTime():0};
+  save();closeM();rPortal();toast('📣 Kampanya yayınlandı ✓');}
 function kademeKaydet(){db.kademe=_kad.filter(k=>+k.min>0&&+k.ind>0).sort((a,b)=>a.min-b.min);save();closeM();rPortal();toast('İndirim kademeleri kaydedildi ✓')}
 function portalRed(id){db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);save();rPortal();toast('Sipariş reddedildi')}
 function portalPaylas(){const url=location.href.split('#')[0]+'#siparis';const t=`${db.firma||'Öz Tekstil'} toptan sipariş kataloğu:\n${url}\n\nKatalogdan ürün seçip sipariş verebilirsiniz.`;
@@ -2593,7 +2608,7 @@ function portalPaylas(){const url=location.href.split('#')[0]+'#siparis';const t
 /* ---------- MÜŞTERİ PORTALI (müşteri tarafı) ---------- */
 let portalSepet=[], portalMusAd='', portalNot='', portalKat='', portalView='katalog', portalUrunId=0, portalArama='', portalKumas='', portalBattal=false, portalFiltreAcik=false, portalTel='', portalAdres='', portalSehir='', portalFotoIx=0;
 function portalAc(){portalView='katalog';document.getElementById('pov').style.display='block';window.scrollTo(0,0);portalCiz()}
-function portalKapat(){document.getElementById('pov').style.display='none';portalSepet=[];portalView='katalog';portalKat='';portalKumas='';portalBattal=false;portalFiltreAcik=false;portalArama='';if(location.hash==='#siparis')history.replaceState(null,'',''+location.pathname);if(typeof cur!=='undefined')go('portal')}
+function portalKapat(){document.getElementById('pov').style.display='none';if(_geriT){clearInterval(_geriT);_geriT=null}portalSepet=[];portalView='katalog';portalKat='';portalKumas='';portalBattal=false;portalFiltreAcik=false;portalArama='';if(location.hash==='#siparis')history.replaceState(null,'',''+location.pathname);if(typeof cur!=='undefined')go('portal')}
 function portalFiyat(u){return +u.satis||0}
 const BATTAL_BED=['XXL','2XL','3XL','4XL','5XL','6XL'];
 function urunBedenler(u){return (u.bedenler||[]).map(x=>typeof x==='object'?x.beden:x).filter(Boolean)}
@@ -2684,6 +2699,21 @@ function portalCokSatan(){const map={};db.satislar.forEach(s=>(s.kalemler||[]).f
 // bu ürünü alanların birlikte aldığı diğer ürünler (market-basket)
 function portalBirlikte(uid){const cnt={};db.satislar.forEach(s=>{const ids=(s.kalemler||[]).map(k=>k.uid);if(!ids.includes(uid))return;ids.forEach(id=>{if(id!==uid)cnt[id]=(cnt[id]||0)+1})});
   return Object.entries(cnt).sort((a,b)=>b[1]-a[1]).map(e=>urun(+e[0])).filter(u=>u&&!u.pasif&&stokTop(u)>0).slice(0,6);}
+// ---- Kampanya / vitrin ----
+function kampanyaAktif(){const k=db.kampanya;if(!k||!k.baslik)return null;if(k.bitis&&k.bitis<Date.now())return null;return k}
+function geriSayimStr(ts){let s=Math.floor((ts-Date.now())/1000);if(s<=0)return 'süre doldu';const g=Math.floor(s/86400);s-=g*86400;const h=Math.floor(s/3600);s-=h*3600;const d=Math.floor(s/60);const sn=s-d*60;
+  return g>0?`${g}g ${h}s ${d}dk`:(h>0?`${h}s ${d}dk ${sn}sn`:`${d}dk ${sn}sn`);}
+let _geriT=null;
+function portalGeriSayimTik(){const el=document.getElementById('p-geri');const k=kampanyaAktif();if(!el||!k||!k.bitis){if(_geriT){clearInterval(_geriT);_geriT=null}return}
+  if(k.bitis<Date.now()){clearInterval(_geriT);_geriT=null;portalCiz();return}el.textContent='⏳ '+geriSayimStr(k.bitis);}
+function kampanyaBannerHtml(){const k=kampanyaAktif();if(!k)return '';const u=k.urunId?urun(k.urunId):null;
+  return `<div onclick="${u?`portalUrunAc(${u.id})`:''}" style="background:linear-gradient(120deg,#7a4fd0,#2d6cdf);color:#fff;border-radius:16px;padding:15px 16px;margin-bottom:13px;position:relative;overflow:hidden;${u?'cursor:pointer':''};box-shadow:0 6px 18px rgba(45,108,223,.28)">
+    <div style="position:absolute;right:-18px;top:-18px;font-size:90px;opacity:.16">${u?portalEmoji(u):'🎉'}</div>
+    <div style="position:relative"><div style="font-size:11px;font-weight:800;letter-spacing:.5px;opacity:.92">📣 KAMPANYA</div>
+    <div style="font-size:18px;font-weight:800;margin-top:3px;line-height:1.15">${esc(k.baslik)}</div>
+    ${k.metin?`<div style="font-size:12.5px;opacity:.95;margin-top:4px">${esc(k.metin)}</div>`:''}
+    ${u?`<div style="display:flex;align-items:center;gap:8px;margin-top:9px;background:rgba(255,255,255,.16);border-radius:11px;padding:7px 10px"><div style="width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:18px;overflow:hidden;flex:0 0 34px">${urunKapak(u)?`<img src="${urunKapak(u)}" style="width:100%;height:100%;object-fit:cover">`:portalEmoji(u)}</div><div style="min-width:0;flex:1"><div style="font-size:13px;font-weight:800">${esc(u.ad)}</div><div style="font-size:12px;opacity:.9">${TL(portalFiyat(u))}/${esc(u.birim||'')}</div></div><span style="font-size:12px;font-weight:800;flex:0 0 auto">İncele ›</span></div>`:''}
+    ${k.bitis?`<div id="p-geri" style="margin-top:9px;display:inline-block;background:rgba(0,0,0,.22);border-radius:9px;padding:5px 11px;font-size:13px;font-weight:800">⏳ ${geriSayimStr(k.bitis)}</div>`:''}</div></div>`;}
 function portalBadge(u,cok){const st=stokTop(u);
   if(st<=0)return {t:'TÜKENDİ',c:'#8a97a8'};
   if(st<=(+u.kritik||0))return {t:'⚡ SON '+st,c:'var(--bad)'};
@@ -2783,6 +2813,8 @@ function portalCiz(){
     body=`<div style="padding:13px 14px ${cartN?'82px':'16px'}">
       <div style="display:flex;gap:8px;margin-bottom:12px"><div style="position:relative;flex:1"><span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:15px;opacity:.5">🔍</span><input class="psearch" value="${esc(portalArama)}" placeholder="Ürün ara..." oninput="portalArama=this.value;portalCiz();const el=document.getElementById('p-search');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}" id="p-search"></div>
       <button onclick="portalFiltreAcik=!portalFiltreAcik;portalCiz()" style="flex:0 0 auto;border:none;border-radius:13px;background:${filtN||portalFiltreAcik?'var(--ind2)':'var(--card)'};color:${filtN||portalFiltreAcik?'#fff':'var(--ink)'};font-weight:700;font-size:13px;padding:0 14px;box-shadow:0 2px 8px rgba(20,29,43,.06);cursor:pointer">⚙️${filtN?' '+filtN:''}</button></div>`;
+    // kampanya banner (vitrin)
+    if(!q&&!filtN&&!portalKat)body+=kampanyaBannerHtml();
     // hızlı erişim: kayıtlı taslak veya son sipariş
     if(!q&&!filtN&&!portalKat){const tsl=portalTaslakVar(),son=portalSonSiparis();
       if(tsl)body+=`<div class="card" style="padding:11px 13px;margin-bottom:11px;background:var(--thr-s);border-color:var(--thr);display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><b style="font-size:13px">📝 Kayıtlı sepetin var</b><div class="mini">${tsl.sepet.reduce((a,k)=>a+k.mik,0)} ${esc((tsl.sepet[0]||{}).birim||'seri')} · ${tstr(tsl.tarih)}</div></div><div style="display:flex;gap:6px;flex:0 0 auto"><button class="btn ghost sm" style="width:auto;margin:0;padding:7px 9px" onclick="portalTaslakSil()">✕</button><button class="btn g sm" style="width:auto;margin:0;padding:7px 13px" onclick="portalTaslakYukle()">Yükle</button></div></div>`;
@@ -2811,6 +2843,8 @@ function portalCiz(){
     if(cartN)body+=`<div style="position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;background:var(--ind2);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;box-shadow:0 -3px 14px rgba(0,0,0,.18)" onclick="portalView='sepet';portalCiz()"><div style="font-weight:800">🛒 ${cartN} ürün</div><div style="font-weight:800">${TL(cartT)} · Sepete Git →</div></div>`;
   }
   pov.innerHTML=`<div style="max-width:520px;margin:0 auto;min-height:100%">${head}${body}</div>`;
+  // geri sayım tik yönetimi
+  if(document.getElementById('p-geri')){if(!_geriT)_geriT=setInterval(portalGeriSayimTik,1000)}else if(_geriT){clearInterval(_geriT);_geriT=null}
 }
 
 /* ---------- RAPOR ---------- */
