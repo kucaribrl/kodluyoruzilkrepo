@@ -1875,17 +1875,23 @@ function cekIslem(id){
     ${c.durum==='ciro'?`<div class="kv"><span class="k">Ciro edilen</span><span class="v">${esc(c.ciroCari||'')}</span></div>`:''}
     ${cekFotoStrip(c)}${altBtn}`);
   const kurPrev=kf0&&Math.abs(kf0.fark)>=1?`<div class="infobox">💱 Dövizli çek: veriş ${kf0.vk.toFixed(2)} → bugün ${kf0.gk.toFixed(2)}. ${c.tip==='alinan'?'Tahsil':'Öde'}rsen kur farkı <b>${kf0.fark>=0?'+':'−'}${TL(Math.abs(kf0.fark))}</b> ${c.cari} bakiyesine eklenecek.</div>`:'';
+  const g=gunFark(c.vade),geldi=g<=0;
+  const kilit=geldi?'':`<div class="infobox">🔒 Vadesine <b>${g} gün</b> var. Çek vadesi gelince tahsil/${c.tip==='alinan'?'karşılıksız':'ödeme'} işlenir — vadesinden önce sadece ciro edilebilir.</div>`;
+  const al=c.tip==='alinan';
   open_('Çek İşlemi',`
     <div class="kv"><span class="k">${esc(c.cari||'—')}</span><span class="v">${TL(c.tutar)}</span></div>
-    <div class="kv"><span class="k">Vade</span><span class="v">${dstr(c.vade)} · ${gunFark(c.vade)<0?Math.abs(gunFark(c.vade))+' gün geçti':gunFark(c.vade)+' gün kaldı'}</span></div>${detay}${cekFotoStrip(c)}${kurPrev}
-    <label>İşlem</label>
-    ${c.tip==='alinan'?`
-    <button class="btn g" onclick="cekTahsil(${id})">✓ Tahsil Et (hesaba geç)</button>
+    <div class="kv"><span class="k">Vade</span><span class="v">${dstr(c.vade)} · ${g<0?Math.abs(g)+' gün geçti':g===0?'bugün':g+' gün kaldı'}</span></div>${detay}${cekFotoStrip(c)}${kurPrev}
+    <label>İşlem</label>${kilit}
+    ${al?`
+    ${geldi?`<button class="btn g" onclick="cekTahsil(${id})">✓ Tahsil Et (hesaba geç)</button>`:''}
     <button class="btn" style="background:var(--pur)" onclick="cekCiro(${id})">🔄 Ciro Et (tedarikçiye devret)</button>
-    <button class="btn ghost" onclick="cekKarsiliksiz(${id})">Karşılıksız çıktı</button>`:`
-    <button class="btn g" onclick="cekTahsil(${id})">✓ Ödendi (vade kuruyla)</button>`}
+    ${geldi?`<button class="btn ghost" onclick="cekKarsiliksiz(${id})">Karşılıksız çıktı</button>`:`<button class="btn ghost" onclick="cekErken(${id})">Erken bozdur / kırdır</button>`}`:`
+    ${geldi?`<button class="btn g" onclick="cekTahsil(${id})">✓ Ödendi (vade kuruyla)</button>`:`<button class="btn ghost" onclick="cekErken(${id})">Erken öde</button>`}`}
     ${altBtn}
   `);
+}
+function cekErken(id){const c=db.cekler.find(x=>x.id===id);if(!c)return;const g=gunFark(c.vade);const al=c.tip==='alinan';
+  askConfirm(`Bu çekin vadesine ${g} gün var.\n${al?'Bankaya erken bozdurup (kırdırıp) nakde mi çeviriyorsun?':'Vadesinden önce mi ödüyorsun?'}`,()=>cekTahsil(id),al?'Erken Boz':'Erken Öde');
 }
 function cekTahsil(id){
   const c=db.cekler.find(x=>x.id===id);let msg;
