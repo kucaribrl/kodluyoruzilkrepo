@@ -372,11 +372,11 @@ function seed(){return{
   kurUSD:32.40, kurEUR:35.10,
   seq:{u:1000,h:1000,c:1000,s:1000,cek:1000,ie:1000,hr:1000,al:1000,oh:1000},
   urunler:[
-    {id:1,ad:'Polo Yaka Triko',kod:'2026Y118',raf:'A-12',kat:'Polo',marka:'Öz Marka',cesit:'Markalı',kaynak:'uretim',birim:'seri',seri:5,renkler:[{ad:'Lacivert',hex:'#1d2f52',stok:60},{ad:'Gri',hex:'#8a8f98',stok:55},{ad:'Bej',hex:'#e8e2d4',stok:42}],stok:157,alis:95,satis:133,karYuzde:40,kritik:15,sezon:'Yaz',yil:'2026'},
-    {id:2,ad:'Basic Tişört',kod:'2026Y087',raf:'A-14',kat:'Tişört',marka:'',cesit:'Markasız',kaynak:'uretim',birim:'seri',seri:5,renkler:[{ad:'Beyaz',hex:'#f2f2ee',stok:5},{ad:'Siyah',hex:'#111111',stok:3}],stok:8,alis:78,satis:118,karYuzde:35,kritik:15,sezon:'Yaz',yil:'2026'},
-    {id:3,ad:'Sweatshirt Kanguru',kod:'2026Y110',raf:'B-03',kat:'Sweat',marka:'Öz Marka',cesit:'Markalı',kaynak:'uretim',birim:'seri',seri:5,renkler:[{ad:'Gri',hex:'#8a8f98',stok:2},{ad:'Lacivert',hex:'#1d2f52',stok:1}],stok:3,alis:180,satis:245,karYuzde:36,kritik:10,sezon:'Kış',yil:'2026'},
-    {id:4,ad:'Eşofman Altı',kod:'2026Y052',kat:'Eşofman',marka:'',cesit:'Markasız',kaynak:'uretim',birim:'adet',seri:1,renkler:[{ad:'Siyah',hex:'#111111',stok:240}],stok:240,alis:60,satis:95,karYuzde:38,kritik:40,sezon:'4 Mevsim',yil:'2026'},
-    {id:5,ad:'Antep Triko Kazak',kod:'2026Y099',kat:'Kazak',marka:'Öz Marka',cesit:'Markalı',kaynak:'alim',birim:'seri',seri:6,renkler:[{ad:'Bordo',hex:'#5a1220',stok:34},{ad:'Antrasit',hex:'#2b2b2b',stok:30}],stok:64,alis:185,satis:260,karYuzde:40,kritik:12,sezon:'Kış',yil:'2026',tedarikciId:102},
+    {id:1,ad:'Polo Yaka Triko',kod:'2026Y118',raf:'A-12',kat:'Polo',marka:'Öz Marka',cesit:'Markalı',kaynak:'uretim',birim:'seri',seri:5,renkler:[{ad:'Lacivert',hex:'#1d2f52',stok:60},{ad:'Gri',hex:'#8a8f98',stok:55},{ad:'Bej',hex:'#e8e2d4',stok:42}],stok:157,alis:95,satis:133,karYuzde:40,kritik:15,kumas:'Süprem',bedenler:['S','M','L','XL'],sezon:'Yaz',yil:'2026'},
+    {id:2,ad:'Basic Tişört',kod:'2026Y087',raf:'A-14',kat:'Tişört',marka:'',cesit:'Markasız',kaynak:'uretim',birim:'seri',seri:5,renkler:[{ad:'Beyaz',hex:'#f2f2ee',stok:5},{ad:'Siyah',hex:'#111111',stok:3}],stok:8,alis:78,satis:118,karYuzde:35,kritik:15,kumas:'Penye',bedenler:['S','M','L','XL','2XL'],sezon:'Yaz',yil:'2026'},
+    {id:3,ad:'Sweatshirt Kanguru',kod:'2026Y110',raf:'B-03',kat:'Sweat',marka:'Öz Marka',cesit:'Markalı',kaynak:'uretim',birim:'seri',seri:5,renkler:[{ad:'Gri',hex:'#8a8f98',stok:2},{ad:'Lacivert',hex:'#1d2f52',stok:1}],stok:3,alis:180,satis:245,karYuzde:36,kritik:10,kumas:'İki İplik',bedenler:['M','L','XL','2XL','3XL'],sezon:'Kış',yil:'2026'},
+    {id:4,ad:'Eşofman Altı',kod:'2026Y052',kat:'Eşofman',marka:'',cesit:'Markasız',kaynak:'uretim',birim:'adet',seri:1,renkler:[{ad:'Siyah',hex:'#111111',stok:240}],stok:240,alis:60,satis:95,karYuzde:38,kritik:40,kumas:'İki İplik',bedenler:['S','M','L','XL','2XL','3XL','4XL'],sezon:'4 Mevsim',yil:'2026'},
+    {id:5,ad:'Antep Triko Kazak',kod:'2026Y099',kat:'Kazak',marka:'Öz Marka',cesit:'Markalı',kaynak:'alim',birim:'seri',seri:6,renkler:[{ad:'Bordo',hex:'#5a1220',stok:34},{ad:'Antrasit',hex:'#2b2b2b',stok:30}],stok:64,alis:185,satis:260,karYuzde:40,kritik:12,kumas:'Triko',bedenler:['M','L','XL'],sezon:'Kış',yil:'2026',tedarikciId:102},
   ],
   hammadde:[
     {id:1,ad:'Süprem Kumaş',kat:'Kumaş',detay:'Beyaz · 30/1 penye',birim:'metre',stok:1240,alis:48,kritik:200},
@@ -2554,10 +2554,13 @@ function portalPaylas(){const url=location.href.split('#')[0]+'#siparis';const t
   else open_('Sipariş Linki',`<textarea readonly style="width:100%;height:100px;font-size:12px">${esc(t)}</textarea>`);
 }
 /* ---------- MÜŞTERİ PORTALI (müşteri tarafı) ---------- */
-let portalSepet=[], portalMusAd='', portalNot='', portalKat='', portalView='katalog', portalUrunId=0, portalArama='', portalTeklifTutar='';
+let portalSepet=[], portalMusAd='', portalNot='', portalKat='', portalView='katalog', portalUrunId=0, portalArama='', portalTeklifTutar='', portalKumas='', portalBeden='', portalBattal=false, portalFiltreAcik=false;
 function portalAc(){portalView='katalog';document.getElementById('pov').style.display='block';window.scrollTo(0,0);portalCiz()}
-function portalKapat(){document.getElementById('pov').style.display='none';portalSepet=[];portalView='katalog';portalKat='';if(location.hash==='#siparis')history.replaceState(null,'',''+location.pathname);if(typeof cur!=='undefined')go('portal')}
+function portalKapat(){document.getElementById('pov').style.display='none';portalSepet=[];portalView='katalog';portalKat='';portalKumas='';portalBeden='';portalBattal=false;portalFiltreAcik=false;portalArama='';if(location.hash==='#siparis')history.replaceState(null,'',''+location.pathname);if(typeof cur!=='undefined')go('portal')}
 function portalFiyat(u){return +u.satis||0}
+const BATTAL_BED=['XXL','2XL','3XL','4XL','5XL','6XL'];
+function urunBedenler(u){return (u.bedenler||[]).map(x=>typeof x==='object'?x.beden:x).filter(Boolean)}
+function urunBattal(u){return urunBedenler(u).some(b=>BATTAL_BED.includes((''+b).toUpperCase()))}
 function portalMik(uid,d){const u=urun(uid);if(!u)return;let it=portalSepet.find(k=>k.uid===uid);
   if(!it){if(d>0)portalSepet.push({uid,urun:u.ad,mik:1,birim:u.birim,fiyat:portalFiyat(u)})}
   else{it.mik+=d;if(it.mik<=0)portalSepet=portalSepet.filter(k=>k.uid!==uid)}
@@ -2621,6 +2624,7 @@ function portalCiz(){
       <div style="font-size:26px;font-weight:800;color:var(--ind);margin:10px 0">${TL(portalFiyat(u))}<span class="mini" style="font-weight:600">/${esc(u.birim||'')}</span></div>
       ${kademeler().length?`<div class="card" style="padding:11px 13px;background:var(--good-s);border-color:var(--good)"><div style="font-weight:800;font-size:13px;color:var(--good)">📦 Çok al, ucuza gel!</div>${kademeler().map(k=>`<div style="display:flex;justify-content:space-between;font-size:12.5px;margin-top:5px"><span>${k.min}+ ${esc(u.birim||'adet')} alana</span><b style="color:var(--good)">%${k.ind} indirim → ${TL(Math.round(portalFiyat(u)*(1-k.ind/100)))}</b></div>`).join('')}</div>`:''}
       ${st<=0?`<div class="warnbox">⚠️ Şu an stokta yok. <a onclick="portalStokBildir(${u.id})" style="color:var(--ind2);font-weight:800;cursor:pointer">🔔 Stoğa girince haber ver</a></div>`:(st<=(+u.kritik||0)?`<div class="warnbox" style="background:var(--bad-s);color:var(--bad);border:none">⚡ Son ${st} ${esc(u.birim||'adet')}! Hızlı tükeniyor.</div>`:'')}
+      ${(u.birim==='seri'&&urunBedenler(u).length)?`<div class="sec" style="margin-top:14px">Seri İçeriği ${urunBattal(u)?'<span class="tag" style="background:var(--thr-s);color:var(--thr)">💪 BATTAL</span>':''}</div><div class="card" style="padding:11px 13px"><div style="display:flex;gap:6px;flex-wrap:wrap">${(u.bedenler||[]).map(x=>{const bd=typeof x==='object'?x.beden:x,ad=typeof x==='object'?(x.adet||1):1;return `<span class="pchip on" style="cursor:default">${esc(bd)}${ad>1?' ×'+ad:''}</span>`}).join('')}</div><div class="mini" style="margin-top:8px">1 seri = <b>${u.seri||urunBedenler(u).length} parça</b>${u.kumas?' · '+esc(u.kumas):''}</div></div>`:(u.kumas?`<div class="mini" style="margin-top:12px">🧵 Kumaş: <b>${esc(u.kumas)}</b></div>`:'')}
       ${objs.length?`<div class="sec" style="margin-top:14px">Renkler (${objs.length})</div><div style="display:flex;flex-wrap:wrap;gap:10px">${objs.map(r=>`<div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:52px"><span style="width:38px;height:38px;border-radius:11px;background:${r.hex||'#ccc'};border:1px solid var(--ln);box-shadow:0 1px 4px rgba(0,0,0,.1)"></span><span class="mini" style="text-align:center;line-height:1.1">${esc(r.ad||'')}</span></div>`).join('')}</div><div class="mini" style="margin-top:8px">Renk dağılımını sipariş notuna yazabilirsiniz.</div>`:''}
       </div></div>`;
     body+=`<div style="position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;background:var(--card);border-top:1px solid var(--ln);padding:12px 16px;display:flex;gap:12px;align-items:center;box-shadow:0 -3px 14px rgba(0,0,0,.1)">${q>0?`<div class="pstep" style="flex:0 0 auto"><button onclick="portalMik(${u.id},-1)">−</button><b>${q}</b><button onclick="portalMik(${u.id},1)">+</button></div><button class="btn g" style="flex:1;margin:0" onclick="portalView='sepet';portalCiz()">Sepete Git · ${TL(cartT)}</button>`:`<button class="btn" style="flex:1;margin:0" onclick="portalMik(${u.id},1)">🛒 Sepete Ekle · ${TL(portalFiyat(u))}</button>`}</div>`;
@@ -2638,17 +2642,32 @@ function portalCiz(){
       <button class="btn g" style="margin-top:14px" onclick="portalGonder()">${(+portalTeklifTutar>0&&+portalTeklifTutar<t)?'💬 Teklifle Gönder · '+TL(+portalTeklifTutar):'✓ Siparişi Gönder · '+TL(t)}</button>`:`<div style="text-align:center;padding:40px 20px"><div style="font-size:44px;opacity:.4">🛒</div><div class="mini" style="margin-top:10px">Sepetiniz boş</div><button class="btn ghost" style="margin:16px auto 0;max-width:220px" onclick="portalView='katalog';portalCiz()">Ürünlere Göz At</button></div>`}
     </div>`;
   }else{
-    const kats=[...new Set(db.urunler.filter(u=>!u.pasif).map(u=>u.kat).filter(Boolean))];
+    const aktifAll=db.urunler.filter(u=>!u.pasif);
+    const kats=[...new Set(aktifAll.map(u=>u.kat).filter(Boolean))];
+    const kumaslar=[...new Set(aktifAll.map(u=>u.kumas).filter(Boolean))];
+    const bedenler=[...new Set(aktifAll.flatMap(u=>urunBedenler(u)))].filter(b=>!BATTAL_BED.includes((''+b).toUpperCase()));
     const q=portalArama.trim().toLowerCase();
-    let list=db.urunler.filter(u=>!u.pasif);
+    let list=aktifAll;
     if(portalKat)list=list.filter(u=>u.kat===portalKat);
+    if(portalKumas)list=list.filter(u=>u.kumas===portalKumas);
+    if(portalBattal)list=list.filter(urunBattal);
+    if(portalBeden)list=list.filter(u=>urunBedenler(u).map(b=>(''+b).toUpperCase()).includes(portalBeden.toUpperCase()));
     if(q)list=list.filter(u=>(u.ad||'').toLowerCase().includes(q)||(u.kod||'').toLowerCase().includes(q));
+    const filtN=(portalKumas?1:0)+(portalBeden?1:0)+(portalBattal?1:0);
     body=`<div style="padding:13px 14px ${cartN?'82px':'16px'}">
-      <div style="position:relative;margin-bottom:12px"><span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:15px;opacity:.5">🔍</span><input class="psearch" value="${esc(portalArama)}" placeholder="Ürün ara..." oninput="portalArama=this.value;portalCiz();const el=document.getElementById('p-search');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}" id="p-search"></div>`;
+      <div style="display:flex;gap:8px;margin-bottom:12px"><div style="position:relative;flex:1"><span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:15px;opacity:.5">🔍</span><input class="psearch" value="${esc(portalArama)}" placeholder="Ürün ara..." oninput="portalArama=this.value;portalCiz();const el=document.getElementById('p-search');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}" id="p-search"></div>
+      <button onclick="portalFiltreAcik=!portalFiltreAcik;portalCiz()" style="flex:0 0 auto;border:none;border-radius:13px;background:${filtN||portalFiltreAcik?'var(--ind2)':'var(--card)'};color:${filtN||portalFiltreAcik?'#fff':'var(--ink)'};font-weight:700;font-size:13px;padding:0 14px;box-shadow:0 2px 8px rgba(20,29,43,.06);cursor:pointer">⚙️${filtN?' '+filtN:''}</button></div>`;
+    if(portalFiltreAcik){
+      body+=`<div class="card" style="padding:12px 13px;margin-bottom:12px">`;
+      if(kumaslar.length){body+=`<div class="mini" style="font-weight:800;margin-bottom:6px">Kumaş</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">`+kumaslar.map(k=>`<div onclick="portalKumas=portalKumas==='${esc(k)}'?'':'${esc(k)}';portalCiz()" class="pchip${portalKumas===k?' on':''}">${esc(k)}</div>`).join('')+`</div>`}
+      body+=`<div class="mini" style="font-weight:800;margin-bottom:6px">Beden</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"><div onclick="portalBattal=!portalBattal;portalCiz()" class="pchip${portalBattal?' on':''}" style="${portalBattal?'':'background:var(--thr-s);color:var(--thr);border-color:var(--thr)'}">💪 BATTAL</div>`+bedenler.map(bd=>`<div onclick="portalBeden=portalBeden==='${esc(bd)}'?'':'${esc(bd)}';portalCiz()" class="pchip${portalBeden===bd?' on':''}">${esc(bd)}</div>`).join('')+`</div>`;
+      if(filtN)body+=`<a onclick="portalKumas='';portalBeden='';portalBattal=false;portalCiz()" style="color:var(--bad);font-weight:700;font-size:12.5px;cursor:pointer">✕ Filtreleri temizle</a>`;
+      body+=`</div>`;
+    }
     if(kats.length)body+=`<div style="display:flex;gap:7px;overflow-x:auto;padding-bottom:13px;margin:0 -2px"><div onclick="portalKat='';portalCiz()" class="pchip${portalKat?'':' on'}">Tümü</div>`+kats.map(k=>`<div onclick="portalKat='${esc(k).replace(/'/g,"\\'")}';portalCiz()" class="pchip${portalKat===k?' on':''}">${esc(k)}</div>`).join('')+`</div>`;
     const cok=portalCokSatan();
     // vitrin rafları (filtre/arama yokken)
-    if(!portalKat&&!q){
+    if(!portalKat&&!q&&!filtN){
       const aktif=db.urunler.filter(u=>!u.pasif);
       body+=portalRaf('🔥 Çok Satanlar',aktif.filter(u=>cok.has(u.id)));
       body+=portalRaf('✨ Yeni Gelenler',aktif.filter(u=>u.yil&&(''+u.yil)>='2026').slice(0,10));
