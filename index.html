@@ -171,6 +171,12 @@
   .acitem.yeni{color:var(--ind2)}
   .acav{width:30px;height:30px;flex:0 0 30px;border-radius:8px;background:var(--ind2);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;overflow:hidden}
   .acav img{width:100%;height:100%;object-fit:cover}
+  .pchip{padding:7px 14px;border-radius:20px;background:var(--card);border:1px solid var(--ln);font-size:12.5px;font-weight:700;color:var(--sub);white-space:nowrap;cursor:pointer}
+  .pchip.on{background:var(--ind2);color:#fff;border-color:var(--ind2)}
+  .pstep{display:inline-flex;align-items:center;gap:9px;background:var(--ln2);border-radius:9px;padding:4px 6px}
+  .pstep.sm button{width:26px;height:26px}
+  .pstep button{width:30px;height:30px;border:none;background:var(--card);border-radius:7px;font-size:17px;font-weight:800;color:var(--ind);cursor:pointer;box-shadow:var(--sh)}
+  .pstep b{min-width:20px;text-align:center;font-size:14px}
   .cfoto{width:58px;height:58px;flex:0 0 58px;border:1px dashed var(--ln);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--sub);cursor:pointer;overflow:hidden;background:#fff}
   .cfoto img{width:100%;height:100%;object-fit:cover}
   .odrow{border:1px solid var(--ln);border-radius:12px;padding:9px;margin-top:8px;background:#fbfcfe}
@@ -332,6 +338,7 @@
 <div class="cov" id="cov"><div class="cbox"><div id="cMsg"></div><div class="cbtns"><button class="btn ghost sm" id="cNo">Vazgeç</button><button class="btn danger sm" id="cYes">Evet</button></div></div></div>
 <div class="ov" id="sov" style="z-index:55"><div class="sheet"><div class="hd"><h3 id="sT">Stok</h3><button class="x" onclick="document.getElementById('sov').classList.remove('show')">✕</button></div><div class="bd" id="sB"></div></div></div>
 <div class="toast" id="toast"></div>
+<div id="pov" style="display:none;position:fixed;inset:0;z-index:60;background:var(--bg);overflow-y:auto"></div>
 <div id="printarea"></div>
 
 <script>
@@ -444,7 +451,7 @@ function seqFix(d){ // id çakışmasını önle: her sıra numarasını mevcut 
   });
 }
 function save(){localStorage.setItem(KEY,JSON.stringify(db))}
-function nid(k){return db.seq[k]++}
+function nid(k){if(db.seq[k]==null)db.seq[k]=1000;return db.seq[k]++}
 function sifirla(){askConfirm('Tüm veriler örnek verilere sıfırlansın mı?',()=>{db=seed();save();go('panel');toast('Sıfırlandı')})}
 
 /* =================== YARDIMCI =================== */
@@ -2476,24 +2483,82 @@ function isEmriA4(id){
 
 /* ---------- PORTAL ---------- */
 function rPortal(){
-  let html=`<div class="sec">Onay Bekleyen Siparişler (${db.bekleyenPortal.length})</div>`;
-  html+=db.bekleyenPortal.length?db.bekleyenPortal.map(o=>`<div class="card" style="margin-bottom:11px;padding:13px"><div style="display:flex;align-items:center;gap:10px"><div class="av">${ii(o.mus)}</div><div class="mid"><div class="t">${esc(o.mus)}</div><div class="s">${tstr(o.tarih)}</div></div></div>
+  let html=`<div class="g2"><button class="btn sm" onclick="portalAc()">👁️ Müşteri Sipariş Ekranı</button><button class="btn ghost sm" onclick="portalPaylas()">🔗 Linki Paylaş</button></div>
+    <div class="mini" style="margin:8px 3px">Müşterilerin katalogdan seçip sipariş verdiği ekran. Aynı cihazda demo/kiosk olarak çalışır; farklı cihazdan gelmesi için uygulamanın bir sunucuda yayınlanması gerekir.</div>`;
+  html+=`<div class="sec">Onay Bekleyen Siparişler (${db.bekleyenPortal.length})</div>`;
+  html+=db.bekleyenPortal.length?db.bekleyenPortal.map(o=>`<div class="card" style="margin-bottom:11px;padding:13px"><div style="display:flex;align-items:center;gap:10px"><div class="av">${ii(o.mus)}</div><div class="mid"><div class="t">${esc(o.mus)}</div><div class="s">${tstr(o.tarih)}${o.not?' · 📝 '+esc(o.not):''}</div></div></div>
     <div style="background:var(--ln2);border-radius:9px;padding:9px 11px;margin:10px 0;font-size:12px">${o.kalemler.map(k=>`<b>${esc(k.urun)}</b> — ${k.mik} ${k.birim}`).join(' · ')}</div>
     <div style="display:flex;justify-content:space-between;align-items:center"><div class="v" style="font-size:16px;font-weight:800;color:var(--ind)">${TL(o.tutar)}</div><div style="display:flex;gap:8px"><button class="btn danger sm" onclick="portalRed(${o.id})">Reddet</button><button class="btn g sm" onclick="portalOnay(${o.id})">✓ Onayla</button></div></div></div>`).join(''):emp('🛍️','Onay bekleyen sipariş yok');
-  html+=`<div class="okbox">✓ Onaylayınca sipariş satışa dönüşür, stok düşer, mal ayrılır ve müşteri carisine işlenir.</div>`;
+  html+=`<div class="okbox">✓ Onaylayınca sipariş satışa dönüşür, stok düşer, mal <b>ayrılır</b> (rezerve) ve müşteri carisine işlenir.</div>`;
   $('app').innerHTML=html;
 }
 function portalOnay(id){
   const o=db.bekleyenPortal.find(x=>x.id===id);if(!o)return;
-  const m=cari(o.mid)||db.cariler.find(c=>c.ad===o.mus&&c.tip==='musteri');
-  const sat={id:nid('s'),tip:'satis',mid:m?m.id:0,mus:o.mus,tarih:Date.now(),kalemler:o.kalemler.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:k.fiyat})),araToplam:o.tutar,iskonto:0,tutar:o.tutar,odenen:0,pb:'TL',durum:'tamam',kaynak:'portal'};
-  db.satislar.push(sat);
-  o.kalemler.forEach(k=>{const u=urun(k.uid);if(u)u.stok-=k.mik});
-  if(m)m.bakiye+=o.tutar;
+  let m=cari(o.mid)||db.cariler.find(c=>c.tip==='musteri'&&c.ad.toLowerCase()===(o.mus||'').toLowerCase());
+  if(!m){m={id:nid('c'),tip:'musteri',ad:o.mus,bakiye:0};db.cariler.push(m)}
+  const sat={id:nid('s'),tip:'satis',mid:m.id,mus:m.ad,tarih:Date.now(),kalemler:o.kalemler.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:k.fiyat,renkler:k.renkler?k.renkler.map(r=>({...r})):undefined})),araToplam:o.tutar,iskonto:0,tutar:o.tutar,odenen:0,kesik:0,pb:'TL',satisKur:1,durum:'tamam',teslimDurum:'ayrildi',odemeler:[],kaynak:'portal'};
+  db.satislar.push(sat);applySatis(sat);
   db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);
-  save();closeM&&closeM();go('portal');toast('Sipariş onaylandı, satışa döndü ✓');
+  save();closeM&&closeM();go('portal');toast('Sipariş onaylandı ✓ mal ayrıldı');
 }
 function portalRed(id){db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);save();rPortal();toast('Sipariş reddedildi')}
+function portalPaylas(){const url=location.href.split('#')[0]+'#siparis';const t=`${db.firma||'Öz Tekstil'} toptan sipariş kataloğu:\n${url}\n\nKatalogdan ürün seçip sipariş verebilirsiniz.`;
+  if(navigator.share)navigator.share({text:t}).catch(()=>{});
+  else if(navigator.clipboard)navigator.clipboard.writeText(t).then(()=>toast('Sipariş linki kopyalandı ✓')).catch(()=>open_('Sipariş Linki',`<textarea readonly style="width:100%;height:100px;font-size:12px">${esc(t)}</textarea>`));
+  else open_('Sipariş Linki',`<textarea readonly style="width:100%;height:100px;font-size:12px">${esc(t)}</textarea>`);
+}
+/* ---------- MÜŞTERİ PORTALI (müşteri tarafı) ---------- */
+let portalSepet=[], portalMusAd='', portalNot='', portalKat='', portalView='katalog';
+function portalAc(){portalView='katalog';document.getElementById('pov').style.display='block';window.scrollTo(0,0);portalCiz()}
+function portalKapat(){document.getElementById('pov').style.display='none';portalSepet=[];portalView='katalog';portalKat='';if(location.hash==='#siparis')history.replaceState(null,'',''+location.pathname);if(typeof cur!=='undefined')go('portal')}
+function portalFiyat(u){return +u.satis||0}
+function portalMik(uid,d){const u=urun(uid);if(!u)return;let it=portalSepet.find(k=>k.uid===uid);
+  if(!it){if(d>0)portalSepet.push({uid,urun:u.ad,mik:1,birim:u.birim,fiyat:portalFiyat(u)})}
+  else{it.mik+=d;if(it.mik<=0)portalSepet=portalSepet.filter(k=>k.uid!==uid)}
+  portalCiz();
+}
+function portalGonder(){
+  const ad=(portalMusAd||'').trim();if(!ad)return toast('Adınızı / firma adınızı yazın');
+  if(!portalSepet.length)return toast('Sepetiniz boş');
+  const m=db.cariler.find(c=>c.tip==='musteri'&&c.ad.toLowerCase()===ad.toLowerCase());
+  const t=portalSepet.reduce((a,k)=>a+k.mik*k.fiyat,0);
+  db.bekleyenPortal.push({id:nid('bp'),mus:m?m.ad:ad,mid:m?m.id:0,tarih:Date.now(),kalemler:portalSepet.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:k.fiyat})),tutar:t,not:(portalNot||'').trim()});
+  save();portalSepet=[];portalNot='';portalView='tesekkur';portalCiz();
+}
+function portalCiz(){
+  const pov=document.getElementById('pov');if(!pov)return;
+  const head=`<div style="background:linear-gradient(135deg,#24487a,#2d6cdf);color:#fff;padding:18px 16px 16px"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div>${db.firmaLogo?`<img src="${db.firmaLogo}" style="height:32px">`:`<div style="font-size:20px;font-weight:800">${esc(db.firma||'Öz Tekstil')}</div>`}<div style="font-size:12.5px;opacity:.92;margin-top:3px">🛍️ Toptan Sipariş Kataloğu</div></div><button onclick="portalKapat()" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:8px;padding:7px 11px;font-size:12px;font-weight:700;cursor:pointer">✕ Kapat</button></div></div>`;
+  let body='';
+  if(portalView==='tesekkur'){
+    body=`<div style="padding:56px 24px;text-align:center"><div style="font-size:58px">✅</div><div style="font-size:20px;font-weight:800;margin-top:12px">Siparişiniz Alındı!</div><div class="mini" style="margin-top:8px;font-size:14px;line-height:1.6">${esc(db.firma||'Öz Tekstil')} siparişinizi inceleyip onaylayacak. Onaylandığında hazırlanıp size bilgi verilecek.</div><button class="btn" style="margin:24px auto 0;max-width:280px" onclick="portalView='katalog';portalCiz()">Yeni Sipariş Ver</button><button class="btn ghost" style="margin:8px auto 0;max-width:280px" onclick="portalKapat()">Kapat</button></div>`;
+  }else if(portalView==='sepet'){
+    const t=portalSepet.reduce((a,k)=>a+k.mik*k.fiyat,0);
+    body=`<div style="padding:14px">
+      <div onclick="portalView='katalog';portalCiz()" style="color:var(--ind2);font-weight:700;font-size:13px;cursor:pointer;margin-bottom:10px">‹ Katalağa dön</div>
+      <div class="sec" style="margin-top:0">Sepetiniz</div>
+      ${portalSepet.length?`<div class="card" style="padding:4px 12px">${portalSepet.map(k=>`<div class="exrow"><div class="exl"><b>${esc(k.urun)}</b><small>${TL(k.fiyat)}/${esc(k.birim)}</small></div><div style="display:flex;align-items:center;gap:10px"><div class="pstep sm"><button onclick="portalMik(${k.uid},-1);portalView='sepet';portalCiz()">−</button><b>${k.mik}</b><button onclick="portalMik(${k.uid},1);portalView='sepet';portalCiz()">+</button></div><b style="width:74px;text-align:right">${TL(k.mik*k.fiyat)}</b></div></div>`).join('')}</div>
+      <div class="total" style="margin-top:12px"><div><div class="l">Toplam</div><div class="v">${TL(t)}</div></div></div>
+      <label style="margin-top:14px">Adınız / Firmanız *</label><input id="p-ad" value="${esc(portalMusAd)}" placeholder="ör. Yılmaz Tekstil" oninput="portalMusAd=this.value">
+      <label>Not (opsiyonel)</label><input id="p-not" value="${esc(portalNot)}" placeholder="teslimat, renk tercihi..." oninput="portalNot=this.value">
+      <button class="btn g" style="margin-top:14px" onclick="portalGonder()">✓ Siparişi Gönder</button>`:`<div class="mini" style="text-align:center;padding:24px">Sepetiniz boş</div>`}
+    </div>`;
+  }else{
+    const kats=[...new Set(db.urunler.filter(u=>!u.pasif).map(u=>u.kat).filter(Boolean))];
+    let list=db.urunler.filter(u=>!u.pasif);if(portalKat)list=list.filter(u=>u.kat===portalKat);
+    const cartN=portalSepet.reduce((a,k)=>a+k.mik,0),cartT=portalSepet.reduce((a,k)=>a+k.mik*k.fiyat,0);
+    body=`<div style="padding:14px 14px ${cartN?'86px':'14px'}">`;
+    if(kats.length)body+=`<div style="display:flex;gap:7px;overflow-x:auto;padding-bottom:12px"><div onclick="portalKat='';portalCiz()" class="pchip${portalKat?'':' on'}">Tümü</div>`+kats.map(k=>`<div onclick="portalKat='${esc(k).replace(/'/g,"\\'")}';portalCiz()" class="pchip${portalKat===k?' on':''}">${esc(k)}</div>`).join('')+`</div>`;
+    body+=list.map(u=>{const st=stokTop(u),q=(portalSepet.find(k=>k.uid===u.id)||{}).mik||0,kap=urunKapak(u);
+      return `<div class="card" style="padding:11px;margin-bottom:10px;display:flex;gap:11px;align-items:center">
+        <div style="width:56px;height:56px;border-radius:10px;background:var(--ln2);flex:0 0 56px;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:24px">${kap?`<img src="${kap}" style="width:100%;height:100%;object-fit:cover">`:'👕'}</div>
+        <div style="flex:1;min-width:0"><div style="font-weight:800;font-size:14px">${esc(u.ad)}</div><div class="mini">${esc(u.kod||'')}${st<=0?' · <b style="color:var(--bad)">tükendi</b>':''}</div><div style="font-weight:800;color:var(--ind);margin-top:3px">${TL(portalFiyat(u))}<span class="mini" style="font-weight:600">/${esc(u.birim||'')}</span></div></div>
+        <div style="flex:0 0 auto">${q>0?`<div class="pstep"><button onclick="portalMik(${u.id},-1)">−</button><b>${q}</b><button onclick="portalMik(${u.id},1)">+</button></div>`:`<button class="btn sm" style="width:auto;padding:9px 15px;margin:0" onclick="portalMik(${u.id},1)">+ Ekle</button>`}</div>
+      </div>`}).join('')||`<div class="mini" style="text-align:center;padding:30px">Bu kategoride ürün yok</div>`;
+    body+=`</div>`;
+    if(cartN)body+=`<div style="position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;background:var(--ind2);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;box-shadow:0 -3px 14px rgba(0,0,0,.18)" onclick="portalView='sepet';portalCiz()"><div style="font-weight:800">🛒 Sepet · ${cartN} ürün</div><div style="font-weight:800">${TL(cartT)} · Devam →</div></div>`;
+  }
+  pov.innerHTML=`<div style="max-width:520px;margin:0 auto;min-height:100%">${head}${body}</div>`;
+}
 
 /* ---------- RAPOR ---------- */
 let rapDonem='ay', rapTab='ozet', rapMusId=0;
@@ -3019,6 +3084,8 @@ function fabAction(){if(cur==='stok'){(stokTab==='hammadde'&&canHammadde())?form
 
 /* =================== BAŞLAT =================== */
 go('panel');
+if(location.hash==='#siparis')portalAc();
+window.addEventListener('hashchange',()=>{if(location.hash==='#siparis')portalAc()});
 // açılışta kur eskiyse (yok veya 3 saatten eski) sessizce güncelle
 if(!db.kurTarih || Date.now()-db.kurTarih > 3*3600000){
   kurCek().then(ok=>{if(ok&&cur==='panel')render()});
