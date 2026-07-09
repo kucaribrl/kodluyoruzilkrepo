@@ -436,9 +436,10 @@ function seed(){return{
   minSiparis:0,
   portalTaslak:[],
   kampanya:null,
+  duzenliGider:[],
 };}
 let db=load();
-function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(!d||!d.urunler)return seed();seqFix(d);if(!d.kademe)d.kademe=[{min:20,ind:3},{min:50,ind:6},{min:100,ind:10}];if(!d.portalFav)d.portalFav=[];if(d.minSiparis==null)d.minSiparis=0;if(!d.portalTaslak)d.portalTaslak=[];if(d.kampanya===undefined)d.kampanya=null;return d}catch(e){return seed()}}
+function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(!d||!d.urunler)return seed();seqFix(d);if(!d.kademe)d.kademe=[{min:20,ind:3},{min:50,ind:6},{min:100,ind:10}];if(!d.portalFav)d.portalFav=[];if(d.minSiparis==null)d.minSiparis=0;if(!d.portalTaslak)d.portalTaslak=[];if(d.kampanya===undefined)d.kampanya=null;if(!d.duzenliGider)d.duzenliGider=[];return d}catch(e){return seed()}}
 function kademeler(){return (db.kademe&&db.kademe.length)?db.kademe.slice().filter(k=>+k.min>0).sort((a,b)=>a.min-b.min):[]}
 function kademeIsk(mik){let ind=0;kademeler().forEach(k=>{if((+mik||0)>=(+k.min||0))ind=+k.ind||0});return ind}
 function portalKalemFiyat(k){const u=urun(k.uid);const base=u?portalFiyat(u):(+k.fiyat||0);
@@ -585,6 +586,7 @@ function rPanel(){
     db.isemirleri.filter(i=>i.durum==='devam').forEach(i=>{const gec=-gunFark(i.baslangic+i.gun*86400000);if(gec>0)bekleyen.push({ic:'⏱️',bg:'var(--bad-s)',t:'İş Emri #'+i.id+' gecikti',s:i.urun+' · '+gec+' gün geç',act:()=>uretimDetay(i.id)})});
     db.cekler.filter(c=>c.durum==='portfoyde'&&gunFark(c.vade)<=7).forEach(c=>{const g=gunFark(c.vade),ov=g<0,al=c.tip==='alinan';
       bekleyen.push({ic:'🏷️',bg:ov?'var(--bad-s)':al?'var(--good-s)':'var(--warn-s)',t:(al?'Çek tahsilatı':'Çek ödemesi')+(ov?' · GECİKTİ '+Math.abs(g)+'g':g===0?' · BUGÜN':' · '+g+' gün'),s:c.cari+' · '+TL(c.tutar)+' · '+dstr(c.vade),act:()=>go('cek')})});
+    const dgB=duzenliGiderBekleyen();if(dgB.length)bekleyen.push({ic:'💸',bg:'var(--warn-s)',t:dgB.length+' düzenli gider bekliyor',s:dgB.map(g=>g.ad).join(', ')+' · '+TL(dgB.reduce((a,g)=>a+(+g.tutar||0),0)),act:()=>go('kasa')});
   }
   if(db.rol==='magaza'||db.rol==='depocu'){ // teslim bekleyen (ayrılan) siparişler
     ayrilan.forEach(s=>bekleyen.push({ic:'🔖',bg:'var(--warn-s)',t:s.mus+' · mal ayrıldı',s:'teslim bekliyor · '+s.kalemler.length+' kalem',act:()=>{go('satis');setTimeout(()=>satisFis(s.id),150)}}));
@@ -1083,7 +1085,10 @@ function urunAra(){const q=($('s-urun-in')?.value||'').trim().toLowerCase();cons
 }
 function urunSec(id){sUrunId=id;const u=urun(id);if($('s-urun-in'))$('s-urun-in').value=u?u.ad:'';$('s-urun-list').style.display='none';urnBilgi()}
 function urunEnter(){const q=($('s-urun-in')?.value||'').trim().toLowerCase();if(!q)return;
-  const u=db.urunler.find(x=>!x.pasif&&(x.renkler||[]).some(r=>r&&typeof r==='object'&&(r.barkod||'')===q))||db.urunler.find(x=>!x.pasif&&(x.kod||'').toLowerCase()===q)||db.urunler.find(x=>!x.pasif&&x.ad.toLowerCase().includes(q));
+  // renk barkodu tam eşleşirse: ürünü seç + o renkten +1 (okut-ekle)
+  for(const u of db.urunler){if(u.pasif)continue;const objs=renkObjs(u);const idx=objs.findIndex(r=>(r.barkod||'').toLowerCase()===q);
+    if(idx>=0){urunSec(u.id);setTimeout(()=>{const el=$('rq-'+idx);if(el){el.value=(+el.value||0)+1;if(typeof rqCheck==='function')rqCheck(idx,objs[idx].stok||0);toast('➕ '+esc(u.ad)+' · '+esc(objs[idx].ad))}},70);if($('s-urun-in'))$('s-urun-in').value='';return}}
+  const u=db.urunler.find(x=>!x.pasif&&(x.kod||'').toLowerCase()===q)||db.urunler.find(x=>!x.pasif&&x.ad.toLowerCase().includes(q));
   if(u)urunSec(u.id);else toast('Ürün bulunamadı');
 }
 async function kameraTara(){
@@ -1786,6 +1791,11 @@ function rKasa(){
     <div class="sec">Hesaplar <a onclick="formHesap()">+ Hesap</a></div><div class="card">`+db.hesaplar.map(h=>`<div class="row" onclick="hesapDetay(${h.id})"><div class="av" style="background:${h.tur==='nakit'?'var(--good)':h.tur==='pos'?'var(--thr)':'var(--ind)'}">${h.tur==='nakit'?'💵':h.tur==='pos'?'💳':'🏦'}</div><div class="mid"><div class="t">${esc(h.ad)}</div><div class="s">${h.tur}</div></div><div class="end"><div class="n ${h.bakiye<0?'neg':''}">${TL(h.bakiye)}</div></div></div>`).join('')+`</div>`;
   html+=`<div class="sec">Ortak Harcamaları</div><div class="card">`+(()=>{const grp={};db.ortakHarcama.forEach(o=>grp[o.ortak]=(grp[o.ortak]||0)+o.tutar);return Object.keys(grp).length?Object.keys(grp).map(k=>`<div class="row"><div class="av p">⚖️</div><div class="mid"><div class="t">${esc(k)}</div><div class="s">çektiği toplam</div></div><div class="end"><div class="n neg">${TL(grp[k])}</div></div></div>`).join(''):emp('⚖️','Kayıt yok')})()+`</div>
     <div style="margin-top:12px"><button class="btn ghost sm" onclick="formHarcama()">➕ Ortak Harcaması Ekle</button></div>`;
+  // düzenli (sabit) giderler
+  const dgBek=duzenliGiderBekleyen();
+  html+=`<div class="sec">💸 Düzenli Giderler <a onclick="duzenliGiderYonet()">yönet</a></div>`;
+  if(dgBek.length)html+=`<div class="card" style="padding:12px 14px;background:var(--warn-s);border-color:var(--warn);margin-bottom:9px"><div style="display:flex;justify-content:space-between;align-items:center"><div><b style="font-size:13px">${dgBek.length} gider işlenmeyi bekliyor</b><div class="mini">${dgBek.map(g=>esc(g.ad)+' '+TL(g.tutar)).join(' · ')}</div></div><div style="font-size:16px;font-weight:800;color:var(--warn)">${TL(dgBek.reduce((a,g)=>a+(+g.tutar||0),0))}</div></div><button class="btn g sm" style="margin-top:9px" onclick="duzenliGiderHepsiniIsle()">✓ Hepsini İşle (gidere yaz)</button></div>`;
+  html+=`<div class="card">`+((db.duzenliGider||[]).length?db.duzenliGider.map(g=>{const islendi=g.sonAy===ayKodu();return `<div class="row"><div class="av" style="background:${g.aktif!==false?'var(--bad)':'var(--ln2)'}">💸</div><div class="mid"><div class="t">${esc(g.ad)}${g.aktif===false?' <span class="pill">pasif</span>':islendi?' <span class="pill ok">bu ay işlendi</span>':''}</div><div class="s">her ayın ${g.gun}. günü · ${esc((hesap(g.hesapId)||{}).ad||'—')}</div></div><div class="end"><div class="n neg">−${TL(g.tutar)}</div>${(g.aktif!==false&&!islendi&&new Date().getDate()>=g.gun)?`<button class="btn g sm" style="width:auto;margin:2px 0 0;padding:5px 10px" onclick="event.stopPropagation();duzenliGiderIsle(${g.id})">işle</button>`:''}</div></div>`}).join(''):emp('💸','Düzenli gider tanımlı değil'))+`</div>`;
   html+=`<div class="sec">Nakit Takvimi (yaklaşan)</div><div class="card">`+takvimList()+`</div>`;
   $('app').innerHTML=html;
 }
@@ -1821,6 +1831,23 @@ function kaydetKasaHareket(){const tut=+$('kh-t').value||0;if(tut<=0)return toas
   const a=($('kh-a').value||'').trim()||(_khYon==='in'?'Gelir':'Gider');
   if(!kasaHareket(hid,_khYon,tut,_khYon==='in'?'Gelir':'Gider',a))return;save();closeM();rKasa();toast((_khYon==='in'?'Gelir':'Gider')+' kaydedildi ✓ '+TL(tut));
 }
+/* --- Düzenli (sabit) giderler: kira, maaş, aidat... --- */
+function ayKodu(t){const d=t?new Date(t):new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
+function duzenliGiderBekleyen(){const bugun=new Date().getDate(),ay=ayKodu();return (db.duzenliGider||[]).filter(g=>g.aktif!==false&&bugun>=(+g.gun||1)&&g.sonAy!==ay)}
+function duzenliGiderIsle(id){const g=(db.duzenliGider||[]).find(x=>x.id===id);if(!g)return;const h=hesap(g.hesapId)||db.hesaplar[0];if(!h)return toast('Hesap yok');
+  kasaHareket(h.id,'out',+g.tutar||0,'Gider',(g.ad||'Düzenli gider')+' · düzenli');g.sonAy=ayKodu();save();rKasa();toast('İşlendi: '+esc(g.ad)+' −'+TL(g.tutar));}
+function duzenliGiderHepsiniIsle(){const bek=duzenliGiderBekleyen();if(!bek.length)return;const ay=ayKodu();
+  bek.forEach(g=>{const h=hesap(g.hesapId)||db.hesaplar[0];if(h){kasaHareket(h.id,'out',+g.tutar||0,'Gider',(g.ad||'Düzenli gider')+' · düzenli');g.sonAy=ay}});
+  save();rKasa();toast(bek.length+' düzenli gider işlendi ✓');}
+let _dgList=[];
+function duzenliGiderYonet(){_dgList=(db.duzenliGider||[]).map(g=>({...g}));if(!_dgList.length)_dgList=[{id:0,ad:'',tutar:0,gun:1,hesapId:(db.hesaplar[0]||{}).id||0,aktif:true,sonAy:''}];
+  open_('💸 Düzenli Giderler',`<div class="mini">Her ay tekrar eden sabit giderler (kira, maaş, aidat...). Ayın belirttiğin günü gelince Kasa'da "işle" ile tek tuşla gidere yazılır.</div><div id="dg-list" style="margin-top:12px"></div><button class="btn ghost sm" onclick="dgSatirEkle()">+ gider ekle</button><button class="btn" style="margin-top:12px" onclick="duzenliGiderKaydet()">Kaydet</button>`);cizDG()}
+function cizDG(){const el=$('dg-list');if(!el)return;el.innerHTML=_dgList.map((g,i)=>`<div class="card" style="padding:10px 12px;margin-bottom:8px">
+  <div class="g2"><div><label style="font-size:11px">Ad</label><input value="${esc(g.ad||'')}" placeholder="Kira" oninput="_dgList[${i}].ad=this.value" style="margin:2px 0 0"></div><div><label style="font-size:11px">Tutar (₺)</label><input type="number" value="${g.tutar||''}" oninput="_dgList[${i}].tutar=+this.value" style="margin:2px 0 0"></div></div>
+  <div class="g2" style="margin-top:6px"><div><label style="font-size:11px">Ayın günü</label><input type="number" min="1" max="31" value="${g.gun||1}" oninput="_dgList[${i}].gun=+this.value" style="margin:2px 0 0"></div><div><label style="font-size:11px">Hesap</label><select oninput="_dgList[${i}].hesapId=+this.value" onchange="_dgList[${i}].hesapId=+this.value" style="margin:2px 0 0">${db.hesaplar.map(h=>`<option value="${h.id}" ${h.id===g.hesapId?'selected':''}>${esc(h.ad)}</option>`).join('')}</select></div></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:7px"><label style="display:flex;align-items:center;gap:6px;font-size:12.5px"><input type="checkbox" ${g.aktif!==false?'checked':''} onchange="_dgList[${i}].aktif=this.checked" style="width:auto"> aktif</label><button class="btn ghost sm danger" style="width:auto;margin:0;padding:6px 10px" onclick="_dgList.splice(${i},1);cizDG()">✕ sil</button></div></div>`).join('')||'<div class="mini">Gider yok</div>'}
+function dgSatirEkle(){_dgList.push({id:0,ad:'',tutar:0,gun:1,hesapId:(db.hesaplar[0]||{}).id||0,aktif:true,sonAy:''});cizDG()}
+function duzenliGiderKaydet(){db.duzenliGider=_dgList.filter(g=>(g.ad||'').trim()&&+g.tutar>0).map(g=>({id:g.id||nid('dg'),ad:g.ad.trim(),tutar:+g.tutar,gun:Math.min(31,Math.max(1,+g.gun||1)),hesapId:g.hesapId||(db.hesaplar[0]||{}).id||0,aktif:g.aktif!==false,sonAy:g.sonAy||''}));save();closeM();rKasa();toast('Düzenli giderler kaydedildi ✓')}
 function takvimList(){
   const items=[];
   db.cekler.filter(c=>c.durum==='portfoyde').forEach(c=>items.push({ts:c.vade,yon:c.tip==='alinan'?'in':'out',t:(c.tip==='alinan'?'Çek tahsil · ':'Çek ödeme · ')+c.cari,a:c.tutar}));
@@ -2626,7 +2653,7 @@ function isEmriA4(id){
 /* ---------- PORTAL ---------- */
 function rPortal(){
   let html=`<div class="g2"><button class="btn sm" onclick="portalOnizle()">👁️ Müşteri Sipariş Ekranı</button><button class="btn ghost sm" onclick="portalPaylas()">🔗 Linki Paylaş</button></div>
-    <div style="margin-top:8px"><button class="btn ghost sm" onclick="portalKullanicilar()">👤 Müşteri Giriş Bilgileri (kullanıcı adı / şifre)</button></div>
+    <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="portalKullanicilar()">👤 Giriş Bilgileri</button><button class="btn ghost sm" onclick="fiyatListesiPaylas()">📋 Fiyat Listesi Paylaş</button></div>
     <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="kademeDuzenle()">⚙️ Toptan İndirim Kademeleri${kademeler().length?' · '+kademeler().map(k=>k.min+'+%'+k.ind).join(' '):''}</button><button class="btn ghost sm" onclick="minSiparisDuzenle()">📦 Min. Sipariş${+db.minSiparis>0?' · '+(+db.minSiparis)+' seri':''}</button></div>
     <div style="margin-top:8px"><button class="btn ghost sm" onclick="kampanyaDuzenle()">📣 Kampanya / Vitrin${kampanyaAktif()?' · <b style="color:var(--good)">yayında</b>':''}</button></div>
     <div class="mini" style="margin:8px 3px">Müşteriler katalogdan seçip sipariş verir. Aynı cihazda demo/kiosk çalışır; farklı cihazdan gelmesi için sunucuda yayınlanması gerekir.</div>`;
@@ -2720,6 +2747,19 @@ function kampanyaKaydet(){const bas=($('kmp-bas')?.value||'').trim();if(!bas)ret
   save();closeM();rPortal();toast('📣 Kampanya yayınlandı ✓');}
 function kademeKaydet(){db.kademe=_kad.filter(k=>+k.min>0&&+k.ind>0).sort((a,b)=>a.min-b.min);save();closeM();rPortal();toast('İndirim kademeleri kaydedildi ✓')}
 function portalRed(id){db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);save();rPortal();toast('Sipariş reddedildi')}
+// Toptan fiyat listesi (müşteriye WhatsApp'tan) — seri fiyatlarıyla, kategoriye göre
+function fiyatListesiMetni(){const aktif=db.urunler.filter(u=>!u.pasif&&stokTop(u)>0);
+  const kats={};aktif.forEach(u=>{const k=u.kat||'Diğer';(kats[k]=kats[k]||[]).push(u)});
+  let t=`📋 ${(db.firma||'Öz Tekstil').toLocaleUpperCase('tr-TR')}\nTOPTAN FİYAT LİSTESİ · ${new Date().toLocaleDateString('tr-TR')}\n`;
+  Object.keys(kats).sort().forEach(k=>{t+=`\n▪️ ${k.toLocaleUpperCase('tr-TR')}\n`;kats[k].forEach(u=>{const f=portalFiyat(u);const seri=u.birim==='seri'&&birimAdet(u)>1?` (${u.seri}'li seri)`:'';t+=`• ${u.ad} — ${TL(f)}/${esc(u.birim||'adet')}${seri}\n`})});
+  const ind=kademeler();if(ind.length)t+=`\n💰 Toptan indirim: ${ind.map(k=>k.min+'+ %'+k.ind).join(' · ')}`;
+  t+=`\n\n💬 Sipariş: ${db.firmaWp||db.firmaTel||''}`;return t;}
+function fiyatListesiPaylas(){const t=fiyatListesiMetni();
+  open_('📋 Toptan Fiyat Listesi',`<div class="mini">Müşteriye WhatsApp'tan gönderebileceğin güncel fiyat listesi. Sadece stokta olan ürünler, seri fiyatlarıyla listelenir.</div>
+    <textarea id="fl-txt" readonly style="width:100%;height:270px;font-size:12px;margin-top:10px;font-family:ui-monospace,monospace;line-height:1.5">${esc(t)}</textarea>
+    <div class="g2" style="margin-top:10px"><button class="btn g sm" onclick="flShare()">📱 Paylaş / Gönder</button><button class="btn ghost sm" onclick="flKopya()">📋 Kopyala</button></div>`);}
+function flShare(){const t=($('fl-txt')&&$('fl-txt').value)||fiyatListesiMetni();if(navigator.share)navigator.share({text:t}).catch(()=>{});else flKopya()}
+function flKopya(){const el=$('fl-txt');const t=(el&&el.value)||'';if(navigator.clipboard)navigator.clipboard.writeText(t).then(()=>toast('Kopyalandı ✓')).catch(()=>{if(el){el.select();document.execCommand('copy');toast('Kopyalandı ✓')}});else if(el){el.select();document.execCommand('copy');toast('Kopyalandı ✓')}}
 // müşteri portal giriş bilgileri (kullanıcı adı / şifre)
 function portalKullanicilar(){open_('👤 Müşteri Giriş Bilgileri',`<div class="mini">Her müşteriye portal için <b>kullanıcı adı ve şifre</b> verin. Müşteri bunlarla girip yalnızca kendi siparişlerini ve cari durumunu görür. (Gerçekten kendi telefonundan girebilmesi için uygulamanın sunucuda yayınlanması gerekir.)</div><input id="pk-ara" placeholder="🔍 müşteri ara" oninput="cizPortalKul(this.value)" style="margin-top:10px"><div id="pk-list" style="margin-top:10px;max-height:60vh;overflow:auto"></div>`);cizPortalKul('')}
 function cizPortalKul(q){const el=$('pk-list');if(!el)return;q=(q||'').trim().toLowerCase();
