@@ -1,71 +1,83 @@
-# ☁️ Öz Tekstil — Yayınlama Rehberi (Bulut / Firebase)
+# ☁️ IQ Basics — Yayınlama & Kullanıcı Rehberi
 
-Bu rehber, müşterilerin **kendi telefonundan** portala girip sipariş verebilmesi için
-uygulamayı internete + Firebase'e bağlamayı anlatır.
+Bu uygulama tek dosyalık bir web uygulamasıdır (`index.html`). Bulut olmadan da
+kendi cihazında tam çalışır. Aşağıdakiler, **müşteri / çalışan / fasonun kendi
+telefonundan** girip kendi işini görmesi için bulutu (Firebase) devreye alır.
 
-> Not: Uygulama bulut olmadan da tam çalışır (kiosk/kendi cihazın). Aşağıdakiler
-> sadece **müşterinin kendi cihazından** sipariş vermesi içindir.
-
----
-
-## Nasıl çalışır (özet)
-- Sen panelde **"☁️ Buluta Yayınla"** dersin → ürün katalogun buluta gider.
-- Müşteri linke girer → katalogu görür → **misafir olarak** (ad + telefon) sipariş verir.
-- Sipariş buluta düşer → sen panelde **"📥 Bulut Siparişlerini Çek"** dersin → sipariş gelir.
-- Senin cari/çek/kâr verilerin **buluta gitmez**, kendi cihazında kalır.
+> Güvenlik ilkesi: Senin **cari / çek / kâr / kasa** verilerin buluta **hiç
+> gitmez**, kendi cihazında kalır. Bulutta yalnız katalog, siparişler, müşteriye
+> özel bakiye/geçmiş ve fason iş emirleri bulunur — herkes yalnız **kendi**
+> verisini görür (Firestore kuralları sunucu tarafında zorlar).
 
 ---
 
-## Adım adım kurulum
+## Roller
+| Rol | Görür | Görmez |
+|-----|-------|--------|
+| **Patron / Ortak (sen)** | Her şey (kendi cihazında) | — |
+| **Müşteri** | Katalog, kendi fiyatı, kendi bakiyesi, kendi sipariş geçmişi | Başka müşteri, cari/çek/kâr |
+| **Çalışan** | Stok/katalog, müşteri adına sipariş girer | Cari/çek/kâr/kasa |
+| **Fason** | Kendine atanan iş emirleri, durum bildirir | Fiyat/cari/kâr, başka fason |
 
-### 1) Firebase projesi (5 dk)
-1. https://console.firebase.google.com → **Proje oluştur** (ör. `oztekstil`)
-2. Sol menü **Build → Firestore Database → Create database** → *Production mode* → bir bölge seç (ör. `europe-west`)
-3. Sol menü **Build → Authentication → Get started → Sign-in method → Email/Password → Enable**
-4. **Authentication → Users → Add user**: kendine bir yönetici hesabı oluştur (e-posta + şifre) — bunu "Bulut Girişi"nde kullanacaksın.
+---
 
-### 2) Güvenlik kurallarını uygula
-1. **Firestore → Rules** sekmesi
-2. Bu depodaki **`firestore.rules`** dosyasının içeriğini yapıştır → **Publish**
+## Kurulum (tek seferlik)
 
-### 3) Proje anahtarını uygulamaya yaz
-1. Firebase → ⚙️ **Project settings → General** → aşağıda **"Your apps"** → Web app (yoksa `</>` ile ekle)
-2. Çıkan `firebaseConfig` bilgilerini kopyala
-3. `index.html` içindeki `FB_CONFIG` bloğunu doldur:
-```js
-const FB_CONFIG = {
-  apiKey: "…", authDomain: "…", projectId: "…",
-  storageBucket: "…", messagingSenderId: "…", appId: "…"
-};
-```
-> Bu bilgiler gizli değildir (tarayıcıda çalışır); güvenlik yukarıdaki kurallarla sağlanır.
+### 1) Firebase projesi
+1. https://console.firebase.google.com → proje (ör. **iq-basics**)
+2. **Build → Firestore Database → Create database** → *Production* → bölge (ör. `eur3`)
+3. **Build → Authentication → Sign-in method → Email/Password → Enable**
 
-### 4) Uygulamayı yayınla (ücretsiz)
-En kolay yol — **Netlify Drop**:
-1. https://app.netlify.com/drop
-2. `index.html` dosyasını sürükle-bırak
-3. Sana `https://xxxx.netlify.app` gibi bir adres verir.
-4. Müşteri linki: `https://xxxx.netlify.app/#siparis`
+### 2) Güvenlik kuralları
+- **Firestore → Rules** → bu depodaki **`firestore.rules`** içeriğini yapıştır → **Publish**
 
-> Alternatif: Firebase Hosting, GitHub Pages, Vercel — hepsi ücretsiz çalışır.
+### 3) Proje anahtarı
+- Zaten `index.html` içindeki `FB_CONFIG` dolu (iq-basics). Başka projede kullanacaksan
+  ⚙️ **Project settings → Your apps → Web** bilgileriyle değiştir. (Bu bilgiler gizli değildir.)
 
-### 5) Test et
-1. Kendi telefonundan/panelinden **Portal → ☁️ Buluta Yayınla** (ilk girişte Firebase e-posta/şifre sorar)
-2. Başka bir telefondan/tarayıcıdan `…/#siparis` adresini aç → katalog görünmeli → sipariş ver
-3. Panelde **Portal → 📥 Bulut Siparişlerini Çek** → sipariş listeye düşmeli → **Onayla**
+### 4) Kendini yönetici yap (tek seferlik)
+1. Uygulamada portala gir (`.../#siparis`) → **Kayıt Ol** → kendi e-posta/şifrenle kayıt ol
+2. Firebase **Firestore → Data → `kullanicilar`** → oluşan kaydını aç →
+   `rol` = **`admin`**, `onay` = **`true`** yap
+3. Artık **☁️ Buluta Yayınla / 👥 Bulut Kullanıcıları** bu hesapla çalışır
+
+### 5) Uygulamayı yayınla
+- Bu depo **GitHub Pages** ile yayında: `https://<kullanıcı>.github.io/<repo>/`
+- Alternatif: Netlify Drop (index.html'i sürükle) / Firebase Hosting / Vercel — hepsi ücretsiz
+
+---
+
+## Günlük kullanım
+
+### Yayınlama
+- **Portal → ☁️ Buluta Yayınla**: katalogu + onaylı müşterilerin bakiye/geçmişini günceller.
+  Stok/fiyat değişince tekrar bas.
+
+### Müşteri kabulü
+1. Müşteri `.../#siparis` → **Kayıt Ol → Müşteri**
+2. Sen: **Portal → 👥 Bulut Kullanıcıları** → onayla, cari bağla
+3. Müşteri girer → katalog + kendi bakiyesi/geçmişi; sipariş verir
+4. Sen: **Portal → 📥 Bulut Siparişlerini Çek** → onayla (satışa döner, stok düşer)
+
+### Çalışan
+- **Kayıt Ol → Çalışan** → sen onayla → stok görür, **müşteri adına** sipariş girer
+  (siparişte "çalışan" etiketi görünür)
+
+### Fason
+1. **Kayıt Ol → Fason** → sen onayla, **cari bağla** (fason kaydını seç — iş emirleri buradan eşleşir)
+2. Üretimde ona durak atadıysan: **Portal → 🧵 Fasona İş Gönder**
+3. Fason girer → iş emirlerini görür → "Başladım / Bitirdim / Teslim Ettim (adet)"
+4. Sen: **Portal → 📥 Fason Durumları** → durumu görürsün
+   > Gerçek teslim alma / stok / ödeme yine Üretim ekranından **elle** yapılır (bulut yalnız haberleşme).
+
+### Uygulamayı telefona kurma (PWA)
+- Android/Chrome: site açılınca **"📲 Uygulamayı Yükle"** ya da menü → *Ana ekrana ekle*
+- iPhone/Safari: Paylaş → *Ana Ekrana Ekle*
 
 ---
 
 ## Sık sorulanlar
-- **Ücret?** Firebase ücretsiz *Spark* planı bu hacimde 0₺. Netlify de ücretsiz.
-- **Müşteri şifresi?** MVP'de müşteri portalı **misafir** (ad+telefon) çalışır — şifreler buluta
-  yazılmaz (güvenlik). İleride Firebase Auth ile müşteriye özel şifreli giriş + geçmiş/cari eklenebilir.
-- **Fotoğraflar?** Ürün fotoğrafları katalogla birlikte gider (küçük/dataURL). Çok büyük
-  fotoğraf koleksiyonu için ileride Firebase Storage'a geçilebilir.
-- **Katalog güncelleme?** Stok/fiyat değişince tekrar **"Buluta Yayınla"** de — anında güncellenir.
-
----
-
-## Sonraki adım (opsiyonel — Faz 2b)
-Müşteriye **özel şifreli giriş** + sipariş geçmişi + cari durumu göstermek istersen,
-Firebase Auth ile müşteri hesapları kurulur. Hazır olduğunda söyle, eklerim.
+- **Ücret?** Firebase Spark (ücretsiz) + GitHub Pages = 0₺.
+- **Kayıt olan admin olur mu?** Hayır. Kayıtta rol yalnız müşteri/çalışan/fason olabilir,
+  onaysız başlar. Admin yalnız Firestore'dan elle atanır (sadece sen).
+- **Müşteri başka müşteriyi görür mü?** Hayır — Firestore kuralları kendi verisine hapseder.

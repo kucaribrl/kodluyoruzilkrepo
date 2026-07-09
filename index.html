@@ -529,7 +529,15 @@ async function bulutYayinla(){if(!bulutBaslat())return toast('☁️ Bulut ayarl
     const urunler=db.urunler.filter(u=>!u.pasif).map(u=>({id:u.id,ad:u.ad,kod:u.kod||'',kat:u.kat||'',marka:u.marka||'',birim:u.birim||'adet',seri:u.seri||1,satis:+u.satis||0,promosyon:+u.promosyon||0,kumas:u.kumas||'',sezon:u.sezon||'',yil:u.yil||'',bedenler:u.bedenler||[],kritik:+u.kritik||0,renkler:renkObjs(u).map(r=>({ad:r.ad,hex:r.hex||'#ccc',stok:+r.stok||0,foto:r.foto||''}))}));
     // Not: müşteri şifreleri GÜVENLİK için buluta yazılmaz — müşteri portalı misafir (ad+telefon) çalışır
     await _fb.collection('magaza').doc(MAGAZA_ID).set({firma:db.firma||'',firmaLogo:db.firmaLogo||'',firmaWp:db.firmaWp||'',firmaTel:db.firmaTel||'',kademe:db.kademe||[],minSiparis:+db.minSiparis||0,kampanya:db.kampanya||null,urunler,guncelleme:Date.now()});
-    toast('☁️ Yayınlandı ✓ '+urunler.length+' ürün');
+    // Girişli müşterilere özel veri (bakiye + geçmiş) — yalnız o müşteri okuyabilir (kurallar)
+    let mn=0;try{const users=await bulutTumKullanicilar();const jobs=[];
+      users.filter(u=>u.rol==='musteri'&&u.onay&&u.cariId).forEach(u=>{const c=cari(u.cariId);if(!c)return;
+        const gecmis=db.satislar.filter(s=>s.mid===u.cariId&&s.tip!=='iade').sort((a,b)=>b.tarih-a.tarih).slice(0,20)
+          .map(s=>({tarih:s.tarih,tutar:s.tutar,pb:s.pb||'TL',kalemler:(s.kalemler||[]).map(k=>({urun:k.urun,mik:k.mik,birim:k.birim}))}));
+        jobs.push(_fb.collection('musteri_veri').doc(u.uid).set({ad:c.ad,bakiye:+c.bakiye||0,limit:+c.limit||0,gecmis,guncelleme:Date.now()}));mn++;});
+      await Promise.all(jobs);
+    }catch(e){console.warn('musteri_veri yayın',e)}
+    toast('☁️ Yayınlandı ✓ '+urunler.length+' ürün'+(mn?' · '+mn+' müşteri':''));
   }catch(e){toast('Yayın hatası: '+(e.message||e))}
 }
 // Müşteri cihazı: buluttan katalogu çekip db'yi doldur (portal render için)
@@ -576,9 +584,25 @@ async function bulutKayit(mail,pw,ad,tel,rolIstek){
 // Portal kullanıcı / admin: giriş
 async function bulutGirisPortal(mail,pw){
   if(!bulutBaslat())return {ok:false,hata:'Bulut ayarlı değil'};
-  try{await firebase.auth().signInWithEmailAndPassword((mail||'').trim(),pw);await bulutProfilYukle();return {ok:true};}
+  try{await firebase.auth().signInWithEmailAndPassword((mail||'').trim(),pw);await bulutProfilYukle();await bulutRolVerisiYukle();return {ok:true};}
   catch(e){return {ok:false,hata:e.code||e.message}}
 }
+// Girişten sonra role göre bulut verisini yükle (müşteri: bakiye+geçmiş+sipariş; fason: iş emirleri)
+async function bulutRolVerisiYukle(){
+  if(!bulutKul||!bulutKul.onay)return;
+  if(bulutKul.rol==='fason')await bulutFasonIsleriYukle();
+  else if(bulutKul.rol==='musteri'){if(bulutKul.ad)portalMusAd=bulutKul.ad;await bulutMusteriYukleHepsi();}
+}
+// Sayfa yüklenince Firebase oturumu asenkron geri gelir — ilk auth durumunu bekle
+let _authCozuldu=false;
+function bulutAuthBekle(){return new Promise(res=>{
+  if(!bulutBaslat())return res(null);
+  try{
+    if(_authCozuldu||typeof firebase.auth().onAuthStateChanged!=='function')return res(firebase.auth().currentUser||null);
+    const unsub=firebase.auth().onAuthStateChanged(u=>{_authCozuldu=true;try{unsub()}catch(e){}res(u||null);});
+    setTimeout(()=>res(firebase.auth().currentUser||null),2500);
+  }catch(e){res(null)}
+})}
 async function bulutProfilYukle(){
   if(!bulutBaslat())return null;
   let u;try{u=firebase.auth().currentUser}catch(e){}
@@ -699,6 +723,23 @@ async function portalFasonBasla(bid){if(await bulutFasonDurum(bid,'basladi'))por
 async function portalFasonBitir(bid){if(await bulutFasonDurum(bid,'bitti'))portalCiz();}
 function portalFasonTeslim(bid,adet){open_('📦 Teslim Bildir',`<label>Kaç adet teslim ettiniz?</label><input id="ft-adet" type="number" inputmode="numeric" value="${adet||''}"><button class="btn g" style="margin-top:12px" onclick="portalFasonTeslimOnay('${bid}')">📦 Teslim Ettim</button>`);}
 async function portalFasonTeslimOnay(bid){const a=$('ft-adet')?.value;if(await bulutFasonDurum(bid,'teslim',a)){closeM();portalCiz();toast('📦 Teslim bildirildi ✓');}}
+
+/* ---- Faz 2b: Müşteri bulut hesabı (bakiye + geçmiş + sipariş durumu) ---- */
+let bulutMusVeri=null, bulutSiparislerim=[];
+async function bulutMusteriVeriYukle(){
+  if(!bulutBaslat()||!bulutKul)return null;
+  try{const d=await _fb.collection('musteri_veri').doc(bulutKul.uid).get();bulutMusVeri=d.exists?d.data():null;return bulutMusVeri;}
+  catch(e){bulutMusVeri=null;return null}
+}
+async function bulutSiparislerimYukle(){
+  if(!bulutBaslat()||!bulutKul)return [];
+  try{const snap=await _fb.collection('siparisler').where('uid','==',bulutKul.uid).get();
+    bulutSiparislerim=[];snap.forEach(d=>bulutSiparislerim.push({bid:d.id,...d.data()}));
+    bulutSiparislerim.sort((a,b)=>(b.olusturma||b.tarih||0)-(a.olusturma||a.tarih||0));
+    return bulutSiparislerim;
+  }catch(e){return []}
+}
+async function bulutMusteriYukleHepsi(){ if(bulutKul&&bulutKul.rol==='musteri'&&bulutKul.onay){await bulutMusteriVeriYukle();await bulutSiparislerimYukle();} }
 
 function sifirla(){askConfirm('Tüm veriler örnek verilere sıfırlansın mı?',()=>{db=seed();save();go('panel');toast('Sıfırlandı')})}
 
@@ -3077,8 +3118,6 @@ async function portalBulutGiris(){
   toast('Giriş yapılıyor…');
   const r=await bulutGirisPortal(mail,pw);
   if(!r.ok)return toast('Giriş başarısız: '+r.hata);
-  if(bulutKul&&bulutKul.rol==='fason'&&bulutKul.onay)await bulutFasonIsleriYukle();
-  if(bulutKul&&bulutKul.rol==='musteri'&&bulutKul.ad)portalMusAd=bulutKul.ad;
   portalCiz();
 }
 async function portalBulutKayit(){
@@ -3092,7 +3131,8 @@ async function portalBulutKayit(){
   toast('✓ Kaydınız alındı — onay bekleniyor');
   portalCiz();
 }
-async function portalBulutCikis(){await bulutCikisPortal();portalMusAd='';portalSepet=[];bulutAuthTab='giris';portalCiz()}
+async function portalBulutCikis(){await bulutCikisPortal();portalMusAd='';portalSepet=[];bulutAuthTab='giris';bulutMusVeri=null;bulutSiparislerim=[];fasonIsler=[];portalCiz()}
+async function portalHesapYenile(){toast('Yenileniyor…');await bulutMusteriYukleHepsi();portalCiz();}
 function portalKapat(){document.getElementById('pov').style.display='none';if(_geriT){clearInterval(_geriT);_geriT=null}portalSepet=[];portalView='katalog';portalKat='';portalKumas='';portalSezon='';portalBattal=false;portalFiltreAcik=false;portalArama='';if(location.hash==='#siparis')history.replaceState(null,'',''+location.pathname);if(typeof cur!=='undefined')go('portal')}
 // güncel birim (seri) fiyat: promosyon (indirimli) varsa o, yoksa satış — parça fiyatı × seri
 function portalFiyat(u){const s=+u.satis||0,p=+u.promosyon||0;const base=(p>0&&p<s)?p:s;return base*birimAdet(u)}
@@ -3335,6 +3375,19 @@ function portalCiz(){
   let body='';
   if(portalView==='tesekkur'){
     body=`<div style="padding:56px 24px;text-align:center"><div style="font-size:58px">✅</div><div style="font-size:21px;font-weight:800;margin-top:12px">Siparişiniz Alındı!</div><div class="mini" style="margin-top:8px;font-size:14px;line-height:1.6">${esc(db.firma||'Öz Tekstil')} siparişinizi inceleyip onaylayacak. Onaylandığında hazırlanıp size bilgi verilecek.</div><button class="btn" style="margin:24px auto 0;max-width:280px" onclick="portalView='katalog';portalCiz()">🛍️ Alışverişe Devam</button><button class="btn ghost" style="margin:8px auto 0;max-width:280px" onclick="portalKapat()">Kapat</button></div>`;
+  }else if(portalView==='hesap'&&bulutMusteriMod&&bulutKul){
+    const v=bulutMusVeri; const sips=bulutSiparislerim||[];
+    const DS={yeni:{t:'⏳ Onay bekliyor',c:'var(--warn)'},onaylandi:{t:'✅ Onaylandı',c:'var(--good)'},red:{t:'❌ Reddedildi',c:'var(--bad)'}};
+    body=`<div style="padding:14px">
+      <div onclick="portalView='katalog';portalCiz()" style="color:var(--ind2);font-weight:700;font-size:13.5px;cursor:pointer;margin-bottom:10px">‹ Katalog</div>
+      <div class="sec" style="margin-top:0">👤 Hesabım</div>
+      <div class="card" style="padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><div style="font-weight:800;font-size:15px">${esc(bulutKul.ad||'')}</div><div class="mini">${esc(bulutKul.mail||'')}</div></div><button class="btn ghost sm" style="width:auto;margin:0;padding:8px 13px;flex:0 0 auto" onclick="portalBulutCikis()">⎋ Çıkış</button></div>
+      ${v?`<div class="card" style="margin-top:12px;padding:13px 15px;background:${v.bakiye>0?'var(--warn-s)':'var(--good-s)'};border-color:${v.bakiye>0?'var(--warn)':'var(--good)'}"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11.5px;font-weight:700;color:var(--sub)">💳 CARİ DURUMUM</div><div class="mini">${v.limit?'limit '+TL(v.limit):'kayıtlı müşteri'}</div></div><div style="text-align:right"><div style="font-size:19px;font-weight:800;color:${v.bakiye>0?'var(--warn)':'var(--good)'}">${TL(Math.abs(v.bakiye||0))}</div><div class="mini">${v.bakiye>0?'borç':v.bakiye<0?'alacak':'kapalı'}</div></div></div></div>`:`<div class="mini" style="margin:10px 3px">Cari bilgin henüz yayınlanmadı — ${esc(db.firma||'firma')} yayınlayınca burada görünecek.</div>`}
+      ${sips.length?`<div class="sec">🧾 Siparişlerim</div>`+sips.map(o=>{const d=DS[o.durum]||DS.yeni;return `<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:13px">${tstr(o.olusturma||o.tarih)}</b><b style="color:var(--ind)">${TL(o.tutar||0)}</b></div><div class="mini" style="margin-top:3px">${(o.kalemler||[]).map(k=>esc(k.urun)+' ×'+k.mik).join(', ')}</div><div class="mini" style="color:${d.c};margin-top:3px;font-weight:700">${d.t}</div></div>`}).join(''):''}
+      ${v&&v.gecmis&&v.gecmis.length?`<div class="sec">📦 Geçmiş Alışverişlerim</div>`+v.gecmis.slice(0,15).map(s=>`<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between"><b style="font-size:13px">${tstr(s.tarih)}</b><b style="color:var(--ind)">${money(s.tutar,s.pb||'TL')}</b></div><div class="mini" style="margin-top:3px">${(s.kalemler||[]).map(k=>esc(k.urun)+' ×'+k.mik).join(', ')}</div></div>`).join(''):''}
+      ${(!sips.length&&!(v&&v.gecmis&&v.gecmis.length))?`<div class="mini" style="text-align:center;padding:22px">Henüz siparişin yok. Kataloğa göz at! 🛍️</div>`:''}
+      <button class="btn ghost sm" style="margin-top:12px" onclick="portalHesapYenile()">🔄 Yenile</button>
+    </div>`;
   }else if(portalView==='hesap'){
     const m=portalMusteriBul();const {gecmis,bekleyen}=portalSiparislerim();
     const favs=(db.portalFav||[]).map(id=>urun(id)).filter(u=>u&&!u.pasif);
@@ -3992,9 +4045,7 @@ function fabAction(){if(cur==='stok'){(stokTab==='hammadde'&&canHammadde())?form
 /* =================== BAŞLAT =================== */
 go('panel');
 // Müşteri cihazı: #siparis + bulut ayarlı → katalogu buluttan çek, sipariş moduna geç
-async function musteriBulutAc(){bulutMusteriMod=true;await bulutKatalogYukle();await bulutProfilYukle();
-  if(bulutKul&&bulutKul.rol==='fason'&&bulutKul.onay)await bulutFasonIsleriYukle();
-  if(bulutKul&&bulutKul.rol==='musteri'&&bulutKul.ad)portalMusAd=bulutKul.ad;portalAc();}
+async function musteriBulutAc(){bulutMusteriMod=true;await bulutKatalogYukle();await bulutAuthBekle();await bulutProfilYukle();await bulutRolVerisiYukle();portalAc();}
 if(location.hash==='#siparis'){if(bulutVar()){setTimeout(musteriBulutAc,300)}else portalAc();}
 window.addEventListener('hashchange',()=>{if(location.hash==='#siparis'){if(bulutVar()&&!bulutMusteriMod)musteriBulutAc();else portalAc()}});
 // açılışta kur eskiyse (yok veya 3 saatten eski) sessizce güncelle
