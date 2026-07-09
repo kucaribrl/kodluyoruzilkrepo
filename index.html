@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#1d3a63">
 <title>Öz Tekstil — Toptan Yönetim</title>
+<!-- ☁️ Bulut (Firebase) — yayında yüklenir; offline/önizlemede sessizce atlanır -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <style>
   :root{
     --bg:#eef2f8; --card:#fff; --ink:#141d2b; --sub:#67788d; --ln:#e7ecf3; --ln2:#f0f4f9;
@@ -482,6 +486,60 @@ function seqFix(d){ // id çakışmasını önle: her sıra numarasını mevcut 
 }
 function save(){localStorage.setItem(KEY,JSON.stringify(db))}
 function nid(k){if(db.seq[k]==null)db.seq[k]=1000;return db.seq[k]++}
+/* ============ ☁️ BULUT (Firebase) ============ */
+/* Yayına almak için kendi Firebase projenin bilgilerini buraya yapıştır.
+   Bu bilgiler gizli değildir (tarayıcıda çalışır) — güvenlik Firestore kurallarıyla sağlanır. */
+const FB_CONFIG = {
+  apiKey: "", authDomain: "", projectId: "", storageBucket: "", messagingSenderId: "", appId: ""
+};
+const MAGAZA_ID = 'oztekstil';
+let _fb=null, bulutHazir=false, bulutMusteriMod=false;
+function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
+function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
+  try{if(!firebase.apps.length)firebase.initializeApp(FB_CONFIG);_fb=firebase.firestore();bulutHazir=true;return true;}catch(e){console.warn('bulut',e);return false}}
+// Admin Firebase Auth girişi (katalog yazma / sipariş okuma yetkisi)
+function bulutGirisli(){try{return !!(window.firebase&&firebase.auth&&firebase.auth().currentUser)}catch(e){return false}}
+function bulutGirisIste(sonra){open_('☁️ Bulut Girişi (yönetici)',`<div class="mini">Katalog yayınlamak ve siparişleri çekmek için Firebase hesabınla giriş yap (tek seferlik, oturum açık kalır).</div>
+  <label>E-posta</label><input id="fbg-mail" type="email" autocomplete="username" placeholder="ornek@mail.com">
+  <label>Şifre</label><input id="fbg-pw" type="password" autocomplete="current-password">
+  <button class="btn g" onclick="bulutGirisYap('${sonra||''}')">Giriş Yap</button>`);}
+async function bulutGirisYap(sonra){if(!bulutBaslat())return toast('Bulut ayarlı değil');
+  const mail=($('fbg-mail')?.value||'').trim(),pw=$('fbg-pw')?.value||'';if(!mail||!pw)return toast('E-posta ve şifre gir');
+  try{await firebase.auth().signInWithEmailAndPassword(mail,pw);closeM();toast('☁️ Giriş yapıldı ✓');if(sonra==='yayin')bulutYayinla();else if(sonra==='cek')bulutSiparisleriCek();}
+  catch(e){toast('Giriş başarısız: '+(e.code||e.message))}}
+// Admin: katalog + kampanyayı buluta yayınla
+async function bulutYayinla(){if(!bulutBaslat())return toast('☁️ Bulut ayarlı değil (FB_CONFIG boş)');
+  if(!bulutGirisli())return bulutGirisIste('yayin');
+  try{
+    const urunler=db.urunler.filter(u=>!u.pasif).map(u=>({id:u.id,ad:u.ad,kod:u.kod||'',kat:u.kat||'',marka:u.marka||'',birim:u.birim||'adet',seri:u.seri||1,satis:+u.satis||0,promosyon:+u.promosyon||0,kumas:u.kumas||'',sezon:u.sezon||'',yil:u.yil||'',bedenler:u.bedenler||[],kritik:+u.kritik||0,renkler:renkObjs(u).map(r=>({ad:r.ad,hex:r.hex||'#ccc',stok:+r.stok||0,foto:r.foto||''}))}));
+    // Not: müşteri şifreleri GÜVENLİK için buluta yazılmaz — müşteri portalı misafir (ad+telefon) çalışır
+    await _fb.collection('magaza').doc(MAGAZA_ID).set({firma:db.firma||'',firmaLogo:db.firmaLogo||'',firmaWp:db.firmaWp||'',firmaTel:db.firmaTel||'',kademe:db.kademe||[],minSiparis:+db.minSiparis||0,kampanya:db.kampanya||null,urunler,guncelleme:Date.now()});
+    toast('☁️ Yayınlandı ✓ '+urunler.length+' ürün');
+  }catch(e){toast('Yayın hatası: '+(e.message||e))}
+}
+// Müşteri cihazı: buluttan katalogu çekip db'yi doldur (portal render için)
+async function bulutKatalogYukle(){if(!bulutBaslat())return false;
+  try{const doc=await _fb.collection('magaza').doc(MAGAZA_ID).get();if(!doc.exists)return false;const d=doc.data();
+    db.firma=d.firma||db.firma;db.firmaLogo=d.firmaLogo||'';db.firmaWp=d.firmaWp||'';db.firmaTel=d.firmaTel||'';
+    db.kademe=d.kademe||[];db.minSiparis=+d.minSiparis||0;db.kampanya=d.kampanya||null;
+    db.urunler=(d.urunler||[]).map(u=>({...u,pasif:false,stok:(u.renkler||[]).reduce((a,r)=>a+(+r.stok||0),0)}));
+    db.cariler=[]; // müşteri portalı misafir çalışır (ad+telefon)
+    return true;
+  }catch(e){console.warn('katalog',e);return false}
+}
+// Müşteri cihazı: siparişi buluta yaz (admin çeker)
+async function bulutSiparisGonder(o){if(!bulutBaslat())return false;
+  try{await _fb.collection('siparisler').add({...o,magaza:MAGAZA_ID,durum:'yeni',olusturma:Date.now()});return true;}catch(e){toast('Sipariş gönderilemedi: '+(e.message||e));return false}}
+function bulutSiparisDurum(bulutId,durum){if(!bulutId||!bulutBaslat())return;try{_fb.collection('siparisler').doc(bulutId).update({durum}).catch(()=>{})}catch(e){}}
+// Admin: buluttaki yeni siparişleri çek → bekleyenPortal'a ekle
+async function bulutSiparisleriCek(){if(!bulutBaslat())return toast('☁️ Bulut ayarlı değil');
+  if(!bulutGirisli())return bulutGirisIste('cek');
+  try{const snap=await _fb.collection('siparisler').where('magaza','==',MAGAZA_ID).where('durum','==','yeni').get();
+    let n=0;snap.forEach(doc=>{const o=doc.data();if(db.bekleyenPortal.some(x=>x.bulutId===doc.id))return;
+      db.bekleyenPortal.push({id:nid('bp'),bulutId:doc.id,mus:o.mus,mid:o.mid||0,tarih:o.tarih||o.olusturma||Date.now(),kalemler:o.kalemler||[],tutar:o.tutar||0,not:o.not||'',tel:o.tel||'',adres:o.adres||'',sehir:o.sehir||''});n++;});
+    if(n){save();rPortal();}toast(n?('☁️ '+n+' yeni sipariş alındı ✓'):'Yeni sipariş yok');
+  }catch(e){toast('Sipariş çekme hatası: '+(e.message||e))}
+}
 function sifirla(){askConfirm('Tüm veriler örnek verilere sıfırlansın mı?',()=>{db=seed();save();go('panel');toast('Sıfırlandı')})}
 
 /* =================== YARDIMCI =================== */
@@ -2699,6 +2757,7 @@ function isEmriA4(id){
 function rPortal(){
   let html=`<div class="g2"><button class="btn sm" onclick="portalOnizle()">👁️ Müşteri Sipariş Ekranı</button><button class="btn ghost sm" onclick="portalPaylas()">🔗 Linki Paylaş</button></div>
     <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="portalKullanicilar()">👤 Giriş Bilgileri</button><button class="btn ghost sm" onclick="fiyatListesiPaylas()">📋 Fiyat Listesi Paylaş</button></div>
+    ${bulutVar()?`<div class="g2" style="margin-top:8px"><button class="btn sm" onclick="bulutYayinla()">☁️ Buluta Yayınla</button><button class="btn ghost sm" onclick="bulutSiparisleriCek()">📥 Bulut Siparişlerini Çek</button></div>`:''}
     <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="kademeDuzenle()">⚙️ Toptan İndirim Kademeleri${kademeler().length?' · '+kademeler().map(k=>k.min+'+%'+k.ind).join(' '):''}</button><button class="btn ghost sm" onclick="minSiparisDuzenle()">📦 Min. Sipariş${+db.minSiparis>0?' · '+(+db.minSiparis)+' seri':''}</button></div>
     <div style="margin-top:8px"><button class="btn ghost sm" onclick="kampanyaDuzenle()">📣 Kampanya / Vitrin${kampanyaAktif()?' · <b style="color:var(--good)">yayında</b>':''}</button></div>
     <div class="mini" style="margin:8px 3px">Müşteriler katalogdan seçip sipariş verir. Aynı cihazda demo/kiosk çalışır; farklı cihazdan gelmesi için sunucuda yayınlanması gerekir.</div>`;
@@ -2762,6 +2821,7 @@ function portalOnay(id,override,force){
   const tutar=override||o.tutar;
   const sat={id:nid('s'),tip:'satis',mid:m.id,mus:m.ad,tarih:Date.now(),kalemler,araToplam:tutar,iskonto:0,tutar,odenen:0,kesik:0,pb:'TL',satisKur:1,durum:'tamam',teslimDurum:'ayrildi',odemeler:[],kaynak:'portal',sipDurum:'onaylandi',sipGecmis:[{k:'onaylandi',t:Date.now()}]};
   db.satislar.push(sat);applySatis(sat);
+  if(o.bulutId)bulutSiparisDurum(o.bulutId,'onaylandi');
   db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);
   save();closeM&&closeM();go('portal');toast('Sipariş onaylandı ✓ '+TL(tutar)+' · mal ayrıldı');
 }
@@ -2791,7 +2851,7 @@ function kampanyaKaydet(){const bas=($('kmp-bas')?.value||'').trim();if(!bas)ret
   db.kampanya={baslik:bas,metin:($('kmp-met')?.value||'').trim(),urunId:uid,bitis:bt?new Date(bt).getTime():0};
   save();closeM();rPortal();toast('📣 Kampanya yayınlandı ✓');}
 function kademeKaydet(){db.kademe=_kad.filter(k=>+k.min>0&&+k.ind>0).sort((a,b)=>a.min-b.min);save();closeM();rPortal();toast('İndirim kademeleri kaydedildi ✓')}
-function portalRed(id){db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);save();rPortal();toast('Sipariş reddedildi')}
+function portalRed(id){const o=db.bekleyenPortal.find(x=>x.id===id);if(o&&o.bulutId)bulutSiparisDurum(o.bulutId,'red');db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);save();rPortal();toast('Sipariş reddedildi')}
 // Toptan fiyat listesi (müşteriye WhatsApp'tan) — seri fiyatlarıyla, kategoriye göre
 function fiyatListesiMetni(){const aktif=db.urunler.filter(u=>!u.pasif&&stokTop(u)>0);
   const kats={};aktif.forEach(u=>{const k=u.kat||'Diğer';(kats[k]=kats[k]||[]).push(u)});
@@ -2902,6 +2962,10 @@ function portalGonder(){
   const kalemler=portalSepet.map(k=>{const f=portalKalemFiyat(k);return {uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:f.net,listeFiyat:f.base,kademeInd:f.ind,renkler:k.renkler&&k.renkler.length?k.renkler.map(r=>({...r})):undefined}});
   const t=portalTotal();
   const o={id:nid('bp'),mus:m?m.ad:ad,mid:m?m.id:0,tarih:Date.now(),kalemler,tutar:t,not:(portalNot||'').trim(),tel,adres:(portalAdres||'').trim(),sehir:(portalSehir||'').trim()};
+  if(bulutMusteriMod){ // müşteri cihazı → sipariş buluta gider
+    bulutSiparisGonder(o).then(ok=>{if(ok){portalSepet=[];portalNot='';portalView='tesekkur';portalCiz()}else toast('Sipariş gönderilemedi, tekrar deneyin')});
+    return;
+  }
   db.bekleyenPortal.push(o);
   db.portalTaslak=(db.portalTaslak||[]).filter(t=>(t.ad||'').toLowerCase()!==ad.toLowerCase()); // gönderilince taslak temizlenir
   save();portalSepet=[];portalNot='';portalView='tesekkur';portalCiz();
@@ -3002,8 +3066,8 @@ function portalRafKart(u){const kap=urunKapak(u);return `<div onclick="portalUru
 function portalRaf(baslik,list){if(!list.length)return '';return `<div style="margin:2px -14px 16px"><div style="font-size:15px;font-weight:800;padding:0 14px 9px">${baslik}</div><div style="display:flex;gap:10px;overflow-x:auto;padding:0 14px 4px">${list.map(portalRafKart).join('')}</div></div>`;}
 function portalCiz(){
   const pov=document.getElementById('pov');if(!pov)return;
-  // giriş kapısı: giriş yapılmamış ve önizleme değilse giriş ekranı
-  if(!portalPreview&&!portalMusteriGiris())portalView='giris';
+  // giriş kapısı: giriş yapılmamış ve önizleme/bulut-misafir değilse giriş ekranı
+  if(!portalPreview&&!bulutMusteriMod&&!portalMusteriGiris())portalView='giris';
   const cartN=portalSepet.reduce((a,k)=>a+k.mik,0),cartT=portalTotal();
   const kadHint=kademeler().length?kademeler().map(k=>`${k.min}+ %${k.ind}`).join(' · '):'';
   const logo=db.firmaLogo?`<img src="${db.firmaLogo}" style="height:30px">`:`<div style="font-size:19px;font-weight:800">${esc(db.firma||'Öz Tekstil')}</div>`;
@@ -3684,8 +3748,10 @@ function fabAction(){if(cur==='stok'){(stokTab==='hammadde'&&canHammadde())?form
 
 /* =================== BAŞLAT =================== */
 go('panel');
-if(location.hash==='#siparis')portalAc();
-window.addEventListener('hashchange',()=>{if(location.hash==='#siparis')portalAc()});
+// Müşteri cihazı: #siparis + bulut ayarlı → katalogu buluttan çek, sipariş moduna geç
+async function musteriBulutAc(){bulutMusteriMod=true;const ok=await bulutKatalogYukle();if(!ok){bulutMusteriMod=false}portalAc();}
+if(location.hash==='#siparis'){if(bulutVar()){setTimeout(musteriBulutAc,300)}else portalAc();}
+window.addEventListener('hashchange',()=>{if(location.hash==='#siparis'){if(bulutVar()&&!bulutMusteriMod)musteriBulutAc();else portalAc()}});
 // açılışta kur eskiyse (yok veya 3 saatten eski) sessizce güncelle
 if(!db.kurTarih || Date.now()-db.kurTarih > 3*3600000){
   kurCek().then(ok=>{if(ok&&cur==='panel')render()});
