@@ -366,7 +366,7 @@
 /* =================== VERİ KATMANI =================== */
 const KEY='oztekstil_v2';
 function seed(){return{
-  firma:'Öz Tekstil',
+  firma:'IQ Basics',
   firmaSlogan:'Toptan Tekstil · Erkek Giyim',
   firmaAdres:'Ulubatlı Hasan Sk. No:53/A · Güngören / İstanbul',
   firmaTel:'0212 000 00 00',
@@ -492,7 +492,7 @@ function nid(k){if(db.seq[k]==null)db.seq[k]=1000;return db.seq[k]++}
 const FB_CONFIG = {
   apiKey: "", authDomain: "", projectId: "", storageBucket: "", messagingSenderId: "", appId: ""
 };
-const MAGAZA_ID = 'oztekstil';
+const MAGAZA_ID = 'iqbasics';
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
