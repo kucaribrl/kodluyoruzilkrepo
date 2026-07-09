@@ -340,6 +340,7 @@
     <button class="bkbtn" onclick="back()">‹</button>
     <div class="logo">🧵</div>
     <div><h1 id="hTitle">Öz Tekstil</h1><div class="sub" id="hSub">Patron</div></div>
+    <button class="role" onclick="genelAra()" title="Ara" style="margin-left:auto;padding:8px 11px">🔍</button>
     <button class="role" id="roleBtn" onclick="rolSec()">👑 Patron ▾</button>
   </div>
 </header>
@@ -587,6 +588,7 @@ function rPanel(){
     db.cekler.filter(c=>c.durum==='portfoyde'&&gunFark(c.vade)<=7).forEach(c=>{const g=gunFark(c.vade),ov=g<0,al=c.tip==='alinan';
       bekleyen.push({ic:'🏷️',bg:ov?'var(--bad-s)':al?'var(--good-s)':'var(--warn-s)',t:(al?'Çek tahsilatı':'Çek ödemesi')+(ov?' · GECİKTİ '+Math.abs(g)+'g':g===0?' · BUGÜN':' · '+g+' gün'),s:c.cari+' · '+TL(c.tutar)+' · '+dstr(c.vade),act:()=>go('cek')})});
     const dgB=duzenliGiderBekleyen();if(dgB.length)bekleyen.push({ic:'💸',bg:'var(--warn-s)',t:dgB.length+' düzenli gider bekliyor',s:dgB.map(g=>g.ad).join(', ')+' · '+TL(dgB.reduce((a,g)=>a+(+g.tutar||0),0)),act:()=>go('kasa')});
+    taksitBekleyen().filter(({t})=>gunFark(t.vade)<=3).forEach(({s,t,i})=>{const g=gunFark(t.vade);bekleyen.push({ic:'📆',bg:g<0?'var(--bad-s)':'var(--thr-s)',t:'Taksit · '+s.mus+(g<0?' · GECİKTİ '+Math.abs(g)+'g':g===0?' · BUGÜN':' · '+g+'g'),s:(i+1)+'. taksit · '+money(t.tutar,s.pb),act:()=>{go('satis');setTimeout(()=>satisFis(s.id),150)}})});
   }
   if(db.rol==='magaza'||db.rol==='depocu'){ // teslim bekleyen (ayrılan) siparişler
     ayrilan.forEach(s=>bekleyen.push({ic:'🔖',bg:'var(--warn-s)',t:s.mus+' · mal ayrıldı',s:'teslim bekliyor · '+s.kalemler.length+' kalem',act:()=>{go('satis');setTimeout(()=>satisFis(s.id),150)}}));
@@ -673,6 +675,17 @@ function rDaha(){
     <div class="mini" style="text-align:center;margin-top:20px">Öz Tekstil · Toptan Yönetim · prototip v2 🧵</div>`;
 }
 
+/* ---------- GENEL ARAMA ---------- */
+function genelAra(){open_('🔍 Genel Arama',`<input id="ga-q" placeholder="ürün · müşteri · çek no · kod · telefon" autocomplete="off" oninput="genelAraCiz()"><div id="ga-res" style="margin-top:10px;max-height:62vh;overflow:auto"></div>`);setTimeout(()=>{const e=$('ga-q');if(e)e.focus()},60);genelAraCiz()}
+function genelAraCiz(){const q=($('ga-q')&&$('ga-q').value||'').trim().toLowerCase();const el=$('ga-res');if(!el)return;
+  if(q.length<2){el.innerHTML='<div class="mini" style="text-align:center;padding:18px">En az 2 harf yaz…</div>';return}
+  const nq=q.replace(/\s/g,'');const R=[];
+  db.urunler.filter(u=>!u.pasif&&((u.ad||'').toLowerCase().includes(q)||(u.kod||'').toLowerCase().includes(q)||renkObjs(u).some(r=>(r.barkod||'').toLowerCase()===q))).slice(0,6).forEach(u=>R.push({ic:'👕',bg:'var(--ind)',t:u.ad,s:(u.kod||'')+' · '+stokTop(u)+' '+esc(u.birim||'')+' · '+money(u.satis,u.pb||'TL'),act:`go('stok');setTimeout(()=>urunDetay(${u.id}),160)`}));
+  if(canSee('cari'))db.cariler.filter(c=>(c.ad||'').toLowerCase().includes(q)||(c.tel||'').replace(/\s/g,'').includes(nq)).slice(0,6).forEach(c=>R.push({ic:c.tip==='musteri'?'🧑':c.tip==='fason'?'🧵':'🏭',bg:'var(--good)',t:c.ad,s:c.tip+(c.tel?' · '+esc(c.tel):'')+' · bakiye '+TL(Math.abs(c.bakiye||0)),act:`go('cari');setTimeout(()=>cariKart(${c.id}),160)`}));
+  if(canSee('cek'))db.cekler.filter(c=>(c.cari||'').toLowerCase().includes(q)||(c.cekNo||'').toLowerCase().includes(q)).slice(0,5).forEach(c=>R.push({ic:'🏷️',bg:'var(--thr)',t:c.cari+' · '+TL(c.tutar),s:'çek '+esc(c.cekNo||'—')+' · '+dstr(c.vade)+' · '+esc(c.durum),act:`go('cek')`}));
+  if(canSee('satis'))db.satislar.filter(s=>s.tip!=='iade'&&(s.mus||'').toLowerCase().includes(q)).slice(0,5).forEach(s=>R.push({ic:'🧾',bg:'var(--ind2)',t:s.mus+' · '+money(s.tutar,s.pb),s:tstr(s.tarih)+' · '+esc(s.kalemler.map(k=>k.urun).join(', ').slice(0,38)),act:`go('satis');setTimeout(()=>satisFis(${s.id}),160)`}));
+  el.innerHTML=R.length?R.map(r=>`<div class="row" onclick="closeM();${r.act}"><div class="av" style="background:${r.bg}">${r.ic}</div><div class="mid"><div class="t">${esc(r.t)}</div><div class="s">${r.s}</div></div><span style="color:var(--sub)">›</span></div>`).join(''):'<div class="mini" style="text-align:center;padding:18px">Sonuç bulunamadı</div>';
+}
 /* ---------- STOK ---------- */
 let stokTab='mamul', stokKat='Tümü';
 function rStok(){
@@ -1263,10 +1276,41 @@ function satisFis(id){
     <div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="faturaYazdir(${id},false)">🧾 A4 Fatura</button><button class="btn ghost sm" onclick="faturaYazdir(${id},true)">📋 İrsaliye (fiyatsız)</button></div>
     ${s.depo?`<button class="btn ${s.depo==='hazir'?'ghost':'g'} sm" style="margin-top:10px" onclick="closeM();setTimeout(()=>depoEmri(${id}),160)">📦 Toplama Emri${s.depo==='hazir'?' (hazır)':''}</button>`:''}
     <div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="closeM();setTimeout(()=>formSatis(0,${id}),160)">✏️ Düzenle</button><button class="btn sm" onclick="satisDurum(${id})">${s.teslimDurum==='ayrildi'?'✓ Teslim Et':'🔖 Ayrıldı Yap'}</button></div>
-    <button class="btn ghost sm" style="margin-top:10px;color:var(--bad)" onclick="closeM();setTimeout(()=>iadeAl(${id}),160)">↩️ İade Al</button>
+    ${(s.taksitler&&s.taksitler.length)?`<div class="sec" style="margin-top:12px">📆 Ödeme Planı</div>`+s.taksitler.map((t,i)=>`<div class="kv"><span class="k">${i+1}. taksit · ${dstr(t.vade)}${t.odendi?' <span class="pill ok">ödendi</span>':gunFark(t.vade)<0?' <span class="pill low">gecikti</span>':''}</span><span class="v">${money(t.tutar,s.pb)}${!t.odendi?` <button class="btn g sm" style="width:auto;margin:0;padding:4px 9px;display:inline-block" onclick="taksitOde(${id},${i})">tahsil</button>`:''}</span></div>`).join(''):''}
+    <div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="closeM();setTimeout(()=>odemePlaniAc(${id}),160)">📆 Ödeme Planı</button><button class="btn ghost sm" style="color:var(--bad)" onclick="closeM();setTimeout(()=>iadeAl(${id}),160)">↩️ İade Al</button></div>
     <button class="btn danger" onclick="silSatis(${id})">Satışı İptal Et</button>
   `);
 }
+/* ---------- ÖDEME PLANI (taksit) ---------- */
+function odemePlaniAc(satisId){const s=db.satislar.find(x=>x.id===satisId);if(!s)return;const kalan=Math.max(0,s.tutar-s.odenen-(s.kesik||0));
+  if(kalan<=0&&!(s.taksitler&&s.taksitler.length))return toast('Bu satışın kalan borcu yok');
+  open_('📆 Ödeme Planı',`<div class="mini">Kalan <b>${money(kalan,s.pb)}</b> borcu taksitlere böl. Her taksit vadesi geldiğinde "tahsil" ile ödeme işlenir.</div>
+    <div class="g2" style="margin-top:10px"><div><label>Taksit sayısı</label><input id="op-n" type="number" inputmode="numeric" value="3" min="1" max="24"></div><div><label>İlk vade</label><input id="op-ilk" type="date" value="${new Date(Date.now()+7*86400000-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10)}"></div></div>
+    <label>Taksit aralığı (gün)</label><input id="op-ara" type="number" inputmode="numeric" value="30">
+    <button class="btn g" style="margin-top:12px" onclick="odemePlaniKaydet(${satisId})">Planı Oluştur</button>
+    ${(s.taksitler&&s.taksitler.length)?`<button class="btn ghost sm danger" style="margin-top:8px" onclick="db.satislar.find(x=>x.id===${satisId}).taksitler=[];save();closeM();satisFis(${satisId});toast('Plan kaldırıldı')">Planı Kaldır</button>`:''}`);
+}
+function odemePlaniKaydet(satisId){const s=db.satislar.find(x=>x.id===satisId);const kalan=Math.max(0,s.tutar-s.odenen-(s.kesik||0));
+  const n=Math.min(24,Math.max(1,+($('op-n').value||1)));const ilk=$('op-ilk').value?new Date($('op-ilk').value+'T12:00:00').getTime():Date.now()+7*86400000;const ara=Math.max(1,+($('op-ara').value||30));
+  const her=Math.floor(kalan/n),taksitler=[];let top=0;
+  for(let i=0;i<n;i++){const tut=i===n-1?Math.round(kalan-top):her;top+=tut;taksitler.push({vade:ilk+i*ara*86400000,tutar:tut,odendi:false})}
+  s.taksitler=taksitler;save();closeM();satisFis(satisId);toast(n+' taksitlik plan oluşturuldu ✓');
+}
+function taksitOde(satisId,idx){const s=db.satislar.find(x=>x.id===satisId);if(!s||!s.taksitler||!s.taksitler[idx])return;const t=s.taksitler[idx];if(t.odendi)return;
+  const div=satisDiv(s);const paidTL=t.tutar*div;const m=cari(s.mid);
+  open_('Taksit Tahsilatı',`<div class="mini">${esc(s.mus)} · ${idx+1}. taksit · vade ${dstr(t.vade)}</div>
+    <div class="kv" style="margin-top:8px"><span class="k">Tutar</span><span class="v">${money(t.tutar,s.pb)}</span></div>
+    <label>Hangi hesaba?</label><select id="tk-hs">${db.hesaplar.map(h=>`<option value="${h.id}">${esc(h.ad)} · ${TL(h.bakiye)}</option>`).join('')}</select>
+    <button class="btn g" style="margin-top:12px" onclick="taksitOdeKaydet(${satisId},${idx})">✓ Tahsil Et</button>`);
+}
+function taksitOdeKaydet(satisId,idx){const s=db.satislar.find(x=>x.id===satisId);const t=s.taksitler[idx];const div=satisDiv(s);const paidTL=t.tutar*div;
+  const h=hesap(+($('tk-hs')?.value||0))||db.hesaplar[0];const m=cari(s.mid);
+  if(h)h.bakiye+=paidTL;if(m)m.bakiye-=paidTL;s.odenen=(+s.odenen||0)+t.tutar;t.odendi=true;t.odemeTarih=Date.now();
+  db.hareketler.push({id:nid('hr'),cariId:s.mid,tip:'tahsilat',tutar:paidTL,tur:'Taksit',tarih:Date.now(),hesapId:h?h.id:null,yon:'in'});
+  save();closeM();satisFis(satisId);toast('Taksit tahsil edildi ✓ '+money(t.tutar,s.pb));
+}
+// yaklaşan/geciken taksitler (takvim + panel için)
+function taksitBekleyen(){const arr=[];db.satislar.forEach(s=>{(s.taksitler||[]).forEach((t,i)=>{if(!t.odendi)arr.push({s,t,i,vade:t.vade})})});return arr.sort((a,b)=>a.vade-b.vade)}
 /* ---------- İADE ---------- */
 let iadeSel={}, _iadeSid=0;
 function iadeAl(satisId){const s=db.satislar.find(x=>x.id===satisId);if(!s||s.tip==='iade')return;iadeSel={};_iadeSid=satisId;
@@ -1852,6 +1896,7 @@ function takvimList(){
   const items=[];
   db.cekler.filter(c=>c.durum==='portfoyde').forEach(c=>items.push({ts:c.vade,yon:c.tip==='alinan'?'in':'out',t:(c.tip==='alinan'?'Çek tahsil · ':'Çek ödeme · ')+c.cari,a:c.tutar}));
   db.cariler.filter(c=>c.tip==='fason'&&c.bakiye>0).forEach(c=>items.push({ts:Date.now()+5*86400000,yon:'out',t:'Fason · '+c.ad,a:c.bakiye,rep:'🔁'}));
+  taksitBekleyen().forEach(({s,t,i})=>items.push({ts:t.vade,yon:'in',t:'Taksit · '+s.mus+' ('+(i+1)+'.)',a:t.tutar*satisDiv(s)}));
   items.sort((a,b)=>a.ts-b.ts);
   return items.length?items.slice(0,6).map(i=>`<div class="row"><div class="av ${i.yon==='in'?'g':'r'}">${i.yon==='in'?'↓':'↑'}</div><div class="mid"><div class="t">${esc(i.t)} ${i.rep||''}</div><div class="s">${dstr(i.ts)}</div></div><div class="end"><div class="n ${i.yon==='in'?'pos':'neg'}">${i.yon==='in'?'+':'−'}${TL(i.a)}</div></div></div>`).join(''):emp('📅','Yaklaşan ödeme yok');
 }
@@ -3215,9 +3260,13 @@ function rapCtx(){
   const acikAlacak=db.cariler.filter(c=>c.tip==='musteri'&&c.bakiye>0).reduce((a,c)=>a+c.bakiye,0);
   const kdv=sat.reduce((a,s)=>a+(+s.kdvTutar||0)*pbKur(s.pb),0);
   const giderTop=(db.hareketler||[]).filter(x=>x.yon==='out'&&x.tur!=='Transfer'&&inRange(x.tarih)).reduce((a,x)=>a+(+x.tutar||0),0);
+  // K-Z için işletme gideri: tedarik/fason ödemeleri HARİÇ (maliyet zaten COGS'ta) — çift sayım önlenir
+  const isletmeGider=(db.hareketler||[]).filter(x=>x.yon==='out'&&(x.tur==='Gider'||x.tur==='Ortak Harcama')&&inRange(x.tarih)).reduce((a,x)=>a+(+x.tutar||0),0);
+  const cogs=ciro-brutKar; // satılan malın maliyeti (net ciro − brüt kâr)
+  const netKar=brutKar-isletmeGider;
   const gy=rapGecenYilAralik();
   const satGY=gy?filt(ts=>ts>=gy[0]&&ts<gy[1]):null;
-  return {bas,bit,donemAd,inRange,onc,kar,toTL,karTLof,sat,satOnc,ciroOf,karOf,ciro,brutKar,marj,adet,kesikTop,tahsil,acikDonem,tahOran,acikAlacak,kdv,giderTop,iadeNetTL,iadeAdet,iadeSat,
+  return {bas,bit,donemAd,inRange,onc,kar,toTL,karTLof,sat,satOnc,ciroOf,karOf,ciro,brutKar,marj,adet,kesikTop,tahsil,acikDonem,tahOran,acikAlacak,kdv,giderTop,isletmeGider,cogs,netKar,iadeNetTL,iadeAdet,iadeSat,
     ciroOnc:satOnc?ciroOf(satOnc):null,karOncV:satOnc?karOf(satOnc):null,islemOnc:satOnc?satOnc.length:null,tahOnc:satOnc?satOnc.reduce((a,s)=>a+(+s.odenen||0)*pbKur(s.pb),0):null,
     gyAd:gy?gy[2]:null,ciroGY:satGY?ciroOf(satGY):null,karGY:satGY?karOf(satGY):null,islemGY:satGY?satGY.length:null,adetGY:satGY?satGY.reduce((a,s)=>a+s.kalemler.reduce((x,k)=>x+(+k.mik||0),0),0):null};
 }
@@ -3236,6 +3285,16 @@ function rapOzet(R){let h='';
   h+=`</div>`;
   h+=`<div class="g2" style="margin-top:9px"><div class="card" style="padding:10px;margin:0;text-align:center"><div class="mini">Satılan Adet</div><div style="font-weight:800;font-size:16px">${R.adet}</div></div><div class="card" style="padding:10px;margin:0;text-align:center"><div class="mini">Ort. Sepet</div><div style="font-weight:800;font-size:16px">${TL(R.sat.length?R.ciro/R.sat.length:0)}</div></div></div>`;
   if(R.iadeNetTL>0)h+=`<div class="card" style="padding:11px 14px;margin-top:9px;background:var(--bad-s);border-color:var(--bad)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11.5px;font-weight:700;color:var(--bad)">↩️ İADELER · ${R.donemAd.toUpperCase()}</div><div class="mini">${R.iadeSat.length} iade · ${R.iadeAdet} adet geri döndü · ciro/kârdan düşüldü</div></div><div style="font-size:18px;font-weight:800;color:var(--bad)">−${TL(R.iadeNetTL)}</div></div></div>`;
+  // Gelir Tablosu (K-Z özeti) — accrual
+  if(R.kar){const kzRow=(l,v,cls,b)=>`<div style="display:flex;justify-content:space-between;padding:7px 0;${b?'border-top:1.5px solid var(--ln);font-weight:800':'font-size:13px'}"><span${cls?` style="color:${cls}"`:''}>${l}</span><span style="font-weight:${b?800:700};${cls?`color:${cls}`:''}">${v}</span></div>`;
+    h+=`<div class="sec">📈 Gelir Tablosu (K-Z) · ${R.donemAd}</div><div class="card" style="padding:12px 15px">
+      ${kzRow('Net Ciro (KDV hariç)',TL(R.ciro))}
+      ${kzRow('(−) Satılan Mal Maliyeti','−'+TL(R.cogs),'var(--bad)')}
+      ${kzRow('= Brüt Kâr'+(R.ciro?' · %'+R.marj:''),TL(R.brutKar),'var(--good)',true)}
+      ${kzRow('(−) İşletme Giderleri','−'+TL(R.isletmeGider),'var(--bad)')}
+      ${kzRow('= NET KÂR',TL(R.netKar),R.netKar>=0?'var(--good)':'var(--bad)',true)}
+      <div class="mini" style="margin-top:8px">Maliyet = ürün alış×seri (COGS). İşletme gideri kira/maaş vb. — tedarik/fason ödemesi maliyete zaten dahil, tekrar sayılmaz.</div></div>`;
+  }
   // hedef takibi (ay/yıl)
   if(rapDonem==='ay'||rapDonem==='yil'){
     const hedef=(+db.hedef||0)*(rapDonem==='yil'?12:1),per=rapDonem==='yil'?'Yıllık':'Aylık';
