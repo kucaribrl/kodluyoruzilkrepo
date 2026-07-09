@@ -1,22 +1,63 @@
 rules_version = '2';
-// Öz Tekstil — Firestore güvenlik kuralları
-// Firebase Console → Firestore Database → Rules sekmesine yapıştır ve "Publish" de.
+// IQ Basics — Firestore güvenlik kuralları (Faz 2: gerçek kullanıcı girişi)
+// Firebase Console → Firestore Database → Rules → yapıştır → "Publish".
+//
+// ÖNEMLİ ilk kurulum (tek seferlik):
+//  1) Authentication'da kendine bir hesap oluştur (e-posta+şifre) ve giriş yap.
+//  2) Firestore'da "kullanicilar" koleksiyonu → belge kimliği = SENİN UID'in →
+//     alanlar: rol="admin", onay=true.  (UID'i Authentication > Users'da görürsün.)
+//  Böylece yalnız sen katalog yayınlayabilir ve tüm siparişleri görebilirsin.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // KATALOG: herkes okuyabilir (müşteri katalogu görür),
-    // yalnızca giriş yapmış yönetici (sen) yazabilir.
-    match /magaza/{doc} {
-      allow read: if true;
-      allow write: if request.auth != null;
+    function girisli() { return request.auth != null; }
+    function rolu() {
+      return get(/databases/$(database)/documents/kullanicilar/$(request.auth.uid)).data.rol;
+    }
+    function adminMi() {
+      return girisli()
+        && exists(/databases/$(database)/documents/kullanicilar/$(request.auth.uid))
+        && rolu() == 'admin';
     }
 
-    // SİPARİŞLER: herkes yeni sipariş oluşturabilir (misafir sipariş),
-    // yalnızca giriş yapmış yönetici okuyabilir/güncelleyebilir/silebilir.
-    // (Böylece bir müşteri başka müşterinin siparişini göremez.)
-    match /siparisler/{doc} {
-      allow create: if true;
-      allow read, update, delete: if request.auth != null;
+    // KULLANICILAR — kimlik + rol
+    match /kullanicilar/{uid} {
+      // Kendi profilini oku; yönetici herkesi okur
+      allow read: if girisli() && (request.auth.uid == uid || adminMi());
+      // Kendi kaydını oluşturur; onaysız + admin OLMADAN (kendini yönetici yapamaz)
+      allow create: if girisli()
+        && request.auth.uid == uid
+        && request.resource.data.onay == false
+        && request.resource.data.rol in ['musteri','calisan','fason'];
+      // Onay / rol / silme yalnız yönetici
+      allow update, delete: if adminMi();
+    }
+
+    // KATALOG — herkes okur, yalnız yönetici yazar
+    match /magaza/{doc} {
+      allow read: if true;
+      allow write: if adminMi();
+    }
+
+    // SİPARİŞLER — giriş yapmış kullanıcı KENDİ adına oluşturur,
+    // kendi siparişini okur; yönetici hepsini okur/günceller.
+    match /siparisler/{id} {
+      allow create: if girisli() && request.resource.data.uid == request.auth.uid;
+      allow read:   if girisli() && (resource.data.uid == request.auth.uid || adminMi());
+      allow update, delete: if adminMi();
+    }
+
+    // MÜŞTERİ ÖZEL VERİ (fiyat/bakiye/geçmiş) — yalnız o müşteri + yönetici (Faz 2b)
+    match /musteri_veri/{uid} {
+      allow read:  if girisli() && (request.auth.uid == uid || adminMi());
+      allow write: if adminMi();
+    }
+
+    // FASON İŞ EMİRLERİ — yalnız o fason (okur+durum günceller) + yönetici (Faz 3)
+    match /fason_isemri/{id} {
+      allow read:   if girisli() && (resource.data.fasonUid == request.auth.uid || adminMi());
+      allow update: if girisli() && (resource.data.fasonUid == request.auth.uid || adminMi());
+      allow create, delete: if adminMi();
     }
   }
 }
