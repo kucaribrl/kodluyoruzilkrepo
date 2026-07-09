@@ -1254,7 +1254,7 @@ function satisFis(id){
     ${s.sevkiyat?`<div class="infobox" style="margin-top:12px">📦 <b>Sevkiyat:</b> ${esc(s.sevkiyat)}</div>`:''}
     ${s.foto?`<div class="sec" style="margin-top:12px">📷 Sipariş Fotoğrafı</div><img src="${s.foto}" style="width:100%;max-height:240px;object-fit:cover;border-radius:12px">`:''}
     <div class="g2" style="margin-top:14px"><button class="btn sm" onclick="fisTermalOnizle(${id})">🧾 Termal Fiş</button><button class="btn g sm" onclick="waFisPreview(${id})">📱 WhatsApp</button></div>
-    <button class="btn ghost sm" style="margin-top:10px" onclick="fisYazdir(${id})">🖨️ A4 Yazdır</button>
+    <div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="faturaYazdir(${id},false)">🧾 A4 Fatura</button><button class="btn ghost sm" onclick="faturaYazdir(${id},true)">📋 İrsaliye (fiyatsız)</button></div>
     ${s.depo?`<button class="btn ${s.depo==='hazir'?'ghost':'g'} sm" style="margin-top:10px" onclick="closeM();setTimeout(()=>depoEmri(${id}),160)">📦 Toplama Emri${s.depo==='hazir'?' (hazır)':''}</button>`:''}
     <div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="closeM();setTimeout(()=>formSatis(0,${id}),160)">✏️ Düzenle</button><button class="btn sm" onclick="satisDurum(${id})">${s.teslimDurum==='ayrildi'?'✓ Teslim Et':'🔖 Ayrıldı Yap'}</button></div>
     <button class="btn danger" onclick="silSatis(${id})">Satışı İptal Et</button>
@@ -1315,10 +1315,48 @@ async function fisWhatsapp(id){const s=db.satislar.find(x=>x.id===id);const m=ca
   }catch(e){if(e&&e.name==='AbortError')return}}
   window.open(`https://wa.me/${ph}?text=${encodeURIComponent(txt)}`,'_blank');
 }
-function fisYazdir(id){const s=db.satislar.find(x=>x.id===id);
-  const rows=s.kalemler.map(k=>{const sub=k.renkler&&k.renkler.length?k.renkler.map(r=>esc(r.ad)+'×'+r.mik).join(', '):k.mik+' '+k.birim;return `<tr><td>${esc(k.urun)}<br><small>${sub}</small></td><td class="r">${money(k.mik*k.fiyat,s.pb)}</td></tr>`}).join('');
-  $('printarea').innerHTML=`<div class="fis"><h2>Öz Tekstil</h2><div>${esc(s.mus)} · ${tstr(s.tarih)}</div><table>${rows}${s.iskonto?`<tr><td>İskonto</td><td class="r">−%${s.iskonto}</td></tr>`:''}${s.kdv?`<tr><td>KDV %${s.kdv}</td><td class="r">+${money(s.kdvTutar||0,s.pb)}</td></tr>`:''}${s.tasima?`<tr><td>Taşıma</td><td class="r">+${money(s.tasima,s.pb)}</td></tr>`:''}<tr class="tot"><td>TOPLAM</td><td class="r">${money(s.tutar,s.pb)}</td></tr><tr><td>Ödenen</td><td class="r">${money(s.odenen,s.pb)}</td></tr><tr><td>Kalan</td><td class="r">${money(Math.max(0,s.tutar-s.odenen),s.pb)}</td></tr></table>${s.sevkiyat?`<div style="margin-top:8px"><b>Sevkiyat:</b> ${esc(s.sevkiyat)}</div>`:''}</div>`;
-  document.body.classList.add('printing');setTimeout(()=>{window.print();document.body.classList.remove('printing')},150);
+function fisYazdir(id){faturaYazdir(id,false)}
+// Profesyonel A4 Fatura (fiyatlı) / İrsaliye (fiyatsız)
+function faturaYazdir(id,irsaliye){const s=db.satislar.find(x=>x.id===id);if(!s)return;const m=cari(s.mid);
+  const pf=x=>money(x,s.pb);
+  const araT=(+s.araToplam||s.kalemler.reduce((a,k)=>a+k.mik*k.fiyat,0));
+  const iskT=araT*(+s.iskonto||0)/100;
+  const kalan=Math.max(0,s.tutar-s.odenen-(s.kesik||0));
+  const rows=s.kalemler.map((k,i)=>{const u=urun(k.uid);const kod=(u&&u.kod)||'—';
+    const cl=k.renkler&&k.renkler.length?k.renkler.map(r=>esc(r.ad)+'×'+r.mik).join(', '):'';
+    const ad=esc(k.urun)+(cl?`<br><small>${cl}</small>`:'');
+    return `<tr><td class="r">${i+1}</td><td>${esc(kod)}</td><td>${ad}</td><td class="r">${k.mik} ${esc(k.birim||'')}</td>${irsaliye?'':`<td class="r">${pf(k.fiyat)}</td><td class="r">${pf(k.mik*k.fiyat)}</td>`}</tr>`}).join('');
+  const musSat=[[m&&m.vergiDairesi?'V.D.':'',m&&m.vergiDairesi||''],['Vergi/TC No',m&&(m.vergiNo||m.tckn)||''],['Telefon',(m&&m.tel)||''],['Adres',[m&&(m.sehir||m.il),m&&m.adres].filter(Boolean).join(' · ')||'']].filter(r=>r[1]);
+  const totRows=irsaliye?'':`
+    <table class="iem" style="width:52%;margin-left:48%;margin-top:8px">
+      <tr><td class="lb">Ara Toplam</td><td class="r">${pf(araT)}</td></tr>
+      ${s.iskonto?`<tr><td class="lb">İskonto (%${s.iskonto})</td><td class="r">−${pf(iskT)}</td></tr>`:''}
+      ${s.vadeFarki?`<tr><td class="lb">Vade Farkı</td><td class="r">+%${s.vadeFarki}</td></tr>`:''}
+      ${s.kdv?`<tr><td class="lb">KDV (%${s.kdv})</td><td class="r">+${pf(s.kdvTutar||0)}</td></tr>`:''}
+      ${s.tasima?`<tr><td class="lb">Taşıma</td><td class="r">+${pf(s.tasima)}</td></tr>`:''}
+      <tr><td class="lb" style="font-size:14px">GENEL TOPLAM</td><td class="r" style="font-weight:800;font-size:14px">${pf(s.tutar)}</td></tr>
+      <tr><td class="lb">Ödenen</td><td class="r">${pf(s.odenen)}</td></tr>
+      ${s.kesik?`<tr><td class="lb">Kesik</td><td class="r">${pf(s.kesik)}</td></tr>`:''}
+      <tr><td class="lb">Kalan</td><td class="r" style="font-weight:800">${pf(kalan)}</td></tr>
+      ${m?`<tr><td class="lb">Cari Bakiye</td><td class="r">${TL(Math.abs(m.bakiye||0))} ${m.bakiye>0?'B':m.bakiye<0?'A':''}</td></tr>`:''}
+    </table>`;
+  const toplamAdet=s.kalemler.reduce((a,k)=>a+(+k.mik||0),0);
+  $('printarea').innerHTML=`<div class="ieA4">
+    <div class="ieh"><div><div class="ien">${esc(db.firma||'ÖZ TEKSTİL')}</div>${db.firmaSlogan?`<div class="ies">${esc(db.firmaSlogan)}</div>`:''}${db.firmaAdres?`<div class="ies">${esc(db.firmaAdres)}</div>`:''}${db.firmaTel?`<div class="ies">Tel: ${esc(db.firmaTel)}${db.firmaWp?' · WP: '+esc(db.firmaWp):''}</div>`:''}</div><div class="iet">${irsaliye?'İRSALİYE':'SATIŞ FATURASI'}<br>#${s.id}</div></div>
+    <div class="ieline"></div>
+    <table class="iem"><tr><td class="lb">Sayın</td><td><b>${esc(s.mus)}</b></td><td class="lb">Tarih</td><td>${tstr(s.tarih)}</td></tr>
+      ${musSat.map((r,i)=>i%2===0?`<tr><td class="lb">${esc(r[0])}</td><td>${esc(r[1])}</td>${musSat[i+1]?`<td class="lb">${esc(musSat[i+1][0])}</td><td>${esc(musSat[i+1][1])}</td>`:'<td></td><td></td>'}</tr>`:'').join('')}</table>
+    <div class="iesec">ÜRÜNLER</div>
+    <table class="ietbl"><tr><th class="r">#</th><th>Kod</th><th>Ürün</th><th class="r">Miktar</th>${irsaliye?'':'<th class="r">Birim Fiyat</th><th class="r">Tutar</th>'}</tr>${rows}
+      <tr><td colspan="3" style="font-weight:700">Toplam</td><td class="r" style="font-weight:700">${toplamAdet} ${esc(s.kalemler[0]&&s.kalemler[0].birim||'')}</td>${irsaliye?'':`<td></td><td class="r" style="font-weight:800">${pf(s.tutar)}</td>`}</tr></table>
+    ${totRows}
+    ${s.sevkiyat?`<div style="margin-top:10px"><b>Sevkiyat / Not:</b> ${esc(s.sevkiyat)}</div>`:''}
+    <div class="iesign"><div>Teslim eden: ______________</div><div>Teslim alan: ______________</div></div>
+    <div class="ies" style="text-align:center;margin-top:16px;color:#666">${esc(db.firma||'')} · ${irsaliye?'İrsaliye':'Fatura'} · ${tstr(s.tarih)}</div>
+  </div>`;
+  const st=document.createElement('style');st.id='a4Style';st.textContent='@media print{@page{size:A4;margin:12mm}}';document.head.appendChild(st);
+  document.body.classList.add('printing');
+  setTimeout(()=>{window.print();document.body.classList.remove('printing');st.remove()},200);
 }
 function fisTermalHTML(s){
   const rw=(l,r,cls)=>`<div class="rw${cls?' '+cls:''}"><span class="lb">${l}</span><span>${r}</span></div>`;
