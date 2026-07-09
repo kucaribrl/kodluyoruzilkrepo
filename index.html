@@ -979,6 +979,7 @@ function rSatis(){
   html+=`<div class="sec">Satışlar <a onclick="formSatis()">+ Yeni</a></div><div class="card">`+(list.length?list.map(s=>{
     const ayrildi=s.teslimDurum==='ayrildi';const teslim=!ayrildi;const odendi=s.odenen>=s.tutar;
     const depoBadge=s.depo==='bekliyor'?'<span class="pill low" style="margin-left:5px">📦 ayrılıyor</span>':s.depo==='hazir'?'<span class="pill ok" style="margin-left:5px">✓ hazır</span>':'';
+    if(s.tip==='iade')return `<div class="row" onclick="iadeFis(${s.id})"><div class="svbars"><i class="svbar" style="background:var(--bad)"></i></div><div class="av" style="background:var(--bad-s)">↩️</div><div class="mid"><div class="t">${esc(s.mus)} <span class="pill" style="background:var(--bad-s);color:var(--bad)">İADE</span></div><div class="s">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div></div><div class="end"><div class="n" style="color:var(--bad)">−${money(s.tutar,s.pb)}</div><div class="u">${s.nakit?'💵 nakit iade':'cari alacak'}</div></div></div>`;
     return `<div class="row" onclick="satisFis(${s.id})"><div class="svbars"><i class="svbar ${teslim?'teslim':''}" title="Teslim edildi"></i><i class="svbar ${odendi?'odendi':''}" title="Parası alındı"></i></div><div class="av ${ayrildi?'o':'g'}">${ayrildi?'🔖':'🧾'}</div><div class="mid"><div class="t">${esc(s.mus)}${depoBadge}</div><div class="s">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div></div><div class="end"><div class="n">${money(s.tutar,s.pb)}</div><div class="u">${ayrildi?'🔖 ayrıldı':teslim?'✓ teslim':''}${odendi?' · 💰':''}</div></div></div>`}).join(''):emp('🧾',satisFilt==='depo'?'Depoda bekleyen sipariş yok.':'Kayıt yok.'))+`</div>`;
   $('app').innerHTML=html;
 }
@@ -1257,8 +1258,64 @@ function satisFis(id){
     <div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="faturaYazdir(${id},false)">🧾 A4 Fatura</button><button class="btn ghost sm" onclick="faturaYazdir(${id},true)">📋 İrsaliye (fiyatsız)</button></div>
     ${s.depo?`<button class="btn ${s.depo==='hazir'?'ghost':'g'} sm" style="margin-top:10px" onclick="closeM();setTimeout(()=>depoEmri(${id}),160)">📦 Toplama Emri${s.depo==='hazir'?' (hazır)':''}</button>`:''}
     <div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="closeM();setTimeout(()=>formSatis(0,${id}),160)">✏️ Düzenle</button><button class="btn sm" onclick="satisDurum(${id})">${s.teslimDurum==='ayrildi'?'✓ Teslim Et':'🔖 Ayrıldı Yap'}</button></div>
+    <button class="btn ghost sm" style="margin-top:10px;color:var(--bad)" onclick="closeM();setTimeout(()=>iadeAl(${id}),160)">↩️ İade Al</button>
     <button class="btn danger" onclick="silSatis(${id})">Satışı İptal Et</button>
   `);
+}
+/* ---------- İADE ---------- */
+let iadeSel={}, _iadeSid=0;
+function iadeAl(satisId){const s=db.satislar.find(x=>x.id===satisId);if(!s||s.tip==='iade')return;iadeSel={};_iadeSid=satisId;
+  open_('↩️ İade Al',`<div class="mini">${esc(s.mus)} · ${tstr(s.tarih)} — iade edilecek ürün/miktarı seç. Mal stoğa geri girer, tutar müşteriye alacak yazılır (veya nakit iade).</div>
+    <div id="iade-list" style="margin-top:10px"></div>
+    <label style="margin-top:6px;display:flex;align-items:center;gap:8px;font-weight:600"><input type="checkbox" id="iade-nakit" style="width:auto" onchange="iadeCiz()"> 💵 Nakit iade et (kasadan öde)</label>
+    <div id="iade-hesap"></div>
+    <div id="iade-ozet" class="total" style="margin-top:10px"></div>
+    <button class="btn g" onclick="iadeKaydet()">İadeyi Onayla</button>`);
+  iadeCiz();
+}
+function iadeAdet(i,ad,d,max){iadeSel[i]=iadeSel[i]||{};const cur=iadeSel[i][ad]||0;const v=Math.max(0,Math.min(cur+d,max));if(v<=0)delete iadeSel[i][ad];else iadeSel[i][ad]=v;iadeCiz()}
+function iadeKalemler(s){const arr=[];s.kalemler.forEach((k,i)=>{const sel=iadeSel[i]||{};
+  if(k.renkler&&k.renkler.length){const rr=k.renkler.map(r=>({ad:r.ad,mik:sel[r.ad]||0})).filter(x=>x.mik>0);const tm=rr.reduce((a,x)=>a+x.mik,0);if(tm>0)arr.push({uid:k.uid,urun:k.urun,mik:tm,birim:k.birim,fiyat:k.fiyat,renkler:rr})}
+  else{const m=sel['_']||0;if(m>0)arr.push({uid:k.uid,urun:k.urun,mik:m,birim:k.birim,fiyat:k.fiyat})}});
+  return arr;}
+function iadeHesap(s){const kal=iadeKalemler(s);const ara=kal.reduce((a,k)=>a+k.mik*k.fiyat,0);const isk=+s.iskonto||0,kdv=+s.kdv||0;
+  const net=ara*(1-isk/100)*(1+kdv/100);const kdvT=ara*(1-isk/100)*kdv/100;const div=satisDiv(s);return {kal,ara,net,kdvT,div,netTL:net*div};}
+function iadeCiz(){const s=db.satislar.find(x=>x.id===_iadeSid);const el=$('iade-list');if(!s||!el)return;
+  el.innerHTML=s.kalemler.map((k,i)=>{
+    if(k.renkler&&k.renkler.length){
+      return `<div class="card" style="padding:9px 12px;margin-bottom:8px"><b style="font-size:13px">${esc(k.urun)}</b>`+k.renkler.map(r=>{const cur=((iadeSel[i]||{})[r.ad])||0;const rc=(''+r.ad).replace(/'/g,"\\'");return `<div class="exrow"><span>${esc(r.ad)} <small style="color:var(--sub)">(${r.mik} satıldı)</small></span><div class="pstep sm"><button onclick="iadeAdet(${i},'${rc}',-1,${r.mik})">−</button><b>${cur}</b><button onclick="iadeAdet(${i},'${rc}',1,${r.mik})">+</button></div></div>`}).join('')+`</div>`;
+    }
+    const cur=((iadeSel[i]||{})['_'])||0;
+    return `<div class="card" style="padding:9px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center"><div><b style="font-size:13px">${esc(k.urun)}</b> <small style="color:var(--sub)">(${k.mik} ${esc(k.birim||'')} satıldı)</small></div><div class="pstep sm"><button onclick="iadeAdet(${i},'_',-1,${k.mik})">−</button><b>${cur}</b><button onclick="iadeAdet(${i},'_',1,${k.mik})">+</button></div></div>`;
+  }).join('');
+  const h=iadeHesap(s);const nakit=$('iade-nakit')?.checked;
+  $('iade-hesap').innerHTML=nakit?`<label>Hangi kasadan ödensin?</label><select id="iade-hs">${db.hesaplar.map(hs=>`<option value="${hs.id}">${esc(hs.ad)} · ${TL(hs.bakiye)}</option>`).join('')}</select>`:'';
+  $('iade-ozet').innerHTML=`<div><div class="l">İade Tutarı</div><div class="v" style="color:var(--bad)">${money(h.net,s.pb)}</div></div>`;
+}
+function iadeKaydet(){const s=db.satislar.find(x=>x.id===_iadeSid);if(!s)return;const h=iadeHesap(s);
+  if(!h.kal.length)return toast('İade edilecek ürün/miktar seç');
+  const nakit=$('iade-nakit')?.checked;const hid=nakit?+($('iade-hs')?.value||0):0;
+  h.kal.forEach(k=>stokUygula(k,1)); // mal stoğa geri
+  const m=cari(s.mid);
+  if(nakit){const hs=hesap(hid)||db.hesaplar[0];if(hs)hs.bakiye-=h.netTL}
+  else{if(m)m.bakiye-=h.netTL}
+  db.satislar.push({id:nid('s'),tip:'iade',mid:s.mid,mus:s.mus,tarih:Date.now(),kaynakId:s.id,pb:s.pb,satisKur:h.div,kalemler:h.kal,araToplam:h.ara,iskonto:s.iskonto||0,kdv:s.kdv||0,kdvTutar:h.kdvT,tutar:h.net,nakit:!!nakit,hesapId:hid});
+  save();closeM();go('satis');toast('İade alındı ✓ '+money(h.net,s.pb)+(nakit?' · 💵 nakit ödendi':' · cariye alacak'));
+}
+function iadeFis(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;const kaynak=s.kaynakId?db.satislar.find(x=>x.id===s.kaynakId):null;
+  open_('↩️ İade Fişi',`<div class="mini">${esc(s.mus)} · ${tstr(s.tarih)}${kaynak?' · kaynak satış #'+kaynak.id:''}</div>
+    <div style="margin-top:10px">${s.kalemler.map(k=>{const sub=k.renkler&&k.renkler.length?k.renkler.map(r=>esc(r.ad)+'×'+r.mik).join(' · '):k.mik+' '+esc(k.birim||'');return `<div class="li"><div class="lt">${esc(k.urun)}<small>${sub}</small></div><b>−${money(k.mik*k.fiyat,s.pb)}</b></div>`}).join('')}</div>
+    <div class="total" style="margin-top:10px"><div class="l">İADE TOPLAM</div><div class="v" style="color:var(--bad)">−${money(s.tutar,s.pb)}</div></div>
+    <div class="kv"><span class="k">Ödeme</span><span class="v">${s.nakit?'💵 Nakit iade edildi':'Cariye alacak yazıldı'}</span></div>
+    <button class="btn danger" style="margin-top:12px" onclick="iadeSil(${id})">İadeyi Geri Al</button>`);
+}
+function iadeSil(id){const s=db.satislar.find(x=>x.id===id);if(!s||s.tip!=='iade')return;
+  askConfirm('Bu iade geri alınsın mı? Mal tekrar stoktan düşülür, tutar cari/kasaya iade edilir.',()=>{
+    s.kalemler.forEach(k=>stokUygula(k,-1)); // stok tekrar düş
+    const netTL=(+s.tutar||0)*(s.satisKur||1);const m=cari(s.mid);
+    if(s.nakit){const hs=hesap(s.hesapId)||db.hesaplar[0];if(hs)hs.bakiye+=netTL}else{if(m)m.bakiye+=netTL}
+    db.satislar=db.satislar.filter(x=>x.id!==id);save();closeM();go('satis');toast('İade geri alındı');
+  },'Geri Al');
 }
 function fisText(s){
   const ciz='━━━━━━━━━━━━━━';
@@ -3103,8 +3160,13 @@ function rapCtx(){
   const malOf=s=>{let m=0;s.kalemler.forEach(k=>{const u=urun(k.uid);if(u)m+=(+u.alis||0)*k.mik*(k.birim==='seri'?(u.seri||1):1)});return m};
   const karTLof=s=>netTL(s)-malOf(s);
   const karOf=arr=>{let m=0;arr.forEach(s=>{m+=malOf(s)});return ciroOf(arr)-m};
-  const ciro=ciroOf(sat),brutKar=karOf(sat),marj=ciro?Math.round(brutKar/ciro*100):0;
-  const adet=sat.reduce((a,s)=>a+s.kalemler.reduce((x,k)=>x+(+k.mik||0),0),0);
+  // iadeler (dönem içi) — ciro/kâr/adet netlenir
+  const iadeSat=db.satislar.filter(s=>s.tip==='iade'&&inRange(s.tarih));
+  const iadeNetTL=iadeSat.reduce((a,s)=>a+netTL(s),0);
+  const iadeMalTL=iadeSat.reduce((a,s)=>a+malOf(s),0);
+  const iadeAdet=iadeSat.reduce((a,s)=>a+s.kalemler.reduce((x,k)=>x+(+k.mik||0),0),0);
+  const ciro=ciroOf(sat)-iadeNetTL,brutKar=karOf(sat)-(iadeNetTL-iadeMalTL),marj=ciro?Math.round(brutKar/ciro*100):0;
+  const adet=sat.reduce((a,s)=>a+s.kalemler.reduce((x,k)=>x+(+k.mik||0),0),0)-iadeAdet;
   const kesikTop=sat.reduce((a,s)=>a+(+s.kesik||0)*pbKur(s.pb),0);
   const tahsil=sat.reduce((a,s)=>a+(+s.odenen||0)*pbKur(s.pb),0);
   const ciroGross=sat.reduce((a,s)=>a+toTL(s),0);       // KDV dahil — tahsilat/açık için
@@ -3115,7 +3177,7 @@ function rapCtx(){
   const giderTop=(db.hareketler||[]).filter(x=>x.yon==='out'&&x.tur!=='Transfer'&&inRange(x.tarih)).reduce((a,x)=>a+(+x.tutar||0),0);
   const gy=rapGecenYilAralik();
   const satGY=gy?filt(ts=>ts>=gy[0]&&ts<gy[1]):null;
-  return {bas,bit,donemAd,inRange,onc,kar,toTL,karTLof,sat,satOnc,ciroOf,karOf,ciro,brutKar,marj,adet,kesikTop,tahsil,acikDonem,tahOran,acikAlacak,kdv,giderTop,
+  return {bas,bit,donemAd,inRange,onc,kar,toTL,karTLof,sat,satOnc,ciroOf,karOf,ciro,brutKar,marj,adet,kesikTop,tahsil,acikDonem,tahOran,acikAlacak,kdv,giderTop,iadeNetTL,iadeAdet,iadeSat,
     ciroOnc:satOnc?ciroOf(satOnc):null,karOncV:satOnc?karOf(satOnc):null,islemOnc:satOnc?satOnc.length:null,tahOnc:satOnc?satOnc.reduce((a,s)=>a+(+s.odenen||0)*pbKur(s.pb),0):null,
     gyAd:gy?gy[2]:null,ciroGY:satGY?ciroOf(satGY):null,karGY:satGY?karOf(satGY):null,islemGY:satGY?satGY.length:null,adetGY:satGY?satGY.reduce((a,s)=>a+s.kalemler.reduce((x,k)=>x+(+k.mik||0),0),0):null};
 }
@@ -3133,6 +3195,7 @@ function rapOzet(R){let h='';
   h+=`<div class="card" style="padding:11px 12px;margin:0"><div class="mini">İşlem Sayısı</div><div style="font-weight:800;font-size:18px">${R.sat.length}</div>${R.onc?`<div style="font-size:11px;margin-top:1px">${rapDelta(R.sat.length,R.islemOnc)}</div>`:''}</div>`;
   h+=`</div>`;
   h+=`<div class="g2" style="margin-top:9px"><div class="card" style="padding:10px;margin:0;text-align:center"><div class="mini">Satılan Adet</div><div style="font-weight:800;font-size:16px">${R.adet}</div></div><div class="card" style="padding:10px;margin:0;text-align:center"><div class="mini">Ort. Sepet</div><div style="font-weight:800;font-size:16px">${TL(R.sat.length?R.ciro/R.sat.length:0)}</div></div></div>`;
+  if(R.iadeNetTL>0)h+=`<div class="card" style="padding:11px 14px;margin-top:9px;background:var(--bad-s);border-color:var(--bad)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11.5px;font-weight:700;color:var(--bad)">↩️ İADELER · ${R.donemAd.toUpperCase()}</div><div class="mini">${R.iadeSat.length} iade · ${R.iadeAdet} adet geri döndü · ciro/kârdan düşüldü</div></div><div style="font-size:18px;font-weight:800;color:var(--bad)">−${TL(R.iadeNetTL)}</div></div></div>`;
   // hedef takibi (ay/yıl)
   if(rapDonem==='ay'||rapDonem==='yil'){
     const hedef=(+db.hedef||0)*(rapDonem==='yil'?12:1),per=rapDonem==='yil'?'Yıllık':'Aylık';
