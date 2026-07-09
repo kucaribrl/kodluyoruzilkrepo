@@ -3905,7 +3905,7 @@ function fabAction(){if(cur==='stok'){(stokTab==='hammadde'&&canHammadde())?form
 /* =================== BAŞLAT =================== */
 go('panel');
 // Müşteri cihazı: #siparis + bulut ayarlı → katalogu buluttan çek, sipariş moduna geç
-async function musteriBulutAc(){bulutMusteriMod=true;const ok=await bulutKatalogYukle();if(!ok){bulutMusteriMod=false;toast('Katalog yüklenemedi');return portalAc();}await bulutProfilYukle();if(bulutKul&&bulutKul.ad)portalMusAd=bulutKul.ad;portalAc();}
+async function musteriBulutAc(){bulutMusteriMod=true;await bulutKatalogYukle();await bulutProfilYukle();if(bulutKul&&bulutKul.ad)portalMusAd=bulutKul.ad;portalAc();}
 if(location.hash==='#siparis'){if(bulutVar()){setTimeout(musteriBulutAc,300)}else portalAc();}
 window.addEventListener('hashchange',()=>{if(location.hash==='#siparis'){if(bulutVar()&&!bulutMusteriMod)musteriBulutAc();else portalAc()}});
 // açılışta kur eskiyse (yok veya 3 saatten eski) sessizce güncelle
