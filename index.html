@@ -569,13 +569,13 @@ async function bulutSiparisleriCek(){if(!bulutBaslat())return toast('☁️ Bulu
 let bulutKul=null; // giriş yapan portal kullanıcısının profili
 const ROL_AD={admin:'Yönetici',musteri:'Müşteri',calisan:'Çalışan',fason:'Fason'};
 // Portal kullanıcı: kendi hesabını oluşturur (onaysız — admin onaylayana kadar giremez)
-async function bulutKayit(mail,pw,ad,tel,rolIstek){
+async function bulutKayit(mail,pw,ad,tel,rolIstek,istenenCari){
   if(!bulutBaslat())return {ok:false,hata:'Bulut ayarlı değil'};
   const r=['musteri','calisan','fason'].includes(rolIstek)?rolIstek:'musteri';
   try{
     const cred=await firebase.auth().createUserWithEmailAndPassword((mail||'').trim(),pw);
     const uid=cred.user.uid;
-    const prof={rol:r,ad:ad||'',tel:tel||'',mail:(mail||'').trim(),onay:false,cariId:0,olusturma:Date.now()};
+    const prof={rol:r,ad:ad||'',tel:tel||'',mail:(mail||'').trim(),onay:false,cariId:0,istenenCari:+istenenCari||0,olusturma:Date.now()};
     await _fb.collection('kullanicilar').doc(uid).set(prof);
     bulutKul={uid,...prof};
     return {ok:true};
@@ -647,10 +647,11 @@ async function bulutKullaniciYonet(){
   const cOpts=(sel)=>`<option value="0">— cari bağlama —</option>`+db.cariler.filter(c=>c.tip==='musteri'||c.tip==='fason').map(c=>`<option value="${c.id}" ${sel==c.id?'selected':''}>${esc(c.ad)} (${c.tip})</option>`).join('');
   const rOpts=(sel)=>['musteri','calisan','fason'].map(r=>`<option value="${r}" ${sel===r?'selected':''}>${ROL_AD[r]}</option>`).join('');
   let h=`<div class="sec" style="margin-top:0">⏳ Onay Bekleyen (${bekle.length})</div>`;
-  h+=bekle.length?bekle.map(u=>`<div class="card" style="padding:12px 13px;margin-bottom:9px"><div style="font-weight:800">${esc(u.ad||'(isimsiz)')} <span class="tag">${ROL_AD[u.rol]||u.rol}</span></div><div class="mini">${esc(u.mail||'')}${u.tel?' · 📞 '+esc(u.tel):''}</div>
+  h+=bekle.length?bekle.map(u=>{const ic=u.istenenCari&&cari(u.istenenCari);return `<div class="card" style="padding:12px 13px;margin-bottom:9px"><div style="font-weight:800">${esc(u.ad||'(isimsiz)')} <span class="tag">${ROL_AD[u.rol]||u.rol}</span></div><div class="mini">${esc(u.mail||'')}${u.tel?' · 📞 '+esc(u.tel):''}</div>
+    ${ic?`<div class="okbox" style="margin:7px 0 2px">✉️ Davetle geldi — önerilen cari: <b>${esc(ic.ad)}</b></div>`:''}
     <label style="margin-top:8px">Rol</label><select id="ku-rol-${u.uid}">${rOpts(u.rol)}</select>
-    <label>Cari bağla (isteğe bağlı)</label><select id="ku-cari-${u.uid}">${cOpts(u.cariId)}</select>
-    <div class="g2" style="margin-top:10px"><button class="btn danger sm" onclick="bulutKulSilUI('${u.uid}')">Sil</button><button class="btn g sm" onclick="bulutKulOnayUI('${u.uid}')">✓ Onayla</button></div></div>`).join(''):'<div class="mini" style="margin-bottom:6px">Bekleyen kullanıcı yok</div>';
+    <label>Cari bağla (isteğe bağlı)</label><select id="ku-cari-${u.uid}">${cOpts(u.istenenCari||u.cariId)}</select>
+    <div class="g2" style="margin-top:10px"><button class="btn danger sm" onclick="bulutKulSilUI('${u.uid}')">Sil</button><button class="btn g sm" onclick="bulutKulOnayUI('${u.uid}')">✓ Onayla</button></div></div>`}).join(''):'<div class="mini" style="margin-bottom:6px">Bekleyen kullanıcı yok</div>';
   h+=`<div class="sec">✅ Onaylı (${aktif.length})</div>`;
   h+=aktif.length?aktif.map(u=>{const c=u.cariId&&cari(u.cariId);return `<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><b>${esc(u.ad||'(isimsiz)')}</b> <span class="tag" style="background:var(--ind-s);color:var(--ind)">${ROL_AD[u.rol]||u.rol}</span><div class="mini">${esc(u.mail||'')}${c?' · 🔗 '+esc(c.ad):''}</div></div>${u.rol!=='admin'?`<button class="btn ghost sm" style="width:auto;margin:0;padding:7px 11px;flex:0 0 auto" onclick="bulutKulSilUI('${u.uid}')">Sil</button>`:''}</div></div>`}).join(''):'<div class="mini">Onaylı kullanıcı yok</div>';
   $('mB').innerHTML=h;
@@ -2960,7 +2961,8 @@ function rPortal(){
     <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="portalKullanicilar()">👤 Giriş Bilgileri</button><button class="btn ghost sm" onclick="fiyatListesiPaylas()">📋 Fiyat Listesi Paylaş</button></div>
     ${bulutVar()?`<div class="g2" style="margin-top:8px"><button class="btn sm" onclick="bulutYayinla()">☁️ Buluta Yayınla</button><button class="btn ghost sm" onclick="bulutSiparisleriCek()">📥 Bulut Siparişlerini Çek</button></div>
     <div style="margin-top:8px"><button class="btn ghost sm" onclick="bulutKullaniciYonet()">👥 Bulut Kullanıcıları <span id="bk-rozet"></span></button></div>
-    <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="bulutFasonYayinla()">🧵 Fasona İş Gönder</button><button class="btn ghost sm" onclick="bulutFasonDurumCek()">📥 Fason Durumları</button></div>`:''}
+    <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="bulutFasonYayinla()">🧵 Fasona İş Gönder</button><button class="btn ghost sm" onclick="bulutFasonDurumCek()">📥 Fason Durumları</button></div>
+    <div style="margin-top:8px"><button class="btn sm" onclick="bulutDavetLinki()">🔗 Davet Linki & QR Oluştur</button></div>`:''}
     <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="kademeDuzenle()">⚙️ Toptan İndirim Kademeleri${kademeler().length?' · '+kademeler().map(k=>k.min+'+%'+k.ind).join(' '):''}</button><button class="btn ghost sm" onclick="minSiparisDuzenle()">📦 Min. Sipariş${+db.minSiparis>0?' · '+(+db.minSiparis)+' seri':''}</button></div>
     <div style="margin-top:8px"><button class="btn ghost sm" onclick="kampanyaDuzenle()">📣 Kampanya / Vitrin${kampanyaAktif()?' · <b style="color:var(--good)">yayında</b>':''}</button></div>
     <div class="mini" style="margin:8px 3px">Müşteriler katalogdan seçip sipariş verir. Aynı cihazda demo/kiosk çalışır; farklı cihazdan gelmesi için sunucuda yayınlanması gerekir.</div>`;
@@ -3088,6 +3090,31 @@ function cariKulPaylas(id){const c=cari(id);if(!c||!c.kullanici)return;const url
   if(navigator.share){navigator.share({text:t}).catch(()=>{});return}
   if(ph)window.open(`https://wa.me/${ph}?text=${encodeURIComponent(t)}`,'_blank');
   else if(navigator.clipboard)navigator.clipboard.writeText(t).then(()=>toast('Bilgiler kopyalandı ✓')).catch(()=>{});}
+// 🔗 Davet linki & QR — rol (+cari) seç, hazır link/QR üret
+let davetGenRol='musteri';
+function bulutDavetLinki(){davetGenRol='musteri';open_('🔗 Davet Linki & QR',`
+  <div class="mini" style="margin-bottom:8px">Rol seç → linki/QR'ı gönder. Karşı taraf tıklayınca <b>rolü hazır</b> kayıt olur, sana <b>önerilen cariyle</b> düşer (tek tuş onay).</div>
+  <div class="seg2" id="dav-seg"></div>
+  <div id="dav-cari-wrap" style="margin-top:10px"></div>
+  <div id="dav-out" style="margin-top:12px"></div>`);
+  davetRolSec('musteri');}
+function davetRolSec(r){davetGenRol=r;
+  const seg=$('dav-seg');if(seg)seg.innerHTML=['musteri','calisan','fason'].map(k=>`<div class="o ${davetGenRol===k?'on':''}" onclick="davetRolSec('${k}')">${ROL_AD[k]}</div>`).join('');
+  const cw=$('dav-cari-wrap');
+  if(cw){if(r==='calisan'){cw.innerHTML='<div class="mini">Çalışan için cari gerekmez.</div>';}
+    else{const list=db.cariler.filter(c=>r==='fason'?c.tip==='fason':c.tip==='musteri');
+      cw.innerHTML=`<label>${r==='fason'?'Fason kaydı':'Müşteri carisi'} (önerilir)</label><select id="dav-cari" onchange="davetYenile()"><option value="0">— seçilmedi —</option>${list.map(c=>`<option value="${c.id}">${esc(c.ad)}</option>`).join('')}</select>`;}}
+  davetYenile();}
+function davetLinkUret(){const base=location.href.split('#')[0];const cid=+($('dav-cari')?.value||0);
+  return base+'#kayit='+davetGenRol+(cid?'&c='+cid:'');}
+function davetYenile(){const out=$('dav-out');if(!out)return;const url=davetLinkUret();
+  out.innerHTML=`<div style="text-align:center"><img src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(url)}" style="width:200px;height:200px;border-radius:12px;background:#fff;border:1px solid var(--ln)" alt="QR"></div>
+    <div class="mini" style="word-break:break-all;background:var(--ln2);border-radius:9px;padding:9px 11px;margin-top:10px">${esc(url)}</div>
+    <div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="davetKopya()">📋 Kopyala</button><button class="btn g sm" onclick="davetWa()">📱 WhatsApp'ta Gönder</button></div>`;}
+function davetMesaj(){const url=davetLinkUret();const rn=ROL_AD[davetGenRol]||'';
+  return `${db.firma||'IQ Basics'} — ${rn} davetiniz 👇\n${url}\n\nLinke tıklayıp bilgilerinizi girerek kayıt olun. Onaylandığında giriş yapabilirsiniz.`;}
+function davetKopya(){const t=davetMesaj();if(navigator.clipboard)navigator.clipboard.writeText(t).then(()=>toast('Kopyalandı ✓')).catch(()=>{});else toast('Kopyalanamadı')}
+function davetWa(){const t=davetMesaj();if(navigator.share)navigator.share({text:t}).catch(()=>{});else window.open('https://wa.me/?text='+encodeURIComponent(t),'_blank');}
 function portalPaylas(){const url=location.href.split('#')[0]+'#siparis';const t=`${db.firma||'Öz Tekstil'} toptan sipariş kataloğu:\n${url}\n\nKatalogdan ürün seçip sipariş verebilirsiniz.`;
   if(navigator.share)navigator.share({text:t}).catch(()=>{});
   else if(navigator.clipboard)navigator.clipboard.writeText(t).then(()=>toast('Sipariş linki kopyalandı ✓')).catch(()=>open_('Sipariş Linki',`<textarea readonly style="width:100%;height:100px;font-size:12px">${esc(t)}</textarea>`));
@@ -3110,8 +3137,12 @@ function portalLogin(){const k=(portalGKad||'').trim().toLowerCase(),s=(portalGS
   portalView='katalog';portalCiz();toast('Hoş geldin '+m.ad+' 👋');}
 function portalCikis(){portalGirisId=0;portalMusAd='';portalSepet=[];portalTel='';portalSehir='';portalAdres='';try{localStorage.removeItem('oz_portal_oturum')}catch(e){}portalPreview=false;portalView='giris';portalCiz()}
 // --- Bulut (Firebase) portal kimlik akışı ---
-let bulutAuthTab='giris';
+let bulutAuthTab='giris', davetRol='', davetCari=0;
 function bulutAuthSekme(t){bulutAuthTab=t;portalCiz()}
+// Davet linkini oku: #kayit=fason&c=201 → kayıt sekmesi + rol/cari hazır
+function portalDavetOku(){davetRol='';davetCari=0;const h=location.hash||'';
+  const m=h.match(/#kayit=?([a-z]*)/);if(m&&['musteri','calisan','fason'].includes(m[1])){davetRol=m[1];bulutAuthTab='kayit';}
+  const c=h.match(/[?&]c=(\d+)/);if(c)davetCari=+c[1];}
 async function portalBulutGiris(){
   const mail=($('pb-mail')?.value||'').trim(),pw=$('pb-pw')?.value||'';
   if(!mail||!pw)return toast('E-posta ve şifre girin');
@@ -3126,7 +3157,7 @@ async function portalBulutKayit(){
   if(!ad)return toast('Ad / firma girin');
   if(!mail||pw.length<6)return toast('Geçerli e-posta ve en az 6 haneli şifre girin');
   toast('Hesap oluşturuluyor…');
-  const r=await bulutKayit(mail,pw,ad,tel,rol);
+  const r=await bulutKayit(mail,pw,ad,tel,rol,davetCari);
   if(!r.ok)return toast('Kayıt başarısız: '+r.hata);
   toast('✓ Kaydınız alındı — onay bekleniyor');
   portalCiz();
@@ -3313,11 +3344,12 @@ function portalCiz(){
     pov.innerHTML=`<div style="max-width:520px;margin:0 auto;min-height:100%"><div style="background:linear-gradient(135deg,#c14b47,#d9534f);color:#fff;padding:16px 15px 15px;display:flex;justify-content:space-between;align-items:center">${logo}${povKapat}</div>
       <div style="padding:26px 22px">
         <div style="text-align:center"><div style="font-size:46px">🔐</div><div style="font-size:20px;font-weight:800;margin-top:8px">${esc(db.firma||'IQ Basics')}</div><div class="mini" style="margin-top:4px">Hesabınızla giriş yapın ya da kayıt olun</div></div>
-        <div class="seg2" style="margin:18px auto 0;max-width:330px"><div class="o ${t==='giris'?'on':''}" onclick="bulutAuthSekme('giris')">Giriş</div><div class="o ${t==='kayit'?'on':''}" onclick="bulutAuthSekme('kayit')">Kayıt Ol</div></div>
+        ${davetRol?`<div class="okbox" style="max-width:330px;margin:14px auto 0">✉️ <b>${esc(db.firma||'Firma')}</b> sizi <b>${ROL_AD[davetRol]||davetRol}</b> olarak davet etti — bilgilerinizi girip kayıt olun.</div>`:''}
+        <div class="seg2" style="margin:14px auto 0;max-width:330px"><div class="o ${t==='giris'?'on':''}" onclick="bulutAuthSekme('giris')">Giriş</div><div class="o ${t==='kayit'?'on':''}" onclick="bulutAuthSekme('kayit')">Kayıt Ol</div></div>
         <div style="max-width:330px;margin:16px auto 0">
           ${t==='kayit'?`<label>Ad / Firma</label><input id="pb-ad" placeholder="ör. Yılmaz Tekstil" autocapitalize="words">
           <label>Telefon</label><input id="pb-tel" placeholder="05.." inputmode="tel">
-          <label>Kimsiniz?</label><select id="pb-rol"><option value="musteri">Müşteri (sipariş vermek için)</option><option value="calisan">Çalışan</option><option value="fason">Fason (üretim)</option></select>`:''}
+          <label>Kimsiniz?</label><select id="pb-rol" ${davetRol?'disabled style="opacity:.75"':''}><option value="musteri" ${davetRol==='musteri'?'selected':''}>Müşteri (sipariş vermek için)</option><option value="calisan" ${davetRol==='calisan'?'selected':''}>Çalışan</option><option value="fason" ${davetRol==='fason'?'selected':''}>Fason (üretim)</option></select>`:''}
           <label>E-posta</label><input id="pb-mail" type="email" autocapitalize="off" autocomplete="username" placeholder="ornek@mail.com">
           <label>Şifre</label><input id="pb-pw" type="password" autocomplete="${t==='kayit'?'new-password':'current-password'}" placeholder="••••••" onkeydown="if(event.key==='Enter')${t==='kayit'?'portalBulutKayit()':'portalBulutGiris()'}">
           <button class="btn g" style="margin-top:15px" onclick="${t==='kayit'?'portalBulutKayit()':'portalBulutGiris()'}">${t==='kayit'?'Hesap Oluştur':'Giriş Yap'}</button>
@@ -4046,8 +4078,9 @@ function fabAction(){if(cur==='stok'){(stokTab==='hammadde'&&canHammadde())?form
 go('panel');
 // Müşteri cihazı: #siparis + bulut ayarlı → katalogu buluttan çek, sipariş moduna geç
 async function musteriBulutAc(){bulutMusteriMod=true;await bulutKatalogYukle();await bulutAuthBekle();await bulutProfilYukle();await bulutRolVerisiYukle();portalAc();}
-if(location.hash==='#siparis'){if(bulutVar()){setTimeout(musteriBulutAc,300)}else portalAc();}
-window.addEventListener('hashchange',()=>{if(location.hash==='#siparis'){if(bulutVar()&&!bulutMusteriMod)musteriBulutAc();else portalAc()}});
+function portalHashAc(){const h=location.hash||'';if(h==='#siparis'||h.indexOf('#kayit')===0){portalDavetOku();if(bulutVar()){if(!bulutMusteriMod)setTimeout(musteriBulutAc,300);else portalAc();}else portalAc();return true;}return false;}
+portalHashAc();
+window.addEventListener('hashchange',()=>{portalHashAc();});
 // açılışta kur eskiyse (yok veya 3 saatten eski) sessizce güncelle
 if(!db.kurTarih || Date.now()-db.kurTarih > 3*3600000){
   kurCek().then(ok=>{if(ok&&cur==='panel')render()});
