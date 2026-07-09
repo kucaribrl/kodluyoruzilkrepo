@@ -4,7 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#1d3a63">
-<title>Öz Tekstil — Toptan Yönetim</title>
+<title>IQ Basics — Toptan Yönetim</title>
+<!-- 📱 PWA — ana ekrana kurulabilir uygulama -->
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="IQ Basics">
+<meta name="mobile-web-app-capable" content="yes">
 <!-- ☁️ Bulut (Firebase) — yayında yüklenir; offline/önizlemede sessizce atlanır -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -3762,6 +3770,40 @@ if(!db.kurTarih || Date.now()-db.kurTarih > 3*3600000){
   kurCek().then(ok=>{if(ok&&cur==='panel')render()});
 }
 window.addEventListener('error',e=>{console.log('APPERR:',e.message)});
+
+/* =================== 📱 PWA: kurulum + çevrimdışı =================== */
+(function(){
+  // Service worker'ı yalnızca gerçek yayında (http/https) kaydet; file:// önizlemede atla
+  if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+    window.addEventListener('load',()=>{
+      navigator.serviceWorker.register('./sw.js').catch(()=>{});
+    });
+  }
+  // "Ana ekrana ekle" istemi — Android/Chrome otomatik butonu yakala
+  let _prompt=null;
+  function kurBtnGoster(){
+    if(document.getElementById('pwa-kur'))return;
+    const b=document.createElement('button');
+    b.id='pwa-kur';
+    b.textContent='📲 Uygulamayı Yükle';
+    b.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:88px;z-index:9999;background:#111;color:#fff;border:1.5px solid #e11d2a;border-radius:24px;padding:11px 20px;font-size:14px;font-weight:800;font-family:inherit;box-shadow:0 6px 22px rgba(0,0,0,.35);cursor:pointer';
+    b.onclick=async()=>{
+      if(!_prompt)return;
+      b.disabled=true; _prompt.prompt();
+      try{await _prompt.userChoice}catch(e){}
+      _prompt=null; b.remove();
+    };
+    document.body.appendChild(b);
+    // 12 sn sonra kendiliğinden gizlensin (rahatsız etmesin)
+    setTimeout(()=>{b&&b.parentNode&&b.remove();},12000);
+  }
+  window.addEventListener('beforeinstallprompt',(e)=>{
+    e.preventDefault(); _prompt=e; kurBtnGoster();
+  });
+  window.addEventListener('appinstalled',()=>{
+    _prompt=null; const b=document.getElementById('pwa-kur'); if(b)b.remove();
+  });
+})();
 </script>
 </body>
 </html>
