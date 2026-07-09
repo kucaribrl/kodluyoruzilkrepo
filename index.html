@@ -520,7 +520,7 @@ async function bulutGirisYap(sonra){if(!bulutBaslat())return toast('Bulut ayarl�
   const mail=($('fbg-mail')?.value||'').trim(),pw=$('fbg-pw')?.value||'';if(!mail||!pw)return toast('E-posta ve şifre gir');
   try{await firebase.auth().signInWithEmailAndPassword(mail,pw);await bulutProfilYukle();closeM();
     if(!bulutAdminMi()){toast('⚠️ Bu hesap yönetici değil. Firebase\'de kullanicilar/'+((bulutKul&&bulutKul.uid)||'UID')+' → rol:admin yapın.');return;}
-    toast('☁️ Giriş yapıldı ✓');if(sonra==='yayin')bulutYayinla();else if(sonra==='cek')bulutSiparisleriCek();else if(sonra==='kullanici')bulutKullaniciYonet();}
+    toast('☁️ Giriş yapıldı ✓');if(sonra==='yayin')bulutYayinla();else if(sonra==='cek')bulutSiparisleriCek();else if(sonra==='kullanici')bulutKullaniciYonet();else if(sonra==='fasonyayin')bulutFasonYayinla();else if(sonra==='fasoncek')bulutFasonDurumCek();}
   catch(e){toast('Giriş başarısız: '+(e.code||e.message))}}
 // Admin: katalog + kampanyayı buluta yayınla
 async function bulutYayinla(){if(!bulutBaslat())return toast('☁️ Bulut ayarlı değil (FB_CONFIG boş)');
@@ -634,6 +634,71 @@ async function bulutKullaniciYonet(){
 async function bulutKulOnayUI(uid){const rol=$('ku-rol-'+uid)?.value||'musteri';const cariId=+($('ku-cari-'+uid)?.value||0);
   if(await bulutKullaniciOnayla(uid,rol,cariId)){toast('✓ Onaylandı');bulutKullaniciYonet();}}
 function bulutKulSilUI(uid){askConfirm('Bu kullanıcı kaydı silinsin mi? (Not: Firebase Auth hesabı ayrıca Authentication panelinden silinmeli)',async()=>{if(await bulutKullaniciSil(uid)){toast('Silindi');bulutKullaniciYonet();}})}
+
+/* ---- Faz 3: Fason bulut iş emirleri ---- */
+let fasonIsler=[];
+// Fason: kendi iş emirlerini yükle
+async function bulutFasonIsleriYukle(){
+  if(!bulutBaslat()||!bulutKul)return [];
+  try{const snap=await _fb.collection('fason_isemri').where('fasonUid','==',bulutKul.uid).get();
+    fasonIsler=[];snap.forEach(d=>fasonIsler.push({bid:d.id,...d.data()}));
+    fasonIsler=fasonIsler.filter(x=>x.aktif!==false).sort((a,b)=>(a.termin||0)-(b.termin||0));
+    return fasonIsler;
+  }catch(e){console.warn('fasonis',e);return []}
+}
+// Fason: durum bildir (yeni→basladi→bitti→teslim)
+async function bulutFasonDurum(bid,durum,teslimAdet){
+  if(!bulutBaslat())return false;
+  try{const u={durum,guncelleme:Date.now()};if(teslimAdet!=null&&teslimAdet!=='')u.teslimAdet=+teslimAdet;
+    await _fb.collection('fason_isemri').doc(bid).update(u);
+    const j=fasonIsler.find(x=>x.bid===bid);if(j){j.durum=durum;if(u.teslimAdet!=null)j.teslimAdet=u.teslimAdet;}
+    return true;
+  }catch(e){toast('Güncellenemedi: '+(e.message||e));return false}
+}
+// Admin: fason iş emirlerini buluta gönder (yalnız fason carisi + bulut hesabı eşleşen 'devam' duraklar aktif)
+async function bulutFasonYayinla(){
+  if(!bulutBaslat())return toast('☁️ Bulut ayarlı değil');
+  if(!bulutGirisli())return bulutGirisIste('fasonyayin');
+  await bulutProfilYukle();if(!bulutAdminMi())return toast('Yönetici hesabıyla giriş gerekli');
+  const users=await bulutTumKullanicilar();
+  const fmap={};users.filter(u=>u.rol==='fason'&&u.onay&&u.cariId).forEach(u=>fmap[u.cariId]=u.uid);
+  const jobs=[];let n=0,atlanan=0;
+  db.isemirleri.forEach(ie=>{(ie.duraklar||[]).forEach((d,ix)=>{
+    if(!d.fasonId)return;
+    if(!fmap[d.fasonId]){if(d.durum==='devam')atlanan++;return;}
+    const renk=(d.gonderilenRenk&&Object.keys(d.gonderilenRenk).length)?Object.entries(d.gonderilenRenk).map(([ad,adet])=>({ad,adet})):(ie.renkDagilim||[]);
+    const termin=ie.baslangic?ie.baslangic+(+ie.gun||0)*86400000:0;
+    jobs.push(_fb.collection('fason_isemri').doc(ie.id+'_'+ix).set({
+      fasonUid:fmap[d.fasonId],magaza:MAGAZA_ID,isEmriId:ie.id,durakIx:ix,
+      urun:ie.urun||'',kod:ie.kod||'',islem:d.ad||'',adet:+d.gonderilen||+ie.hedef||0,birim:ie.birim||'adet',
+      ucret:+d.ucret||0,renk,termin,not:d.not||'',foto:ie.foto||'',
+      aktif:d.durum==='devam',guncellemeAdmin:Date.now()
+    },{merge:true}));
+    if(d.durum==='devam')n++;
+  })});
+  if(!jobs.length)return toast('Fasona bağlı iş yok. Önce fason kullanıcısını onaylayıp carisini bağlayın.');
+  try{await Promise.all(jobs);toast('🧵 '+n+' aktif fason işi gönderildi'+(atlanan?' · '+atlanan+' iş: fason hesabı yok':'')+' ✓');}
+  catch(e){toast('Gönderim hatası: '+(e.message||e))}
+}
+// Admin: fasonların bildirdiği durumları göster
+async function bulutFasonDurumCek(){
+  if(!bulutBaslat())return toast('☁️ Bulut ayarlı değil');
+  if(!bulutGirisli())return bulutGirisIste('fasoncek');
+  open_('🧵 Fason Durumları','<div class="mini">Yükleniyor…</div>');
+  await bulutProfilYukle();if(!bulutAdminMi()){$('mB').innerHTML='<div class="mini" style="color:var(--bad)">Yönetici hesabıyla giriş gerekli.</div>';return;}
+  try{const snap=await _fb.collection('fason_isemri').get();const list=[];snap.forEach(d=>list.push({bid:d.id,...d.data()}));
+    const users=await bulutTumKullanicilar();const uad={};users.forEach(u=>uad[u.uid]=u.ad||u.mail||'?');
+    const D={yeni:'⚪ Beklemede',basladi:'🔵 Başladı',bitti:'🟢 Bitti',teslim:'📦 Teslim etti'};
+    const akt=list.filter(x=>x.aktif!==false).sort((a,b)=>(b.guncelleme||0)-(a.guncelleme||0));
+    let h=akt.length?akt.map(x=>`<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><b>${esc(x.urun)}</b> <span class="mini">· ${esc(x.islem)}</span><div class="mini">🧵 ${esc(uad[x.fasonUid]||'?')} · ${x.adet} ${esc(x.birim||'')}</div></div><span class="tag" style="background:var(--ind-s);color:var(--ind);flex:0 0 auto">${D[x.durum||'yeni']}</span></div>${x.durum==='teslim'&&x.teslimAdet!=null?`<div class="mini" style="margin-top:4px;color:var(--good)">Teslim ettiği: <b>${x.teslimAdet}</b> adet</div>`:''}</div>`).join(''):'<div class="mini">Bulutta aktif fason işi yok. Önce "🧵 Fasona İş Gönder" deyin.</div>';
+    $('mB').innerHTML=h+'<div class="okbox" style="margin-top:8px">Not: Gerçek teslim alma / stok / ödeme işlemini Üretim ekranından elle yaparsınız. Burası fasonun bildirdiği durumdur.</div>';
+  }catch(e){$('mB').innerHTML='<div class="mini" style="color:var(--bad)">Hata: '+esc(e.message||(''+e))+'</div>'}
+}
+async function portalFasonYenile(){toast('Yenileniyor…');await bulutFasonIsleriYukle();portalCiz();}
+async function portalFasonBasla(bid){if(await bulutFasonDurum(bid,'basladi'))portalCiz();}
+async function portalFasonBitir(bid){if(await bulutFasonDurum(bid,'bitti'))portalCiz();}
+function portalFasonTeslim(bid,adet){open_('📦 Teslim Bildir',`<label>Kaç adet teslim ettiniz?</label><input id="ft-adet" type="number" inputmode="numeric" value="${adet||''}"><button class="btn g" style="margin-top:12px" onclick="portalFasonTeslimOnay('${bid}')">📦 Teslim Ettim</button>`);}
+async function portalFasonTeslimOnay(bid){const a=$('ft-adet')?.value;if(await bulutFasonDurum(bid,'teslim',a)){closeM();portalCiz();toast('📦 Teslim bildirildi ✓');}}
 
 function sifirla(){askConfirm('Tüm veriler örnek verilere sıfırlansın mı?',()=>{db=seed();save();go('panel');toast('Sıfırlandı')})}
 
@@ -2853,7 +2918,8 @@ function rPortal(){
   let html=`<div class="g2"><button class="btn sm" onclick="portalOnizle()">👁️ Müşteri Sipariş Ekranı</button><button class="btn ghost sm" onclick="portalPaylas()">🔗 Linki Paylaş</button></div>
     <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="portalKullanicilar()">👤 Giriş Bilgileri</button><button class="btn ghost sm" onclick="fiyatListesiPaylas()">📋 Fiyat Listesi Paylaş</button></div>
     ${bulutVar()?`<div class="g2" style="margin-top:8px"><button class="btn sm" onclick="bulutYayinla()">☁️ Buluta Yayınla</button><button class="btn ghost sm" onclick="bulutSiparisleriCek()">📥 Bulut Siparişlerini Çek</button></div>
-    <div style="margin-top:8px"><button class="btn ghost sm" onclick="bulutKullaniciYonet()">👥 Bulut Kullanıcıları <span id="bk-rozet"></span></button></div>`:''}
+    <div style="margin-top:8px"><button class="btn ghost sm" onclick="bulutKullaniciYonet()">👥 Bulut Kullanıcıları <span id="bk-rozet"></span></button></div>
+    <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="bulutFasonYayinla()">🧵 Fasona İş Gönder</button><button class="btn ghost sm" onclick="bulutFasonDurumCek()">📥 Fason Durumları</button></div>`:''}
     <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="kademeDuzenle()">⚙️ Toptan İndirim Kademeleri${kademeler().length?' · '+kademeler().map(k=>k.min+'+%'+k.ind).join(' '):''}</button><button class="btn ghost sm" onclick="minSiparisDuzenle()">📦 Min. Sipariş${+db.minSiparis>0?' · '+(+db.minSiparis)+' seri':''}</button></div>
     <div style="margin-top:8px"><button class="btn ghost sm" onclick="kampanyaDuzenle()">📣 Kampanya / Vitrin${kampanyaAktif()?' · <b style="color:var(--good)">yayında</b>':''}</button></div>
     <div class="mini" style="margin:8px 3px">Müşteriler katalogdan seçip sipariş verir. Aynı cihazda demo/kiosk çalışır; farklı cihazdan gelmesi için sunucuda yayınlanması gerekir.</div>`;
@@ -3011,7 +3077,8 @@ async function portalBulutGiris(){
   toast('Giriş yapılıyor…');
   const r=await bulutGirisPortal(mail,pw);
   if(!r.ok)return toast('Giriş başarısız: '+r.hata);
-  if(bulutKul&&bulutKul.ad)portalMusAd=bulutKul.ad;
+  if(bulutKul&&bulutKul.rol==='fason'&&bulutKul.onay)await bulutFasonIsleriYukle();
+  if(bulutKul&&bulutKul.rol==='musteri'&&bulutKul.ad)portalMusAd=bulutKul.ad;
   portalCiz();
 }
 async function portalBulutKayit(){
@@ -3082,6 +3149,7 @@ function portalGonder(){
   const kalemler=portalSepet.map(k=>{const f=portalKalemFiyat(k);return {uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:f.net,listeFiyat:f.base,kademeInd:f.ind,renkler:k.renkler&&k.renkler.length?k.renkler.map(r=>({...r})):undefined}});
   const t=portalTotal();
   const o={id:nid('bp'),mus:m?m.ad:ad,mid:m?m.id:0,tarih:Date.now(),kalemler,tutar:t,not:(portalNot||'').trim(),tel,adres:(portalAdres||'').trim(),sehir:(portalSehir||'').trim()};
+  if(bulutMusteriMod&&bulutKul&&bulutKul.rol==='calisan')o.calisan=bulutKul.ad||bulutKul.mail||''; // çalışan adına giriş
   if(bulutMusteriMod){ // müşteri cihazı → sipariş buluta gider
     bulutSiparisGonder(o).then(ok=>{if(ok){portalSepet=[];portalNot='';portalView='tesekkur';portalCiz()}else toast('Sipariş gönderilemedi, tekrar deneyin')});
     return;
@@ -3187,11 +3255,12 @@ function portalRaf(baslik,list){if(!list.length)return '';return `<div style="ma
 function portalCiz(){
   const pov=document.getElementById('pov');if(!pov)return;
   // giriş kapısı
-  if(bulutMusteriMod){ // bulut modu → Firebase hesabıyla giriş/onay kapısı
+  if(bulutMusteriMod){ // bulut modu → Firebase hesabıyla giriş/onay/rol kapısı
     if(!bulutKul)portalView='bulutgiris';
     else if(!bulutKul.onay)portalView='bulutonay';
-    else{ if(['giris','bulutgiris','bulutonay'].includes(portalView))portalView='katalog';
-      if(bulutKul.ad&&!portalMusAd)portalMusAd=bulutKul.ad; }
+    else if(bulutKul.rol==='fason'){portalView='fason';}
+    else{ if(['giris','bulutgiris','bulutonay','fason'].includes(portalView))portalView='katalog';
+      if(bulutKul.rol==='musteri'&&bulutKul.ad&&!portalMusAd)portalMusAd=bulutKul.ad; } // çalışan müşteri adını elle girer
   }else if(!portalPreview&&!portalMusteriGiris()){portalView='giris';}
   const cartN=portalSepet.reduce((a,k)=>a+k.mik,0),cartT=portalTotal();
   const kadHint=kademeler().length?kademeler().map(k=>`${k.min}+ %${k.ind}`).join(' · '):'';
@@ -3215,6 +3284,23 @@ function portalCiz(){
           ${t==='kayit'?`<div class="mini" style="text-align:center;margin-top:12px;line-height:1.5">Kayıttan sonra <b>${esc(db.firma||'firma')}</b> hesabınızı onaylayınca girebilirsiniz.</div>`:''}
         </div>
       </div></div>`;
+    if(_geriT){clearInterval(_geriT);_geriT=null}
+    return;
+  }
+  if(portalView==='fason'){
+    const jobs=fasonIsler||[];
+    const D={yeni:{t:'Beklemede',c:'var(--sub)'},basladi:{t:'Devam ediyor',c:'var(--ind2)'},bitti:{t:'Bitti',c:'var(--good)'},teslim:{t:'Teslim edildi',c:'var(--good)'}};
+    pov.innerHTML=`<div style="max-width:520px;margin:0 auto;min-height:100%">
+      <div style="background:linear-gradient(135deg,#c14b47,#d9534f);color:#fff;padding:16px 15px 15px;display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><div style="font-size:17px;font-weight:800">🧵 İş Emirlerim</div><div style="font-size:11.5px;opacity:.9">${esc(bulutKul&&bulutKul.ad||'')} · ${esc(db.firma||'IQ Basics')}</div></div><div style="display:flex;gap:7px;flex:0 0 auto"><button onclick="portalFasonYenile()" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:11px;padding:9px 11px;font-size:14px;cursor:pointer">🔄</button><button onclick="portalBulutCikis()" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:11px;padding:9px 11px;font-size:12px;font-weight:700;cursor:pointer">⎋</button>${povKapat}</div></div>
+      <div style="padding:14px">${jobs.length?jobs.map(j=>{const st=j.durum||'yeni';const d=D[st]||D.yeni;const gun=j.termin?gunFark(j.termin):null;
+        return `<div class="card" style="padding:13px 14px;margin-bottom:11px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><div style="font-weight:800;font-size:15px">${esc(j.urun)}</div><div class="mini">${esc(j.islem)} · ${j.adet} ${esc(j.birim||'adet')}${j.ucret?' · ₺'+j.ucret+'/ad':''}</div></div><span class="tag" style="background:var(--ln2);color:${d.c};flex:0 0 auto">${d.t}</span></div>
+          ${j.renk&&j.renk.length?`<div class="mini" style="margin-top:6px">🎨 ${j.renk.map(r=>esc(r.ad)+' '+r.adet).join(' · ')}</div>`:''}
+          ${j.termin?`<div class="mini" style="margin-top:3px;color:${gun<0?'var(--bad)':gun<=2?'var(--warn)':'var(--sub)'}">📅 Termin: ${dstr(j.termin)}${gun!=null?' ('+(gun<0?(-gun+' gün geçti'):(gun+' gün kaldı'))+')':''}</div>`:''}
+          ${j.not?`<div class="mini" style="margin-top:3px">📝 ${esc(j.not)}</div>`:''}
+          ${j.foto?`<img src="${j.foto}" style="width:100%;max-height:160px;object-fit:cover;border-radius:10px;margin-top:8px">`:''}
+          <div style="margin-top:11px">${st==='yeni'?`<button class="btn g sm" onclick="portalFasonBasla('${j.bid}')">▶️ İşe Başladım</button>`:st==='basladi'?`<button class="btn g sm" onclick="portalFasonBitir('${j.bid}')">✅ Bitirdim</button>`:st==='bitti'?`<button class="btn sm" onclick="portalFasonTeslim('${j.bid}',${j.adet||0})">📦 Teslim Ettim</button>`:`<div class="okbox" style="margin:0">✓ Teslim edildi${j.teslimAdet!=null?' — '+j.teslimAdet+' adet':''}</div>`}</div>
+        </div>`}).join(''):`<div style="padding:50px 20px;text-align:center"><div style="font-size:50px">🧵</div><div style="font-weight:800;margin-top:10px">Şu an iş emri yok</div><div class="mini" style="margin-top:6px">${esc(db.firma||'Firma')} size iş atadığında burada görünecek. 🔄 ile yenileyin.</div></div>`}</div></div>`;
     if(_geriT){clearInterval(_geriT);_geriT=null}
     return;
   }
@@ -3292,8 +3378,9 @@ function portalCiz(){
       ${portalSepet.length?portalSepet.map(k=>{const u=urun(k.uid),kap=u?urunKapak(u):null,f=portalKalemFiyat(k),renkli=k.renkler&&k.renkler.length;return `<div class="card" style="padding:10px;margin-bottom:9px;display:flex;gap:10px;align-items:center"><div style="width:48px;height:48px;border-radius:10px;background:var(--ln2);flex:0 0 48px;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:22px">${kap?`<img src="${kap}" style="width:100%;height:100%;object-fit:cover">`:(u?portalEmoji(u):'👕')}</div><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13.5px">${esc(k.urun)}</div><div class="mini">${f.ind?`<s style="opacity:.6">${TL(f.base)}</s> <b style="color:var(--good)">${TL(f.net)}</b> <span style="color:var(--good)">%${f.ind}↓</span>`:`${TL(f.net)}`}/${esc(k.birim)} · <b>${TL(k.mik*f.net)}</b></div>${renkli?`<div class="mini" style="margin-top:2px">🎨 ${k.renkler.map(r=>esc(r.ad)+' ×'+r.mik).join(' · ')}</div>`:''}</div>${renkli?`<button class="btn ghost sm" style="width:auto;margin:0;padding:8px 11px" onclick="portalUrunAc(${k.uid})">${k.mik} ${esc(k.birim)} ›</button>`:`<div class="pstep sm"><button onclick="portalMik(${k.uid},-1);portalView='sepet';portalCiz()">−</button><b>${k.mik}</b><button onclick="portalMik(${k.uid},1);portalView='sepet';portalCiz()">+</button></div>`}</div>`}).join('')
       +(()=>{const liste=portalListeTotal(),net=portalTotal(),kazanc=liste-net;return kazanc>0?`<div class="okbox" style="margin-top:4px">🎉 Miktar indirimiyle <b>${TL(kazanc)}</b> kazandınız!</div>`:(kadHint?`<div class="mini" style="margin:8px 3px">💡 Toptan indirim (her üründen): ${kadHint} — daha çok al, birim fiyat düşsün</div>`:'')})()
       +`<div class="total" style="margin-top:12px"><div><div class="l">Toplam</div><div class="v">${TL(t)}</div></div></div>
+      ${(bulutMusteriMod&&bulutKul&&bulutKul.rol==='calisan')?`<div class="okbox" style="margin:6px 0 2px">🧑‍💼 Çalışan modu — müşteri adına sipariş giriyorsunuz (${esc(bulutKul.ad||'')})</div>`:''}
       <div class="sec">İletişim & Teslimat</div>
-      <label>Adınız / Firmanız *</label><input id="p-ad" value="${esc(portalMusAd)}" placeholder="ör. Yılmaz Tekstil" ${portalMusteriGiris()?'readonly style="opacity:.7"':'oninput="portalMusAd=this.value" onchange="portalMusEslesme()"'}>
+      <label>${(bulutMusteriMod&&bulutKul&&bulutKul.rol==='calisan')?'Müşteri adı / firması *':'Adınız / Firmanız *'}</label><input id="p-ad" value="${esc(portalMusAd)}" placeholder="ör. Yılmaz Tekstil" ${portalMusteriGiris()?'readonly style="opacity:.7"':'oninput="portalMusAd=this.value" onchange="portalMusEslesme()"'}>
       <div id="p-eslesme"></div>
       <label>Telefon *</label><input id="p-tel" type="tel" value="${esc(portalTel)}" placeholder="0532 000 00 00" oninput="portalTel=this.value">
       <div class="g2"><div><label>Şehir</label><input id="p-sehir" value="${esc(portalSehir)}" placeholder="İstanbul" oninput="portalSehir=this.value"></div><div><label>Adres</label><input id="p-adres" value="${esc(portalAdres)}" placeholder="mahalle / cadde" oninput="portalAdres=this.value"></div></div>
@@ -3905,7 +3992,9 @@ function fabAction(){if(cur==='stok'){(stokTab==='hammadde'&&canHammadde())?form
 /* =================== BAŞLAT =================== */
 go('panel');
 // Müşteri cihazı: #siparis + bulut ayarlı → katalogu buluttan çek, sipariş moduna geç
-async function musteriBulutAc(){bulutMusteriMod=true;await bulutKatalogYukle();await bulutProfilYukle();if(bulutKul&&bulutKul.ad)portalMusAd=bulutKul.ad;portalAc();}
+async function musteriBulutAc(){bulutMusteriMod=true;await bulutKatalogYukle();await bulutProfilYukle();
+  if(bulutKul&&bulutKul.rol==='fason'&&bulutKul.onay)await bulutFasonIsleriYukle();
+  if(bulutKul&&bulutKul.rol==='musteri'&&bulutKul.ad)portalMusAd=bulutKul.ad;portalAc();}
 if(location.hash==='#siparis'){if(bulutVar()){setTimeout(musteriBulutAc,300)}else portalAc();}
 window.addEventListener('hashchange',()=>{if(location.hash==='#siparis'){if(bulutVar()&&!bulutMusteriMod)musteriBulutAc();else portalAc()}});
 // açılışta kur eskiyse (yok veya 3 saatten eski) sessizce güncelle
