@@ -4129,8 +4129,11 @@ window.addEventListener('error',e=>{console.log('APPERR:',e.message)});
   // Service worker'ı yalnızca gerçek yayında (http/https) kaydet; file:// önizlemede atla
   if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     window.addEventListener('load',()=>{
-      navigator.serviceWorker.register('./sw.js').catch(()=>{});
+      navigator.serviceWorker.register('./sw.js').then(reg=>{try{reg.update()}catch(e){}}).catch(()=>{});
     });
+    // Yeni sürüm devralınca sayfayı bir kez otomatik tazele (güncel HTML gelsin)
+    let _yenilendi=false;
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{if(_yenilendi)return;_yenilendi=true;location.reload();});
   }
   // "Ana ekrana ekle" istemi — Android/Chrome otomatik butonu yakala
   let _prompt=null;

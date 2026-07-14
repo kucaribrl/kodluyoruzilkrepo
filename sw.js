@@ -1,5 +1,5 @@
 /* IQ Basics — Service Worker (çevrimdışı çalışma + kurulabilir PWA) */
-const CACHE = 'iqbasics-v1';
+const CACHE = 'iqbasics-v4';
 
 /* Uygulama kabuğu: internet olmasa da açılması gereken dosyalar */
 const SHELL = [
@@ -43,10 +43,11 @@ self.addEventListener('fetch', (e) => {
     return; // varsayılan ağ davranışı
   }
 
-  // Sayfa açılışı (navigation) → önce ağ, olmazsa önbellekteki index.html (offline)
+  // Sayfa açılışı (navigation) → HER ZAMAN taze HTML (HTTP önbelleğini de atla),
+  // sadece internet yoksa önbellekteki index.html'e düş (offline).
   if (req.mode === 'navigate') {
     e.respondWith(
-      fetch(req).then((res) => {
+      fetch(req.url, { cache: 'no-store' }).then((res) => {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put('./index.html', copy)).catch(() => {});
         return res;
