@@ -353,7 +353,7 @@
     <div class="logo">🧵</div>
     <div><h1 id="hTitle">Öz Tekstil</h1><div class="sub" id="hSub">Patron</div></div>
     <button class="role" onclick="genelAra()" title="Ara" style="margin-left:auto;padding:8px 11px">🔍</button>
-    <button class="role" id="roleBtn" onclick="rolSec()">👑 Patron ▾</button>
+    <button class="role" id="roleBtn" onclick="hesapMenu()">👑 Patron ▾</button>
   </div>
 </header>
 
@@ -368,6 +368,13 @@
 <div class="ov" id="sov" style="z-index:55"><div class="sheet"><div class="hd"><h3 id="sT">Stok</h3><button class="x" onclick="document.getElementById('sov').classList.remove('show')">✕</button></div><div class="bd" id="sB"></div></div></div>
 <div class="toast" id="toast"></div>
 <div id="pov" style="display:none;position:fixed;inset:0;z-index:60;background:var(--bg);overflow-y:auto"></div>
+<div id="kilit" style="display:none;position:fixed;inset:0;z-index:9999;background:linear-gradient(150deg,#2a2a33,#121216);color:#fff;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center">
+  <div style="font-size:44px">🔒</div>
+  <div style="font-weight:900;font-size:22px;margin-top:8px;letter-spacing:-.02em">IQ Basics</div>
+  <div id="kilit-msg" style="opacity:.85;font-size:13.5px;margin-top:5px">Devam etmek için PIN girin</div>
+  <input id="kilit-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off" style="margin-top:20px;width:190px;text-align:center;font-size:24px;letter-spacing:8px;padding:13px;border-radius:13px;border:1px solid #4a4a55;background:#1e1e26;color:#fff;outline:none" onkeydown="if(event.key==='Enter')kilitDene()">
+  <button onclick="kilitDene()" style="margin-top:15px;background:linear-gradient(135deg,#c14b47,#d9534f);color:#fff;border:none;border-radius:13px;padding:13px 40px;font-weight:800;font-size:15px;cursor:pointer">Aç</button>
+</div>
 <div id="printarea"></div>
 
 <script>
@@ -947,9 +954,42 @@ function renderNav(){
   $('nav').innerHTML=navFor().map(([v,ic,ad])=>`<button data-v="${v}" onclick="go('${v}')" class="${cur===v?'on':''}"><span class="i">${ic}</span>${ad}</button>`).join('');
 }
 function back(){go('panel')}
+// Hesap / oturum menüsü (çıkış buradan)
+function hesapMenu(){
+  const bg=(function(){try{return bulutGirisli()}catch(e){return false}})();
+  const rol=ROL_AD[db.rol]||ROLLER[db.rol]?.ad||db.rol;
+  let h=`<div class="card" style="padding:13px 15px"><div style="font-weight:800;font-size:15px">${(ROLLER[db.rol]||{}).ic||'👤'} ${esc(rol)}</div><div class="mini">${db.personelMod?'Personel oturumu · canlı bağlı':(bg?'Yönetici · bulut girişli':'Yönetici · bu cihaz')}</div></div>`;
+  if(db.personelMod){h+=`<button class="btn danger" style="margin-top:12px" onclick="personelCik()">🚪 Çıkış Yap</button>`;}
+  else{
+    if(bg)h+=`<button class="btn danger" style="margin-top:12px" onclick="bulutCikisTum()">🚪 Bulut Oturumunu Kapat</button>`;
+    h+=`<button class="btn ghost" style="margin-top:8px" onclick="closeM();go('ayarlar')">⚙️ Ayarlar</button>`;
+    h+=`<div class="mini" style="text-align:center;margin-top:12px"><a onclick="closeM();rolOnizle()" style="color:var(--ind2);font-weight:700;cursor:pointer">Farklı rolü önizle (deneme)</a></div>`;
+  }
+  open_('Hesap',h);
+}
+function bulutCikisTum(){askConfirm('Bulut oturumu kapatılsın mı? Bu cihazdaki veriler kalır; tekrar giriş yapılabilir.',()=>{try{if(canliAcik)canliDur()}catch(e){}try{bulutCikisPortal()}catch(e){}bulutKul=null;closeM();toast('Bulut oturumu kapatıldı');});}
+function rolOnizle(){rolSec();}
+/* 🔒 Uygulama kilidi (PIN) + hareketsizlik otomatik kilit */
+function pinHash(s){let h=5381;for(let i=0;i<s.length;i++)h=((h*33)^s.charCodeAt(i))>>>0;return 'p'+h;}
+let _kilitT=null;
+function kilitGoster(){if(!db.pin)return;const el=$('kilit');if(!el)return;el.style.display='flex';const i=$('kilit-pin');if(i){i.value='';$('kilit-msg').textContent='Devam etmek için PIN girin';setTimeout(()=>i.focus(),60);}}
+function kilitDene(){const v=$('kilit-pin')?.value||'';if(db.pin&&pinHash(v)===db.pin){$('kilit').style.display='none';kilitZamanla();}else{$('kilit-msg').textContent='❌ Yanlış PIN, tekrar deneyin';const i=$('kilit-pin');if(i){i.value='';i.focus();}}}
+function kilitZamanla(){clearTimeout(_kilitT);if(!db.pin)return;const dk=Math.max(1,+db.pinDk||3);_kilitT=setTimeout(kilitGoster,dk*60000);}
+function kilitAyar(){open_('🔒 Uygulama Kilidi (PIN)',`
+    <div class="mini" style="line-height:1.6">Cihazını biri eline alırsa uygulamayı açamasın diye PIN koy. Durum: <b style="color:${db.pin?'var(--good)':'var(--sub)'}">${db.pin?'AÇIK':'kapalı'}</b></div>
+    ${db.pin?'':`<label style="margin-top:10px">Yeni PIN (4–8 rakam)</label><input id="pin-yeni" type="password" inputmode="numeric" maxlength="8" placeholder="••••">
+    <label>PIN tekrar</label><input id="pin-yeni2" type="password" inputmode="numeric" maxlength="8">`}
+    <label style="margin-top:8px">Otomatik kilit — kaç dakika hareketsizlikte?</label><input id="pin-dk" type="number" inputmode="numeric" value="${+db.pinDk||3}" min="1">
+    ${db.pin?`<button class="btn g" style="margin-top:12px" onclick="kilitDkKaydet()">Süreyi Kaydet</button><button class="btn danger" style="margin-top:8px" onclick="kilitKaldir()">Kilidi Kaldır (PIN sil)</button>`:`<button class="btn g" style="margin-top:12px" onclick="kilitKur()">🔒 Kilidi Kur</button>`}
+    <div class="mini" style="margin-top:10px;color:var(--warn)">⚠️ PIN'i unutma! Unutursan: Ayarlar → Veri Güvenliği → yedekten yükle ya da tarayıcı verisini temizle (veriler bulutta/yedekte durur).</div>`);}
+function kilitKur(){const a=$('pin-yeni')?.value||'',b=$('pin-yeni2')?.value||'';if(!/^\d{4,8}$/.test(a))return toast('PIN 4–8 rakam olmalı');if(a!==b)return toast('PIN\'ler aynı değil');db.pin=pinHash(a);db.pinDk=Math.max(1,+($('pin-dk')?.value)||3);save();closeM();toast('🔒 Uygulama kilidi açıldı');kilitZamanla();}
+function kilitDkKaydet(){db.pinDk=Math.max(1,+($('pin-dk')?.value)||3);save();closeM();toast('Süre kaydedildi ✓');kilitZamanla();}
+function kilitKaldir(){askConfirm('Uygulama kilidi kaldırılsın mı? (PIN silinir, uygulama şifresiz açılır)',()=>{db.pin=null;save();closeM();toast('Kilit kaldırıldı');clearTimeout(_kilitT);});}
+['click','keydown','touchstart','mousemove'].forEach(ev=>document.addEventListener(ev,()=>{if(db&&db.pin){const k=$('kilit');if(k&&k.style.display!=='flex')kilitZamanla();}},{passive:true}));
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&db&&db.pin){const k=$('kilit');if(k&&k.style.display!=='flex'){/* geri gelince süreyi yenile */kilitZamanla();}}});
 function rolSec(){
-  if(db.personelMod)return toast('👤 Personel modundasın ('+(ROL_AD[db.rol]||db.rol)+') — rol değiştirilemez. Çıkış: Ayarlar → Bulut.');
-  open_('Rol Seç (test)',Object.keys(ROLLER).map(k=>`<div class="row" onclick="setRol('${k}')"><div class="av" style="background:${rolRenk(k)}">${ROLLER[k].ic}</div><div class="mid"><div class="t">${ROLLER[k].ad}</div><div class="s">${ROLLER[k].kar?'kâr görür':'kâr gizli'}</div></div>${db.rol===k?'<span class="pill ok">aktif</span>':''}</div>`).join('')+'<div class="mini" style="text-align:center;margin-top:14px">Bu, farklı rollerin ne gördüğünü denemen için. Gerçekte herkes kendi şifresiyle girer.</div>');
+  if(db.personelMod)return toast('👤 Personel modundasın ('+(ROL_AD[db.rol]||db.rol)+') — rol değiştirilemez. Çıkış: sağ üst 👤 menüsü.');
+  open_('Rol Önizleme (deneme)',Object.keys(ROLLER).map(k=>`<div class="row" onclick="setRol('${k}')"><div class="av" style="background:${rolRenk(k)}">${ROLLER[k].ic}</div><div class="mid"><div class="t">${ROLLER[k].ad}</div><div class="s">${ROLLER[k].kar?'kâr görür':'kâr gizli'}</div></div>${db.rol===k?'<span class="pill ok">aktif</span>':''}</div>`).join('')+'<div class="mini" style="text-align:center;margin-top:14px">Sadece farklı rollerin ne gördüğünü denemen için. Gerçekte personel kendi şifresiyle girer (Ayarlar → Bulut → Personel Girişi).</div>');
 }
 function setRol(k){db.rol=k;save();closeM();go('panel');toast(ROLLER[k].ad+' görünümü')}
 
@@ -4188,6 +4228,9 @@ function rAyarlar(){
     <div class="row" onclick="canliBulutAyar()"><div class="av" style="background:${canliAcik?'var(--good)':'var(--ind2)'}">☁️</div><div class="mid"><div class="t">Canlı Bulut Senkronu ${canliAcik?'<span class="pill ok">açık</span>':''}</div><div class="s">tüm cihazlar aynı canlı veriyi paylaşır (yönetici)</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="personelGiris()"><div class="av" style="background:var(--pur)">👤</div><div class="mid"><div class="t">Personel Girişi</div><div class="s">depocu / mağaza / ortak — kendi hesabıyla bağlan</div></div><span style="color:var(--sub)">›</span></div>`}
   </div>`;
+  html+=`<div class="sec">Güvenlik</div><div class="card">
+    <div class="row" onclick="kilitAyar()"><div class="av" style="background:${db.pin?'var(--good)':'var(--ind)'}">🔒</div><div class="mid"><div class="t">Uygulama Kilidi (PIN) ${db.pin?'<span class="pill ok">açık</span>':''}</div><div class="s">${db.pin?('cihaz '+(+db.pinDk||3)+' dk hareketsizlikte kilitlenir'):'cihazını başkası açamasın diye PIN koy'}</div></div><span style="color:var(--sub)">›</span></div>
+  </div>`;
   html+=`<div class="sec">Veri Güvenliği</div><div class="card">
     <div class="row" onclick="otoYedekListe()"><div class="av" style="background:var(--good)">🕑</div><div class="mid"><div class="t">Otomatik Yedekler</div><div class="s">riskli işlemlerden önce alınır · geri yükle</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="yedekAl()"><div class="av g">💾</div><div class="mid"><div class="t">Yedek Al (indir)</div><div class="s">tüm verini dosya olarak kaydet</div></div><span style="color:var(--sub)">›</span></div>
@@ -4264,6 +4307,8 @@ if(!db.kurTarih || Date.now()-db.kurTarih > 3*3600000){
 window.addEventListener('error',e=>{console.log('APPERR:',e.message)});
 // Günlük otomatik yedek (son yedek 8 saatten eskiyse)
 try{const _yy=JSON.parse(localStorage.getItem('iq_yedekler')||'[]');if(!_yy.length||Date.now()-_yy[0].t>8*3600000)autoYedek('günlük otomatik');}catch(e){}
+// 🔒 Açılışta PIN kilidi varsa göster
+if(db.pin)kilitGoster();
 // Canlı senkron açıksa: bulut+admin girişi hazır olunca sessizce yeniden bağlan
 if(db.canliBulut&&bulutVar()){bulutBaslat();bulutAuthBekle().then(()=>{bulutProfilYukle().then(()=>{if(bulutGirisli())canliBaslat(true);})});}
 
