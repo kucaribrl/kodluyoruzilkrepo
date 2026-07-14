@@ -586,7 +586,27 @@ function canliBulutAyar(){
     <div class="mini" style="margin-top:14px;font-weight:800">Zaten kuruluysa, başka cihazdan katılıyorsan:</div>
     <button class="btn" style="margin-top:6px" onclick="canliBulutKatil()">⬇️ Buluttaki veriyi bu cihaza al</button>
     <div class="mini" style="margin-top:12px;color:var(--warn);line-height:1.5">⚠️ "Yükle" bu cihazdaki veriyi buluta yazar. "Al" buluttakini alıp bu cihazdakinin üzerine yazar. İlk kuran <b>Yükle</b>, sonra katılanlar <b>Al</b> demeli.</div>`}
+    <button class="btn ghost" style="margin-top:14px" onclick="canliTeshis()">🔍 Senkron Teşhis (neden çalışmıyor?)</button>
   `);
+}
+// 🔍 Senkron teşhis — internet/giriş/rol/okuma/yazma tek tek test edip rapor eder
+async function canliTeshis(){
+  if(!bulutBaslat())return toast('Bulut ayarlı değil');
+  const R=[];
+  R.push('🌐 İnternet: '+(navigator.onLine?'✓ var':'✗ YOK'));
+  const gi=(function(){try{return bulutGirisli()}catch(e){return false}})();
+  R.push('🔑 Bulut girişi: '+(gi?'✓ açık':'✗ KAPALI — önce hesabınla giriş yap'));
+  if(gi&&(!bulutKul||!bulutKul.rol)){try{await bulutProfilYukle()}catch(e){}}
+  if(gi)R.push('👤 Hesap rolü: '+((bulutKul&&bulutKul.rol)||'?')+' · onay: '+(bulutKul&&bulutKul.onay?'✓ evet':'✗ HAYIR'));
+  R.push('📡 Canlı senkron: '+(canliAcik?('✓ açık — '+_canliUnsub.length+' alan dinleniyor'):'✗ kapalı'));
+  if(gi){
+    try{const d=await canliRef('stok').get();R.push('📖 Buluttan OKUMA: ✓ ('+(d.exists?'veri var':'henüz boş')+')');}
+    catch(e){R.push('📖 Buluttan OKUMA: ✗ '+(e.code||e.message||e));}
+    try{await canliRef('stok').set({_ping:Date.now()},{merge:true});R.push('✍️ Buluta YAZMA: ✓');}
+    catch(e){R.push('✍️ Buluta YAZMA: ✗ '+(e.code||e.message||e));}
+  }
+  const izin=R.some(x=>/permission-denied|insufficient|PERMISSION/i.test(x));
+  open_('🔍 Senkron Teşhis',`<div style="line-height:1.95;font-size:13.5px">${R.map(x=>esc(x)).join('<br>')}</div>${izin?`<div class="card" style="margin-top:12px;padding:11px 13px;background:var(--bad-s);line-height:1.55"><b>⛔ İzin hatası.</b><br>1) Firebase Console → Firestore → <b>Rules</b> → projedeki <b>firestore.rules</b> içeriğini yapıştır → <b>Publish</b>.<br>2) Firestore → <b>kullanicilar</b> → senin UID belgende <b>rol="admin"</b> ve <b>onay=true</b> olmalı.</div>`:(gi?`<div class="mini" style="margin-top:12px">Okuma+yazma ✓. İki cihazda da giriş yapıp senkronu açık tut — değişiklik birkaç saniyede geçer. Geçmiyorsa iki cihaz da aynı hesapla mı giriş yapmış kontrol et.</div>`:`<div class="mini" style="margin-top:12px">Önce Ayarlar → Bulut'tan giriş yap.</div>`)}<button class="btn ghost" style="margin-top:12px" onclick="canliTeshis()">🔄 Tekrar Test Et</button>`);
 }
 // 🛡️ Otomatik yerel yedek (riskli işlemlerden önce + günlük) — son 10 tutulur
 function autoYedek(etiket){try{const y=JSON.parse(localStorage.getItem('iq_yedekler')||'[]');
@@ -1035,19 +1055,21 @@ async function oturumKilitGiris(){
   if(!mail||!pw){if(m)m.textContent='E-posta ve şifre gir';return;}
   if(m)m.textContent='Giriş yapılıyor…';
   try{
+    // 1) BULUTA giriş (şifre doğrulama = cihaz kilidini açar)
     await firebase.auth().signInWithEmailAndPassword(mail,pw);
     await bulutProfilYukle(); await bulutRolVerisiYukle();
-    if(!bulutKul||!bulutKul.onay){if(m)m.textContent='Hesabın onaylı değil — yöneticinin onaylaması lazım';try{await bulutCikisPortal()}catch(e){}return;}
+    // Giriş başarılı → kilit kalkar. (Onay/rol yetkisini Firestore kuralları zaten uygular.)
     localStorage.removeItem('iq_oturumKilit');
-    const r=bulutKul.rol;
+    const r=bulutKul&&bulutKul.rol;
     if(['ortak','magaza','depocu'].includes(r)){db.rol=r;db.personelMod=true;}
     _canliUyari=false; db.canliBulut=true; save();
     const p=$('ok-pw'); if(p)p.value='';
     $('oturumKilit').style.display='none';
-    canliBaslat(true); // canlı buluta OTOMATİK bağlan — veri buluttan gelir/gider
+    canliBaslat(true); // 2) canlı buluta OTOMATİK bağlan — veri buluttan gelir/gider
     try{go('panel')}catch(e){}
-    toast('☁️ Giriş yapıldı — bulut verisi geliyor…');
-  }catch(e){const c=e.code||'';if(m)m.textContent='❌ '+(c==='auth/wrong-password'||c==='auth/invalid-credential'||c==='auth/invalid-login-credentials'?'E-posta veya şifre hatalı':c==='auth/network-request-failed'?'İnternet yok — giriş için bağlantı gerekli':(c||e.message||'giriş başarısız'));}
+    if(bulutKul&&bulutKul.onay===false)toast('⚠️ Giriş yapıldı ama hesabın yönetici onayı beklemede — canlı veri gelmeyebilir.');
+    else toast('☁️ Giriş yapıldı — bulut verisi geliyor…');
+  }catch(e){const c=e.code||'';if(m)m.textContent='❌ '+(c==='auth/wrong-password'||c==='auth/invalid-credential'||c==='auth/invalid-login-credentials'||c==='auth/user-not-found'?'E-posta veya şifre hatalı':c==='auth/network-request-failed'?'İnternet yok — giriş için bağlantı gerekli':(c||e.message||'giriş başarısız'));}
 }
 async function oturumKilitSifre(){const m=$('ok-msg');if(!bulutBaslat())return;const mail=($('ok-mail')?.value||'').trim();if(!mail){if(m)m.textContent='Önce e-posta adresini yaz';return;}try{await firebase.auth().sendPasswordResetEmail(mail);if(m)m.textContent='📧 Sıfırlama bağlantısı e-postana gönderildi';}catch(e){if(m)m.textContent='Gönderilemedi: '+(e.code||e.message);}}
 function rolSec(){
