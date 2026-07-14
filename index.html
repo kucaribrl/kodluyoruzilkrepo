@@ -505,7 +505,8 @@ const CANLI_DOMEN={
   uretim:['isemirleri'],
   ayar:['firma','firmaSlogan','firmaAdres','firmaTel','firmaWp','firmaLogo','satici','kurUSD','kurEUR','seq','kademe','minSiparis','kampanya','kurTarih','portalFav','portalTaslak','duzenliGider']
 };
-let canliAcik=false,_canliUnsub=[],_canliGolge={},_canliUygulaniyor=false,_canliYazT=null;
+let canliAcik=false,_canliUnsub=[],_canliGolge={},_canliUygulaniyor=false,_canliYazT=null,_canliUyari=false;
+function canliIzinHata(e){const c=(e&&e.code)||'';if(c==='permission-denied'&&!_canliUyari){_canliUyari=true;toast('☁️ Senkron İZNİ YOK — Firebase Rules güncel mi + yönetici hesabıyla giriş yaptın mı?');}return c;}
 function canliAl(obj,domen){const o={};CANLI_DOMEN[domen].forEach(k=>{if(obj[k]!==undefined)o[k]=obj[k];});return o;}
 function canliRef(domen){return _fb.collection('isletme').doc(MAGAZA_ID).collection('veri').doc(domen);}
 // Dinleyicileri kur — ilk snapshot buluttaki veriyi getirir (başka cihaz katılınca)
@@ -521,7 +522,7 @@ function canliBaslat(sessiz){
       _canliGolge[domen]=js; localStorage.setItem(KEY,JSON.stringify(db));
       _canliUygulaniyor=false;
       try{if(typeof render==='function'&&typeof cur!=='undefined')render()}catch(e){}
-    },err=>{console.warn('canlı-dinle',domen,err&&err.code)});
+    },err=>{console.warn('canlı-dinle',domen,err&&err.code);canliIzinHata(err);});
     _canliUnsub.push(un);
   });
   if(!sessiz)toast('☁️ Canlı senkron açık');
@@ -545,7 +546,7 @@ function canliYaz(){
     Object.keys(CANLI_DOMEN).forEach(domen=>{
       const data=canliAl(db,domen); const js=JSON.stringify(data);
       if(js!==_canliGolge[domen]){_canliGolge[domen]=js;
-        canliRef(domen).set(data).catch(e=>{console.warn('canlı-yaz',domen,e&&e.code);if((''+e).includes('longer than'))toast('⚠️ '+domen+' verisi çok büyük (fotoğraflar) — canlı senkron için küçültün');});}
+        canliRef(domen).set(data).catch(e=>{console.warn('canlı-yaz',domen,e&&e.code);if(canliIzinHata(e)!=='permission-denied'&&(''+e).includes('longer than'))toast('⚠️ '+domen+' verisi çok büyük (fotoğraflar) — canlı senkron için küçültün');});}
     });
   },450);
 }
