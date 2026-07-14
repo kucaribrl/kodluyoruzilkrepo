@@ -616,13 +616,22 @@ async function personelBaslat(){
   toast('👤 '+ROL_AD[r]+' olarak bağlanıldı — canlı veri geliyor…');
 }
 function personelCik(){askConfirm('Çıkış yapılsın mı? Bu cihazdaki veriler temizlenecek (verilerin bulutta güvende kalır).',()=>{try{if(canliAcik)canliDur()}catch(e){}try{bulutCikisPortal()}catch(e){}try{localStorage.removeItem(KEY);localStorage.removeItem('iq_yedekler')}catch(e){}bulutKul=null;location.reload();},'Çıkış yap ve temizle');}
-// Güvenli çıkış: bu cihazdaki TÜM veriyi siler (ödünç/başka cihazdan çıkarken)
+// Güvenli çıkış: ÖNCE veriyi buluta yükle (kayıp olmasın), SONRA bu cihazdaki her şeyi sil
+function _cihazTemizle(){try{if(canliAcik)canliDur()}catch(e){}try{bulutCikisPortal()}catch(e){}try{localStorage.removeItem(KEY);localStorage.removeItem('iq_yedekler');localStorage.removeItem('oz_portal_oturum')}catch(e){}bulutKul=null;location.reload();}
 function guvenliCikis(){
-  const senkron=!!db.canliBulut;
-  const msg=senkron
-    ?'BU CİHAZDAKİ TÜM VERİLER SİLİNECEK ve çıkış yapılacak. Verilerin bulutta güvende — başka cihazdan tekrar girersin. (Ödünç/başka cihazdan çıkarken bunu kullan.) Devam?'
-    :'⚠️ DİKKAT: Bu cihazın verileri buluta YÜKLENMEMİŞ! Silersen (yedeğin yoksa) KAYBOLUR. Yine de bu cihazdaki her şey silinsin mi?';
-  askConfirm(msg,()=>{try{if(canliAcik)canliDur()}catch(e){}try{bulutCikisPortal()}catch(e){}try{localStorage.removeItem(KEY);localStorage.removeItem('iq_yedekler');localStorage.removeItem('oz_portal_oturum')}catch(e){}bulutKul=null;location.reload();},'Evet, temizle ve çık');
+  const bg=(function(){try{return bulutGirisli()}catch(e){return false}})();
+  if(bg){
+    askConfirm('Güvenli çıkış: bu cihazdaki güncel veriler ÖNCE buluta yüklenecek, sonra cihaz temizlenecek. Böylece veri kaybı olmaz. Devam?',async()=>{
+      toast('☁️ Veriler buluta yükleniyor…');
+      let ok=false; try{ ok=await canliGonder(); }catch(e){ ok=false; }
+      if(!ok){ toast('⚠️ Buluta yüklenemedi (internet yok?). Çıkış İPTAL — veri kaybı olmasın.'); return; }
+      toast('✓ Yüklendi — cihaz temizleniyor'); setTimeout(_cihazTemizle,500);
+    },'Yükle ve çık');
+  } else {
+    askConfirm('⚠️ Bulut girişi yok — veriler buluta yüklenemiyor. Cihazı temizlersen (yedeğin yoksa) veri KAYBOLUR. Önce yedek dosyası indirilsin, sonra çıkılsın mı?',()=>{
+      try{yedekAl()}catch(e){} toast('💾 Yedek indirildi — cihaz temizleniyor'); setTimeout(_cihazTemizle,1200);
+    },'Yedek al ve çık');
+  }
 }
 // Çevrimdışı → çevrimiçi geçişte kullanıcıyı bilgilendir (Firestore bekleyenleri otomatik gönderir)
 window.addEventListener('offline',()=>{if(canliAcik)toast('📴 Çevrimdışı — değişiklikler cihazda tutuluyor, internet gelince otomatik yüklenecek');});
