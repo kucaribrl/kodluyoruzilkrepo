@@ -1251,14 +1251,14 @@ function cizRenk(){
       <div class="rc-body">
         <div class="rc-foto" onclick="renkFotoSec(${i})">${r.foto?`<img src="${r.foto}">`:'<span>📷<br>Foto</span>'}<input type="file" accept="image/*" id="rf-${i}" style="display:none" onchange="renkFoto(${i},this)"></div>
         <div class="rc-fields">
-          <div class="rc-top"><input class="rad" value="${esc(r.ad||'')}" placeholder="Renk adı (Siyah, Bordo...)" oninput="fRenk[${i}].ad=this.value"><button class="del" onclick="fRenk.splice(${i},1);cizRenk()">✕</button></div>
+          <div class="rc-top"><input class="rad" list="renkList" autocomplete="off" value="${esc(r.ad||'')}" placeholder="Renk adı (Siyah, Bordo...)" oninput="fRenk[${i}].ad=this.value"><button class="del" onclick="fRenk.splice(${i},1);cizRenk()">✕</button></div>
           <label>Seri Adedi</label><input type="number" inputmode="numeric" min="0" value="${r.stok||0}" oninput="if(+this.value<0)this.value=0;fRenk[${i}].stok=+this.value||0;renkTot()">
         </div>
       </div>
       <div class="rc-kirikh" onclick="renkKirik(${i})">${kirikOpen?'▾':'▸'} Kırık seri (tek beden)${kirikTop?` · ${kirikTop} adet`:''}</div>
       ${kirikOpen?`<div class="rc-kirik">${fBeden.length?fBeden.map(x=>{const bd=x.beden;return `<div class="kb"><span>${esc(bd)}</span><input type="number" inputmode="numeric" value="${(r.kirik&&r.kirik[bd])||''}" placeholder="0" oninput="setKirik(${i},'${esc(bd)}',this.value)"></div>`}).join(''):'<div class="mini">Önce Genel Bilgi sekmesinde seri içeriği (beden) ekle</div>'}</div>`:''}
     </div>`;
-  }).join('')+`<button type="button" class="btn ghost sm" onclick="renkEkle()" style="margin-top:10px">+ Renk Ekle</button><div class="mini" id="renk-tot" style="margin-top:8px"></div>`;
+  }).join('')+`<datalist id="renkList">${['Siyah','Beyaz','Lacivert','Gri','Antrasit','Bej','Bordo','Yeşil','Haki','Hardal','Mor','Kırmızı','Kahverengi','Sarı','Mavi','Pembe','Turuncu','Füme','Ekru','Vizon'].map(c=>`<option value="${c}">`).join('')}</datalist><button type="button" class="btn ghost sm" onclick="renkEkle()" style="margin-top:10px">+ Renk Ekle</button><div class="mini" id="renk-tot" style="margin-top:8px"></div>`;
   renkTot();
 }
 function renkTot(){const t=$('renk-tot');if(!t)return;if(!fRenk.length){t.textContent='';return}const s=fRenk.reduce((a,r)=>a+(+r.stok||0),0);const k=fRenk.reduce((a,r)=>a+(r.kirik?Object.values(r.kirik).reduce((b,x)=>b+(+x||0),0):0),0);t.innerHTML=`📦 Toplam: <b>${s}</b> seri${k?` + ${k} tek (kırık)`:''}`}
@@ -1658,6 +1658,7 @@ function kaydetSatis(){
   const m=cari(sMusId);if(!m)return toast('Müşteri seç');
   const h=satisHesap();
   const div=h.div, tutar=h.tutar, saleTL=tutar*div;
+  if(saleTL<=0.5)return toast('Satış tutarı 0 — ürün fiyatlarını kontrol et (0 TL satış olmaz)');
   const odemeler=sOdemeler.filter(l=>+l.tutar>0).map(l=>({tur:l.tur,tutar:+l.tutar,pb:l.pb,hesapId:l.hesapId||0,vade:l.vade||0,foto:l.foto||''}));
   let paidTL=odemeler.reduce((a,l)=>a+l.tutar*pbKur(l.pb),0);
   if(paidTL>saleTL+0.5)toast('⚠️ Ödeme toplamdan fazla — fazlası müşteri alacağına yazıldı');
@@ -2068,13 +2069,15 @@ function formCari(tip,id,preAd){
     ${id?`<button class="btn danger" onclick="silCari(${id})">Sil</button>`:''}`);
 }
 function kaydetCari(tip,id){const ad=$('c-ad').value.trim();if(!ad)return toast('Ad gerekli');
-  if(tip==='musteri'&&!($('c-tel')?.value||'').trim()){$('c-tel')&&$('c-tel').focus();return toast('Telefon gerekli')}
+  const _tel=($('c-tel')?.value||'').trim(), _telDig=_tel.replace(/\D/g,'');
+  if(tip==='musteri'&&!_tel){$('c-tel')&&$('c-tel').focus();return toast('Telefon gerekli')}
+  if(_tel&&_telDig.length<10){$('c-tel')&&$('c-tel').focus();return toast('Geçerli telefon girin (en az 10 rakam, ör. 0532...)')}
   if(!id&&db.cariler.some(x=>x.tip===tip&&(x.ad||'').trim().toLowerCase()===ad.toLowerCase()))return toast('Bu isimde kayıt zaten var: '+ad);
   const o={tip,ad,bakiye:+$('c-bak').value||0,foto:cFoto};
   if(tip==='musteri'){o.yabanci=musYabanci;if($('c-adres'))o.adres=$('c-adres').value.trim();if($('c-ambar'))o.ambar=$('c-ambar').value.trim();if($('c-ulke'))o.ulke=$('c-ulke').value.trim();if($('c-kod'))o.kod=$('c-kod').value.trim();if($('c-vd'))o.vd=$('c-vd').value.trim();if($('c-vno'))o.vno=$('c-vno').value.trim();if($('c-paratercih'))o.paraTercih=$('c-paratercih').value}
   const V=idn=>$(idn)?$(idn).value:undefined, VT=idn=>$(idn)?$(idn).value.trim():undefined, VN=idn=>$(idn)?(+$(idn).value||0):undefined;
   if($('c-tel'))o.tel=VT('c-tel'); if($('c-sehir'))o.sehir=VT('c-sehir'); if($('c-yetkili'))o.yetkili=VT('c-yetkili');
-  if($('c-limit'))o.limit=VN('c-limit'); if($('c-grup'))o.grup=V('c-grup');
+  if($('c-limit'))o.limit=Math.max(0,VN('c-limit')||0); if($('c-grup'))o.grup=V('c-grup');
   if($('c-tedtur'))o.tedTur=V('c-tedtur'); if($('c-vade'))o.vade=VN('c-vade');
   if($('c-fasislem')){o.fasIslem=V('c-fasislem');o.durak=o.fasIslem} if($('c-kapasite'))o.kapasite=VN('c-kapasite');
   if(tip==='fason'){const fy={};ISTASYON.forEach(s=>{const v=+($('c-fy-'+s.replace(/[^a-zA-Z]/g,''))?.value||0);if(v>0)fy[s]=v});o.fiyatlar=fy;}
@@ -2214,6 +2217,7 @@ function kaydetOdeme(id){
   const t=+$('o-t').value||0;let kesik=Math.max(0,+($('o-kesik')?.value||0));if(t<=0&&kesik<=0)return toast('Tutar girin');
   const c=cari(id);const isMus=c.tip==='musteri';const tur=$('o-tur').value;const h=hesap(+$('o-hesap').value);
   if(isMus)kesik=Math.min(kesik,Math.max(0,(+c.bakiye||0)-t)); // kesik borçtan fazla olamaz
+  if(isMus&&t>(+c.bakiye||0)+0.5)toast('⚠️ Tahsilat borçtan fazla — fazlası '+c.ad+' alacağına yazıldı');
   if(!isMus&&tur!=='Çek'&&h&&t>0&&!hesapYeter(h.id,t))return toast('⚠️ '+h.ad+' bakiyesi yetersiz. Hesap eksiye düşemez.');
   if(isMus){c.bakiye-=(t+kesik);if(kesik>0)c.kesikToplam=(c.kesikToplam||0)+kesik;if(t>0){if(tur==='Çek'){db.cekler.push({id:nid('cek'),tur:'cek',tip:'alinan',cariId:c.id,cari:c.ad,tutar:t,vade:Date.now()+30*86400000,banka:'—',durum:'portfoyde'})}else if(tur==='Kredi Kartı'){db.cekler.push({id:nid('cek'),tur:'kk',tip:'alinan',cariId:c.id,cari:c.ad,tutar:t,vade:Date.now()+34*86400000,banka:'Kredi Kartı POS',durum:'portfoyde'})}else if(h){h.bakiye+=t}}}
   else{ // tedarikçi/fason/gider ödeme
