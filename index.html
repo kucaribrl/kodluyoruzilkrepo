@@ -597,7 +597,12 @@ function bulutGirisli(){try{return !!(window.firebase&&firebase.auth&&firebase.a
 function bulutGirisIste(sonra){open_('☁️ Bulut Girişi (yönetici)',`<div class="mini">Katalog yayınlamak ve siparişleri çekmek için Firebase hesabınla giriş yap (tek seferlik, oturum açık kalır).</div>
   <label>E-posta</label><input id="fbg-mail" type="email" autocomplete="username" placeholder="ornek@mail.com">
   <label>Şifre</label><input id="fbg-pw" type="password" autocomplete="current-password">
-  <button class="btn g" onclick="bulutGirisYap('${sonra||''}')">Giriş Yap</button>`);}
+  <button class="btn g" onclick="bulutGirisYap('${sonra||''}')">Giriş Yap</button>
+  <div class="mini" style="text-align:center;margin-top:12px"><a onclick="bulutSifreSifirla()" style="color:var(--ind2);font-weight:700;cursor:pointer">🔑 Şifremi unuttum</a></div>`);}
+async function bulutSifreSifirla(){if(!bulutBaslat())return toast('Bulut ayarlı değil');
+  const mail=($('fbg-mail')?.value||'').trim();if(!mail)return toast('Önce e-posta adresini yaz, sonra bas');
+  try{await firebase.auth().sendPasswordResetEmail(mail);toast('📧 Sıfırlama bağlantısı gönderildi: '+mail+' — mailini kontrol et');}
+  catch(e){toast('Gönderilemedi: '+(e.code||e.message||e))}}
 async function bulutGirisYap(sonra){if(!bulutBaslat())return toast('Bulut ayarlı değil');
   const mail=($('fbg-mail')?.value||'').trim(),pw=$('fbg-pw')?.value||'';if(!mail||!pw)return toast('E-posta ve şifre gir');
   try{await firebase.auth().signInWithEmailAndPassword(mail,pw);await bulutProfilYukle();closeM();
