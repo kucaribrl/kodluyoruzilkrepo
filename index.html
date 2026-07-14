@@ -608,9 +608,23 @@ async function canliTeshis(){
   }
   const izin=R.some(x=>/permission-denied|insufficient|PERMISSION/i.test(x));
   window._teshisUid=uid;
-  open_('🔍 Senkron Teşhis',`<div style="line-height:1.95;font-size:13.5px">${R.map(x=>esc(x)).join('<br>')}</div>${izin?`<div class="card" style="margin-top:12px;padding:11px 13px;background:var(--bad-s);line-height:1.55"><b>⛔ Yetki yok — hesabın "admin" değil.</b><br>Firebase Console → <b>Firestore Database</b> → <b>kullanicilar</b> koleksiyonu → <b>Belge Ekle</b>:<br>• Belge kimliği (Document ID): <b>UID'in</b> (aşağıdaki butonla kopyala)<br>• Alan: <b>rol</b> = <b>admin</b> (string)<br>• Alan: <b>onay</b> = <b>true</b> (boolean)<br>Kaydet → uygulamada tekrar test et.${uid?`<br><br>${esc(uid)}`:''}</div>${uid?`<button class="btn g" style="margin-top:10px" onclick="teshisUidKopya()">📋 UID'i Kopyala</button>`:''}<div class="mini" style="margin-top:10px;line-height:1.5">Not: Kuralları da yayınlaman lazım — Firestore → <b>Rules</b> → projedeki <b>firestore.rules</b> → <b>Publish</b>.</div>`:(gi?`<div class="mini" style="margin-top:12px">Okuma+yazma ✓. İki cihazda da <b>aynı hesapla</b> giriş yapıp senkronu açık tut — değişiklik birkaç saniyede geçer.</div>`:`<div class="mini" style="margin-top:12px">Önce Ayarlar → Bulut'tan giriş yap.</div>`)}<button class="btn ghost" style="margin-top:12px" onclick="canliTeshis()">🔄 Tekrar Test Et</button>`);
+  open_('🔍 Senkron Teşhis',`<div style="line-height:1.95;font-size:13.5px">${R.map(x=>esc(x)).join('<br>')}</div>${izin?`<div class="card" style="margin-top:12px;padding:11px 13px;background:var(--bad-s);line-height:1.55"><b>⛔ Yetki yok — hesabın "admin" değil.</b><br>Firebase Console → <b>Firestore Database</b> → <b>kullanicilar</b> koleksiyonu → <b>Belge Ekle</b>:<br>• Belge kimliği (Document ID): <b>UID'in</b> (aşağıdaki butonla kopyala)<br>• Alan: <b>rol</b> = <b>admin</b> (string)<br>• Alan: <b>onay</b> = <b>true</b> (boolean)<br>Kaydet → uygulamada tekrar test et.${uid?`<br><br>${esc(uid)}`:''}</div>${uid?`<button class="btn g" style="margin-top:10px" onclick="bulutYoneticiYap()">👑 Bu Hesabı Yönetici Yap</button><div class="mini" style="margin-top:4px;text-align:center">(kuralları yayınladıysan tek tık yeter)</div><button class="btn ghost" style="margin-top:8px" onclick="teshisUidKopya()">📋 UID'i Kopyala (elle kurulum için)</button>`:''}<div class="mini" style="margin-top:10px;line-height:1.5">Önce kuralları yayınla: Firestore → <b>Rules</b> → projedeki <b>firestore.rules</b> → <b>Publish</b>.</div>`:(gi?`<div class="mini" style="margin-top:12px">Okuma+yazma ✓. İki cihazda da <b>aynı hesapla</b> giriş yapıp senkronu açık tut — değişiklik birkaç saniyede geçer.</div>`:`<div class="mini" style="margin-top:12px">Önce Ayarlar → Bulut'tan giriş yap.</div>`)}<button class="btn ghost" style="margin-top:12px" onclick="canliTeshis()">🔄 Tekrar Test Et</button>`);
 }
 function teshisUidKopya(){const u=window._teshisUid||'';if(!u)return toast('UID yok');try{navigator.clipboard.writeText(u).then(()=>toast('📋 UID kopyalandı'),()=>toast('UID: '+u));}catch(e){toast('UID: '+u);}}
+// İşletme sahibi: kendi hesabını yönetici yap (kurallar yalnız sahip e-postasına izin verir)
+async function bulutYoneticiYap(){
+  if(!bulutBaslat())return toast('Bulut ayarlı değil');
+  let u;try{u=firebase.auth().currentUser}catch(e){}
+  if(!u)return toast('Önce giriş yap');
+  try{
+    await _fb.collection('kullanicilar').doc(u.uid).set({rol:'admin',onay:true,ad:(bulutKul&&bulutKul.ad)||'',mail:u.email||'',olusturma:Date.now()},{merge:true});
+    await bulutProfilYukle();
+    toast('👑 Hesap yönetici yapıldı — tekrar test ediliyor…');
+    canliTeshis();
+  }catch(e){const c=e.code||e.message||e;
+    if(/permission/i.test(''+c))toast('⛔ İzin yok: Önce Firestore Rules’u yayınla (firestore.rules) ya da bu e-posta sahip listesinde değil.');
+    else toast('Olmadı: '+c);}
+}
 // 🛡️ Otomatik yerel yedek (riskli işlemlerden önce + günlük) — son 10 tutulur
 function autoYedek(etiket){try{const y=JSON.parse(localStorage.getItem('iq_yedekler')||'[]');
   y.unshift({t:Date.now(),etiket:etiket||'',ozet:(db.urunler||[]).length+' ürün · '+(db.cariler||[]).length+' cari',veri:localStorage.getItem(KEY)});

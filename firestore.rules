@@ -4,33 +4,42 @@ rules_version = '2';
 //
 // ÖNEMLİ ilk kurulum (tek seferlik):
 //  1) Authentication'da kendine bir hesap oluştur (e-posta+şifre) ve giriş yap.
-//  2) Firestore'da "kullanicilar" koleksiyonu → belge kimliği = SENİN UID'in →
-//     alanlar: rol="admin", onay=true.  (UID'i Authentication > Users'da görürsün.)
-//  Böylece yalnız sen katalog yayınlayabilir ve tüm siparişleri görebilirsin.
+//  2) Bu kuralları yayınla. Aşağıdaki sahipMi() e-posta listesinde olan hesap
+//     otomatik yönetici olur — elle belge oluşturmana GEREK YOK.
+//     (İstersen uygulamada Senkron Teşhis → "Bu Hesabı Yönetici Yap" ile
+//      kullanicilar belgen de admin olarak yazılır; katalog yayını için gerekir.)
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function girisli() { return request.auth != null; }
+    // İŞLETME SAHİBİ — e-posta ile tanınır. Bu hesap(lar) kullanicilar belgesine
+    // gerek olmadan her zaman yönetici sayılır (ilk kurulum kolaylığı).
+    // Yeni ortak eklemek istersen e-postayı bu listeye ekle.
+    function sahipMi() {
+      return girisli() && request.auth.token.email in ['birol575@hotmail.com'];
+    }
     function rolu() {
       return get(/databases/$(database)/documents/kullanicilar/$(request.auth.uid)).data.rol;
     }
     function adminMi() {
-      return girisli()
+      return sahipMi() || (girisli()
         && exists(/databases/$(database)/documents/kullanicilar/$(request.auth.uid))
-        && rolu() == 'admin';
+        && rolu() == 'admin');
     }
 
     // KULLANICILAR — kimlik + rol
     match /kullanicilar/{uid} {
       // Kendi profilini oku; yönetici herkesi okur
       allow read: if girisli() && (request.auth.uid == uid || adminMi());
-      // Kendi kaydını oluşturur; onaysız + admin OLMADAN (kendini yönetici yapamaz)
-      allow create: if girisli()
+      // Kendi kaydını oluşturur; onaysız + admin OLMADAN (kendini yönetici yapamaz).
+      // İstisna: işletme sahibi (sahipMi) kendi belgesini admin olarak oluşturabilir.
+      allow create: if (girisli()
         && request.auth.uid == uid
         && request.resource.data.onay == false
-        && request.resource.data.rol in ['musteri','calisan','fason'];
-      // Onay / rol / silme yalnız yönetici
-      allow update, delete: if adminMi();
+        && request.resource.data.rol in ['musteri','calisan','fason'])
+        || (sahipMi() && request.auth.uid == uid);
+      // Sahip kendi belgesini güncelleyebilir; onay / rol / silme yönetici (sahip dahil)
+      allow update, delete: if adminMi() || (sahipMi() && request.auth.uid == uid);
     }
 
     // KATALOG — herkes okur, yalnız yönetici yazar
@@ -62,9 +71,9 @@ service cloud.firestore {
 
     // CANLI ORTAK VERİ — gerçek zamanlı çok cihaz senkron, ALAN + ROL bazlı izin.
     // rolu(): kullanicilar/{uid}.rol  → admin | ortak | magaza | depocu
-    function rolVar(liste){ return girisli()
+    function rolVar(liste){ return sahipMi() || (girisli()
       && exists(/databases/$(database)/documents/kullanicilar/$(request.auth.uid))
-      && (rolu() in liste); }
+      && (rolu() in liste)); }
     match /isletme/{iid}/veri/stok   { allow read, write: if rolVar(['admin','ortak','magaza','depocu']); }
     match /isletme/{iid}/veri/cari   { allow read, write: if rolVar(['admin','ortak','magaza']); }
     match /isletme/{iid}/veri/satis  { allow read, write: if rolVar(['admin','ortak','magaza']); }
