@@ -1192,7 +1192,7 @@ function barkodYazdir(id){const u=urun(id);let changed=false;renkObjs(u).forEach
     <div class="mini">Her rengin kaç etiket basılacağını gir, sonra Yazdır'a bas. Ütü/paket bunları ürüne yapıştırır.</div>
     <div id="bk-list" style="margin-top:10px">${renkler.map((r,i)=>`<div class="bkrow"><div class="bksvg">${barkodSVG(r.barkod)}</div><div class="bkinfo"><b>${esc(u.ad)} · ${esc(r.ad||'—')}</b><div class="mini">${esc(u.kod||'')} · ${esc(seriStr(u))}</div><div class="mini">${esc(r.barkod)}</div><label style="margin:6px 0 2px">Kaç etiket?</label><input id="bkq-${i}" type="number" inputmode="numeric" value="${r.stok||1}" style="width:90px;padding:8px"></div></div>`).join('')}</div>
     <label style="margin-top:12px">Etiket ölçüsü (rulo barkod yazıcısı — ör. Xprinter)</label>
-    <select id="bk-boy">${[['40x30','40 × 30 mm'],['50x30','50 × 30 mm'],['50x40','50 × 40 mm'],['60x40','60 × 40 mm'],['30x20','30 × 20 mm'],['80x50','80 × 50 mm'],['100x150','100 × 150 mm (kargo)'],['a4','A4 yaprağa dizerek bas']].map(o=>`<option value="${o[0]}" ${(db.etiketBoy||'40x30')===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>
+    <select id="bk-boy">${[['60x40','60 × 40 mm (6×4 cm)'],['40x30','40 × 30 mm'],['50x30','50 × 30 mm'],['50x40','50 × 40 mm'],['30x20','30 × 20 mm'],['80x50','80 × 50 mm'],['100x150','100 × 150 mm (kargo)'],['a4','A4 yaprağa dizerek bas']].map(o=>`<option value="${o[0]}" ${(db.etiketBoy||'60x40')===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>
     <div class="g2" style="margin-top:6px"><div><label>Özel en (mm)</label><input id="bk-w" type="number" inputmode="numeric" placeholder="—"></div><div><label>Özel boy (mm)</label><input id="bk-h" type="number" inputmode="numeric" placeholder="—"></div></div>
     <div class="mini" style="margin-top:4px">Özel ölçü girersen seçimi geçersiz kılar. Rulodaki etiketin gerçek ölçüsünü seç.</div>
     <button class="btn" style="margin-top:12px" onclick="barkodYap(${id})">🖨️ Yazdır</button>
@@ -1203,7 +1203,7 @@ function seriStr(u){if(u.birim!=='seri')return 'Tekli ürün';if(u.bedenler&&u.b
 function barkodYap(id){const u=urun(id);const renkler=renkObjs(u).filter(r=>r.barkod);const sstr=seriStr(u);
   // ölçü belirle: özel en/boy varsa onu kullan, yoksa seçili preset ('a4' → yaprağa diz)
   const cw=+($('bk-w')?.value||0), ch=+($('bk-h')?.value||0);
-  let sel=$('bk-boy')?.value||'40x30', a4=false, w=40, h=30;
+  let sel=$('bk-boy')?.value||'60x40', a4=false, w=60, h=40;
   if(cw>0&&ch>0){w=cw;h=ch;db.etiketBoy=cw+'x'+ch;}
   else if(sel==='a4'){a4=true;db.etiketBoy='a4';}
   else{const m=sel.split('x');w=+m[0]||40;h=+m[1]||30;db.etiketBoy=sel;}
