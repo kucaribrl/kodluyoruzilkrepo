@@ -375,6 +375,15 @@
   <input id="kilit-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off" style="margin-top:20px;width:190px;text-align:center;font-size:24px;letter-spacing:8px;padding:13px;border-radius:13px;border:1px solid #4a4a55;background:#1e1e26;color:#fff;outline:none" onkeydown="if(event.key==='Enter')kilitDene()">
   <button onclick="kilitDene()" style="margin-top:15px;background:linear-gradient(135deg,#c14b47,#d9534f);color:#fff;border:none;border-radius:13px;padding:13px 40px;font-weight:800;font-size:15px;cursor:pointer">Aç</button>
 </div>
+<div id="oturumKilit" style="display:none;position:fixed;inset:0;z-index:10000;background:linear-gradient(150deg,#2a2a33,#121216);color:#fff;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center">
+  <div style="font-size:44px">🔐</div>
+  <div style="font-weight:900;font-size:22px;margin-top:8px;letter-spacing:-.02em">IQ Basics</div>
+  <div id="ok-msg" style="opacity:.85;font-size:13.5px;margin-top:5px;max-width:300px">Devam etmek için hesabınla giriş yap</div>
+  <input id="ok-mail" type="email" autocomplete="username" placeholder="E-posta" style="margin-top:18px;width:250px;font-size:15px;padding:12px 14px;border-radius:12px;border:1px solid #4a4a55;background:#1e1e26;color:#fff;outline:none">
+  <input id="ok-pw" type="password" autocomplete="current-password" placeholder="Şifre" style="margin-top:10px;width:250px;font-size:15px;padding:12px 14px;border-radius:12px;border:1px solid #4a4a55;background:#1e1e26;color:#fff;outline:none" onkeydown="if(event.key==='Enter')oturumKilitGiris()">
+  <button onclick="oturumKilitGiris()" style="margin-top:15px;width:280px;background:linear-gradient(135deg,#c14b47,#d9534f);color:#fff;border:none;border-radius:13px;padding:13px 40px;font-weight:800;font-size:15px;cursor:pointer">Giriş Yap</button>
+  <div style="margin-top:14px;font-size:12.5px"><a onclick="oturumKilitSifre()" style="color:#f0a">🔑 Şifremi unuttum</a></div>
+</div>
 <div id="printarea"></div>
 
 <script>
@@ -623,6 +632,8 @@ async function _cihazTemizle(){
   try{if(canliAcik)canliDur()}catch(e){}
   try{await bulutCikisPortal()}catch(e){}
   try{localStorage.removeItem(KEY);localStorage.removeItem('iq_yedekler');localStorage.removeItem('oz_portal_oturum')}catch(e){}
+  // Tekrar açılışta parola iste (güvenli çıkış → oturum kilidi)
+  try{if(bulutVar())localStorage.setItem('iq_oturumKilit','1')}catch(e){}
   bulutKul=null;
   try{location.replace(location.pathname)}catch(e){location.reload()}
 }
@@ -676,6 +687,8 @@ async function bulutSifreSifirla(){if(!bulutBaslat())return toast('Bulut ayarlı
 async function bulutGirisYap(sonra){if(!bulutBaslat())return toast('Bulut ayarlı değil');
   const mail=($('fbg-mail')?.value||'').trim(),pw=$('fbg-pw')?.value||'';if(!mail||!pw)return toast('E-posta ve şifre gir');
   try{await firebase.auth().signInWithEmailAndPassword(mail,pw);await bulutProfilYukle();closeM();
+    // Daha önce canlı senkron kurulduysa, girişten sonra OTOMATİK yeniden bağlan (tekrar tıklama gerekmez)
+    if(db.canliBulut&&!canliAcik&&bulutGirisli()){_canliUyari=false;canliBaslat(true);}
     if(sonra==='personel'){personelBaslat();return;}
     if(!bulutAdminMi()){toast('⚠️ Bu hesap yönetici değil. Firebase\'de kullanicilar/'+((bulutKul&&bulutKul.uid)||'UID')+' → rol:admin yapın.');return;}
     toast('☁️ Giriş yapıldı ✓');if(sonra==='yayin')bulutYayinla();else if(sonra==='cek')bulutSiparisleriCek();else if(sonra==='kullanici')bulutKullaniciYonet();else if(sonra==='fasonyayin')bulutFasonYayinla();else if(sonra==='fasoncek')bulutFasonDurumCek();else if(sonra==='canli')canliBulutAyar();else if(sonra==='personel')personelBaslat();}
@@ -1012,6 +1025,31 @@ function kilitDkKaydet(){db.pinDk=Math.max(1,+($('pin-dk')?.value)||3);save();cl
 function kilitKaldir(){askConfirm('Uygulama kilidi kaldırılsın mı? (PIN silinir, uygulama şifresiz açılır)',()=>{db.pin=null;save();closeM();toast('Kilit kaldırıldı');clearTimeout(_kilitT);});}
 ['click','keydown','touchstart','mousemove'].forEach(ev=>document.addEventListener(ev,()=>{if(db&&db.pin){const k=$('kilit');if(k&&k.style.display!=='flex')kilitZamanla();}},{passive:true}));
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&db&&db.pin){const k=$('kilit');if(k&&k.style.display!=='flex'){/* geri gelince süreyi yenile */kilitZamanla();}}});
+/* 🔐 OTURUM KİLİDİ — güvenli çıkıştan sonra tekrar açılışta e-posta+şifre ister,
+   giriş başarılı olunca canlı buluta OTOMATİK bağlanır (ikinci kez şifre sorulmaz). */
+function oturumKilidiGoster(){const el=$('oturumKilit');if(!el)return;el.style.display='flex';const m=$('ok-msg');if(m)m.textContent='Devam etmek için hesabınla giriş yap';const i=$('ok-mail');if(i)setTimeout(()=>i.focus(),80);}
+async function oturumKilitGiris(){
+  const m=$('ok-msg');
+  if(!bulutBaslat()){if(m)m.textContent='Bulut ayarlı değil';return;}
+  const mail=($('ok-mail')?.value||'').trim(), pw=$('ok-pw')?.value||'';
+  if(!mail||!pw){if(m)m.textContent='E-posta ve şifre gir';return;}
+  if(m)m.textContent='Giriş yapılıyor…';
+  try{
+    await firebase.auth().signInWithEmailAndPassword(mail,pw);
+    await bulutProfilYukle(); await bulutRolVerisiYukle();
+    if(!bulutKul||!bulutKul.onay){if(m)m.textContent='Hesabın onaylı değil — yöneticinin onaylaması lazım';try{await bulutCikisPortal()}catch(e){}return;}
+    localStorage.removeItem('iq_oturumKilit');
+    const r=bulutKul.rol;
+    if(['ortak','magaza','depocu'].includes(r)){db.rol=r;db.personelMod=true;}
+    _canliUyari=false; db.canliBulut=true; save();
+    const p=$('ok-pw'); if(p)p.value='';
+    $('oturumKilit').style.display='none';
+    canliBaslat(true); // canlı buluta OTOMATİK bağlan — veri buluttan gelir/gider
+    try{go('panel')}catch(e){}
+    toast('☁️ Giriş yapıldı — bulut verisi geliyor…');
+  }catch(e){const c=e.code||'';if(m)m.textContent='❌ '+(c==='auth/wrong-password'||c==='auth/invalid-credential'||c==='auth/invalid-login-credentials'?'E-posta veya şifre hatalı':c==='auth/network-request-failed'?'İnternet yok — giriş için bağlantı gerekli':(c||e.message||'giriş başarısız'));}
+}
+async function oturumKilitSifre(){const m=$('ok-msg');if(!bulutBaslat())return;const mail=($('ok-mail')?.value||'').trim();if(!mail){if(m)m.textContent='Önce e-posta adresini yaz';return;}try{await firebase.auth().sendPasswordResetEmail(mail);if(m)m.textContent='📧 Sıfırlama bağlantısı e-postana gönderildi';}catch(e){if(m)m.textContent='Gönderilemedi: '+(e.code||e.message);}}
 function rolSec(){
   if(db.personelMod)return toast('👤 Personel modundasın ('+(ROL_AD[db.rol]||db.rol)+') — rol değiştirilemez. Çıkış: sağ üst 👤 menüsü.');
   open_('Rol Önizleme (deneme)',Object.keys(ROLLER).map(k=>`<div class="row" onclick="setRol('${k}')"><div class="av" style="background:${rolRenk(k)}">${ROLLER[k].ic}</div><div class="mid"><div class="t">${ROLLER[k].ad}</div><div class="s">${ROLLER[k].kar?'kâr görür':'kâr gizli'}</div></div>${db.rol===k?'<span class="pill ok">aktif</span>':''}</div>`).join('')+'<div class="mini" style="text-align:center;margin-top:14px">Sadece farklı rollerin ne gördüğünü denemen için. Gerçekte personel kendi şifresiyle girer (Ayarlar → Bulut → Personel Girişi).</div>');
@@ -4332,8 +4370,11 @@ if(!db.kurTarih || Date.now()-db.kurTarih > 3*3600000){
 window.addEventListener('error',e=>{console.log('APPERR:',e.message)});
 // Günlük otomatik yedek (son yedek 8 saatten eskiyse)
 try{const _yy=JSON.parse(localStorage.getItem('iq_yedekler')||'[]');if(!_yy.length||Date.now()-_yy[0].t>8*3600000)autoYedek('günlük otomatik');}catch(e){}
-// 🔒 Açılışta PIN kilidi varsa göster
-if(db.pin)kilitGoster();
+// 🔐 Güvenli çıkış sonrası: açılışta parola iste (oturum kilidi). Yoksa PIN kilidi.
+if(localStorage.getItem('iq_oturumKilit')){
+  if(bulutVar())oturumKilidiGoster();
+  else{try{localStorage.removeItem('iq_oturumKilit')}catch(e){}if(db.pin)kilitGoster();}
+}else if(db.pin)kilitGoster();
 // Canlı senkron açıksa: bulut+admin girişi hazır olunca sessizce yeniden bağlan
 if(db.canliBulut&&bulutVar()){bulutBaslat();bulutAuthBekle().then(()=>{bulutProfilYukle().then(()=>{if(bulutGirisli())canliBaslat(true);})});}
 
