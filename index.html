@@ -597,7 +597,8 @@ async function canliTeshis(){
   const gi=(function(){try{return bulutGirisli()}catch(e){return false}})();
   R.push('🔑 Bulut girişi: '+(gi?'✓ açık':'✗ KAPALI — önce hesabınla giriş yap'));
   if(gi&&(!bulutKul||!bulutKul.rol)){try{await bulutProfilYukle()}catch(e){}}
-  if(gi)R.push('👤 Hesap rolü: '+((bulutKul&&bulutKul.rol)||'?')+' · onay: '+(bulutKul&&bulutKul.onay?'✓ evet':'✗ HAYIR'));
+  let uid='',mail='';try{const u=firebase.auth().currentUser;if(u){uid=u.uid;mail=u.email||'';}}catch(e){}
+  if(gi){R.push('📧 Hesap: '+(mail||'?'));R.push('🆔 UID: '+(uid||'?'));R.push('👤 Hesap rolü: '+((bulutKul&&bulutKul.rol)||'? (kayıt yok)')+' · onay: '+(bulutKul&&bulutKul.onay?'✓ evet':'✗ HAYIR'));}
   R.push('📡 Canlı senkron: '+(canliAcik?('✓ açık — '+_canliUnsub.length+' alan dinleniyor'):'✗ kapalı'));
   if(gi){
     try{const d=await canliRef('stok').get();R.push('📖 Buluttan OKUMA: ✓ ('+(d.exists?'veri var':'henüz boş')+')');}
@@ -606,8 +607,10 @@ async function canliTeshis(){
     catch(e){R.push('✍️ Buluta YAZMA: ✗ '+(e.code||e.message||e));}
   }
   const izin=R.some(x=>/permission-denied|insufficient|PERMISSION/i.test(x));
-  open_('🔍 Senkron Teşhis',`<div style="line-height:1.95;font-size:13.5px">${R.map(x=>esc(x)).join('<br>')}</div>${izin?`<div class="card" style="margin-top:12px;padding:11px 13px;background:var(--bad-s);line-height:1.55"><b>⛔ İzin hatası.</b><br>1) Firebase Console → Firestore → <b>Rules</b> → projedeki <b>firestore.rules</b> içeriğini yapıştır → <b>Publish</b>.<br>2) Firestore → <b>kullanicilar</b> → senin UID belgende <b>rol="admin"</b> ve <b>onay=true</b> olmalı.</div>`:(gi?`<div class="mini" style="margin-top:12px">Okuma+yazma ✓. İki cihazda da giriş yapıp senkronu açık tut — değişiklik birkaç saniyede geçer. Geçmiyorsa iki cihaz da aynı hesapla mı giriş yapmış kontrol et.</div>`:`<div class="mini" style="margin-top:12px">Önce Ayarlar → Bulut'tan giriş yap.</div>`)}<button class="btn ghost" style="margin-top:12px" onclick="canliTeshis()">🔄 Tekrar Test Et</button>`);
+  window._teshisUid=uid;
+  open_('🔍 Senkron Teşhis',`<div style="line-height:1.95;font-size:13.5px">${R.map(x=>esc(x)).join('<br>')}</div>${izin?`<div class="card" style="margin-top:12px;padding:11px 13px;background:var(--bad-s);line-height:1.55"><b>⛔ Yetki yok — hesabın "admin" değil.</b><br>Firebase Console → <b>Firestore Database</b> → <b>kullanicilar</b> koleksiyonu → <b>Belge Ekle</b>:<br>• Belge kimliği (Document ID): <b>UID'in</b> (aşağıdaki butonla kopyala)<br>• Alan: <b>rol</b> = <b>admin</b> (string)<br>• Alan: <b>onay</b> = <b>true</b> (boolean)<br>Kaydet → uygulamada tekrar test et.${uid?`<br><br>${esc(uid)}`:''}</div>${uid?`<button class="btn g" style="margin-top:10px" onclick="teshisUidKopya()">📋 UID'i Kopyala</button>`:''}<div class="mini" style="margin-top:10px;line-height:1.5">Not: Kuralları da yayınlaman lazım — Firestore → <b>Rules</b> → projedeki <b>firestore.rules</b> → <b>Publish</b>.</div>`:(gi?`<div class="mini" style="margin-top:12px">Okuma+yazma ✓. İki cihazda da <b>aynı hesapla</b> giriş yapıp senkronu açık tut — değişiklik birkaç saniyede geçer.</div>`:`<div class="mini" style="margin-top:12px">Önce Ayarlar → Bulut'tan giriş yap.</div>`)}<button class="btn ghost" style="margin-top:12px" onclick="canliTeshis()">🔄 Tekrar Test Et</button>`);
 }
+function teshisUidKopya(){const u=window._teshisUid||'';if(!u)return toast('UID yok');try{navigator.clipboard.writeText(u).then(()=>toast('📋 UID kopyalandı'),()=>toast('UID: '+u));}catch(e){toast('UID: '+u);}}
 // 🛡️ Otomatik yerel yedek (riskli işlemlerden önce + günlük) — son 10 tutulur
 function autoYedek(etiket){try{const y=JSON.parse(localStorage.getItem('iq_yedekler')||'[]');
   y.unshift({t:Date.now(),etiket:etiket||'',ozet:(db.urunler||[]).length+' ürün · '+(db.cariler||[]).length+' cari',veri:localStorage.getItem(KEY)});
@@ -648,10 +651,10 @@ async function personelBaslat(){
 function personelCik(){askConfirm('Çıkış yapılsın mı? Bu cihazdaki veriler temizlenecek (verilerin bulutta güvende kalır).',()=>{try{if(canliAcik)canliDur()}catch(e){}try{bulutCikisPortal()}catch(e){}try{localStorage.removeItem(KEY);localStorage.removeItem('iq_yedekler')}catch(e){}bulutKul=null;location.reload();},'Çıkış yap ve temizle');}
 // Güvenli çıkış: ÖNCE veriyi buluta yükle (kayıp olmasın), SONRA bu cihazdaki her şeyi sil.
 // Silme GÜVENİLİR olmalı — indirme/gezinme araya girip silmeyi kesmesin.
-async function _cihazTemizle(){
+async function _cihazTemizle(yedegiKoru){
   try{if(canliAcik)canliDur()}catch(e){}
   try{await bulutCikisPortal()}catch(e){}
-  try{localStorage.removeItem(KEY);localStorage.removeItem('iq_yedekler');localStorage.removeItem('oz_portal_oturum')}catch(e){}
+  try{localStorage.removeItem(KEY);localStorage.removeItem('oz_portal_oturum');if(!yedegiKoru)localStorage.removeItem('iq_yedekler');}catch(e){}
   // Tekrar açılışta parola iste (güvenli çıkış → oturum kilidi)
   try{if(bulutVar())localStorage.setItem('iq_oturumKilit','1')}catch(e){}
   bulutKul=null;
@@ -663,11 +666,13 @@ function guvenliCikis(){
     // Buluta yükleyemeyiz → silmek veri kaybı olur. Önce giriş yaptır (indirme yapma; mobilde silmeyi keser).
     return askConfirm('Güvenli çıkış için önce bulut girişi gerekli — böylece veriler buluta yüklenir ve kaybolmaz. Şimdi giriş yapılsın mı?',()=>{closeM();bulutGirisIste('');},'Giriş Yap');
   }
-  askConfirm('Güvenli çıkış: bu cihazdaki veriler ÖNCE buluta yüklenecek, sonra cihaz tamamen temizlenecek (veri kaybı olmaz). Devam?',async()=>{
+  askConfirm('Güvenli çıkış: bu cihazdaki veriler ÖNCE buluta yüklenecek, sonra cihaz tamamen temizlenecek. Devam?',async()=>{
     toast('☁️ Buluta yükleniyor…');
+    autoYedek('güvenli çıkış öncesi'); // her ihtimale karşı yerel yedek
     let ok=false; try{ ok=await canliGonder(); }catch(e){ ok=false; }
-    if(!ok){ toast('⚠️ Buluta yüklenemedi (internet yok?). Çıkış İPTAL — veri kaybı olmasın.'); return; }
-    await _cihazTemizle();
+    if(ok){ await _cihazTemizle(); return; }
+    // Yükleme başarısız (yetki yok / internet yok) → KULLANICIYI KİLİTLEME, seçenek sun.
+    askConfirm('⚠️ Veriler buluta yüklenemedi (hesabın "admin" değil ya da internet yok). Yerel yedek alındı. Yine de çıkıp bu cihazı temizleyeyim mi? Veriler bu tarayıcının YEDEĞİNDE kalır (Ayarlar → Veri Güvenliği → Otomatik Yedekler’den geri alınır).',async()=>{ await _cihazTemizle(true); },'Yine de çık (yedek kalsın)');
   },'Yükle ve çık');
 }
 // Çevrimdışı → çevrimiçi geçişte kullanıcıyı bilgilendir (Firestore bekleyenleri otomatik gönderir)
