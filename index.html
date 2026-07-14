@@ -566,8 +566,28 @@ function canliBulutAyar(){
     <div class="mini" style="margin-top:12px;color:var(--warn);line-height:1.5">⚠️ "Yükle" bu cihazdaki veriyi buluta yazar. "Al" buluttakini alıp bu cihazdakinin üzerine yazar. İlk kuran <b>Yükle</b>, sonra katılanlar <b>Al</b> demeli.</div>`}
   `);
 }
-async function canliBulutIlk(){toast('Yükleniyor…');const ok=await canliGonder();if(!ok)return;canliBaslat(true);closeM();toast('☁️ Canlı senkron açıldı ✓');try{render()}catch(e){}}
-function canliBulutKatil(){askConfirm('Buluttaki veri bu cihaza alınacak; bu cihazdaki mevcut veri bununla DEĞİŞECEK. Devam edilsin mi?',()=>{canliBaslat();closeM();toast('☁️ Bağlanıldı — bulut verisi geliyor…');});}
+// 🛡️ Otomatik yerel yedek (riskli işlemlerden önce + günlük) — son 10 tutulur
+function autoYedek(etiket){try{const y=JSON.parse(localStorage.getItem('iq_yedekler')||'[]');
+  y.unshift({t:Date.now(),etiket:etiket||'',ozet:(db.urunler||[]).length+' ürün · '+(db.cariler||[]).length+' cari',veri:localStorage.getItem(KEY)});
+  while(y.length>10)y.pop();localStorage.setItem('iq_yedekler',JSON.stringify(y));}catch(e){}}
+async function _bulutUrunSay(){try{const s=await canliRef('stok').get();return {var:s.exists,n:s.exists?((s.data().urunler||[]).length):0};}catch(e){return {var:false,n:0,hata:1};}}
+async function canliBulutIlk(){
+  autoYedek('buluta göndermeden önce');
+  const bul=await _bulutUrunSay(); const yerel=(db.urunler||[]).length;
+  const devam=async()=>{toast('Yükleniyor…');const ok=await canliGonder();if(!ok)return;canliBaslat(true);closeM();toast('☁️ Canlı senkron açıldı ✓ ('+yerel+' ürün yüklendi)');try{render()}catch(e){}};
+  if(bul.var&&bul.n>0){askConfirm(`⚠️ DİKKAT: Bulutta zaten ${bul.n} ürün var! GÖNDERİRSEN buluttaki veri silinip bu cihazdaki ${yerel} ürün yazılır. (Yedek alındı.) Emin misin?`,devam,'Evet, gönder');return;}
+  devam();
+}
+async function canliBulutKatil(){
+  autoYedek('buluttan indirmeden önce');
+  const bul=await _bulutUrunSay(); const yerel=(db.urunler||[]).length;
+  if(!bul.var){toast('⚠️ Bulutta veri yok. Önce ANA cihazda "Buluta gönder" yap.');return;}
+  askConfirm(`İNDİR: Bulutta ${bul.n} ürün var. Bu cihazdaki ${yerel} ürün bununla değişecek. (Yedek alındı — istersen geri dönebilirsin.) Devam?`,()=>{canliBaslat();closeM();toast('☁️ Bağlanıldı — bulut verisi geliyor…');},'Evet, indir');
+}
+function otoYedekListe(){const y=JSON.parse(localStorage.getItem('iq_yedekler')||'[]');
+  open_('🕑 Otomatik Yedekler',(y.length?y.map((b,i)=>`<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><b>${tstr(b.t)}</b><div class="mini">${esc(b.etiket||'')} · ${esc(b.ozet||'')}</div></div><button class="btn ghost sm" style="width:auto;margin:0;padding:8px 12px;flex:0 0 auto" onclick="otoYedekGeri(${i})">↩︎ Geri yükle</button></div></div>`).join(''):'<div class="mini">Henüz yedek yok. Riskli işlemlerden önce ve günde bir otomatik alınır.</div>')+'<div class="mini" style="margin-top:8px">Yedekler bu cihazda saklanır (son 10). Cihaz değişimi için "Yedek Al (indir)" ile dosya da al.</div>');}
+function otoYedekGeri(i){const y=JSON.parse(localStorage.getItem('iq_yedekler')||'[]');const b=y[i];if(!b)return;
+  askConfirm('Bu yedeğe dönülsün mü? Şu anki veri bununla değişir ve canlı senkron kapatılır (istersen sonra tekrar açarsın).',()=>{try{const d=JSON.parse(b.veri);if(canliAcik)canliDur();db=d;save();closeM();go('panel');toast('↩︎ Yedek geri yüklendi ✓');}catch(e){toast('Yedek okunamadı')}});}
 function canliBulutKapat(){askConfirm('Canlı senkron kapatılsın mı? (Veri cihazda kalır ama artık senkronlanmaz)',()=>{canliDur();closeM();toast('Senkron kapatıldı');});}
 // Çevrimdışı → çevrimiçi geçişte kullanıcıyı bilgilendir (Firestore bekleyenleri otomatik gönderir)
 window.addEventListener('offline',()=>{if(canliAcik)toast('📴 Çevrimdışı — değişiklikler cihazda tutuluyor, internet gelince otomatik yüklenecek');});
@@ -4141,6 +4161,7 @@ function rAyarlar(){
     <div class="row" onclick="canliBulutAyar()"><div class="av" style="background:${canliAcik?'var(--good)':'var(--ind2)'}">☁️</div><div class="mid"><div class="t">Canlı Bulut Senkronu ${canliAcik?'<span class="pill ok">açık</span>':''}</div><div class="s">tüm cihazlar aynı canlı veriyi paylaşır</div></div><span style="color:var(--sub)">›</span></div>
   </div>`;
   html+=`<div class="sec">Veri Güvenliği</div><div class="card">
+    <div class="row" onclick="otoYedekListe()"><div class="av" style="background:var(--good)">🕑</div><div class="mid"><div class="t">Otomatik Yedekler</div><div class="s">riskli işlemlerden önce alınır · geri yükle</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="yedekAl()"><div class="av g">💾</div><div class="mid"><div class="t">Yedek Al (indir)</div><div class="s">tüm verini dosya olarak kaydet</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="$('yedekFile').click()"><div class="av" style="background:var(--ind2)">📂</div><div class="mid"><div class="t">Yedekten Yükle</div><div class="s">daha önce aldığın yedeği geri yükle</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="sifirla()"><div class="av r">🔄</div><div class="mid"><div class="t">Örnek verilere sıfırla</div></div></div>
@@ -4213,6 +4234,8 @@ if(!db.kurTarih || Date.now()-db.kurTarih > 3*3600000){
   kurCek().then(ok=>{if(ok&&cur==='panel')render()});
 }
 window.addEventListener('error',e=>{console.log('APPERR:',e.message)});
+// Günlük otomatik yedek (son yedek 8 saatten eskiyse)
+try{const _yy=JSON.parse(localStorage.getItem('iq_yedekler')||'[]');if(!_yy.length||Date.now()-_yy[0].t>8*3600000)autoYedek('günlük otomatik');}catch(e){}
 // Canlı senkron açıksa: bulut+admin girişi hazır olunca sessizce yeniden bağlan
 if(db.canliBulut&&bulutVar()){bulutBaslat();bulutAuthBekle().then(()=>{bulutProfilYukle().then(()=>{if(bulutGirisli())canliBaslat(true);})});}
 
