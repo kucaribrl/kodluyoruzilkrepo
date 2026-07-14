@@ -615,7 +615,15 @@ async function personelBaslat(){
   canliBaslat(true); try{closeM()}catch(e){} go('panel');
   toast('👤 '+ROL_AD[r]+' olarak bağlanıldı — canlı veri geliyor…');
 }
-function personelCik(){askConfirm('Personel oturumu kapatılsın mı?',()=>{try{canliDur()}catch(e){}bulutCikisPortal&&bulutCikisPortal();db.personelMod=false;db.rol='patron';save();go('panel');toast('Çıkış yapıldı');});}
+function personelCik(){askConfirm('Çıkış yapılsın mı? Bu cihazdaki veriler temizlenecek (verilerin bulutta güvende kalır).',()=>{try{if(canliAcik)canliDur()}catch(e){}try{bulutCikisPortal()}catch(e){}try{localStorage.removeItem(KEY);localStorage.removeItem('iq_yedekler')}catch(e){}bulutKul=null;location.reload();},'Çıkış yap ve temizle');}
+// Güvenli çıkış: bu cihazdaki TÜM veriyi siler (ödünç/başka cihazdan çıkarken)
+function guvenliCikis(){
+  const senkron=!!db.canliBulut;
+  const msg=senkron
+    ?'BU CİHAZDAKİ TÜM VERİLER SİLİNECEK ve çıkış yapılacak. Verilerin bulutta güvende — başka cihazdan tekrar girersin. (Ödünç/başka cihazdan çıkarken bunu kullan.) Devam?'
+    :'⚠️ DİKKAT: Bu cihazın verileri buluta YÜKLENMEMİŞ! Silersen (yedeğin yoksa) KAYBOLUR. Yine de bu cihazdaki her şey silinsin mi?';
+  askConfirm(msg,()=>{try{if(canliAcik)canliDur()}catch(e){}try{bulutCikisPortal()}catch(e){}try{localStorage.removeItem(KEY);localStorage.removeItem('iq_yedekler');localStorage.removeItem('oz_portal_oturum')}catch(e){}bulutKul=null;location.reload();},'Evet, temizle ve çık');
+}
 // Çevrimdışı → çevrimiçi geçişte kullanıcıyı bilgilendir (Firestore bekleyenleri otomatik gönderir)
 window.addEventListener('offline',()=>{if(canliAcik)toast('📴 Çevrimdışı — değişiklikler cihazda tutuluyor, internet gelince otomatik yüklenecek');});
 window.addEventListener('online',()=>{if(canliAcik)toast('🌐 İnternet geldi — bekleyen değişiklikler yükleniyor…');});
@@ -959,9 +967,11 @@ function hesapMenu(){
   const bg=(function(){try{return bulutGirisli()}catch(e){return false}})();
   const rol=ROL_AD[db.rol]||ROLLER[db.rol]?.ad||db.rol;
   let h=`<div class="card" style="padding:13px 15px"><div style="font-weight:800;font-size:15px">${(ROLLER[db.rol]||{}).ic||'👤'} ${esc(rol)}</div><div class="mini">${db.personelMod?'Personel oturumu · canlı bağlı':(bg?'Yönetici · bulut girişli':'Yönetici · bu cihaz')}</div></div>`;
-  if(db.personelMod){h+=`<button class="btn danger" style="margin-top:12px" onclick="personelCik()">🚪 Çıkış Yap</button>`;}
+  if(db.personelMod){h+=`<button class="btn danger" style="margin-top:12px" onclick="personelCik()">🚪 Çıkış Yap (cihazı temizle)</button>`;}
   else{
-    if(bg)h+=`<button class="btn danger" style="margin-top:12px" onclick="bulutCikisTum()">🚪 Bulut Oturumunu Kapat</button>`;
+    h+=`<button class="btn danger" style="margin-top:12px" onclick="guvenliCikis()">🧹 Güvenli Çıkış — bu cihazdaki verileri sil</button>`;
+    h+=`<div class="mini" style="margin-top:6px;line-height:1.5">Başka/ödünç cihazdan girdiysen bunu kullan: çıkışta bu cihazdaki her şey silinir (verilerin bulutta durur).</div>`;
+    if(bg)h+=`<button class="btn ghost" style="margin-top:10px" onclick="bulutCikisTum()">Sadece bulut oturumunu kapat (veriler kalsın)</button>`;
     h+=`<button class="btn ghost" style="margin-top:8px" onclick="closeM();go('ayarlar')">⚙️ Ayarlar</button>`;
     h+=`<div class="mini" style="text-align:center;margin-top:12px"><a onclick="closeM();rolOnizle()" style="color:var(--ind2);font-weight:700;cursor:pointer">Farklı rolü önizle (deneme)</a></div>`;
   }
