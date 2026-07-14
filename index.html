@@ -1191,16 +1191,42 @@ function barkodYazdir(id){const u=urun(id);let changed=false;renkObjs(u).forEach
   open_('Barkod · '+u.ad,`
     <div class="mini">Her rengin kaç etiket basılacağını gir, sonra Yazdır'a bas. Ütü/paket bunları ürüne yapıştırır.</div>
     <div id="bk-list" style="margin-top:10px">${renkler.map((r,i)=>`<div class="bkrow"><div class="bksvg">${barkodSVG(r.barkod)}</div><div class="bkinfo"><b>${esc(u.ad)} · ${esc(r.ad||'—')}</b><div class="mini">${esc(u.kod||'')} · ${esc(seriStr(u))}</div><div class="mini">${esc(r.barkod)}</div><label style="margin:6px 0 2px">Kaç etiket?</label><input id="bkq-${i}" type="number" inputmode="numeric" value="${r.stok||1}" style="width:90px;padding:8px"></div></div>`).join('')}</div>
-    <button class="btn" onclick="barkodYap(${id})">🖨️ Yazdır</button>
-    <div class="mini" style="margin-top:8px">Not: Yazdır penceresi açılmazsa (önizleme kısıtı), uygulamayı kendi ekranında açtığında sorunsuz çalışır.</div>
+    <label style="margin-top:12px">Etiket ölçüsü (rulo barkod yazıcısı — ör. Xprinter)</label>
+    <select id="bk-boy">${[['40x30','40 × 30 mm'],['50x30','50 × 30 mm'],['50x40','50 × 40 mm'],['60x40','60 × 40 mm'],['30x20','30 × 20 mm'],['80x50','80 × 50 mm'],['100x150','100 × 150 mm (kargo)'],['a4','A4 yaprağa dizerek bas']].map(o=>`<option value="${o[0]}" ${(db.etiketBoy||'40x30')===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>
+    <div class="g2" style="margin-top:6px"><div><label>Özel en (mm)</label><input id="bk-w" type="number" inputmode="numeric" placeholder="—"></div><div><label>Özel boy (mm)</label><input id="bk-h" type="number" inputmode="numeric" placeholder="—"></div></div>
+    <div class="mini" style="margin-top:4px">Özel ölçü girersen seçimi geçersiz kılar. Rulodaki etiketin gerçek ölçüsünü seç.</div>
+    <button class="btn" style="margin-top:12px" onclick="barkodYap(${id})">🖨️ Yazdır</button>
+    <div class="mini" style="margin-top:8px">İpucu: Yazdırırken <b>yazıcıyı XP-490B seç</b>, <b>Kenar boşlukları: Yok</b>, <b>Ölçek: %100</b> (Sığdır kapalı). Uygulamayı ana ekran kısayolundan açarsan yazdırma sorunsuz çalışır.</div>
   `);
 }
 function seriStr(u){if(u.birim!=='seri')return 'Tekli ürün';if(u.bedenler&&u.bedenler.length)return 'Seri: '+u.bedenler.map(x=>typeof x==='object'?x.beden+(x.adet>1?'×'+x.adet:''):x).join('·')+' ('+u.seri+')';return u.seri+"'li seri"}
-function barkodYap(id){const u=urun(id);const renkler=renkObjs(u).filter(r=>r.barkod);let cells='';const sstr=seriStr(u);
-  renkler.forEach((r,i)=>{const n=Math.max(0,+($('bkq-'+i)?.value||0));for(let k=0;k<n;k++)cells+=`<div class="lbl"><div class="l-ad">${esc(u.ad)}</div><div class="l-line">${esc(u.kod||'')}</div>${r.ad?`<div class="l-line">${esc(r.ad)}</div>`:''}<div class="l-line">${esc(sstr)}</div>${barkodSVG(r.barkod,40)}</div>`});
+function barkodYap(id){const u=urun(id);const renkler=renkObjs(u).filter(r=>r.barkod);const sstr=seriStr(u);
+  // ölçü belirle: özel en/boy varsa onu kullan, yoksa seçili preset ('a4' → yaprağa diz)
+  const cw=+($('bk-w')?.value||0), ch=+($('bk-h')?.value||0);
+  let sel=$('bk-boy')?.value||'40x30', a4=false, w=40, h=30;
+  if(cw>0&&ch>0){w=cw;h=ch;db.etiketBoy=cw+'x'+ch;}
+  else if(sel==='a4'){a4=true;db.etiketBoy='a4';}
+  else{const m=sel.split('x');w=+m[0]||40;h=+m[1]||30;db.etiketBoy=sel;}
+  save();
+  const old=document.getElementById('etiketStyle');if(old)old.remove();
+  let cells='';
+  renkler.forEach((r,i)=>{const n=Math.max(0,+($('bkq-'+i)?.value||0));for(let k=0;k<n;k++){
+    if(a4)cells+=`<div class="lbl"><div class="l-ad">${esc(u.ad)}</div><div class="l-line">${esc(u.kod||'')}</div>${r.ad?`<div class="l-line">${esc(r.ad)}</div>`:''}<div class="l-line">${esc(sstr)}</div>${barkodSVG(r.barkod,40)}</div>`;
+    else cells+=`<div class="tlbl"><div class="t-ad">${esc(u.ad)}</div>${(u.kod||r.ad)?`<div class="t-sub">${esc(u.kod||'')}${u.kod&&r.ad?' · ':''}${esc(r.ad||'')}</div>`:''}<div class="t-bar">${barkodSVG(r.barkod,60)}</div><div class="t-sub">${esc(sstr)}</div></div>`;
+  }});
   if(!cells)return toast('Adet gir');
+  if(!a4){const fAd=Math.max(7,Math.min(11,Math.round(w/4))),fSub=Math.max(6,Math.min(8,Math.round(w/6)));
+    const st=document.createElement('style');st.id='etiketStyle';
+    st.textContent=`@media print{@page{size:${w}mm ${h}mm;margin:0}`
+      +`body.printing #printarea{display:block!important;padding:0;margin:0}`
+      +`body.printing .tlbl{width:${w}mm;height:${h}mm;box-sizing:border-box;padding:1.2mm;page-break-after:always;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;overflow:hidden;color:#000}`
+      +`body.printing .tlbl .t-ad{font-size:${fAd}pt;font-weight:800;line-height:1.05;max-height:2.6em;overflow:hidden}`
+      +`body.printing .tlbl .t-sub{font-size:${fSub}pt;font-weight:600;line-height:1.15}`
+      +`body.printing .tlbl .t-bar{width:96%;margin:0.6mm 0}`
+      +`body.printing .tlbl .t-bar svg{width:100%;max-width:none!important;height:auto}}`;
+    document.head.appendChild(st);}
   const area=document.getElementById('printarea');area.innerHTML=cells;document.body.classList.add('printing');
-  setTimeout(()=>{window.print();document.body.classList.remove('printing')},150);
+  setTimeout(()=>{window.print();document.body.classList.remove('printing');const s=document.getElementById('etiketStyle');if(s)s.remove();},250);
 }
 /* ---- Aktif / Pasif (arşiv) ---- */
 function urunAktifToggle(id){const u=urun(id);if(!u)return;u.pasif=!u.pasif;save();render();toast(u.pasif?'Pasife alındı (arşiv) 🗄️':'Aktif edildi ✓')}
