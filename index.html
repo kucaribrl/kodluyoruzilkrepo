@@ -556,7 +556,7 @@ function canliBulutAyar(){
   if(!bulutGirisli())return bulutGirisIste('canli');
   open_('☁️ Canlı Bulut Senkronu',`
     <div class="mini" style="line-height:1.6">Açıkken <b>stok, cari, kasa, çek, üretim ve ayarların</b> tüm cihazlarında <b>canlı aynı</b> olur — bir cihazda yapılan hareket diğerlerinde anında görünür. İnternet gerekir.</div>
-    <div class="card" style="margin-top:10px;padding:11px 13px">Durum: <b style="color:${canliAcik?'var(--good)':'var(--sub)'}">${canliAcik?'AÇIK ✓ (canlı)':'kapalı'}</b></div>
+    <div class="card" style="margin-top:10px;padding:11px 13px">Durum: <b style="color:${canliAcik?'var(--good)':'var(--sub)'}">${canliAcik?'AÇIK ✓ (canlı)':'kapalı'}</b>${canliAcik?` · ${navigator.onLine?'🌐 çevrimiçi':'📴 çevrimdışı — internet gelince otomatik yüklenecek'}`:''}</div>
     ${canliAcik?`<button class="btn danger" style="margin-top:12px" onclick="canliBulutKapat()">⏹ Senkronu Kapat</button>`:`
     <div class="mini" style="margin-top:14px;font-weight:800">İlk kez kuruyorsan (bu cihazdaki veri ana kaynak):</div>
     <button class="btn g" style="margin-top:6px" onclick="canliBulutIlk()">⬆️ Bu cihazın verisini buluta yükle</button>
@@ -568,6 +568,9 @@ function canliBulutAyar(){
 async function canliBulutIlk(){toast('Yükleniyor…');const ok=await canliGonder();if(!ok)return;canliBaslat(true);closeM();toast('☁️ Canlı senkron açıldı ✓');try{render()}catch(e){}}
 function canliBulutKatil(){askConfirm('Buluttaki veri bu cihaza alınacak; bu cihazdaki mevcut veri bununla DEĞİŞECEK. Devam edilsin mi?',()=>{canliBaslat();closeM();toast('☁️ Bağlanıldı — bulut verisi geliyor…');});}
 function canliBulutKapat(){askConfirm('Canlı senkron kapatılsın mı? (Veri cihazda kalır ama artık senkronlanmaz)',()=>{canliDur();closeM();toast('Senkron kapatıldı');});}
+// Çevrimdışı → çevrimiçi geçişte kullanıcıyı bilgilendir (Firestore bekleyenleri otomatik gönderir)
+window.addEventListener('offline',()=>{if(canliAcik)toast('📴 Çevrimdışı — değişiklikler cihazda tutuluyor, internet gelince otomatik yüklenecek');});
+window.addEventListener('online',()=>{if(canliAcik)toast('🌐 İnternet geldi — bekleyen değişiklikler yükleniyor…');});
 function nid(k){if(db.seq[k]==null)db.seq[k]=1000;return db.seq[k]++}
 /* ============ ☁️ BULUT (Firebase) ============ */
 /* Yayına almak için kendi Firebase projenin bilgilerini buraya yapıştır.
@@ -584,7 +587,10 @@ const MAGAZA_ID = 'iqbasics';
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
-  try{if(!firebase.apps.length)firebase.initializeApp(FB_CONFIG);_fb=firebase.firestore();bulutHazir=true;return true;}catch(e){console.warn('bulut',e);return false}}
+  try{if(!firebase.apps.length)firebase.initializeApp(FB_CONFIG);_fb=firebase.firestore();
+    // Çevrimdışı kalıcı bellek: internet yokken çalış, gelince otomatik gönder (uygulama kapansa bile korunur)
+    try{_fb.enablePersistence({synchronizeTabs:true}).catch(()=>{});}catch(e){}
+    bulutHazir=true;return true;}catch(e){console.warn('bulut',e);return false}}
 // Admin Firebase Auth girişi (katalog yazma / sipariş okuma yetkisi)
 function bulutGirisli(){try{return !!(window.firebase&&firebase.auth&&firebase.auth().currentUser)}catch(e){return false}}
 function bulutGirisIste(sonra){open_('☁️ Bulut Girişi (yönetici)',`<div class="mini">Katalog yayınlamak ve siparişleri çekmek için Firebase hesabınla giriş yap (tek seferlik, oturum açık kalır).</div>
