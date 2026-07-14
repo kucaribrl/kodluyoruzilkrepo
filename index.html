@@ -1186,7 +1186,8 @@ function cogaltUrun(id){const src=urun(id);if(!src)return;const c=JSON.parse(JSO
 /* ---- CODE128 barkod çizimi (okunabilir) ---- */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 function code128Bseq(text){const codes=[104];let sum=104;for(let i=0;i<text.length;i++){const v=text.charCodeAt(i)-32;codes.push(v);sum+=v*(i+1)}codes.push(sum%103);codes.push(106);return codes.map(c=>C128[c]).join('')}
-function barkodSVG(text,h=48){const seq=code128Bseq(''+text);const q=10;let x=q,rects='',bar=true;for(const ch of seq){const w=+ch;if(bar)rects+=`<rect x="${x}" y="0" width="${w}" height="${h}"/>`;x+=w;bar=!bar}const W=x+q;return `<svg viewBox="0 0 ${W} ${h+15}" preserveAspectRatio="xMidYMid meet" style="width:100%;max-width:230px;height:auto"><rect x="0" y="0" width="${W}" height="${h+15}" fill="#fff"/><g fill="#000">${rects}</g><text x="${W/2}" y="${h+12}" font-size="11" text-anchor="middle" fill="#000" font-family="monospace" letter-spacing="1">${esc(''+text)}</text></svg>`}
+function barkodSVG(text,h=48,noText){const seq=code128Bseq(''+text);const q=10;let x=q,rects='',bar=true;for(const ch of seq){const w=+ch;if(bar)rects+=`<rect x="${x}" y="0" width="${w}" height="${h}"/>`;x+=w;bar=!bar}const W=x+q;const H=noText?h:h+15;
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;max-width:${noText?'none':'230px'};height:auto"><rect x="0" y="0" width="${W}" height="${H}" fill="#fff"/><g fill="#000">${rects}</g>${noText?'':`<text x="${W/2}" y="${h+12}" font-size="11" text-anchor="middle" fill="#000" font-family="monospace" letter-spacing="1">${esc(''+text)}</text>`}</svg>`}
 function barkodYazdir(id){const u=urun(id);let changed=false;renkObjs(u).forEach(r=>{if(!r.barkod){r.barkod=genBarkod();changed=true}});if(changed)save();const renkler=renkObjs(u);if(!renkler.length)return toast('Bu üründe renk yok');
   open_('Barkod · '+u.ad,`
     <div class="mini">Her rengin kaç etiket basılacağını gir, sonra Yazdır'a bas. Ütü/paket bunları ürüne yapıştırır.</div>
@@ -1195,35 +1196,45 @@ function barkodYazdir(id){const u=urun(id);let changed=false;renkObjs(u).forEach
     <select id="bk-boy">${[['60x40','60 × 40 mm (6×4 cm)'],['40x30','40 × 30 mm'],['50x30','50 × 30 mm'],['50x40','50 × 40 mm'],['30x20','30 × 20 mm'],['80x50','80 × 50 mm'],['100x150','100 × 150 mm (kargo)'],['a4','A4 yaprağa dizerek bas']].map(o=>`<option value="${o[0]}" ${(db.etiketBoy||'60x40')===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>
     <div class="g2" style="margin-top:6px"><div><label>Özel en (mm)</label><input id="bk-w" type="number" inputmode="numeric" placeholder="—"></div><div><label>Özel boy (mm)</label><input id="bk-h" type="number" inputmode="numeric" placeholder="—"></div></div>
     <div class="mini" style="margin-top:4px">Özel ölçü girersen seçimi geçersiz kılar. Rulodaki etiketin gerçek ölçüsünü seç.</div>
+    <label style="margin-top:8px">Yön (yazıcı dikine basıyorsa döndür)</label>
+    <select id="bk-yon">${[['90','Yatay — 90° döndür (önerilen)'],['270','Yatay — ters 90°'],['0','Döndürme (dik)']].map(o=>`<option value="${o[0]}" ${String(db.etiketDon!=null?db.etiketDon:90)===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>
     <button class="btn" style="margin-top:12px" onclick="barkodYap(${id})">🖨️ Yazdır</button>
     <div class="mini" style="margin-top:8px">İpucu: Yazdırırken <b>yazıcıyı XP-490B seç</b>, <b>Kenar boşlukları: Yok</b>, <b>Ölçek: %100</b> (Sığdır kapalı). Uygulamayı ana ekran kısayolundan açarsan yazdırma sorunsuz çalışır.</div>
   `);
 }
 function seriStr(u){if(u.birim!=='seri')return 'Tekli ürün';if(u.bedenler&&u.bedenler.length)return 'Seri: '+u.bedenler.map(x=>typeof x==='object'?x.beden+(x.adet>1?'×'+x.adet:''):x).join('·')+' ('+u.seri+')';return u.seri+"'li seri"}
-function barkodYap(id){const u=urun(id);const renkler=renkObjs(u).filter(r=>r.barkod);const sstr=seriStr(u);
-  // ölçü belirle: özel en/boy varsa onu kullan, yoksa seçili preset ('a4' → yaprağa diz)
+function etiketBedenStr(u){if(u.bedenler&&u.bedenler.length)return u.bedenler.map(x=>typeof x==='object'?x.beden:x).join('-');return u.birim==='seri'?(u.seri+"'li seri"):'Tekli';}
+function barkodYap(id){const u=urun(id);const renkler=renkObjs(u).filter(r=>r.barkod);const sstr=seriStr(u);const bed=etiketBedenStr(u);
+  // ölçü: özel en/boy varsa onu kullan, yoksa seçili preset ('a4' → yaprağa diz)
   const cw=+($('bk-w')?.value||0), ch=+($('bk-h')?.value||0);
   let sel=$('bk-boy')?.value||'60x40', a4=false, w=60, h=40;
   if(cw>0&&ch>0){w=cw;h=ch;db.etiketBoy=cw+'x'+ch;}
   else if(sel==='a4'){a4=true;db.etiketBoy='a4';}
   else{const m=sel.split('x');w=+m[0]||40;h=+m[1]||30;db.etiketBoy=sel;}
+  let don=+($('bk-yon')?.value);if(isNaN(don))don=(db.etiketDon!=null?+db.etiketDon:90);db.etiketDon=don;
   save();
   const old=document.getElementById('etiketStyle');if(old)old.remove();
   let cells='';
   renkler.forEach((r,i)=>{const n=Math.max(0,+($('bkq-'+i)?.value||0));for(let k=0;k<n;k++){
-    if(a4)cells+=`<div class="lbl"><div class="l-ad">${esc(u.ad)}</div><div class="l-line">${esc(u.kod||'')}</div>${r.ad?`<div class="l-line">${esc(r.ad)}</div>`:''}<div class="l-line">${esc(sstr)}</div>${barkodSVG(r.barkod,40)}</div>`;
-    else cells+=`<div class="tlbl"><div class="t-ad">${esc(u.ad)}</div>${(u.kod||r.ad)?`<div class="t-sub">${esc(u.kod||'')}${u.kod&&r.ad?' · ':''}${esc(r.ad||'')}</div>`:''}<div class="t-bar">${barkodSVG(r.barkod,60)}</div><div class="t-sub">${esc(sstr)}</div></div>`;
+    if(a4){cells+=`<div class="lbl"><div class="l-ad">${esc(u.ad)}</div><div class="l-line">${esc(u.kod||'')}</div>${r.ad?`<div class="l-line">${esc(r.ad)}</div>`:''}<div class="l-line">${esc(sstr)}</div>${barkodSVG(r.barkod,40)}</div>`;}
+    else{const lbl=`<div class="tl-tbl"><div class="tl-r"><span class="tl-k">KOD:</span> ${esc(u.kod||'-')}</div><div class="tl-r"><span class="tl-k">İSİM:</span> ${esc(u.ad||'')}</div><div class="tl-r"><span class="tl-k">RENK:</span> ${esc(r.ad||'-')}</div><div class="tl-r tl-bed">${esc(bed)}</div><div class="tl-bar">${barkodSVG(r.barkod,60,true)}</div><div class="tl-num">${esc(r.barkod)}</div></div>`;
+      cells+=`<div class="tpage"><div class="tlbl">${lbl}</div></div>`;}
   }});
   if(!cells)return toast('Adet gir');
-  if(!a4){const fAd=Math.max(7,Math.min(11,Math.round(w/4))),fSub=Math.max(6,Math.min(8,Math.round(w/6)));
+  if(!a4){const rot=(don===90||don===270),pw=rot?h:w,ph=rot?w:h;
+    const rf=Math.max(6,Math.min(9,Math.round(w/7))),nf=Math.max(7,Math.min(11,Math.round(w/6)));
     const st=document.createElement('style');st.id='etiketStyle';
-    st.textContent=`@media print{@page{size:${w}mm ${h}mm;margin:0}`
+    st.textContent=`@media print{@page{size:${pw}mm ${ph}mm;margin:0}`
       +`body.printing #printarea{display:block!important;padding:0;margin:0}`
-      +`body.printing .tlbl{width:${w}mm;height:${h}mm;box-sizing:border-box;padding:1.2mm;page-break-after:always;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;overflow:hidden;color:#000}`
-      +`body.printing .tlbl .t-ad{font-size:${fAd}pt;font-weight:800;line-height:1.05;max-height:2.6em;overflow:hidden}`
-      +`body.printing .tlbl .t-sub{font-size:${fSub}pt;font-weight:600;line-height:1.15}`
-      +`body.printing .tlbl .t-bar{width:96%;margin:0.6mm 0}`
-      +`body.printing .tlbl .t-bar svg{width:100%;max-width:none!important;height:auto}}`;
+      +`body.printing .tpage{width:${pw}mm;height:${ph}mm;position:relative;overflow:hidden;page-break-after:always}`
+      +`body.printing .tlbl{position:absolute;top:50%;left:50%;width:${w}mm;height:${h}mm;box-sizing:border-box;transform:translate(-50%,-50%) rotate(${don}deg);color:#000;font-family:ui-sans-serif,system-ui,sans-serif}`
+      +`body.printing .tl-tbl{width:100%;height:100%;border:0.4mm solid #000;border-radius:1mm;display:flex;flex-direction:column;overflow:hidden}`
+      +`body.printing .tl-r{border-bottom:0.3mm solid #000;padding:0.3mm 1.2mm;font-size:${rf}pt;font-weight:700;text-align:center;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}`
+      +`body.printing .tl-k{font-weight:800}`
+      +`body.printing .tl-bed{font-weight:800;letter-spacing:0.4px}`
+      +`body.printing .tl-bar{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:0.6mm 1.5mm}`
+      +`body.printing .tl-bar svg{width:100%!important;height:100%!important;max-width:none!important}`
+      +`body.printing .tl-num{text-align:center;font-family:monospace;font-size:${nf}pt;letter-spacing:1px;font-weight:700;padding:0.2mm 0 0.6mm}}`;
     document.head.appendChild(st);}
   const area=document.getElementById('printarea');area.innerHTML=cells;document.body.classList.add('printing');
   setTimeout(()=>{window.print();document.body.classList.remove('printing');const s=document.getElementById('etiketStyle');if(s)s.remove();},250);
