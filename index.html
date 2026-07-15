@@ -884,7 +884,8 @@ async function bulutFasonIsleriYukle(){
   if(!bulutBaslat()||!bulutKul)return [];
   try{const snap=await _fb.collection('fason_isemri').where('fasonUid','==',bulutKul.uid).get();
     fasonIsler=[];snap.forEach(d=>fasonIsler.push({bid:d.id,...d.data()}));
-    fasonIsler=fasonIsler.filter(x=>x.aktif!==false).sort((a,b)=>(a.termin||0)-(b.termin||0));
+    // Tümünü tut (geçmiş dahil) — aktif/geçmiş ayrımı arayüzde yapılır
+    fasonIsler=fasonIsler.sort((a,b)=>(a.termin||0)-(b.termin||0));
     return fasonIsler;
   }catch(e){console.warn('fasonis',e);return []}
 }
@@ -976,6 +977,7 @@ $('cNo').onclick=()=>{$('cov').classList.remove('show');_cYes=null};
 $('cov').addEventListener('click',e=>{if(e.target.id==='cov'){$('cov').classList.remove('show');_cYes=null}});
 function tstr(ts){const d=new Date(ts);return d.toLocaleDateString('tr-TR',{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'})}
 function dstr(ts){return new Date(ts).toLocaleDateString('tr-TR',{day:'2-digit',month:'short'})}
+function zamanKisa(ts){if(!ts)return '';const fark=Date.now()-ts,dk=Math.floor(fark/60000);if(dk<1)return 'az önce';if(dk<60)return dk+' dk önce';const sa=Math.floor(dk/60);if(sa<24)return sa+' sa önce';const g=Math.floor(sa/24);if(g===1)return 'dün';if(g<7)return g+' gün önce';return tstr(ts)}
 function gunFark(ts){return Math.round((ts-Date.now())/86400000)}
 const cari=id=>db.cariler.find(c=>c.id===id);
 const hesap=id=>db.hesaplar.find(h=>h.id===id);
@@ -1176,6 +1178,16 @@ function rPanel(){
     const pts=[30,28,32,22,26,18,24,14,20,10,16,8,12,6];
     const path=pts.map((p,i)=>`${i*(300/(pts.length-1))},${p}`).join(' ');
     html+=`<div class="sec">Son 30 Gün Cirosu</div><div class="card trend"><div class="th"><span class="a">Ciro trendi</span><span class="v">${TL(bugunSatis()*22+2100000)}</span></div><svg viewBox="0 0 300 40" preserveAspectRatio="none"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2d6cdf" stop-opacity=".25"/><stop offset="1" stop-color="#2d6cdf" stop-opacity="0"/></linearGradient></defs><polygon points="${path} 300,40 0,40" fill="url(#g)"/><polyline points="${path}" fill="none" stroke="#2d6cdf" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg></div>`;
+  }
+  // 📦 HAZIRLADIKLARIM — depocu/mağaza/patron: hazırlanmış siparişler ekrandan kaybolmasın, geçmişe bakılabilsin
+  if(db.rol==='depocu'||db.rol==='magaza'||para){
+    const hg=depoHazirGecmis();
+    if(hg.length){
+      html+=`<div class="sec">📦 Hazırlananlar${db.rol==='depocu'?' (Hazırladıklarım)':''} · ${hg.length}</div><div class="card">`+hg.slice(0,8).map(s=>{
+        const dh=s.depoHazir||{};const ne=dh.t?zamanKisa(dh.t):'';const kim=dh.by?esc(dh.by):'';
+        return `<div class="row" onclick="depoEmri(${s.id})"><div class="av" style="background:var(--good-s)">✅</div><div class="mid"><div class="t">${esc(s.mus||'—')} · İrsaliye #${s.id}</div><div class="s">${s.kalemler.length} kalem${kim?' · '+kim:''}${ne?' · '+ne:''}</div></div><span style="color:var(--sub)">›</span></div>`;
+      }).join('')+(hg.length>8?`<div class="mini" style="text-align:center;padding:8px">+${hg.length-8} daha · Satış ekranında 📦 Depo sekmesi</div>`:'')+`</div>`;
+    }
   }
   html+=`<div class="sec">Kritik Stok</div><div class="card">`+(kritik.length?kritik.map(u=>`<div class="row" onclick="go('stok')"><div class="av o">📦</div><div class="mid"><div class="t">${esc(u.ad)}</div><div class="s">${esc(u.kod)}</div></div><div class="end"><div class="n ${u.stok<=0?'neg':'warnc'}">${u.stok}</div><div class="u">${u.birim}</div></div></div>`).join(''):emp('✅','Kritik stok yok'))+`</div>`;
   $('app').innerHTML=html;
@@ -2116,6 +2128,8 @@ function fisTermal(id){const s=db.satislar.find(x=>x.id===id);
 function satisDurum(id){const s=db.satislar.find(x=>x.id===id);s.teslimDurum=s.teslimDurum==='ayrildi'?'teslim':'ayrildi';save();closeM();go('satis');toast(s.teslimDurum==='ayrildi'?'Mal ayrıldı (rezerve) 🔖':'Teslim edildi ✓')}
 /* ---- Depo toplama/ayırma emri ---- */
 function depoBekleyen(){return db.satislar.filter(s=>s.depo==='bekliyor').sort((a,b)=>a.tarih-b.tarih)}
+// Hazırlanmış (toplanmış) siparişlerin geçmişi — kim/ne zaman hazırladı
+function depoHazirGecmis(){return db.satislar.filter(s=>s.depo==='hazir').sort((a,b)=>((b.depoHazir&&b.depoHazir.t)||b.tarih||0)-((a.depoHazir&&a.depoHazir.t)||a.tarih||0))}
 function depoLines(s){ // rafa göre sıralı, tek tek toplanacak satırlar
   const lines=[];
   s.kalemler.forEach((k,ki)=>{const u=urun(k.uid);const raf=(u&&u.raf)?u.raf:'—';
@@ -2147,7 +2161,7 @@ function depoTik(id,key){const s=db.satislar.find(x=>x.id===id);if(!s||s.depo===
   if(!s.depoCheck)s.depoCheck={};s.depoCheck[key]=!s.depoCheck[key];save();depoEmri(id)}
 function depoHazirla(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;
   const lines=depoLines(s);const eksik=lines.filter(l=>!(s.depoCheck&&s.depoCheck[l.key]));
-  const bitir=()=>{s.depo='hazir';save();closeM();render();toast('Sipariş hazırlandı ✓ Patrona bildirildi')};
+  const bitir=()=>{s.depo='hazir';s.depoHazir={t:Date.now(),by:(bulutKul&&bulutKul.ad)||ROL_AD[db.rol]||db.rol||'',rol:db.rol||'',uid:(bulutKul&&bulutKul.uid)||''};save();closeM();render();toast('Sipariş hazırlandı ✓ Patrona bildirildi')};
   if(eksik.length)askConfirm(`${eksik.length} kalem henüz işaretlenmedi (toplam ${lines.length}).\nYine de "hazırlandı" olarak kapatılsın mı?`,bitir,'Yine de kapat');
   else bitir();
 }
@@ -3681,19 +3695,23 @@ function portalCiz(){
     return;
   }
   if(portalView==='fason'){
-    const jobs=fasonIsler||[];
+    const all=fasonIsler||[];
+    const aktif=all.filter(j=>j.aktif!==false&&j.durum!=='teslim');
+    const gecmis=all.filter(j=>j.aktif===false||j.durum==='teslim').sort((a,b)=>((b.guncelleme||b.termin||0))-((a.guncelleme||a.termin||0)));
     const D={yeni:{t:'Beklemede',c:'var(--sub)'},basladi:{t:'Devam ediyor',c:'var(--ind2)'},bitti:{t:'Bitti',c:'var(--good)'},teslim:{t:'Teslim edildi',c:'var(--good)'}};
-    pov.innerHTML=`<div style="max-width:520px;margin:0 auto;min-height:100%">
-      <div style="background:linear-gradient(135deg,#c14b47,#d9534f);color:#fff;padding:16px 15px 15px;display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><div style="font-size:17px;font-weight:800">🧵 İş Emirlerim</div><div style="font-size:11.5px;opacity:.9">${esc(bulutKul&&bulutKul.ad||'')} · ${esc(db.firma||'IQ Basics')}</div></div><div style="display:flex;gap:7px;flex:0 0 auto"><button onclick="portalFasonYenile()" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:11px;padding:9px 11px;font-size:14px;cursor:pointer">🔄</button><button onclick="portalBulutCikis()" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:11px;padding:9px 11px;font-size:12px;font-weight:700;cursor:pointer">⎋</button>${povKapat}</div></div>
-      <div style="padding:14px">${jobs.length?jobs.map(j=>{const st=j.durum||'yeni';const d=D[st]||D.yeni;const gun=j.termin?gunFark(j.termin):null;
-        return `<div class="card" style="padding:13px 14px;margin-bottom:11px">
+    const kart=(j,ro)=>{const st=j.durum||'yeni';const d=D[st]||D.yeni;const gun=j.termin?gunFark(j.termin):null;
+      return `<div class="card" style="padding:13px 14px;margin-bottom:11px${ro?';opacity:.82':''}">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><div style="font-weight:800;font-size:15px">${esc(j.urun)}</div><div class="mini">${esc(j.islem)} · ${j.adet} ${esc(j.birim||'adet')}${j.ucret?' · ₺'+j.ucret+'/ad':''}</div></div><span class="tag" style="background:var(--ln2);color:${d.c};flex:0 0 auto">${d.t}</span></div>
           ${j.renk&&j.renk.length?`<div class="mini" style="margin-top:6px">🎨 ${j.renk.map(r=>esc(r.ad)+' '+r.adet).join(' · ')}</div>`:''}
-          ${j.termin?`<div class="mini" style="margin-top:3px;color:${gun<0?'var(--bad)':gun<=2?'var(--warn)':'var(--sub)'}">📅 Termin: ${dstr(j.termin)}${gun!=null?' ('+(gun<0?(-gun+' gün geçti'):(gun+' gün kaldı'))+')':''}</div>`:''}
+          ${j.termin?`<div class="mini" style="margin-top:3px;color:${ro?'var(--sub)':gun<0?'var(--bad)':gun<=2?'var(--warn)':'var(--sub)'}">📅 Termin: ${dstr(j.termin)}${(!ro&&gun!=null)?' ('+(gun<0?(-gun+' gün geçti'):(gun+' gün kaldı'))+')':''}</div>`:''}
           ${j.not?`<div class="mini" style="margin-top:3px">📝 ${esc(j.not)}</div>`:''}
-          ${j.foto?`<img src="${j.foto}" style="width:100%;max-height:160px;object-fit:cover;border-radius:10px;margin-top:8px">`:''}
-          <div style="margin-top:11px">${st==='yeni'?`<button class="btn g sm" onclick="portalFasonBasla('${j.bid}')">▶️ İşe Başladım</button>`:st==='basladi'?`<button class="btn g sm" onclick="portalFasonBitir('${j.bid}')">✅ Bitirdim</button>`:st==='bitti'?`<button class="btn sm" onclick="portalFasonTeslim('${j.bid}',${j.adet||0})">📦 Teslim Ettim</button>`:`<div class="okbox" style="margin:0">✓ Teslim edildi${j.teslimAdet!=null?' — '+j.teslimAdet+' adet':''}</div>`}</div>
-        </div>`}).join(''):`<div style="padding:50px 20px;text-align:center"><div style="font-size:50px">🧵</div><div style="font-weight:800;margin-top:10px">Şu an iş emri yok</div><div class="mini" style="margin-top:6px">${esc(db.firma||'Firma')} size iş atadığında burada görünecek. 🔄 ile yenileyin.</div></div>`}</div></div>`;
+          ${(!ro&&j.foto)?`<img src="${j.foto}" style="width:100%;max-height:160px;object-fit:cover;border-radius:10px;margin-top:8px">`:''}
+          ${ro?`<div class="mini" style="margin-top:8px;color:var(--good)">✓ Tamamlandı${j.teslimAdet!=null?' · teslim '+j.teslimAdet+' adet':''}${j.guncelleme?' · '+zamanKisa(j.guncelleme):''}</div>`:`<div style="margin-top:11px">${st==='yeni'?`<button class="btn g sm" onclick="portalFasonBasla('${j.bid}')">▶️ İşe Başladım</button>`:st==='basladi'?`<button class="btn g sm" onclick="portalFasonBitir('${j.bid}')">✅ Bitirdim</button>`:st==='bitti'?`<button class="btn sm" onclick="portalFasonTeslim('${j.bid}',${j.adet||0})">📦 Teslim Ettim</button>`:`<div class="okbox" style="margin:0">✓ Teslim edildi${j.teslimAdet!=null?' — '+j.teslimAdet+' adet':''}</div>`}</div>`}
+        </div>`;};
+    pov.innerHTML=`<div style="max-width:520px;margin:0 auto;min-height:100%">
+      <div style="background:linear-gradient(135deg,#c14b47,#d9534f);color:#fff;padding:16px 15px 15px;display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><div style="font-size:17px;font-weight:800">🧵 İş Emirlerim</div><div style="font-size:11.5px;opacity:.9">${esc(bulutKul&&bulutKul.ad||'')} · ${esc(db.firma||'IQ Basics')}</div></div><div style="display:flex;gap:7px;flex:0 0 auto"><button onclick="portalFasonYenile()" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:11px;padding:9px 11px;font-size:14px;cursor:pointer">🔄</button><button onclick="portalBulutCikis()" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:11px;padding:9px 11px;font-size:12px;font-weight:700;cursor:pointer">⎋</button>${povKapat}</div></div>
+      <div style="padding:14px">${aktif.length?`<div class="sec" style="margin-top:0">Aktif İşler · ${aktif.length}</div>`+aktif.map(j=>kart(j,false)).join(''):`<div style="padding:40px 20px;text-align:center"><div style="font-size:50px">🧵</div><div style="font-weight:800;margin-top:10px">Şu an aktif iş yok</div><div class="mini" style="margin-top:6px">${esc(db.firma||'Firma')} size iş atadığında burada görünecek. 🔄 ile yenileyin.</div></div>`}
+        ${gecmis.length?`<div class="sec">📋 Geçmiş İşlerim · ${gecmis.length}</div>`+gecmis.slice(0,30).map(j=>kart(j,true)).join(''):''}</div></div>`;
     if(_geriT){clearInterval(_geriT);_geriT=null}
     return;
   }
