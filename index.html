@@ -468,7 +468,7 @@ function seed(){return{
   duzenliGider:[],
 };}
 let db=load();
-function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(!d||!d.urunler)return seed();seqFix(d);if(!d.kademe)d.kademe=[{min:20,ind:3},{min:50,ind:6},{min:100,ind:10}];if(!d.portalFav)d.portalFav=[];if(d.minSiparis==null)d.minSiparis=0;if(!d.portalTaslak)d.portalTaslak=[];if(d.kampanya===undefined)d.kampanya=null;if(!d.duzenliGider)d.duzenliGider=[];return d}catch(e){return seed()}}
+function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(!d||!d.urunler)return seed();seqFix(d);if(!d.kademe)d.kademe=[{min:20,ind:3},{min:50,ind:6},{min:100,ind:10}];if(!d.portalFav)d.portalFav=[];if(d.minSiparis==null)d.minSiparis=0;if(!d.portalTaslak)d.portalTaslak=[];if(d.kampanya===undefined)d.kampanya=null;if(!d.duzenliGider)d.duzenliGider=[];if(!d.maliyetler)d.maliyetler=[];return d}catch(e){return seed()}}
 function kademeler(){return (db.kademe&&db.kademe.length)?db.kademe.slice().filter(k=>+k.min>0).sort((a,b)=>a.min-b.min):[]}
 function kademeIsk(mik){let ind=0;kademeler().forEach(k=>{if((+mik||0)>=(+k.min||0))ind=+k.ind||0});return ind}
 function portalKalemFiyat(k){const u=urun(k.uid);const base=u?portalFiyat(u):(+k.fiyat||0);
@@ -1307,6 +1307,7 @@ function modulListe(){
   if(db.rol==='depocu')list.unshift({ic:'📋',ad:'Sayım',act:'depoSayim()'});
   // 🔄 Sipariş önerisi — azalan stok varsa, sipariş verebilen roller için
   if((paraGoster()||db.rol==='magaza'||db.rol==='depocu')){const az=reorderListe().length;if(az)list.unshift({ic:'🔄',ad:'Sipariş Öner',bd:az,act:'reorderAc()'});}
+  if(paraGoster())list.push({ic:'💰',ad:'Maliyet',act:'maliyetAc()'}); // koleksiyon maliyetleri — üretim dışında da erişim
   return list;
 }
 
@@ -3062,29 +3063,30 @@ function rUretim(){
   const fasondaTop=wip.reduce((a,w)=>a+durakYolda(w.d),0);
   const firmalar=new Set(wip.map(w=>w.d.fasonId).filter(Boolean));
   const geciken=aktif.filter(i=>ieGecikme(i)>0).length;
-  let html=`<div class="greet"><div><div class="h">Üretim Panosu 🏭</div><div class="d">Malın nerede — canlı takip</div></div></div>
-    <div class="tiles">
-      <div class="tile b1" style="background:linear-gradient(135deg,#7a4fd0,#9b6ee0);cursor:pointer" onclick="uretimListe('fasonda')"><div class="l">Fasonda Mal</div><div class="v ${fasondaTop>9999?'sm':''}">${fasondaTop} ad</div><div class="em">🧵</div></div>
-      <div class="tile b2" style="cursor:pointer" onclick="uretimListe('firma')"><div class="l">Firmada</div><div class="v sm">${firmalar.size} fason</div><div class="em">🏭</div></div>
-      <div class="tile b1" style="background:linear-gradient(135deg,${geciken?'#c0392b,#e0455f':'#0f9d63,#12b673'});cursor:pointer" onclick="uretimListe('geciken')"><div class="l">Geciken</div><div class="v">${geciken} iş</div><div class="em">⏱️</div></div>
-      <div class="tile b4" style="cursor:pointer" onclick="uretimListe('aktif')"><div class="l">Aktif İş</div><div class="v sm">${aktif.length}</div><div class="em">📋</div></div>
-    </div>
-    <div class="g2" style="margin-top:6px">
-      <div class="card" style="padding:12px;background:linear-gradient(135deg,#0f9d63,#12b673);color:#fff;cursor:pointer;margin:0" onclick="maliyetSim()"><div style="font-size:22px">💡</div><div style="font-weight:800;font-size:13.5px;margin-top:3px">Üretsem kaça gelir?</div><div style="font-size:10.5px;opacity:.92">maliyet simülasyonu</div></div>
-      <div class="card" style="padding:12px;background:linear-gradient(135deg,#7a4fd0,#9b6ee0);color:#fff;cursor:pointer;margin:0" onclick="fasonKarneListe()"><div style="font-size:22px">📊</div><div style="font-weight:800;font-size:13.5px;margin-top:3px">Fason Karnesi</div><div style="font-size:10.5px;opacity:.92">kim hızlı / az fireli</div></div>
-    </div>`;
-  html+=`<div class="sec">🧵 Fasondaki Mallarım</div>`;
-  if(wip.length){html+=wip.map(({i,d,x})=>{const kalan=durakYolda(d);const gun=d.baslama?Math.floor((Date.now()-d.baslama)/86400000):0;const gec=ieGecikme(i);
-    const st=gec>0?['bad','var(--bad)',gec+' gün geç']:gec>=-1?['low','var(--warn)','termin yakın']:['ok','var(--good)',gun+' gündür'];
-    return `<div class="card" style="padding:12px;margin-bottom:9px;border-left:4px solid ${st[1]}"><div style="display:flex;align-items:center;gap:10px"><div class="av gray">${DURAK_IC[d.ad]||'🏭'}</div><div class="mid"><div class="t">${esc(fasonAd(d)||'firma yok')} · ${esc(d.ad)}</div><div class="s">${esc(i.urun)} · ${kalan} ${esc(i.birim||'ad')} fasonda · ${gun} gündür</div></div><span class="pill ${st[0]}">${st[2]}</span></div>
-      <div style="display:flex;gap:7px;margin-top:10px;flex-wrap:wrap"><button class="btn g sm" style="margin:0;width:auto;padding:8px 14px" onclick="durakTeslimAl(${i.id},${x})">📥 Teslim Al</button>${d.fasonId?`<button class="btn ${gec>0?'':'ghost'} sm" style="margin:0;width:auto;padding:8px 14px${gec>0?';background:var(--bad);color:#fff':''}" onclick="fasonHatirlat(${i.id},${x})">📲 Hatırlat</button>`:''}<button class="btn ghost sm" style="margin:0;width:auto;padding:8px 14px" onclick="isEmriPaylas(${i.id},${x})">📤 Gönder</button><button class="btn ghost sm" style="margin:0;width:auto;padding:8px 14px" onclick="uretimDetay(${i.id})">Detay</button></div></div>`;
-  }).join('');}
-  else html+=`<div class="card">${emp('🧵','Fasonda mal yok — yeni iş emri aç.')}</div>`;
-  html+=`<div class="sec">📋 İş Emirleri <a onclick="formIsEmri()">+ Yeni</a></div>`;
-  html+=aktif.length?aktif.map(i=>{const hedef=i.hedef||0;const yap=ieSaglam(i);const pct=hedef?Math.min(100,Math.round(yap/hedef*100)):0;const ad=ieAktifDurak(i);
-    return `<div class="card" style="margin-bottom:9px;padding:12px;cursor:pointer" onclick="uretimDetay(${i.id})"><div style="display:flex;align-items:center;gap:10px"><div class="av gray" style="overflow:hidden;padding:0">${i.foto?`<img src="${i.foto}" style="width:100%;height:100%;object-fit:cover">`:'👕'}</div><div class="mid"><div class="t">#${i.id} · ${esc(i.urun)}</div><div class="s">${ad?esc(ad.ad):'—'} · ${yap} geldi · ${hedef-yap>0?(hedef-yap)+' kaldı':'tamam'}</div></div><span class="pill low">%${pct}</span></div><div class="depoprog" style="margin-top:9px"><div class="bar"><i style="width:${pct}%"></i></div><span class="lbl">${yap}/${hedef}</span></div></div>`;
-  }).join(''):`<div class="card">${emp('📋','Aktif iş emri yok.')}</div>`;
-  if(bitmis.length)html+=`<div class="sec">✅ Tamamlananlar</div>`+bitmis.slice(-4).reverse().map(i=>`<div class="card" style="margin-bottom:8px;padding:11px;opacity:.85;cursor:pointer" onclick="uretimDetay(${i.id})"><div style="display:flex;align-items:center;gap:10px"><div class="av g">✅</div><div class="mid"><div class="t">#${i.id} · ${esc(i.urun)}</div><div class="s">${ieSaglam(i)} ${esc(i.birim||'ad')} stoğa girdi${karGoster()?' · birim '+TL(ieBirimMaliyet(i)):''}</div></div></div></div>`).join('');
+  let html=`<div class="greet"><div><div class="h">Üretim 🏭</div><div class="d">Malın nerede — canlı takip</div></div></div>`;
+  // Kompakt özet şeridi (3 rakam)
+  html+=`<div class="card" style="padding:0;display:flex;text-align:center;overflow:hidden;margin-top:4px">
+    <div style="flex:1;padding:11px 5px;cursor:pointer" onclick="uretimListe('aktif')"><div style="font-size:19px;font-weight:800">${aktif.length}</div><div class="mini">Aktif İş</div></div>
+    <div style="flex:1;padding:11px 5px;border-left:1px solid var(--ln);cursor:pointer" onclick="uretimListe('fasonda')"><div style="font-size:19px;font-weight:800;color:var(--ind2)">${fasondaTop}</div><div class="mini">Fasonda</div></div>
+    <div style="flex:1;padding:11px 5px;border-left:1px solid var(--ln);cursor:pointer" onclick="uretimListe('geciken')"><div style="font-size:19px;font-weight:800;color:${geciken?'var(--bad)':'var(--good)'}">${geciken}</div><div class="mini">Geciken</div></div>
+  </div>
+  <button class="btn g" style="margin-top:10px" onclick="formIsEmri()">＋ Yeni İş Emri</button>`;
+  // Fasonda bekleyen (aksiyon gerektiren) — tek belirgin buton
+  if(wip.length){html+=`<div class="sec">🧵 Fasonda Bekleyen · ${wip.length}</div>`;
+    html+=wip.map(({i,d,x})=>{const kalan=durakYolda(d);const gun=d.baslama?Math.floor((Date.now()-d.baslama)/86400000):0;const gec=ieGecikme(i);
+      const st=gec>0?['bad','var(--bad)',gec+'g geç']:gec>=-1?['low','var(--warn)','termin yakın']:['ok','var(--good)',gun+'g'];
+      return `<div class="card" style="padding:10px 11px;margin-bottom:8px;border-left:3px solid ${st[1]}">
+        <div class="row" onclick="uretimDetay(${i.id})" style="cursor:pointer"><div class="av gray">${DURAK_IC[d.ad]||'🏭'}</div><div class="mid"><div class="t">${esc(fasonAd(d)||'firma yok')} · ${esc(d.ad)}</div><div class="s">${esc(i.urun)} · ${kalan} ${esc(i.birim||'ad')}</div></div><span class="pill ${st[0]}">${st[2]}</span></div>
+        <div style="display:flex;gap:6px;margin-top:8px"><button class="btn g sm" style="margin:0;flex:1" onclick="durakTeslimAl(${i.id},${x})">📥 Teslim Al</button>${d.fasonId&&gec>0?`<button class="btn sm" style="margin:0;width:auto;padding:8px 12px;background:var(--bad);color:#fff" onclick="fasonHatirlat(${i.id},${x})">📲</button>`:''}<button class="btn ghost sm" style="margin:0;width:auto;padding:8px 12px" onclick="isEmriPaylas(${i.id},${x})">📤</button></div>
+      </div>`;}).join('');}
+  // Tüm iş emirleri — kompakt liste (tek tek, hepsi)
+  html+=`<div class="sec">📋 Tüm İş Emirleri · ${aktif.length}</div>`;
+  html+=aktif.length?`<div class="card" style="padding:0;overflow:hidden">`+aktif.map((i,ix)=>{const hedef=i.hedef||0;const yap=ieSaglam(i);const pct=hedef?Math.min(100,Math.round(yap/hedef*100)):0;const ad=ieAktifDurak(i);
+    return `<div class="row" style="padding:9px 11px;cursor:pointer${ix?';border-top:1px solid var(--ln2)':''}" onclick="uretimDetay(${i.id})"><div class="av gray" style="width:30px;height:30px;overflow:hidden;padding:0;font-size:14px">${i.foto?`<img src="${i.foto}" style="width:100%;height:100%;object-fit:cover">`:'👕'}</div><div class="mid"><div class="t" style="font-size:13px">#${i.id} · ${esc(i.urun)}</div><div class="s" style="font-size:11px">${ad?esc(ad.ad):'—'} · ${yap}/${hedef}</div></div><span style="width:44px;height:5px;border-radius:4px;background:var(--ln2);overflow:hidden;flex:0 0 auto"><i style="display:block;height:100%;width:${pct}%;background:var(--ind2)"></i></span><span style="font-size:11px;font-weight:800;color:var(--sub);width:30px;text-align:right;flex:0 0 auto">%${pct}</span></div>`;
+  }).join('')+`</div>`:`<div class="card">${emp('📋','Aktif iş emri yok — ＋ Yeni ile başla.')}</div>`;
+  if(bitmis.length)html+=`<div class="sec">✅ Son Tamamlananlar</div><div class="card" style="padding:0;overflow:hidden">`+bitmis.slice(-5).reverse().map((i,ix)=>`<div class="row" style="padding:9px 11px;cursor:pointer;opacity:.8${ix?';border-top:1px solid var(--ln2)':''}" onclick="uretimDetay(${i.id})"><div class="av g" style="width:30px;height:30px;font-size:14px">✅</div><div class="mid"><div class="t" style="font-size:13px">#${i.id} · ${esc(i.urun)}</div><div class="s" style="font-size:11px">${ieSaglam(i)} ${esc(i.birim||'ad')} stoğa girdi</div></div></div>`).join('')+`</div>`;
+  // Araçlar (küçük, altta)
+  html+=`<div class="g2" style="margin-top:12px"><button class="btn ghost sm" onclick="maliyetAc()">💰 Maliyet & Koleksiyon</button><button class="btn ghost sm" onclick="fasonKarneListe()">📊 Fason Karnesi</button></div>`;
   $('app').innerHTML=html;
 }
 function uretimListe(tur){
@@ -3122,6 +3124,79 @@ function msHesap(){const g=id=>+($(id)?.value||0);
   el.innerHTML=`<div class="total"><div><div class="l">Net Birim Maliyet</div><div class="v">${TL(birim)}</div></div><div style="text-align:right"><div class="l">Önerilen Satış +%${kar}</div><div class="v pos">${TL(satis)}</div></div></div>
     <div class="card" style="margin-top:8px;padding:4px 13px"><div class="kv"><span class="k">Toplam maliyet</span><span class="v">${TL(toplam)}</span></div><div class="kv"><span class="k">Sağlam adet (fire sonrası)</span><span class="v">${saglam} / ${adet}</span></div><div class="kv"><span class="k">Fason işçilik / adet</span><span class="v">${TL(fasonBirim)}</span></div></div>${cmp}`;
 }
+/* ===== 💰 MALİYET & KOLEKSİYON — ürün maliyetlerini sakla, içinden üretime yolla ===== */
+function maliyetHesapla(m){
+  const adet=Math.max(1,+m.adet||1);const fire=+m.fire||0;const saglam=Math.max(1,Math.round(adet*(1-fire/100)));
+  const malPU=(m.malzeme||[]).reduce((a,x)=>a+((+x.mik||0)*(+x.fiyat||0)),0);
+  const fasonPU=(+m.kes||0)+(+m.nak||0)+(+m.dik||0)+(+m.utu||0);const ggPU=+m.gg||0;
+  const perStarted=malPU+fasonPU+ggPU;const toplam=perStarted*adet;const birim=toplam/saglam;const satis=birim*(1+(+m.kar||0)/100);
+  return {saglam,malPU,fasonPU,ggPU,toplam,birim,satis};
+}
+function maliyetAc(){
+  const list=(db.maliyetler||[]).slice().sort((a,b)=>(b.tarih||0)-(a.tarih||0));
+  let h=`<div class="mini">Sezon/koleksiyon için ürün maliyetlerini hesapla ve sakla. Hazır olunca içinden seçip <b>üretime yolla</b>.</div>
+    <button class="btn g" style="margin-top:10px" onclick="maliyetForm(0)">＋ Yeni Maliyet Hesabı</button>`;
+  if(list.length){h+=`<div class="sec">📚 Koleksiyon · ${list.length}</div>`+list.map(m=>{const r=maliyetHesapla(m);
+    return `<div class="card" style="padding:10px 11px;margin-bottom:8px"><div class="row"><div class="av gray" style="overflow:hidden;padding:0">${m.foto?`<img src="${m.foto}" style="width:100%;height:100%;object-fit:cover">`:'👕'}</div><div class="mid"><div class="t">${esc(m.ad||'(isimsiz)')}${m.kod?' · '+esc(m.kod):''}</div><div class="s">birim <b>${TL(r.birim)}</b> · satış ${TL(r.satis)}</div></div><span class="pill low">${m.adet||0} ad</span></div>
+      <div style="display:flex;gap:6px;margin-top:8px"><button class="btn g sm" style="margin:0;flex:1" onclick="maliyetUretimeYolla(${m.id})">🏭 Üretime Yolla</button><button class="btn ghost sm" style="margin:0;width:auto;padding:8px 12px" onclick="maliyetForm(${m.id})">✏️</button><button class="btn ghost sm" style="margin:0;width:auto;padding:8px 12px" onclick="maliyetSil(${m.id})">🗑️</button></div></div>`;
+  }).join('');}
+  else h+=`<div class="card" style="margin-top:10px">${emp('📚','Henüz maliyet kartı yok. ＋ ile ilk ürünü hesapla.')}</div>`;
+  open_('💰 Maliyet & Koleksiyon',h);
+}
+let mkK=[],mkFoto='';
+function maliyetForm(id){
+  const m=id?(db.maliyetler||[]).find(x=>x.id===id):null;
+  mkK=m?(m.malzeme||[]).map(x=>({...x})):[{ad:'',mik:'',birim:'adet',fiyat:''}];if(!mkK.length)mkK=[{ad:'',mik:'',birim:'adet',fiyat:''}];
+  mkFoto=m?m.foto||'':'';
+  open_(id?'Maliyet Düzenle':'💰 Yeni Maliyet Hesabı',`
+    <label>Ürün adı</label><input id="mk-ad" value="${esc(m?m.ad||'':'')}" placeholder="Polo Yaka Triko">
+    <div class="g2"><div><label>Ürün kodu</label><input id="mk-kod" value="${esc(m?m.kod||'':'')}" placeholder="2026Y500"></div><div><label>📷 Foto</label><div id="mk-foto-box"></div></div></div>
+    <div class="g2" style="margin-top:6px"><div><label>Adet</label><input id="mk-adet" type="number" inputmode="numeric" value="${m?m.adet:100}" oninput="mkHesap()"></div><div><label>Fire %</label><input id="mk-fire" type="number" inputmode="numeric" value="${m?m.fire:5}" oninput="mkHesap()"></div></div>
+    <div class="sec" style="margin-top:12px">🧵 Malzeme <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub)">(1 ürüne giren)</span> <a onclick="mkK.push({ad:'',mik:'',birim:'adet',fiyat:''});cizMkK()">+ ekle</a></div>
+    <div id="mk-list"></div>
+    <div class="sec" style="margin-top:12px">✂️ Fason işçilik (₺/adet)</div>
+    <div class="g2"><div><label>Kesim</label><input id="mk-kes" type="number" inputmode="numeric" value="${m&&m.kes?m.kes:''}" placeholder="0" oninput="mkHesap()"></div><div><label>Nakış/Baskı</label><input id="mk-nak" type="number" inputmode="numeric" value="${m&&m.nak?m.nak:''}" placeholder="0" oninput="mkHesap()"></div></div>
+    <div class="g2"><div><label>Dikim</label><input id="mk-dik" type="number" inputmode="numeric" value="${m&&m.dik?m.dik:''}" placeholder="0" oninput="mkHesap()"></div><div><label>Ütü/Paket</label><input id="mk-utu" type="number" inputmode="numeric" value="${m&&m.utu?m.utu:''}" placeholder="0" oninput="mkHesap()"></div></div>
+    <div class="g2" style="margin-top:6px"><div><label>Genel gider ₺/ad</label><input id="mk-gg" type="number" inputmode="numeric" value="${m?m.gg:12}" oninput="mkHesap()"></div><div><label>Hedef kâr %</label><input id="mk-kar" type="number" inputmode="numeric" value="${m?m.kar:40}" oninput="mkHesap()"></div></div>
+    <label>Hazır alım fiyatı (kıyas · ₺/ad)</label><input id="mk-hazir" type="number" inputmode="numeric" value="${m&&m.hazir?m.hazir:''}" placeholder="opsiyonel" oninput="mkHesap()">
+    <div id="mk-sonuc" style="margin-top:12px"></div>
+    <button class="btn" style="margin-top:12px" onclick="maliyetKaydet(${id||0})">💾 Kaydet</button>`);
+  cizMkFoto();cizMkK();mkHesap();
+}
+function cizMkK(){const box=$('mk-list');if(!box)return;
+  box.innerHTML=mkK.map((x,i)=>`<div style="display:flex;gap:5px;align-items:center;margin-top:6px">
+    <input value="${esc(x.ad||'')}" placeholder="malzeme (kumaş, düğme...)" oninput="mkK[${i}].ad=this.value" style="flex:1.3;min-width:0;margin:0;padding:8px 9px">
+    <input type="number" inputmode="decimal" value="${x.mik||''}" placeholder="mik" oninput="mkK[${i}].mik=this.value;mkHesap()" style="width:48px;margin:0;padding:8px 4px;text-align:center">
+    <input value="${esc(x.birim||'')}" placeholder="br" oninput="mkK[${i}].birim=this.value" style="width:42px;margin:0;padding:8px 3px;text-align:center">
+    <span style="color:var(--sub);font-size:12px;flex:0 0 auto">×₺</span>
+    <input type="number" inputmode="decimal" value="${x.fiyat||''}" placeholder="0" oninput="mkK[${i}].fiyat=this.value;mkHesap()" style="width:54px;margin:0;padding:8px 4px;text-align:center">
+    <button class="del" onclick="mkK.splice(${i},1);if(!mkK.length)mkK=[{ad:'',mik:'',birim:'adet',fiyat:''}];cizMkK();mkHesap()" style="flex:0 0 auto">✕</button>
+  </div>`).join('');
+}
+function mkTopla(){return {ad:($('mk-ad')?.value||'').trim(),kod:($('mk-kod')?.value||'').trim(),foto:mkFoto,
+  adet:+($('mk-adet')?.value||0),fire:+($('mk-fire')?.value||0),
+  malzeme:mkK.filter(x=>(x.ad||'').trim()||+x.mik||+x.fiyat).map(x=>({ad:(x.ad||'').trim(),mik:+x.mik||0,birim:(x.birim||'').trim(),fiyat:+x.fiyat||0})),
+  kes:+($('mk-kes')?.value||0),nak:+($('mk-nak')?.value||0),dik:+($('mk-dik')?.value||0),utu:+($('mk-utu')?.value||0),
+  gg:+($('mk-gg')?.value||0),kar:+($('mk-kar')?.value||0),hazir:+($('mk-hazir')?.value||0)};}
+function mkHesap(){const m=mkTopla();const r=maliyetHesapla(m);const el=$('mk-sonuc');if(!el)return;
+  let cmp='';if(m.hazir>0){const fark=m.hazir-r.birim;cmp=fark>=0?`<div class="okbox" style="margin-top:8px">✅ Üretim <b>${TL(fark)}/ad</b> daha ucuz — üretmek mantıklı.</div>`:`<div class="warnbox" style="margin-top:8px">⚠️ Hazır alım <b>${TL(-fark)}/ad</b> daha ucuz — almak mantıklı.</div>`;}
+  el.innerHTML=`<div class="total"><div><div class="l">Net Birim Maliyet</div><div class="v">${TL(r.birim)}</div></div><div style="text-align:right"><div class="l">Önerilen Satış +%${m.kar}</div><div class="v pos">${TL(r.satis)}</div></div></div>
+    <div class="card" style="margin-top:8px;padding:4px 13px"><div class="kv"><span class="k">Malzeme / adet</span><span class="v">${TL(r.malPU)}</span></div><div class="kv"><span class="k">Fason işçilik / adet</span><span class="v">${TL(r.fasonPU)}</span></div><div class="kv"><span class="k">Toplam (${m.adet} ad)</span><span class="v">${TL(r.toplam)}</span></div></div>${cmp}`;
+}
+function maliyetKaydet(id){const m=mkTopla();if(!m.ad)return toast('Ürün adı gir');
+  db.maliyetler=db.maliyetler||[];
+  if(id){const e=db.maliyetler.find(x=>x.id===id);if(e)Object.assign(e,m);} else {m.id=nid('mk');m.tarih=Date.now();db.maliyetler.push(m);}
+  save();maliyetAc();toast('💾 Maliyet kaydedildi ✓');}
+function maliyetSil(id){askConfirm('Bu maliyet kartı silinsin mi?',()=>{db.maliyetler=(db.maliyetler||[]).filter(x=>x.id!==id);save();maliyetAc();toast('Silindi');});}
+function cizMkFoto(){const b=$('mk-foto-box');if(!b)return;b.innerHTML=`<div class="cfoto" onclick="$('mk-foto-in').click()" style="height:38px;display:flex;align-items:center;justify-content:center">${mkFoto?`<img src="${mkFoto}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">`:'📷'}</div><input type="file" accept="image/*" id="mk-foto-in" style="display:none" onchange="mkFotoSec(this)">`;}
+function mkFotoSec(input){const f=input.files&&input.files[0];if(!f)return;resizeImg(f,d=>{mkFoto=d;cizMkFoto()})}
+function maliyetUretimeYolla(id){const m=(db.maliyetler||[]).find(x=>x.id===id);if(!m)return;closeM();setTimeout(()=>{formIsEmri();
+  if($('ie-ad')){$('ie-ad').value=m.ad||'';try{ieUrunAra()}catch(e){}}
+  if($('ie-kod'))$('ie-kod').value=m.kod||'';
+  if($('dk-kesim-uc'))$('dk-kesim-uc').value=m.kes||'';if($('ie-gg'))$('ie-gg').value=m.gg||'';
+  if(m.foto){ieFoto=m.foto;try{cizIeFoto()}catch(e){}}
+  toast('💰 Maliyetten dolduruldu — adet/renk gir, aç');
+},160);}
 /* --- Yeni iş emri --- */
 let ieMal=[], ieRenk=[], ieFoto='', ieUrunId=0;
 function formIsEmri(){
