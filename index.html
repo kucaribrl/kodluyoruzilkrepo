@@ -1002,6 +1002,23 @@ function stokDegeri(){return db.urunler.reduce((a,u)=>a+u.stok*u.alis*(u.birim==
 // 1 satış biriminde kaç parça var (seri ürünlerde parça fiyatı × seri = seri fiyatı)
 function birimAdet(u){return (u&&u.birim==='seri')?(+u.seri||1):1}
 function bugunSatis(){const b=new Date().setHours(0,0,0,0);return db.satislar.filter(s=>s.tarih>=b).reduce((a,s)=>a+s.tutar,0)}
+// 📊 PANO — günün özeti, en çok satan, gerçek ciro trendi
+function panoGunOzet(){const b=new Date().setHours(0,0,0,0);
+  const sat=db.satislar.filter(s=>s.tarih>=b&&s.tip!=='iade');
+  const iade=db.satislar.filter(s=>s.tarih>=b&&s.tip==='iade');
+  let tah=0;(db.hareketler||[]).filter(h=>h.tarih>=b&&h.tip==='tahsilat').forEach(h=>tah+=(+h.tutar||0));
+  db.satislar.filter(s=>s.tarih>=b&&s.odenen>0).forEach(s=>tah+=s.odenen*satisDiv(s));
+  const yeniSip=(db.bekleyenPortal||[]).filter(o=>(o.tarih||0)>=b).length;
+  return {adet:sat.length,ciro:sat.reduce((a,s)=>a+s.tutar,0),tahsilat:tah,iade:iade.length,yeniSip};}
+function enCokSatan(gun,n){const since=Date.now()-gun*86400000;const map={};
+  db.satislar.filter(s=>s.tarih>=since&&s.tip!=='iade').forEach(s=>(s.kalemler||[]).forEach(k=>{
+    const m=map[k.uid]||(map[k.uid]={uid:k.uid,ad:k.urun,adet:0,ciro:0});
+    m.adet+=(+k.mik||0);m.ciro+=(+k.mik||0)*(+k.fiyat||0)*satisDiv(s);}));
+  return Object.values(map).sort((a,b)=>b.adet-a.adet).slice(0,n||5);}
+function ciroSeri(gun){const arr=[];const bugun=new Date().setHours(0,0,0,0);
+  for(let i=gun-1;i>=0;i--){const g0=bugun-i*86400000,g1=g0+86400000;
+    arr.push(db.satislar.filter(s=>s.tarih>=g0&&s.tarih<g1&&s.tip!=='iade').reduce((a,s)=>a+s.tutar,0));}
+  return arr;}
 
 /* Roller ve yetki — merkezi model */
 const ROLLER={
@@ -1174,10 +1191,26 @@ function rPanel(){
     window._bek=bekleyen;
   }
   html+=`<div class="sec">Modüller</div><div class="mgrid">`+mods.map(m=>`<div class="mcell" onclick="${m.act}">${m.bd?`<span class="bd">${m.bd}</span>`:''}<div class="mi">${m.ic}</div><div class="mx">${m.ad}</div></div>`).join('')+`</div>`;
+  // 📊 GÜNÜN ÖZETİ — patron/ortak
+  if(para){const g=panoGunOzet();
+    html+=`<div class="sec">📊 Bugünün Özeti</div><div class="card" style="padding:12px 14px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><div class="mini">🧾 Satış</div><div style="font-size:18px;font-weight:800">${g.adet}<span class="mini" style="font-weight:600"> adet · ${TL(g.ciro)}</span></div></div>
+        <div><div class="mini">💰 Tahsilat</div><div style="font-size:18px;font-weight:800;color:var(--good)">${TL(g.tahsilat)}</div></div>
+        <div><div class="mini">📮 Yeni Portal Sipariş</div><div style="font-size:18px;font-weight:800;color:var(--ind2)">${g.yeniSip}</div></div>
+        <div><div class="mini">↩️ İade</div><div style="font-size:18px;font-weight:800;color:${g.iade?'var(--bad)':'var(--sub)'}">${g.iade}</div></div>
+      </div></div>`;
+  }
   if(y.kar){
-    const pts=[30,28,32,22,26,18,24,14,20,10,16,8,12,6];
-    const path=pts.map((p,i)=>`${i*(300/(pts.length-1))},${p}`).join(' ');
-    html+=`<div class="sec">Son 30 Gün Cirosu</div><div class="card trend"><div class="th"><span class="a">Ciro trendi</span><span class="v">${TL(bugunSatis()*22+2100000)}</span></div><svg viewBox="0 0 300 40" preserveAspectRatio="none"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2d6cdf" stop-opacity=".25"/><stop offset="1" stop-color="#2d6cdf" stop-opacity="0"/></linearGradient></defs><polygon points="${path} 300,40 0,40" fill="url(#g)"/><polyline points="${path}" fill="none" stroke="#2d6cdf" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg></div>`;
+    const seri=ciroSeri(30);const mx=Math.max(1,...seri);const top=30;
+    const path=seri.map((v,i)=>`${i*(300/(seri.length-1))},${(top-2)-(v/mx)*(top-4)}`).join(' ');
+    const toplam=seri.reduce((a,v)=>a+v,0);
+    html+=`<div class="sec">Son 30 Gün Cirosu</div><div class="card trend"><div class="th"><span class="a">Gerçek ciro · ${TL(toplam)}</span><span class="v">bugün ${TL(seri[seri.length-1]||0)}</span></div><svg viewBox="0 0 300 ${top}" preserveAspectRatio="none"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d9534f" stop-opacity=".28"/><stop offset="1" stop-color="#d9534f" stop-opacity="0"/></linearGradient></defs><polygon points="${path} 300,${top} 0,${top}" fill="url(#g)"/><polyline points="${path}" fill="none" stroke="#d9534f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg></div>`;
+    // 🏆 EN ÇOK SATAN (son 30 gün)
+    const top5=enCokSatan(30,5);
+    if(top5.length){const maxA=Math.max(...top5.map(t=>t.adet));
+      html+=`<div class="sec">🏆 En Çok Satan (30 gün)</div><div class="card">`+top5.map((t,i)=>`<div class="row" onclick="go('stok');setTimeout(()=>urunDetay(${t.uid}),150)"><div class="av" style="background:${['#d9534f','#e0803a','#caa43a','#7a8a99','#8a94a0'][i]||'var(--ind)'}">${i+1}</div><div class="mid"><div class="t">${esc(t.ad)}</div><div class="s">${t.adet} adet · ${TL(t.ciro)}</div><div style="height:4px;background:var(--ln2);border-radius:3px;margin-top:5px;overflow:hidden"><i style="display:block;height:100%;width:${Math.round(t.adet/maxA*100)}%;background:var(--ind2)"></i></div></div></div>`).join('')+`</div>`;
+    }
   }
   // 📦 HAZIRLADIKLARIM — depocu/mağaza/patron: hazırlanmış siparişler ekrandan kaybolmasın, geçmişe bakılabilsin
   if(db.rol==='depocu'||db.rol==='magaza'||para){
