@@ -3670,7 +3670,17 @@ function portalPersoneleGec(){
   toast('👤 '+(ROL_AD[r]||r)+' olarak bağlanıldı — canlı veri geliyor…');
 }
 async function portalHesapYenile(){toast('Yenileniyor…');await bulutMusteriYukleHepsi();portalCiz();}
-function portalKapat(){document.getElementById('pov').style.display='none';if(_geriT){clearInterval(_geriT);_geriT=null}portalSepet=[];portalView='katalog';portalKat='';portalKumas='';portalSezon='';portalBattal=false;portalFiltreAcik=false;portalArama='';if(location.hash==='#siparis')history.replaceState(null,'',''+location.pathname);if(typeof cur!=='undefined')go('portal')}
+function portalKapat(){
+  // 🔒 GÜVENLİK: gerçek müşteri/portal kullanıcısı portalı kapatınca ALTTAKİ yönetici uygulaması AÇILMAMALI.
+  // Sadece yönetici (admin) cihazında ya da önizlemede portal kapanıp uygulamaya dönülür.
+  const yonetici = (typeof bulutKul!=='undefined' && bulutKul && bulutKul.rol==='admin');
+  const portalKullanici = (bulutMusteriMod && bulutKul) || (typeof portalMusteriGiris==='function' && portalMusteriGiris());
+  if(portalKullanici && !yonetici && !portalPreview){
+    // Portalda kal — kataloğa dön (çıkış için ⎋ butonu var)
+    portalSepet=portalSepet;portalView='katalog';portalKat='';portalKumas='';portalSezon='';portalBattal=false;portalFiltreAcik=false;portalArama='';
+    portalCiz();return;
+  }
+  document.getElementById('pov').style.display='none';if(_geriT){clearInterval(_geriT);_geriT=null}portalSepet=[];portalView='katalog';portalKat='';portalKumas='';portalSezon='';portalBattal=false;portalFiltreAcik=false;portalArama='';if(location.hash==='#siparis')history.replaceState(null,'',''+location.pathname);if(typeof cur!=='undefined')go('portal')}
 // güncel birim (seri) fiyat: promosyon (indirimli) varsa o, yoksa satış — parça fiyatı × seri
 function portalFiyat(u){const s=+u.satis||0,p=+u.promosyon||0;const base=(p>0&&p<s)?p:s;return base*birimAdet(u)}
 // indirim varsa üstü çizgili eski (seri) fiyat (yoksa 0)
