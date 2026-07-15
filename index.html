@@ -3017,7 +3017,7 @@ function ieSaglam(i){const ds=i.duraklar||[];for(let k=ds.length-1;k>=0;k--)if((
 function ieBirimMaliyet(i){const s=ieSaglam(i);return s>0?ieToplamMaliyet(i)/s:0}
 function ieDefo(i){return (i.duraklar||[]).reduce((a,d)=>a+(+d.defolu||0),0)}
 function ieAktifDurak(i){return (i.duraklar||[]).find(d=>d.durum==='devam')||(i.duraklar||[]).find(d=>d.durum==='bekliyor')}
-function durakYolda(d){return Math.max(0,(+d.gonderilen||0)-(+d.gelen||0)-(+d.defolu||0))}
+function durakYolda(d){if(d.durum==='tamam')return 0;return Math.max(0,(+d.gonderilen||0)-(+d.gelen||0)-(+d.defolu||0))}
 function ieFasondaki(i){return (i.duraklar||[]).filter(d=>d.durum==='devam'&&d.fasonId&&(+d.gonderilen||0)>0)}
 function ieGecikme(i){return Math.floor((Date.now()-(i.baslangic+(i.gun||0)*86400000))/86400000)}
 function ieBorcGuncelle(d,carpan){const c=carpan||1;
@@ -3260,6 +3260,14 @@ function uretimDetay(id){
       <div class="mini" style="margin-top:2px">${esc(i.kod||'')} · başladı ${dstr(i.baslangic)} · hedef ${i.hedef} ${esc(i.birim||'adet')}${i.birim==='seri'&&ieCarpan(i)>1?' ('+(i.hedef*ieCarpan(i))+' adet)':''}</div></div></div>
     ${i.renkDagilim&&i.renkDagilim.length?`<div class="mini" style="margin-top:8px">🎨 ${i.renkDagilim.map(r=>esc(r.ad)+' '+r.adet).join(' · ')}</div>`:''}</div>
     <div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="isEmriA4(${id})">📄 İş Emri Formu (A4)</button><button class="btn g sm" onclick="isEmriPaylas(${id})">📤 Fasona Gönder</button></div>`;
+  // 📊 İSTENEN vs YAPILAN — planladığın (hedef) ile üretimden çıkan (sağlam) karşılaştırması
+  {const ist=+i.hedef||0;const yap=saglam;const fark=yap-ist;const fire=ieDefo(i);
+   const fc=fark<0?'var(--bad)':fark>0?'var(--ind2)':'var(--good)';const fl=fark===0?'tam':fark>0?'+'+fark+' fazla':fark+' eksik';
+   html+=`<div class="card" style="margin-top:10px;padding:11px 13px"><div style="display:flex;justify-content:space-between;text-align:center;gap:6px">
+     <div style="flex:1"><div class="mini">İSTENEN</div><div style="font-weight:800;font-size:17px">${ist}</div></div>
+     <div style="flex:1;border-left:1px solid var(--ln);border-right:1px solid var(--ln)"><div class="mini">YAPILAN</div><div style="font-weight:800;font-size:17px">${yap}</div></div>
+     <div style="flex:1"><div class="mini">FARK</div><div style="font-weight:800;font-size:17px;color:${fc}">${fl}</div></div>
+   </div>${fire?`<div class="mini" style="text-align:center;margin-top:6px;color:var(--bad)">🔥 ${fire} defo/fire</div>`:''}<div class="mini" style="text-align:center;margin-top:4px;color:var(--sub)">${esc(i.birim||'adet')} · kesim fazla/eksik çıkabilir, "fasonda kaldı" sayılmaz</div></div>`;}
   if(kar){const gg=ieGenelGider(i);html+=`<div class="total" style="margin-top:12px"><div><div class="l">Toplam Maliyet</div><div class="v">${TL(ieToplamMaliyet(i))}</div></div><div style="text-align:right"><div class="l">Birim Maliyet</div><div class="v pos">${birim?TL(birim):'—'} ${birim?'/'+esc(i.birim||'ad'):''}</div></div></div>
     <div class="card" style="margin-top:8px;padding:4px 13px">
       <div class="kv"><span class="k">🧵 Malzeme / Kumaş</span><span class="v">${TL(ieMalMaliyet(i))}</span></div>
@@ -3361,7 +3369,8 @@ function durakTeslimAl(id,x){
     <datalist id="t-eksik-dl">${['Kesim hatası','Boya / leke','Dikiş hatası','Fasonda kaldı','Sonra gelecek','Kayıp / eksik geldi','Ölçü/kalıp hatası'].map(x=>`<option value="${x}">`).join('')}</datalist>
     <label>Eksik / defo nedeni <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub)">(varsa)</span></label><input id="t-eksik" list="t-eksik-dl" placeholder="neden eksik/defo çıktı?">
     <label>📷 Fotoğraf</label><div id="d-foto-box"></div>
-    <div class="infobox">Atölye genelde toplam adet söyler — tek rakam gir. Garni/nakış gibi renge göre değişen işte <b>🎨 renk renk gir</b>. Ücret gelen adet üzerinden fasona borç yazılır.</div>
+    <label class="ckrow" style="margin-top:8px"><input type="checkbox" id="t-bitti"><span>✓ Bu iş bitti — kalan gelmeyecek (kesim fazla/eksik olabilir)</span></label>
+    <div class="infobox">Atölye genelde toplam adet söyler — tek rakam gir. Kesim istenenden az/çok çıkabilir; bittiyse yukarıyı işaretle, "fasonda kaldı" gösterilmez. Ücret gelen adet üzerinden fasona borç yazılır.</div>
     <button class="btn g" onclick="durakTeslimKaydet(${id},${x})">📥 Teslim Al</button>`);
   cizDurakFoto();
 }
@@ -3399,8 +3408,9 @@ function durakTeslimKaydet(id,x){
     d.teslimatlar=d.teslimatlar||[];d.teslimatlar.push({tarih:Date.now(),adet:tAdet,defo:tDefo,renk:batch,not:($('t-not')?.value||'').trim(),eksikNeden:eksNed});
     if(eksNed)d.eksikNeden=eksNed;
     d.foto=dFoto;ieBorcGuncelle(d,ieCarpan(i));
-    const bitti=(d.gelen+d.defolu)>=gonTop;
-    if(bitti){d.durum='tamam';if(x<i.duraklar.length-1){const nx=i.duraklar[x+1];if(nx.durum==='bekliyor'){nx.gonderilenRenk={...d.renkGelen};nx.gonderilen=d.gelen;nx.durum='devam';nx.baslama=Date.now()}}}
+    const bittiForce=$('t-bitti')?.checked;
+    const bitti=bittiForce||((d.gelen+d.defolu)>=gonTop);
+    if(bitti){d.durum='tamam';d.bittiElle=!!bittiForce;if(x<i.duraklar.length-1){const nx=i.duraklar[x+1];if(nx.durum==='bekliyor'){nx.gonderilenRenk={...d.renkGelen};nx.gonderilen=d.gelen;nx.durum='devam';nx.baslama=Date.now()}}}
     else d.durum='devam';
     save();closeM();uretimDetay(id);toast(bitti?'Durak tamamlandı ✓':tAdet+' adet teslim alındı ✓');
   };
