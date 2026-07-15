@@ -791,7 +791,7 @@ const ROL_AD={admin:'Yönetici',ortak:'Ortak',magaza:'Mağaza',depocu:'Depocu',m
 function kimlikMail(x){x=(''+(x||'')).trim();if(!x)return '';if(x.includes('@'))return x.toLowerCase();const d=x.replace(/\D/g,'');return d?('u'+d+'@iqbasics.app'):'';}
 async function bulutKayit(mail,pw,ad,tel,rolIstek,istenenCari){
   if(!bulutBaslat())return {ok:false,hata:'Bulut ayarlı değil'};
-  const r=['musteri','calisan','fason','magaza','depocu'].includes(rolIstek)?rolIstek:'musteri';
+  const r=['musteri','calisan','fason','magaza','depocu','ortak'].includes(rolIstek)?rolIstek:'musteri';
   // Telefon birincil kimlik; e-posta yoksa telefondan üretilir
   const authMail=kimlikMail(mail||tel);
   if(!authMail)return {ok:false,hata:'Telefon (veya e-posta) gerekli'};
@@ -3592,9 +3592,9 @@ function bulutDavetLinki(){davetGenRol='musteri';open_('🔗 Davet Linki & QR',`
   <div id="dav-out" style="margin-top:12px"></div>`);
   davetRolSec('musteri');}
 function davetRolSec(r){davetGenRol=r;
-  const seg=$('dav-seg');if(seg)seg.innerHTML=['musteri','magaza','depocu','fason'].map(k=>`<div class="o ${davetGenRol===k?'on':''}" onclick="davetRolSec('${k}')">${ROL_AD[k]}</div>`).join('');
+  const seg=$('dav-seg');if(seg)seg.innerHTML=['musteri','ortak','magaza','depocu','fason'].map(k=>`<div class="o ${davetGenRol===k?'on':''}" onclick="davetRolSec('${k}')">${ROL_AD[k]}</div>`).join('');
   const cw=$('dav-cari-wrap');
-  if(cw){if(r==='magaza'||r==='depocu'){cw.innerHTML='<div class="mini">Personel (mağaza/depocu) için cari gerekmez — onayladıktan sonra canlı veriye bağlanır.</div>';}
+  if(cw){if(r==='ortak'||r==='magaza'||r==='depocu'){cw.innerHTML='<div class="mini">Personel/ortak için cari gerekmez — onayladıktan sonra canlı veriye bağlanır.'+(r==='ortak'?' <b>Ortak her şeyi görür (kâr/kasa dahil).</b>':'')+'</div>';}
     else{const list=db.cariler.filter(c=>r==='fason'?c.tip==='fason':c.tip==='musteri');
       cw.innerHTML=`<label>${r==='fason'?'Fason kaydı':'Müşteri carisi'} (önerilir)</label><select id="dav-cari" onchange="davetYenile()"><option value="0">— seçilmedi —</option>${list.map(c=>`<option value="${c.id}">${esc(c.ad)}</option>`).join('')}</select>`;}}
   davetYenile();}
@@ -3634,7 +3634,7 @@ let bulutAuthTab='giris', davetRol='', davetCari=0;
 function bulutAuthSekme(t){bulutAuthTab=t;portalCiz()}
 // Davet linkini oku: #kayit=fason&c=201 → kayıt sekmesi + rol/cari hazır
 function portalDavetOku(){davetRol='';davetCari=0;const h=location.hash||'';
-  const m=h.match(/#kayit=?([a-z]*)/);if(m&&['musteri','calisan','fason','magaza','depocu'].includes(m[1])){davetRol=m[1];bulutAuthTab='kayit';}
+  const m=h.match(/#kayit=?([a-z]*)/);if(m&&['musteri','calisan','fason','magaza','depocu','ortak'].includes(m[1])){davetRol=m[1];bulutAuthTab='kayit';}
   const c=h.match(/[?&]c=(\d+)/);if(c)davetCari=+c[1];}
 async function portalBulutGiris(){
   const kimlik=($('pb-mail')?.value||'').trim(),pw=$('pb-pw')?.value||'';
@@ -3856,7 +3856,7 @@ function portalCiz(){
         <div style="max-width:330px;margin:16px auto 0">
           ${t==='kayit'?`<label>Ad / Firma</label><input id="pb-ad" placeholder="ör. Yılmaz Tekstil" autocapitalize="words">
           <label>Telefon <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub)">— giriş için kullanılır</span></label><input id="pb-tel" placeholder="05.." inputmode="tel" autocomplete="tel">
-          <label>Kimsiniz?</label><select id="pb-rol" ${davetRol?'disabled style="opacity:.75"':''}><option value="musteri" ${davetRol==='musteri'?'selected':''}>Müşteri (sipariş vermek için)</option><option value="magaza" ${davetRol==='magaza'?'selected':''}>Mağaza Elemanı</option><option value="depocu" ${davetRol==='depocu'?'selected':''}>Depocu</option><option value="fason" ${davetRol==='fason'?'selected':''}>Fason (üretim)</option></select>`:''}
+          <label>Kimsiniz?</label><select id="pb-rol" ${davetRol?'disabled style="opacity:.75"':''}><option value="musteri" ${davetRol==='musteri'?'selected':''}>Müşteri (sipariş vermek için)</option><option value="ortak" ${davetRol==='ortak'?'selected':''}>Ortak (yönetici)</option><option value="magaza" ${davetRol==='magaza'?'selected':''}>Mağaza Elemanı</option><option value="depocu" ${davetRol==='depocu'?'selected':''}>Depocu</option><option value="fason" ${davetRol==='fason'?'selected':''}>Fason (üretim)</option></select>`:''}
           ${t==='giris'?`<label>Telefon veya E-posta</label><input id="pb-mail" autocapitalize="off" autocomplete="username" placeholder="05.. veya ornek@mail.com">`:''}
           <label>Şifre</label><input id="pb-pw" type="password" autocomplete="${t==='kayit'?'new-password':'current-password'}" placeholder="••••••" onkeydown="if(event.key==='Enter')${t==='kayit'?'portalBulutKayit()':'portalBulutGiris()'}">
           ${t==='kayit'?`<label style="margin-top:8px">E-posta <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub)">— isteğe bağlı</span></label><input id="pb-mail" type="email" autocapitalize="off" placeholder="varsa ornek@mail.com">`:''}

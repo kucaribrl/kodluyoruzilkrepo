@@ -36,7 +36,7 @@ service cloud.firestore {
       allow create: if (girisli()
         && request.auth.uid == uid
         && request.resource.data.onay == false
-        && request.resource.data.rol in ['musteri','calisan','fason','magaza','depocu'])
+        && request.resource.data.rol in ['musteri','calisan','fason','magaza','depocu','ortak'])
         || (sahipMi() && request.auth.uid == uid);
       // Sahip kendi belgesini güncelleyebilir; onay / rol / silme yönetici (sahip dahil)
       allow update, delete: if adminMi() || (sahipMi() && request.auth.uid == uid);
