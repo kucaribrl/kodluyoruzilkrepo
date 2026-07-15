@@ -860,6 +860,11 @@ async function bulutKullaniciSil(uid){
   if(!bulutBaslat())return false;
   try{await _fb.collection('kullanicilar').doc(uid).delete();return true;}catch(e){toast('Silme hatası: '+(e.message||e));return false}
 }
+// Erişimi kapat (pasife al) — kaydı silmeden girişi engelle (onay=false)
+async function bulutKullaniciPasif(uid){
+  if(!bulutBaslat())return false;
+  try{await _fb.collection('kullanicilar').doc(uid).update({onay:false});return true;}catch(e){toast('Olmadı: '+(e.message||e));return false}
+}
 // Admin: bulut kullanıcılarını yönet (onay / rol / cari bağla)
 async function bulutKullaniciYonet(){
   if(!bulutBaslat())return toast('☁️ Bulut ayarlı değil');
@@ -878,16 +883,22 @@ async function bulutKullaniciYonet(){
     <label>Cari bağla (isteğe bağlı)</label><select id="ku-cari-${u.uid}">${cOpts(u.istenenCari||u.cariId)}</select>
     <div class="g2" style="margin-top:10px"><button class="btn danger sm" onclick="bulutKulSilUI('${u.uid}')">Sil</button><button class="btn g sm" onclick="bulutKulOnayUI('${u.uid}')">✓ Onayla</button></div></div>`}).join(''):'<div class="mini" style="margin-bottom:6px">Bekleyen kullanıcı yok</div>';
   h+=`<div class="sec">✅ Onaylı (${aktif.length})</div>`;
-  h+=aktif.length?aktif.map(u=>{const c=u.cariId&&cari(u.cariId);return `<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><b>${esc(u.ad||'(isimsiz)')}</b> <span class="tag" style="background:var(--ind-s);color:var(--ind)">${ROL_AD[u.rol]||u.rol}</span><div class="mini">${esc(u.mail||'')}${u.tel?' · 📞 '+esc(u.tel):''}${c?' · 🔗 '+esc(c.ad):''}</div></div>${u.rol!=='admin'?`<button class="btn ghost sm" style="width:auto;margin:0;padding:7px 11px;flex:0 0 auto" onclick="bulutKulSilUI('${u.uid}')">Sil</button>`:''}</div>
-    ${u.rol!=='admin'?`<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12.5px;color:var(--ind2);font-weight:700">⚙️ Rolü / cariyi değiştir</summary>
+  h+=aktif.length?aktif.map(u=>{const c=u.cariId&&cari(u.cariId);return `<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><b>${esc(u.ad||'(isimsiz)')}</b> <span class="tag" style="background:var(--ind-s);color:var(--ind)">${ROL_AD[u.rol]||u.rol}</span><div class="mini">${esc(u.mail||'')}${u.tel?' · 📞 '+esc(u.tel):''}${c?' · 🔗 '+esc(c.ad):''}</div></div>${u.rol!=='admin'?`<button class="btn ghost sm" style="width:auto;margin:0;padding:7px 11px;flex:0 0 auto" onclick="bulutKulPasifUI('${u.uid}')">🚫 Kapat</button>`:''}</div>
+    ${u.rol!=='admin'?`<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12.5px;color:var(--ind2);font-weight:700">⚙️ Rolü / cariyi değiştir · şifre · sil</summary>
       <label style="margin-top:6px">Rol</label><select id="ku-rol-${u.uid}">${rOpts(u.rol)}</select>
       <label>Cari bağla (isteğe bağlı)</label><select id="ku-cari-${u.uid}">${cOpts(u.cariId)}</select>
-      <button class="btn g sm" style="margin-top:8px" onclick="bulutKulOnayUI('${u.uid}')">💾 Kaydet</button></details>`:''}</div>`}).join(''):'<div class="mini">Onaylı kullanıcı yok</div>';
+      <button class="btn g sm" style="margin-top:8px" onclick="bulutKulOnayUI('${u.uid}')">💾 Kaydet</button>
+      ${u.mail?`<button class="btn ghost sm" style="margin-top:8px" onclick="bulutSifreSifirlaKul('${esc(u.mail)}')">🔑 Şifre Sıfırlama Linki Gönder</button>`:''}
+      <button class="btn danger sm" style="margin-top:8px" onclick="bulutKulSilUI('${u.uid}')">🗑️ Kalıcı Sil</button></details>`:''}</div>`}).join(''):'<div class="mini">Onaylı kullanıcı yok</div>';
   $('mB').innerHTML=h;
 }
 async function bulutKulOnayUI(uid){const rol=$('ku-rol-'+uid)?.value||'musteri';const cariId=+($('ku-cari-'+uid)?.value||0);
   if(await bulutKullaniciOnayla(uid,rol,cariId)){toast('✓ Onaylandı');bulutKullaniciYonet();}}
-function bulutKulSilUI(uid){askConfirm('Bu kullanıcı kaydı silinsin mi? (Not: Firebase Auth hesabı ayrıca Authentication panelinden silinmeli)',async()=>{if(await bulutKullaniciSil(uid)){toast('Silindi');bulutKullaniciYonet();}})}
+function bulutKulSilUI(uid){askConfirm('⚠️ Bu kullanıcı KALICI olarak silinsin mi? Bu işlem geri ALINAMAZ. Sadece girişini engellemek istiyorsan "🚫 Erişimi Kapat" kullan (kayıt durur, sonra tekrar açabilirsin).\n\n(Firebase Auth hesabı ayrıca Authentication panelinden silinmeli.)',async()=>{if(await bulutKullaniciSil(uid)){toast('Silindi');bulutKullaniciYonet();}},'Evet, KALICI sil')}
+function bulutKulPasifUI(uid){askConfirm('Bu kullanıcının erişimi kapatılsın mı? Kaydı SİLİNMEZ — girişi engellenir, istediğinde "Onayla" ile tekrar açabilirsin.',async()=>{if(await bulutKullaniciPasif(uid)){toast('🚫 Erişim kapatıldı');bulutKullaniciYonet();}},'Erişimi Kapat')}
+// Yönetici: bir kullanıcıya şifre sıfırlama bağlantısı gönder (yalnız gerçek e-postayla kayıtlıysa çalışır)
+function bulutSifreSifirlaKul(mail){if(!mail||mail.indexOf('@')<0)return toast('Bu kullanıcı telefonla kayıtlı — e-posta ile sıfırlama yok. Kullanıcı yeni şifreyle tekrar kayıt olmalı.');
+  askConfirm(mail+' adresine şifre sıfırlama bağlantısı gönderilsin mi? Kullanıcı mailinden yeni şifre belirler.',async()=>{try{await firebase.auth().sendPasswordResetEmail(mail);toast('📧 Sıfırlama bağlantısı gönderildi');}catch(e){toast('Gönderilemedi: '+(e.code||e.message));}},'Gönder');}
 
 /* ---- Faz 3: Fason bulut iş emirleri ---- */
 let fasonIsler=[];
