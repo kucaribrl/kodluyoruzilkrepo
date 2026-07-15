@@ -3305,7 +3305,9 @@ function durakGuncelle(id,x){
   const i=db.isemirleri.find(v=>v.id===id);const d=i.duraklar[x];const fs=fasonlar();
   dFoto=d.foto||'';
   open_(d.ad+' · Fason / Ücret',`
-    <label>Fason Firma</label><select id="d-fas"><option value="0">— dışarı / firma yok —</option>${fs.map(f=>`<option value="${f.id}" ${d.fasonId==f.id?'selected':''}>${esc(f.ad)}</option>`).join('')}</select>
+    <label>Fason Firma <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub)">— yaz, yoksa otomatik eklenir</span></label>
+    <input id="d-fas" list="fason-dl" autocomplete="off" value="${esc((d.fasonId&&cari(d.fasonId))?cari(d.fasonId).ad:'')}" placeholder="Fason firma adı (boş = dışarı yok)">
+    <datalist id="fason-dl">${fs.map(f=>`<option value="${esc(f.ad)}">`).join('')}</datalist>
     <label>₺ / adet (anlaşılan ücret)</label><input id="d-uc" type="number" inputmode="numeric" value="${d.ucret||''}" placeholder="0">
     <label>Not (fason için)</label><input id="d-not" value="${esc(d.not||'')}" placeholder="ör. yaka koyu, ütü buharlı">
     <label>📷 Numune / örnek foto</label><div id="d-foto-box"></div>
@@ -3319,7 +3321,12 @@ function cizDurakFoto(){const b=$('d-foto-box');if(!b)return;
 function durakFotoSec(input){const f=input.files&&input.files[0];if(!f)return;resizeImg(f,d=>{dFoto=d;cizDurakFoto()},1200,0.72)}
 function durakKaydet(id,x){
   const i=db.isemirleri.find(v=>v.id===id);const d=i.duraklar[x];
-  d.fasonId=+($('d-fas').value||0)||null;d.ucret=+$('d-uc').value||0;d.not=($('d-not')?.value||'').trim();d.foto=dFoto;
+  // Fason adını çöz: varsa eşleştir, yoksa yeni fason carisi oluştur (yazılabilir alan)
+  const fad=($('d-fas')?.value||'').trim();let fid=null;
+  if(fad){let f=db.cariler.find(c=>c.tip==='fason'&&(c.ad||'').toLowerCase()===fad.toLowerCase());
+    if(!f){f={id:nid('c'),tip:'fason',ad:fad,tel:'',bakiye:0,doviz:'TL',olusturma:Date.now()};db.cariler.push(f);toast('🧵 Yeni fason eklendi: '+fad);}
+    fid=f.id;}
+  d.fasonId=fid;d.ucret=+$('d-uc').value||0;d.not=($('d-not')?.value||'').trim();d.foto=dFoto;
   ieBorcGuncelle(d,ieCarpan(i));save();closeM();uretimDetay(id);toast('Kaydedildi ✓');
 }
 /* --- Teslimat: varsayılan tek toplam, istenirse renk renk --- */
