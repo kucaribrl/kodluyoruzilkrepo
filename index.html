@@ -523,8 +523,9 @@ const CANLI_DOMEN={
 };
 // Rol → hangi alanları OKUR / YAZAR (veri seviyesinde sınır; arayüz gizlemesiyle birlikte)
 const _CTUM=Object.keys(CANLI_DOMEN);
-const ROL_OKU={admin:_CTUM,ortak:_CTUM,magaza:['stok','cari','satis','ayar'],depocu:['stok','ayar']};
-const ROL_YAZ={admin:_CTUM,ortak:_CTUM,magaza:['stok','cari','satis','ayar'],depocu:['stok']};
+const ROL_OKU={admin:_CTUM,ortak:_CTUM,magaza:['stok','cari','satis','ayar'],depocu:['stok','ayar'],fason:[],musteri:[],calisan:[]};
+const ROL_YAZ={admin:_CTUM,ortak:_CTUM,magaza:['stok','cari','satis','ayar'],depocu:['stok'],fason:[],musteri:[],calisan:[]};
+// Bilinen rol → kendisi; bilinmeyen/'?' (sahip, kullanicilar belgesi yoksa) → admin (bulut kuralları asıl kapıyı tutar)
 function canliRol(){const r=(bulutKul&&bulutKul.rol);return (r&&ROL_OKU[r])?r:'admin';}
 let canliAcik=false,_canliUnsub=[],_canliGolge={},_canliUygulaniyor=false,_canliYazT=null,_canliUyari=false;
 function canliIzinHata(e){const c=(e&&e.code)||'';if(c==='permission-denied'&&!_canliUyari){_canliUyari=true;toast('☁️ Senkron İZNİ YOK — Firebase Rules güncel mi + yönetici hesabıyla giriş yaptın mı?');}return c;}
