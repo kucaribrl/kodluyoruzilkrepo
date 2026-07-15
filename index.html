@@ -3584,7 +3584,8 @@ function isEmriPaylas(id,x){
     <div class="mini">${f?esc(f.ad)+(f.tel?' · '+esc(f.tel):''):'Fason'} — gidecek mesaj:</div>
     <div style="white-space:pre-wrap;background:#e7f6ea;border:1px solid #b6e0bf;border-radius:14px;padding:14px;margin-top:8px;font-size:13px;line-height:1.5;color:#0b3d1a">${esc(txt).replace(/\*(.+?)\*/g,'<b>$1</b>')}</div>
     ${i.foto?`<div class="mini" style="margin-top:8px">🖼️ Ürün fotoğrafı da eklenecek</div><img src="${i.foto}" style="width:100%;max-height:190px;object-fit:cover;border-radius:12px;margin-top:6px">`:''}
-    <button class="btn g" onclick="isEmriWa(${id},${x==null?'null':x})">📱 ${i.foto?'Fotoğraflı Gönder':"WhatsApp'ta Gönder"}</button>
+    <button class="btn g" onclick="isEmriResimGonder(${id},${x==null?'null':x})">🖼️ Resimli Form Gönder</button>
+    <button class="btn ghost sm" style="margin-top:8px" onclick="isEmriWa(${id},${x==null?'null':x})">💬 Sadece Yazı Gönder</button>
     <button class="btn ghost sm" style="margin-top:8px" onclick="isEmriA4(${id})">📄 A4 Form Yazdır</button>`);
 }
 async function isEmriWa(id,x){
@@ -3595,6 +3596,71 @@ async function isEmriWa(id,x){
   let ph=((f&&f.tel)||'').replace(/\D/g,'');if(ph){if(ph.length===10)ph='90'+ph;else if(ph[0]==='0')ph='9'+ph}
   if(i.foto&&navigator.share){try{const file=dataURLtoFile(i.foto,'isemri-'+id+'.jpg');if(!navigator.canShare||navigator.canShare({files:[file]})){await navigator.share({files:[file],text:txt});return}}catch(e){if(e&&e.name==='AbortError')return}}
   window.open(`https://wa.me/${ph}?text=${encodeURIComponent(txt)}`,'_blank');
+}
+// 🖼️ İş emrini TEK GÖRSEL (form gibi) olarak çiz — bilgiler + ürün fotoğrafı bir arada
+function isEmriResimYap(id,x,cb){
+  const i=db.isemirleri.find(v=>v.id===id);if(!i){cb(null);return;}
+  const durak=(x!=null&&x>=0&&i.duraklar[x])?i.duraklar[x]:null;
+  const W=820,P=46;
+  const proceed=(im)=>{
+    const mc=document.createElement('canvas').getContext('2d');
+    const wrap=(t,font,maxW)=>{mc.font=font;const ws=(''+t).split(/\s+/),out=[];let cur='';ws.forEach(w=>{const tt=cur?cur+' '+w:w;if(mc.measureText(tt).width>maxW&&cur){out.push(cur);cur=w}else cur=tt});if(cur)out.push(cur);return out;};
+    const renkArr=(i.renkDagilim&&i.renkDagilim.length)?i.renkDagilim:[];
+    const durakArr=durak?[durak]:(i.duraklar||[]);
+    const notTxt=(durak&&durak.not)||i.not||'';const notLines=notTxt?wrap('📝 '+notTxt,'22px sans-serif',W-2*P):[];
+    let H=96+34+Math.ceil(5/2)*40+16;
+    if(im)H+=im.h+26;
+    if(renkArr.length)H+=26+Math.ceil(renkArr.length/2)*40+12;
+    H+=26+durakArr.length*40+4;
+    if(notLines.length)H+=notLines.length*30+8;
+    H+=54;
+    const dpr=2,c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const g=c.getContext('2d');g.scale(dpr,dpr);
+    g.fillStyle='#ffffff';g.fillRect(0,0,W,H);
+    g.fillStyle='#33333d';g.fillRect(0,0,W,96);
+    g.textBaseline='alphabetic';g.textAlign='left';
+    g.fillStyle='#fff';g.font='800 30px sans-serif';g.fillText(db.firma||'IQ Basics',P,54);
+    g.font='600 15px sans-serif';g.fillStyle='#c9ccd4';g.fillText((db.firmaTel||db.firmaWp||''),P,79);
+    g.textAlign='right';g.fillStyle='#fff';g.font='800 26px sans-serif';g.fillText('İŞ EMRİ #'+i.id,W-P,50);
+    g.font='600 15px sans-serif';g.fillStyle='#e6b3b0';g.fillText(durak?durak.ad:'Üretim',W-P,76);
+    g.textAlign='left';
+    let y=96+34;const colW=(W-2*P)/2;
+    const info=[['ÜRÜN',i.urun||'—'],['KOD',i.kod||'—'],['TARİH',dstr(i.baslangic)],['TERMİN',(i.gun||'-')+' gün'],['HEDEF',(i.hedef||0)+' '+(i.birim||'adet')]];
+    info.forEach((kv,idx)=>{const col=idx%2,row=Math.floor(idx/2),xx=P+col*colW,yy=y+row*40;
+      g.fillStyle='#8a8f98';g.font='600 13px sans-serif';g.fillText(kv[0],xx,yy);
+      g.fillStyle='#22232a';g.font='800 20px sans-serif';g.fillText(''+kv[1],xx,yy+23);});
+    y+=Math.ceil(info.length/2)*40+16;
+    if(im){const px=(W-im.w)/2;try{g.drawImage(im.el,px,y,im.w,im.h)}catch(e){}g.strokeStyle='#e5e8ed';g.strokeRect(px,y,im.w,im.h);y+=im.h+26;}
+    if(renkArr.length){g.fillStyle='#8a8f98';g.font='700 14px sans-serif';g.fillText('RENK DAĞILIMI',P,y);y+=26;
+      renkArr.forEach((r,idx)=>{const col=idx%2,row=Math.floor(idx/2),xx=P+col*colW,yy=y+row*40;
+        g.fillStyle=hexFromAd(r.ad)||'#ccc';g.fillRect(xx,yy-15,18,18);g.strokeStyle='#e5e8ed';g.strokeRect(xx,yy-15,18,18);
+        g.fillStyle='#22232a';g.font='700 19px sans-serif';g.fillText((r.ad||'—')+': '+r.adet,xx+26,yy);});
+      y+=Math.ceil(renkArr.length/2)*40+12;}
+    g.fillStyle='#8a8f98';g.font='700 14px sans-serif';g.fillText(durak?'İŞLEM':'ÜRETİM AŞAMALARI',P,y);y+=26;
+    durakArr.forEach((d,k)=>{g.fillStyle='#22232a';g.font='700 18px sans-serif';
+      g.fillText((durak?'':(k+1)+'. ')+(d.ad||'')+(fasonAd(d)?' · '+fasonAd(d):'')+(d.ucret?' · ₺'+d.ucret+'/ad':''),P,y+8);y+=40;});
+    y+=4;
+    if(notLines.length){g.fillStyle='#4a4a55';g.font='22px sans-serif';notLines.forEach(l=>{g.fillText(l,P,y+8);y+=30;});y+=8;}
+    g.fillStyle='#8a8f98';g.font='600 14px sans-serif';g.fillText((db.firma||'IQ Basics')+(db.firmaWp?' · '+db.firmaWp:''),P,H-22);
+    try{c.toBlob(bl=>cb(bl,c),'image/jpeg',0.92);}catch(e){cb(null,c);}
+  };
+  if(i.foto){const el=new Image();el.onload=()=>{let w=Math.min(520,el.width||520);let hh=w*(el.height||1)/(el.width||1);if(hh>360){hh=360;w=hh*(el.width||1)/(el.height||1)}proceed({el,w,h:hh});};el.onerror=()=>proceed(null);el.src=i.foto;}
+  else proceed(null);
+}
+async function isEmriResimGonder(id,x){
+  const i=db.isemirleri.find(v=>v.id===id);if(!i)return;
+  toast('🖼️ Görsel hazırlanıyor…');
+  isEmriResimYap(id,x,async(blob)=>{
+    if(!blob)return toast('Görsel oluşturulamadı');
+    const durak=(x!=null&&x>=0&&i.duraklar[x])?i.duraklar[x]:null;
+    const fname='is-emri-'+i.id+(durak?'-'+durak.ad:'')+'.jpg';
+    const file=new File([blob],fname,{type:'image/jpeg'});
+    const txt=ieShareText(i,x);
+    if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){
+      try{await navigator.share({files:[file],text:txt});return;}catch(e){if(e&&e.name==='AbortError')return;}
+    }
+    const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=fname;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);
+    toast('📥 Görsel indirildi — WhatsApp\'tan gönderebilirsin');
+  });
 }
 function isEmriA4(id){
   const i=db.isemirleri.find(v=>v.id===id);if(!i)return;
