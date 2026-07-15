@@ -787,23 +787,29 @@ async function bulutSiparisleriCek(){if(!bulutBaslat())return toast('☁️ Bulu
 let bulutKul=null; // giriş yapan portal kullanıcısının profili
 const ROL_AD={admin:'Yönetici',ortak:'Ortak',magaza:'Mağaza',depocu:'Depocu',musteri:'Müşteri',calisan:'Çalışan',fason:'Fason'};
 // Portal kullanıcı: kendi hesabını oluşturur (onaysız — admin onaylayana kadar giremez)
+// Giriş kimliği: '@' varsa e-posta; yoksa telefon → sentetik e-posta (Firebase e-posta ister ama kullanıcı telefonla girer)
+function kimlikMail(x){x=(''+(x||'')).trim();if(!x)return '';if(x.includes('@'))return x.toLowerCase();const d=x.replace(/\D/g,'');return d?('u'+d+'@iqbasics.app'):'';}
 async function bulutKayit(mail,pw,ad,tel,rolIstek,istenenCari){
   if(!bulutBaslat())return {ok:false,hata:'Bulut ayarlı değil'};
-  const r=['musteri','calisan','fason'].includes(rolIstek)?rolIstek:'musteri';
+  const r=['musteri','calisan','fason','magaza','depocu'].includes(rolIstek)?rolIstek:'musteri';
+  // Telefon birincil kimlik; e-posta yoksa telefondan üretilir
+  const authMail=kimlikMail(mail||tel);
+  if(!authMail)return {ok:false,hata:'Telefon (veya e-posta) gerekli'};
   try{
-    const cred=await firebase.auth().createUserWithEmailAndPassword((mail||'').trim(),pw);
+    const cred=await firebase.auth().createUserWithEmailAndPassword(authMail,pw);
     const uid=cred.user.uid;
-    const prof={rol:r,ad:ad||'',tel:tel||'',mail:(mail||'').trim(),onay:false,cariId:0,istenenCari:+istenenCari||0,olusturma:Date.now()};
+    const prof={rol:r,ad:ad||'',tel:tel||'',mail:(mail||'').trim(),girisMail:authMail,onay:false,cariId:0,istenenCari:+istenenCari||0,olusturma:Date.now()};
     await _fb.collection('kullanicilar').doc(uid).set(prof);
     bulutKul={uid,...prof};
     return {ok:true};
-  }catch(e){return {ok:false,hata:e.code||e.message}}
+  }catch(e){return {ok:false,hata:e.code==='auth/email-already-in-use'?'Bu telefon/e-posta zaten kayıtlı':(e.code||e.message)}}
 }
-// Portal kullanıcı / admin: giriş
+// Portal kullanıcı / admin: giriş (telefon veya e-posta ile)
 async function bulutGirisPortal(mail,pw){
   if(!bulutBaslat())return {ok:false,hata:'Bulut ayarlı değil'};
-  try{await firebase.auth().signInWithEmailAndPassword((mail||'').trim(),pw);await bulutProfilYukle();await bulutRolVerisiYukle();return {ok:true};}
-  catch(e){return {ok:false,hata:e.code||e.message}}
+  const authMail=kimlikMail(mail);
+  try{await firebase.auth().signInWithEmailAndPassword(authMail,pw);await bulutProfilYukle();await bulutRolVerisiYukle();return {ok:true};}
+  catch(e){return {ok:false,hata:e.code==='auth/invalid-credential'||e.code==='auth/wrong-password'||e.code==='auth/user-not-found'?'Telefon/e-posta veya şifre hatalı':(e.code||e.message)}}
 }
 // Girişten sonra role göre bulut verisini yükle (müşteri: bakiye+geçmiş+sipariş; fason: iş emirleri)
 async function bulutRolVerisiYukle(){
@@ -3577,9 +3583,9 @@ function bulutDavetLinki(){davetGenRol='musteri';open_('🔗 Davet Linki & QR',`
   <div id="dav-out" style="margin-top:12px"></div>`);
   davetRolSec('musteri');}
 function davetRolSec(r){davetGenRol=r;
-  const seg=$('dav-seg');if(seg)seg.innerHTML=['musteri','calisan','fason'].map(k=>`<div class="o ${davetGenRol===k?'on':''}" onclick="davetRolSec('${k}')">${ROL_AD[k]}</div>`).join('');
+  const seg=$('dav-seg');if(seg)seg.innerHTML=['musteri','magaza','depocu','fason'].map(k=>`<div class="o ${davetGenRol===k?'on':''}" onclick="davetRolSec('${k}')">${ROL_AD[k]}</div>`).join('');
   const cw=$('dav-cari-wrap');
-  if(cw){if(r==='calisan'){cw.innerHTML='<div class="mini">Çalışan için cari gerekmez.</div>';}
+  if(cw){if(r==='magaza'||r==='depocu'){cw.innerHTML='<div class="mini">Personel (mağaza/depocu) için cari gerekmez — onayladıktan sonra canlı veriye bağlanır.</div>';}
     else{const list=db.cariler.filter(c=>r==='fason'?c.tip==='fason':c.tip==='musteri');
       cw.innerHTML=`<label>${r==='fason'?'Fason kaydı':'Müşteri carisi'} (önerilir)</label><select id="dav-cari" onchange="davetYenile()"><option value="0">— seçilmedi —</option>${list.map(c=>`<option value="${c.id}">${esc(c.ad)}</option>`).join('')}</select>`;}}
   davetYenile();}
@@ -3619,13 +3625,13 @@ let bulutAuthTab='giris', davetRol='', davetCari=0;
 function bulutAuthSekme(t){bulutAuthTab=t;portalCiz()}
 // Davet linkini oku: #kayit=fason&c=201 → kayıt sekmesi + rol/cari hazır
 function portalDavetOku(){davetRol='';davetCari=0;const h=location.hash||'';
-  const m=h.match(/#kayit=?([a-z]*)/);if(m&&['musteri','calisan','fason'].includes(m[1])){davetRol=m[1];bulutAuthTab='kayit';}
+  const m=h.match(/#kayit=?([a-z]*)/);if(m&&['musteri','calisan','fason','magaza','depocu'].includes(m[1])){davetRol=m[1];bulutAuthTab='kayit';}
   const c=h.match(/[?&]c=(\d+)/);if(c)davetCari=+c[1];}
 async function portalBulutGiris(){
-  const mail=($('pb-mail')?.value||'').trim(),pw=$('pb-pw')?.value||'';
-  if(!mail||!pw)return toast('E-posta ve şifre girin');
+  const kimlik=($('pb-mail')?.value||'').trim(),pw=$('pb-pw')?.value||'';
+  if(!kimlik||!pw)return toast('Telefon (veya e-posta) ve şifre girin');
   toast('Giriş yapılıyor…');
-  const r=await bulutGirisPortal(mail,pw);
+  const r=await bulutGirisPortal(kimlik,pw);
   if(!r.ok)return toast('Giriş başarısız: '+r.hata);
   portalCiz();
 }
@@ -3633,14 +3639,27 @@ async function portalBulutKayit(){
   const ad=($('pb-ad')?.value||'').trim(),tel=($('pb-tel')?.value||'').trim(),rol=$('pb-rol')?.value||'musteri';
   const mail=($('pb-mail')?.value||'').trim(),pw=$('pb-pw')?.value||'';
   if(!ad)return toast('Ad / firma girin');
-  if(!mail||pw.length<6)return toast('Geçerli e-posta ve en az 6 haneli şifre girin');
+  const telD=tel.replace(/\D/g,'');
+  if(telD.length<10)return toast('Geçerli telefon girin (en az 10 hane)');
+  if(pw.length<6)return toast('En az 6 haneli şifre girin');
   toast('Hesap oluşturuluyor…');
-  const r=await bulutKayit(mail,pw,ad,tel,rol,davetCari);
+  // Kimlik = telefon (e-posta opsiyonel); girişte telefonla girecek
+  const r=await bulutKayit(mail||tel,pw,ad,tel,rol,davetCari);
   if(!r.ok)return toast('Kayıt başarısız: '+r.hata);
   toast('✓ Kaydınız alındı — onay bekleniyor');
   portalCiz();
 }
 async function portalBulutCikis(){await bulutCikisPortal();portalMusAd='';portalSepet=[];bulutAuthTab='giris';bulutMusVeri=null;bulutSiparislerim=[];fasonIsler=[];portalCiz()}
+// Onaylı personel (ortak/mağaza/depocu) portaldan girse bile → uygulama görünümüne + canlı senkrona geç
+function portalPersoneleGec(){
+  try{const pov=document.getElementById('pov');if(pov)pov.style.display='none';}catch(e){}
+  bulutMusteriMod=false;
+  const r=bulutKul&&bulutKul.rol;
+  db.rol=r;db.personelMod=true;_canliUyari=false;db.canliBulut=true;save();
+  try{canliBaslat(true)}catch(e){}
+  try{if(typeof go==='function')go('panel');else render();}catch(e){}
+  toast('👤 '+(ROL_AD[r]||r)+' olarak bağlanıldı — canlı veri geliyor…');
+}
 async function portalHesapYenile(){toast('Yenileniyor…');await bulutMusteriYukleHepsi();portalCiz();}
 function portalKapat(){document.getElementById('pov').style.display='none';if(_geriT){clearInterval(_geriT);_geriT=null}portalSepet=[];portalView='katalog';portalKat='';portalKumas='';portalSezon='';portalBattal=false;portalFiltreAcik=false;portalArama='';if(location.hash==='#siparis')history.replaceState(null,'',''+location.pathname);if(typeof cur!=='undefined')go('portal')}
 // güncel birim (seri) fiyat: promosyon (indirimli) varsa o, yoksa satış — parça fiyatı × seri
@@ -3807,6 +3826,7 @@ function portalCiz(){
   if(bulutMusteriMod){ // bulut modu → Firebase hesabıyla giriş/onay/rol kapısı
     if(!bulutKul)portalView='bulutgiris';
     else if(!bulutKul.onay)portalView='bulutonay';
+    else if(['ortak','magaza','depocu'].includes(bulutKul.rol)){portalPersoneleGec();return;} // personel → portal değil, uygulama görünümü
     else if(bulutKul.rol==='fason'){portalView='fason';}
     else{ if(['giris','bulutgiris','bulutonay','fason'].includes(portalView))portalView='katalog';
       if(bulutKul.rol==='musteri'&&bulutKul.ad&&!portalMusAd)portalMusAd=bulutKul.ad; } // çalışan müşteri adını elle girer
@@ -3826,10 +3846,11 @@ function portalCiz(){
         <div class="seg2" style="margin:14px auto 0;max-width:330px"><div class="o ${t==='giris'?'on':''}" onclick="bulutAuthSekme('giris')">Giriş</div><div class="o ${t==='kayit'?'on':''}" onclick="bulutAuthSekme('kayit')">Kayıt Ol</div></div>
         <div style="max-width:330px;margin:16px auto 0">
           ${t==='kayit'?`<label>Ad / Firma</label><input id="pb-ad" placeholder="ör. Yılmaz Tekstil" autocapitalize="words">
-          <label>Telefon</label><input id="pb-tel" placeholder="05.." inputmode="tel">
-          <label>Kimsiniz?</label><select id="pb-rol" ${davetRol?'disabled style="opacity:.75"':''}><option value="musteri" ${davetRol==='musteri'?'selected':''}>Müşteri (sipariş vermek için)</option><option value="calisan" ${davetRol==='calisan'?'selected':''}>Çalışan</option><option value="fason" ${davetRol==='fason'?'selected':''}>Fason (üretim)</option></select>`:''}
-          <label>E-posta</label><input id="pb-mail" type="email" autocapitalize="off" autocomplete="username" placeholder="ornek@mail.com">
+          <label>Telefon <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub)">— giriş için kullanılır</span></label><input id="pb-tel" placeholder="05.." inputmode="tel" autocomplete="tel">
+          <label>Kimsiniz?</label><select id="pb-rol" ${davetRol?'disabled style="opacity:.75"':''}><option value="musteri" ${davetRol==='musteri'?'selected':''}>Müşteri (sipariş vermek için)</option><option value="magaza" ${davetRol==='magaza'?'selected':''}>Mağaza Elemanı</option><option value="depocu" ${davetRol==='depocu'?'selected':''}>Depocu</option><option value="fason" ${davetRol==='fason'?'selected':''}>Fason (üretim)</option></select>`:''}
+          ${t==='giris'?`<label>Telefon veya E-posta</label><input id="pb-mail" autocapitalize="off" autocomplete="username" placeholder="05.. veya ornek@mail.com">`:''}
           <label>Şifre</label><input id="pb-pw" type="password" autocomplete="${t==='kayit'?'new-password':'current-password'}" placeholder="••••••" onkeydown="if(event.key==='Enter')${t==='kayit'?'portalBulutKayit()':'portalBulutGiris()'}">
+          ${t==='kayit'?`<label style="margin-top:8px">E-posta <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub)">— isteğe bağlı</span></label><input id="pb-mail" type="email" autocapitalize="off" placeholder="varsa ornek@mail.com">`:''}
           <button class="btn g" style="margin-top:15px" onclick="${t==='kayit'?'portalBulutKayit()':'portalBulutGiris()'}">${t==='kayit'?'Hesap Oluştur':'Giriş Yap'}</button>
           ${t==='kayit'?`<div class="mini" style="text-align:center;margin-top:12px;line-height:1.5">Kayıttan sonra <b>${esc(db.firma||'firma')}</b> hesabınızı onaylayınca girebilirsiniz.</div>`:''}
         </div>
