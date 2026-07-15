@@ -548,6 +548,7 @@ function canliBaslat(sessiz){
     },err=>{console.warn('canlı-dinle',domen,err&&err.code);canliIzinHata(err);});
     _canliUnsub.push(un);
   });
+  if(['admin','ortak'].includes(canliRol()))siparisDinle(); // yönetici → siparişler otomatik gelsin
   if(!sessiz)toast('☁️ Canlı senkron açık');
   return true;
 }
@@ -836,7 +837,7 @@ async function bulutProfilYukle(){
   }catch(e){bulutKul={uid:u.uid,rol:'?',onay:false}}
   return bulutKul;
 }
-async function bulutCikisPortal(){try{await firebase.auth().signOut()}catch(e){}bulutKul=null;}
+async function bulutCikisPortal(){try{siparisDinlemeDur();siparisMusDur();}catch(e){}try{await firebase.auth().signOut()}catch(e){}bulutKul=null;}
 function bulutAdminMi(){return !!(bulutKul&&bulutKul.rol==='admin')}
 // Admin: onay bekleyen kullanıcılar
 async function bulutOnayBekleyen(){
@@ -969,7 +970,37 @@ async function bulutSiparislerimYukle(){
     return bulutSiparislerim;
   }catch(e){return []}
 }
-async function bulutMusteriYukleHepsi(){ if(bulutKul&&bulutKul.rol==='musteri'&&bulutKul.onay){await bulutMusteriVeriYukle();await bulutSiparislerimYukle();} }
+async function bulutMusteriYukleHepsi(){ if(bulutKul&&bulutKul.rol==='musteri'&&bulutKul.onay){await bulutMusteriVeriYukle();await bulutSiparislerimYukle();siparisDinleMusteri();} }
+// 🔔 OTOMATİK SİPARİŞ — yönetici: yeni siparişler CANLI düşer (manuel "Çek" gerekmez), bildirim verir
+let _sipUnsub=null;
+function siparisDinle(){
+  if(_sipUnsub)return; if(!bulutBaslat()||!bulutGirisli())return;
+  try{if('Notification'in window&&Notification.permission==='default')Notification.requestPermission().catch(()=>{})}catch(e){}
+  try{
+    _sipUnsub=_fb.collection('siparisler').where('magaza','==',MAGAZA_ID).where('durum','==','yeni').onSnapshot(snap=>{
+      let n=0;snap.forEach(doc=>{const o=doc.data();if((db.bekleyenPortal||[]).some(x=>x.bulutId===doc.id))return;
+        db.bekleyenPortal.push({id:nid('bp'),bulutId:doc.id,mus:o.mus,mid:o.mid||0,tarih:o.tarih||o.olusturma||Date.now(),kalemler:o.kalemler||[],tutar:o.tutar||0,not:o.not||'',tel:o.tel||'',adres:o.adres||'',sehir:o.sehir||'',calisan:o.calisan||''});n++;});
+      if(n){save();try{if(typeof render==='function'&&typeof cur!=='undefined')render()}catch(e){}
+        toast('🔔 '+n+' yeni sipariş geldi!');
+        try{if(navigator.vibrate)navigator.vibrate([90,40,90])}catch(e){}
+        try{if('Notification'in window&&Notification.permission==='granted')new Notification('🔔 Yeni sipariş',{body:n+' yeni sipariş geldi — onay bekliyor'});}catch(e){}}
+    },err=>{console.warn('sipdinle',err&&err.code);});
+  }catch(e){console.warn('sipdinle',e);}
+}
+function siparisDinlemeDur(){if(_sipUnsub){try{_sipUnsub()}catch(e){}_sipUnsub=null;}}
+// Müşteri: kendi siparişlerinin durumu CANLI güncellenir (onaylandı/reddedildi anında görünür)
+let _sipMusUnsub=null;
+function siparisDinleMusteri(){
+  if(_sipMusUnsub)return; if(!bulutBaslat()||!bulutKul||!bulutKul.uid)return;
+  try{
+    _sipMusUnsub=_fb.collection('siparisler').where('uid','==',bulutKul.uid).onSnapshot(snap=>{
+      bulutSiparislerim=[];snap.forEach(d=>bulutSiparislerim.push({bid:d.id,...d.data()}));
+      bulutSiparislerim.sort((a,b)=>(b.olusturma||b.tarih||0)-(a.olusturma||a.tarih||0));
+      try{if(bulutMusteriMod&&portalView==='hesap')portalCiz()}catch(e){}
+    },err=>{console.warn('sipmusdinle',err&&err.code);});
+  }catch(e){}
+}
+function siparisMusDur(){if(_sipMusUnsub){try{_sipMusUnsub()}catch(e){}_sipMusUnsub=null;}}
 
 function sifirla(){askConfirm('Tüm veriler örnek verilere sıfırlansın mı?',()=>{db=seed();save();go('panel');toast('Sıfırlandı')})}
 
@@ -3445,9 +3476,11 @@ function isEmriA4(id){
 
 /* ---------- PORTAL ---------- */
 function rPortal(){
+  try{if(bulutVar()&&bulutGirisli())siparisDinle();}catch(e){} // portal açıkken siparişler otomatik gelsin
   let html=`<div class="g2"><button class="btn sm" onclick="portalOnizle()">👁️ Müşteri Sipariş Ekranı</button><button class="btn ghost sm" onclick="portalPaylas()">🔗 Linki Paylaş</button></div>
     <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="portalKullanicilar()">👤 Giriş Bilgileri</button><button class="btn ghost sm" onclick="fiyatListesiPaylas()">📋 Fiyat Listesi Paylaş</button></div>
-    ${bulutVar()?`<div class="g2" style="margin-top:8px"><button class="btn sm" onclick="bulutYayinla()">☁️ Buluta Yayınla</button><button class="btn ghost sm" onclick="bulutSiparisleriCek()">📥 Bulut Siparişlerini Çek</button></div>
+    ${bulutVar()?`<div style="margin-top:8px"><button class="btn sm" onclick="bulutYayinla()">☁️ Buluta Yayınla (katalog)</button></div>
+    <div class="okbox" style="margin-top:8px;display:flex;align-items:center;justify-content:space-between;gap:8px"><span>🔔 Siparişler otomatik geliyor${_sipUnsub?' <b style="color:var(--good)">✓ dinleniyor</b>':''}</span><button class="btn ghost sm" style="width:auto;margin:0;padding:6px 10px;flex:0 0 auto" onclick="bulutSiparisleriCek()">🔄 Yenile</button></div>
     <div style="margin-top:8px"><button class="btn ghost sm" onclick="bulutKullaniciYonet()">👥 Bulut Kullanıcıları <span id="bk-rozet"></span></button></div>
     <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="bulutFasonYayinla()">🧵 Fasona İş Gönder</button><button class="btn ghost sm" onclick="bulutFasonDurumCek()">📥 Fason Durumları</button></div>
     <div style="margin-top:8px"><button class="btn sm" onclick="bulutDavetLinki()">🔗 Davet Linki & QR Oluştur</button></div>`:''}
