@@ -877,7 +877,11 @@ async function bulutKullaniciYonet(){
     <label>Cari bağla (isteğe bağlı)</label><select id="ku-cari-${u.uid}">${cOpts(u.istenenCari||u.cariId)}</select>
     <div class="g2" style="margin-top:10px"><button class="btn danger sm" onclick="bulutKulSilUI('${u.uid}')">Sil</button><button class="btn g sm" onclick="bulutKulOnayUI('${u.uid}')">✓ Onayla</button></div></div>`}).join(''):'<div class="mini" style="margin-bottom:6px">Bekleyen kullanıcı yok</div>';
   h+=`<div class="sec">✅ Onaylı (${aktif.length})</div>`;
-  h+=aktif.length?aktif.map(u=>{const c=u.cariId&&cari(u.cariId);return `<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><b>${esc(u.ad||'(isimsiz)')}</b> <span class="tag" style="background:var(--ind-s);color:var(--ind)">${ROL_AD[u.rol]||u.rol}</span><div class="mini">${esc(u.mail||'')}${c?' · 🔗 '+esc(c.ad):''}</div></div>${u.rol!=='admin'?`<button class="btn ghost sm" style="width:auto;margin:0;padding:7px 11px;flex:0 0 auto" onclick="bulutKulSilUI('${u.uid}')">Sil</button>`:''}</div></div>`}).join(''):'<div class="mini">Onaylı kullanıcı yok</div>';
+  h+=aktif.length?aktif.map(u=>{const c=u.cariId&&cari(u.cariId);return `<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><b>${esc(u.ad||'(isimsiz)')}</b> <span class="tag" style="background:var(--ind-s);color:var(--ind)">${ROL_AD[u.rol]||u.rol}</span><div class="mini">${esc(u.mail||'')}${u.tel?' · 📞 '+esc(u.tel):''}${c?' · 🔗 '+esc(c.ad):''}</div></div>${u.rol!=='admin'?`<button class="btn ghost sm" style="width:auto;margin:0;padding:7px 11px;flex:0 0 auto" onclick="bulutKulSilUI('${u.uid}')">Sil</button>`:''}</div>
+    ${u.rol!=='admin'?`<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12.5px;color:var(--ind2);font-weight:700">⚙️ Rolü / cariyi değiştir</summary>
+      <label style="margin-top:6px">Rol</label><select id="ku-rol-${u.uid}">${rOpts(u.rol)}</select>
+      <label>Cari bağla (isteğe bağlı)</label><select id="ku-cari-${u.uid}">${cOpts(u.cariId)}</select>
+      <button class="btn g sm" style="margin-top:8px" onclick="bulutKulOnayUI('${u.uid}')">💾 Kaydet</button></details>`:''}</div>`}).join(''):'<div class="mini">Onaylı kullanıcı yok</div>';
   $('mB').innerHTML=h;
 }
 async function bulutKulOnayUI(uid){const rol=$('ku-rol-'+uid)?.value||'musteri';const cariId=+($('ku-cari-'+uid)?.value||0);
