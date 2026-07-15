@@ -1506,23 +1506,30 @@ function bedenEkle(){const el=$('beden-in');const v=(el.value||'').trim().toUppe
 function bedenPreset(list){fBeden=list.map(b=>({beden:b,adet:1}));cizBeden()}
 function cizRenk(){
   const box=$('renk-box');if(!box)return;
+  const seriMi=$('sb-seri')?$('sb-seri').classList.contains('on'):true;
+  const birimAd=seriMi?'seri':'adet';
   box.innerHTML=fRenk.map((r,i)=>{
     const kirikOpen=r._kirikOpen||(r.kirik&&Object.keys(r.kirik).length);
     const kirikTop=r.kirik?Object.values(r.kirik).reduce((a,x)=>a+(+x||0),0):0;
-    return `<div class="renkcard">
-      <div class="rc-body">
-        <div class="rc-foto" onclick="renkFotoSec(${i})">${r.foto?`<img src="${r.foto}">`:'<span>📷<br>Foto</span>'}<input type="file" accept="image/*" id="rf-${i}" style="display:none" onchange="renkFoto(${i},this)"></div>
-        <div class="rc-fields">
-          <div class="rc-top"><input class="rad" list="renkList" autocomplete="off" value="${esc(r.ad||'')}" placeholder="Renk adı (Siyah, Bordo...)" oninput="fRenk[${i}].ad=this.value"><button class="del" onclick="fRenk.splice(${i},1);cizRenk()">✕</button></div>
-          <label>Seri Adedi</label><input type="number" inputmode="numeric" min="0" value="${r.stok||0}" oninput="if(+this.value<0)this.value=0;fRenk[${i}].stok=+this.value||0;renkTot()">
-        </div>
+    const sw=hexFromAd(r.ad)||r.hex||'#8a8f98';
+    return `<div style="border:1px solid var(--ln);border-radius:11px;padding:6px 7px;margin-bottom:6px;background:var(--card)">
+      <div style="display:flex;align-items:center;gap:7px">
+        <div onclick="renkFotoSec(${i})" title="Foto ekle" style="width:36px;height:36px;flex:0 0 auto;border-radius:9px;overflow:hidden;background:${sw};display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;border:1px solid var(--ln);color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.4)">${r.foto?`<img src="${r.foto}" style="width:100%;height:100%;object-fit:cover">`:'📷'}<input type="file" accept="image/*" id="rf-${i}" style="display:none" onchange="renkFoto(${i},this)"></div>
+        <input class="rad" list="renkList" autocomplete="off" value="${esc(r.ad||'')}" placeholder="Renk" oninput="fRenk[${i}].ad=this.value;cizRenkSwatch(${i},this)" style="flex:1;min-width:0;margin:0;padding:8px 9px">
+        <div class="step sm" style="flex:0 0 auto"><button type="button" class="b" onclick="rStokAdet(${i},-1)">−</button><input type="number" inputmode="numeric" min="0" value="${r.stok||0}" oninput="if(+this.value<0)this.value=0;fRenk[${i}].stok=+this.value||0;renkTot()" style="width:50px"><button type="button" class="b p" onclick="rStokAdet(${i},1)">+</button></div>
+        <button type="button" class="del" onclick="fRenk.splice(${i},1);cizRenk()" style="flex:0 0 auto">✕</button>
       </div>
-      <div class="rc-kirikh" onclick="renkKirik(${i})">${kirikOpen?'▾':'▸'} Kırık seri (tek beden)${kirikTop?` · ${kirikTop} adet`:''}</div>
-      ${kirikOpen?`<div class="rc-kirik">${fBeden.length?fBeden.map(x=>{const bd=x.beden;return `<div class="kb"><span>${esc(bd)}</span><input type="number" inputmode="numeric" value="${(r.kirik&&r.kirik[bd])||''}" placeholder="0" oninput="setKirik(${i},'${esc(bd)}',this.value)"></div>`}).join(''):'<div class="mini">Önce Genel Bilgi sekmesinde seri içeriği (beden) ekle</div>'}</div>`:''}
+      ${seriMi?`<div onclick="renkKirik(${i})" style="font-size:11px;color:var(--sub);margin-top:3px;cursor:pointer;padding-left:2px">${kirikOpen?'▾':'▸'} kırık seri (tek beden)${kirikTop?` · <b>${kirikTop}</b> adet`:''}</div>`:''}
+      ${(seriMi&&kirikOpen)?`<div class="rc-kirik" style="margin-top:4px">${fBeden.length?fBeden.map(x=>{const bd=x.beden;return `<div class="kb"><span>${esc(bd)}</span><input type="number" inputmode="numeric" value="${(r.kirik&&r.kirik[bd])||''}" placeholder="0" oninput="setKirik(${i},'${esc(bd)}',this.value)"></div>`}).join(''):'<div class="mini">Önce Genel sekmesinde beden ekle</div>'}</div>`:''}
     </div>`;
-  }).join('')+`<datalist id="renkList">${['Siyah','Beyaz','Lacivert','Gri','Antrasit','Bej','Bordo','Yeşil','Haki','Hardal','Mor','Kırmızı','Kahverengi','Sarı','Mavi','Pembe','Turuncu','Füme','Ekru','Vizon'].map(c=>`<option value="${c}">`).join('')}</datalist><button type="button" class="btn ghost sm" onclick="renkEkle()" style="margin-top:10px">+ Renk Ekle</button><div class="mini" id="renk-tot" style="margin-top:8px"></div>`;
+  }).join('')+`<datalist id="renkList">${['Siyah','Beyaz','Lacivert','Gri','Antrasit','Bej','Bordo','Yeşil','Haki','Hardal','Mor','Kırmızı','Kahverengi','Sarı','Mavi','Pembe','Turuncu','Füme','Ekru','Vizon'].map(c=>`<option value="${c}">`).join('')}</datalist>
+    <button type="button" class="btn ghost sm" onclick="renkEkle()" style="margin-top:8px">+ Renk Ekle</button>
+    <div class="mini" style="margin-top:6px">Her satır: küçük kutuya dokun → foto · adı yaz · <b>${birimAd}</b> adedini gir. Renk adını yazınca kutu rengi otomatik.</div>
+    <div class="mini" id="renk-tot" style="margin-top:4px;font-weight:700"></div>`;
   renkTot();
 }
+function rStokAdet(i,d){if(!fRenk[i])return;fRenk[i].stok=Math.max(0,(+fRenk[i].stok||0)+d);cizRenk()}
+function cizRenkSwatch(i,inp){if(!fRenk[i])return;const hx=hexFromAd(inp.value);if(hx){const box=inp.parentNode.querySelector('div');if(box&&!fRenk[i].foto)box.style.background=hx;}}
 function renkTot(){const t=$('renk-tot');if(!t)return;if(!fRenk.length){t.textContent='';return}const s=fRenk.reduce((a,r)=>a+(+r.stok||0),0);const k=fRenk.reduce((a,r)=>a+(r.kirik?Object.values(r.kirik).reduce((b,x)=>b+(+x||0),0):0),0);t.innerHTML=`📦 Toplam: <b>${s}</b> seri${k?` + ${k} tek (kırık)`:''}`}
 function renkEkle(){fRenk.push({ad:'',hex:'#8a8f98',foto:'',barkod:genBarkod(),stok:0,kirik:null});cizRenk()}
 function renkFotoSec(i){const el=$('rf-'+i);if(el)el.click()}
