@@ -3217,9 +3217,7 @@ function formIsEmri(){
     <div class="mini">Hangi renkten kaç adet üreteceksin? <b>Toplam adet renklerden otomatik hesaplanır.</b></div>
     <div id="ie-renk"></div>
     <div class="ietoplam" id="ie-toplam-box"></div>
-    <div class="sec" style="margin-top:12px">🧵 Malzeme / Kumaş <a onclick="kumasStok()">📦 stoğum</a> · <a onclick="ieMalEkle()">+ malzeme</a></div>
-    <div class="mini">Adını yaz — stokta varsa öneriden seç. Yoksa <b>＋ stoğa tanımla</b> ile ekle. Kilo/metre + TL/dolar seçebilirsin. Elinde yoksa <b>🛒 alınacak</b> işaretle.</div>
-    <div id="ie-mal" style="margin-top:6px"></div>
+    <div class="okbox" style="margin-top:12px">🧵 <b>Kumaş / aksesuarı sen girmiyorsun.</b> Kesim bitince fason takipçin, iş emri detayından fiş fotoğrafıyla ekleyecek. Sen sadece kesim bilgisini ver.</div>
     <div class="sec" style="margin-top:12px">✂️ Kesim (ilk durak)</div>
     <div class="mini">İş emri önce <b>kesime</b> gider. Nereye dikileceği/nakış olup olmayacağı sonra belli olur — o aşamaları <b>kesim bitince "Durak Ekle" ile</b> eklersin.</div>
     ${fs.length?'':'<div class="warnbox" style="margin-top:6px">Hiç fason firma yok. Cari › Fason\'dan ekleyebilirsin (yine de açabilirsin).</div>'}
@@ -3227,7 +3225,7 @@ function formIsEmri(){
     <label style="margin-top:12px">Genel Gider (₺/adet)</label><input id="ie-gg" type="number" inputmode="numeric" value="12" placeholder="10-15">
     <div class="mini">Elektrik, işçilik payı, nakliye vb. — birim maliyete eklenir.</div>
     <button class="btn" style="margin-top:14px" onclick="kaydetIsEmri()">İş Emri Aç</button>`);
-  cizIeRenk();cizIeMal();cizIeFoto();ieToplamCiz();
+  cizIeRenk();cizIeFoto();ieToplamCiz();
 }
 function ieToplam(){return ieRenk.reduce((a,r)=>a+(+r.adet||0),0)}
 function ieToplamCiz(){const el=$('ie-toplam-box');if(!el)return;const t=ieToplam();const seri=$('ie-birim')?.value==='seri';const sa=Math.max(1,+($('ie-seriadet')?.value||1));
