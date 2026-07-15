@@ -3302,8 +3302,17 @@ function cizIeMal(){const b=$('ie-mal');if(!b)return;
     <div class="g2" style="margin-top:6px"><div><label style="margin-top:0">Tutar</label><input type="number" inputmode="numeric" value="${m.tutar||''}" oninput="ieMalSet(${i},'tutar',this.value)"></div><div><label style="margin-top:0">Döviz</label><select onchange="ieMalSet(${i},'pb',this.value)">${['TL','USD','EUR'].map(x=>`<option ${(m.pb||'TL')===x?'selected':''}>${x}</option>`).join('')}</select></div></div>
     ${(m.pb==='USD'||m.pb==='EUR')&&m.tutar?`<div class="mini" style="margin-top:3px;color:var(--ind2)">≈ ${TL(m.tutar*(m.pb==='USD'?db.kurUSD:db.kurEUR))} (kur ${(m.pb==='USD'?db.kurUSD:db.kurEUR).toFixed(2)})</div>`:''}
     <label class="ckrow" style="margin:8px 0 0"><input type="checkbox" ${m.durum==='alinacak'?'checked':''} onchange="ieMalSet(${i},'durum',this.checked?'alinacak':'var')"><span>🛒 Bu malzeme alınacak (elimde yok)</span></label>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:7px">
+      <button type="button" class="btn ghost sm" style="width:auto;margin:0;padding:7px 11px" onclick="ieMalFisSec(${i})">📷 Fiş / Makbuz${m.fis?' ✓':''}</button>
+      ${m.fis?`<img src="${m.fis}" style="width:40px;height:40px;border-radius:8px;object-fit:cover;cursor:pointer" onclick="ieMalFisGoster(${i})"><a onclick="ieMalSet(${i},'fis','');cizIeMal()" style="font-size:12px;color:var(--bad);font-weight:700;cursor:pointer">kaldır</a>`:'<span class="mini">alış fişini fotoğrafla (opsiyonel)</span>'}
+      <input type="file" accept="image/*" id="mal-fis-${i}" style="display:none" onchange="ieMalFis(${i},this)">
+    </div>
   </div>`}).join(''):'<div class="mini">Kumaş/malzeme eklemek için "+ malzeme".</div>';
 }
+function ieMalFisSec(i){const el=$('mal-fis-'+i);if(el)el.click()}
+function ieMalFis(i,input){const f=input.files&&input.files[0];if(!f||!ieMal[i])return;resizeImg(f,d=>{ieMal[i].fis=d;cizIeMal()},1400,0.72)}
+function ieMalFisGoster(i){const m=ieMal[i];if(!m||!m.fis)return;open_('🧾 Fiş · '+(m.ad||'malzeme'),`<img src="${m.fis}" style="width:100%;border-radius:12px">`)}
+function isEmriFisGoster(id,mi){const i=db.isemirleri.find(v=>v.id===id);const m=i&&i.malzeme&&i.malzeme[mi];if(!m||!m.fis)return;open_('🧾 Fiş · '+(m.ad||'malzeme'),`<img src="${m.fis}" style="width:100%;border-radius:12px">`)}
 function kaydetIsEmri(){
   const ad=($('ie-ad').value||'').trim();if(!ad)return toast('Ürün adı gir');
   const kod=($('ie-kod').value||'').trim();
@@ -3368,7 +3377,7 @@ function uretimDetay(id){
   html+=`</div>`;
   if(i.durum!=='tamam'){const sonD=i.duraklar[i.duraklar.length-1];const sonBitti=sonD&&sonD.durum==='tamam';
     html+=`<button class="btn ${sonBitti?'g':'ghost'} sm" style="margin-top:10px" onclick="formDurakEkle(${id})">➕ Sonraki Durak Ekle${sonBitti?' — mal '+ieSaglam(i)+' '+(i.birim||'ad')+' hazır, nereye?':' (dikim / nakış / baskı / ütü...)'}</button>`;}
-  html+=`<div class="sec">Malzeme / Kumaş <a onclick="ieMalDuzenle(${id})">${i.durum==='tamam'?'':'+ ekle / düzenle'}</a></div><div class="card" style="padding:4px 13px">`+((i.malzeme&&i.malzeme.length)?i.malzeme.map(m=>`<div class="kv"><span class="k">${esc(m.ad)}${m.durum==='alinacak'?' <span class="pill low">🛒 alınacak</span>':''}</span><span class="v">${m.mik?m.mik.toLocaleString('tr-TR')+' '+esc(m.birim||''):''}${kar&&m.tutar?' · '+money(m.tutar,m.pb||'TL'):''}</span></div>`).join(''):'<div class="mini" style="padding:8px 0">Malzeme eklenmedi.</div>')+`</div>`;
+  html+=`<div class="sec">Malzeme / Kumaş <a onclick="ieMalDuzenle(${id})">${i.durum==='tamam'?'':'+ ekle / düzenle'}</a></div><div class="card" style="padding:4px 13px">`+((i.malzeme&&i.malzeme.length)?i.malzeme.map((m,mi)=>`<div class="kv"><span class="k">${esc(m.ad)}${m.durum==='alinacak'?' <span class="pill low">🛒 alınacak</span>':''}${m.fis?` <a onclick="isEmriFisGoster(${id},${mi})" style="color:var(--ind2);font-weight:700;cursor:pointer">🧾 fiş</a>`:''}</span><span class="v">${m.mik?m.mik.toLocaleString('tr-TR')+' '+esc(m.birim||''):''}${kar&&m.tutar?' · '+money(m.tutar,m.pb||'TL'):''}</span></div>`).join(''):'<div class="mini" style="padding:8px 0">Malzeme eklenmedi.</div>')+`</div>`;
   if(i.durum!=='tamam'){html+=`<button class="btn g" style="margin-top:14px" onclick="isEmriTamamla(${id})">📦 Tamamla → ${saglam||'?'} ${esc(i.birim||'adet')} stoğa al</button>`;}
   else{html+=`<div class="okbox" style="margin-top:14px">✅ ${ieSaglam(i)} ${esc(i.birim||'adet')} stoğa girdi${kar?` · birim maliyet ${TL(birim)}`:''}</div>`;
     if(i.urunId&&urun(i.urunId))html+=`<button class="btn" style="margin-top:10px" onclick="closeM();setTimeout(()=>barkodYazdir(${i.urunId}),150)">🏷️ Barkod Etiketi Yazdır</button>`;}
@@ -3549,7 +3558,7 @@ function ieMalDuzenle(id){const i=db.isemirleri.find(v=>v.id===id);if(!i||i.duru
   cizIeMal();
 }
 function ieMalKaydet(id){const i=db.isemirleri.find(v=>v.id===id);
-  const yeni=ieMal.filter(m=>(m.ad||'').trim()).map(m=>{const h=db.hammadde.find(x=>x.ad.toLowerCase()===m.ad.trim().toLowerCase());return {ad:m.ad.trim(),mik:+m.mik||0,birim:m.birim||(h?h.birim:''),tutar:+m.tutar||0,pb:m.pb||'TL',durum:m.durum||'var',hid:h?h.id:null}});
+  const yeni=ieMal.filter(m=>(m.ad||'').trim()).map(m=>{const h=db.hammadde.find(x=>x.ad.toLowerCase()===m.ad.trim().toLowerCase());return {ad:m.ad.trim(),mik:+m.mik||0,birim:m.birim||(h?h.birim:''),tutar:+m.tutar||0,pb:m.pb||'TL',durum:m.durum||'var',fis:m.fis||'',hid:h?h.id:null}});
   // önce eski 'var' malzemelerin stoğunu geri ekle, sonra güncel 'var' olanları düş → net fark uygulanır (miktar düzenlemesinde çift düşme olmaz)
   (i.malzeme||[]).forEach(m=>{if(m.durum==='var'&&m.hid){const h=db.hammadde.find(x=>x.id===m.hid);if(h)h.stok=(+h.stok||0)+(+m.mik||0)}});
   yeni.forEach(m=>{if(m.durum==='var'&&m.hid){const h=db.hammadde.find(x=>x.id===m.hid);if(h)h.stok=(+h.stok||0)-m.mik}});
