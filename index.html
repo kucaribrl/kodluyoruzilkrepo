@@ -1014,6 +1014,16 @@ function siparisDinleMusteri(){
 function siparisMusDur(){if(_sipMusUnsub){try{_sipMusUnsub()}catch(e){}_sipMusUnsub=null;}}
 
 function sifirla(){askConfirm('Tüm veriler örnek verilere sıfırlansın mı?',()=>{db=seed();save();go('panel');toast('Sıfırlandı')})}
+// 🧹 Test/örnek verileri temizle — sıfırdan boş başla (firma bilgisi + kur + roller + PIN korunur)
+function bosBaslat(){
+  const canli=canliAcik;
+  askConfirm('🧹 Sıfırdan başla?\n\nTÜM örnek/test verileri silinecek: ürünler, cariler, satışlar, kasa hareketleri, çekler, iş emirleri, bekleyen siparişler.\n\nKORUNUR: firma bilgilerin, döviz kuru, indirim kademeleri, roller, PIN.\n'+(canli?'\n⚠️ Canlı senkron AÇIK — bu temizlik BULUTA ve tüm cihazlara da yansır.\n':'')+'\nÖnce otomatik yedek alınır (geri dönebilirsin). Devam?',()=>{
+    autoYedek('sıfırdan başlamadan önce');
+    db.urunler=[];db.cariler=[];db.satislar=[];db.cekler=[];db.isemirleri=[];db.bekleyenPortal=[];db.hareketler=[];db.portalTaslak=[];db.stokBildirim=[];db.duzenliGider=[];db.kampanya=null;
+    db.seq={}; db.hesaplar=[{id:nid('h'),ad:'Nakit Kasa',tur:'nakit',bakiye:0}];
+    save();closeM();go('panel');toast('🧹 Temizlendi — sıfırdan başlayabilirsin ✓');
+  },'Evet, temizle');
+}
 
 /* =================== YARDIMCI =================== */
 const $=id=>document.getElementById(id);
@@ -4591,6 +4601,7 @@ function rAyarlar(){
     <div class="row" onclick="otoYedekListe()"><div class="av" style="background:var(--good)">🕑</div><div class="mid"><div class="t">Otomatik Yedekler</div><div class="s">riskli işlemlerden önce alınır · geri yükle</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="yedekAl()"><div class="av g">💾</div><div class="mid"><div class="t">Yedek Al (indir)</div><div class="s">tüm verini dosya olarak kaydet</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="$('yedekFile').click()"><div class="av" style="background:var(--ind2)">📂</div><div class="mid"><div class="t">Yedekten Yükle</div><div class="s">daha önce aldığın yedeği geri yükle</div></div><span style="color:var(--sub)">›</span></div>
+    <div class="row" onclick="bosBaslat()"><div class="av" style="background:var(--warn)">🧹</div><div class="mid"><div class="t">Test verilerini temizle (sıfırdan başla)</div><div class="s">örnek ürün/cari/satışları siler · firma+roller kalır</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="sifirla()"><div class="av r">🔄</div><div class="mid"><div class="t">Örnek verilere sıfırla</div></div></div>
   </div><input type="file" id="yedekFile" accept="application/json" style="display:none" onchange="yedekYukle(this)">
   <div class="mini" style="margin:8px 3px">💡 Veriler telefonunun tarayıcısında saklanır. Önemli verini ara sıra <b>yedek al</b> — tarayıcı geçmişini silsen bile kaybolmaz.</div>`;
