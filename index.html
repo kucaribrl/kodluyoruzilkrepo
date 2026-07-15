@@ -1224,7 +1224,7 @@ function rDaha(){
   ].filter(i=>canSee(i.v));
   $('app').innerHTML=`<div class="sec">Daha Fazlası</div><div class="card">`+items.map(i=>`<div class="row" onclick="go('${i.v}')"><div class="av" style="background:var(--ind)">${i.ic}</div><div class="mid"><div class="t">${i.ad}</div><div class="s">${i.s}</div></div><span style="color:var(--sub)">›</span></div>`).join('')+`</div>
     <div class="sec">Uygulama</div><div class="card"><div class="row" onclick="sifirla()"><div class="av r">🔄</div><div class="mid"><div class="t">Örnek verilere sıfırla</div><div class="s">test için</div></div></div></div>
-    <div class="mini" style="text-align:center;margin-top:20px">Öz Tekstil · Toptan Yönetim · prototip v2 🧵</div>`;
+    <div class="mini" style="text-align:center;margin-top:20px">${esc(db.firma||'IQ Basics')} · Toptan Yönetim 🧵</div>`;
 }
 
 /* ---------- GENEL ARAMA ---------- */
@@ -2343,10 +2343,28 @@ function musKartAlt(id){
 function cekFotoGoster(cekId){const k=db.cekler.find(x=>x.id===cekId);if(!k||!k.foto)return;open_('Çek Resmi',`<img src="${k.foto}" style="width:100%;border-radius:12px"><div class="kv" style="margin-top:10px"><span class="k">Tutar</span><span class="v">${TL(k.tutar)}</span></div><div class="kv"><span class="k">Vade</span><span class="v">${dstr(k.vade)}</span></div>`)}
 function sonTahsilat(id){let t=0;(db.hareketler||[]).filter(h=>h.cariId===id&&h.tip==='tahsilat'&&h.tutar>0).forEach(h=>{if(h.tarih>t)t=h.tarih});db.satislar.filter(s=>s.mid===id&&s.odenen>0).forEach(s=>{if(s.tarih>t)t=s.tarih});return t}
 function gecikmeGun(id){const t=sonTahsilat(id);if(t)return Math.floor((Date.now()-t)/86400000);const ilk=db.satislar.filter(s=>s.mid===id).map(s=>s.tarih).sort((a,b)=>a-b)[0];return ilk?Math.floor((Date.now()-ilk)/86400000):0}
-function waHatirlat(id){const m=cari(id);if(!m)return;let ph=((m.tel)||'').replace(/\D/g,'');if(ph){if(ph.length===10)ph='90'+ph;else if(ph[0]==='0')ph='9'+ph}
-  const msg=`Merhaba ${m.ad}, Öz Tekstil. Güncel bakiyeniz ${TL(Math.max(0,m.bakiye))}. Uygun olduğunuzda ödeme yapabilirseniz seviniriz. Teşekkürler 🙏`;
-  window.open(`https://wa.me/${ph}?text=${encodeURIComponent(msg)}`,'_blank');
+function waTel(t){let ph=((t)||'').replace(/\D/g,'');if(!ph)return '';if(ph.length===10)ph='90'+ph;else if(ph[0]==='0')ph='9'+ph;return ph}
+function waAc(tel,txt){const ph=waTel(tel);const u=`https://wa.me/${ph}?text=${encodeURIComponent(txt)}`;if(!ph&&navigator.share){navigator.share({text:txt}).catch(()=>{});return;}window.open(u,'_blank');}
+function waHatirlat(id){const m=cari(id);if(!m)return;
+  const b=Math.max(0,+m.bakiye||0);const firma=db.firma||'IQ Basics';
+  const msg=`Merhaba ${m.ad}, ${firma}.\nGüncel bakiyeniz: ${TL(b)}${b>0?' (borç)':''}.\nUygun olduğunuzda ödeme yapabilirseniz seviniriz. Teşekkürler 🙏`;
+  waAc(m.tel,msg);
 }
+// Ekstre metni (son hareketler + güncel bakiye) — WhatsApp'tan gönderilecek özet
+function ekstreMetin(id){
+  const c=cari(id);const {evs,devir}=cariEkstre(id);const firma=db.firma||'IQ Basics';
+  let run=devir;const sat=[];
+  evs.forEach(e=>{run+=(e.borc||0)-(e.alacak||0);sat.push({t:e.t,ad:e.ad,tut:e.borc?('+'+TL(e.borc)):('−'+TL(e.alacak)),bak:run});});
+  const son=sat.slice(-8); // son 8 hareket
+  const b=+c.bakiye||0;
+  let msg=`📄 ${firma} — Hesap Ekstresi\nSayın ${c.ad},\n`;
+  if(son.length){msg+=`\nSon hareketler:\n`+son.map(s=>`• ${dstr(s.t)} — ${s.ad} ${s.tut}`).join('\n')+`\n`;}
+  msg+=`\n💰 Güncel bakiye: ${TL(Math.abs(b))}${b>0?' (borç)':b<0?' (sizin alacağınız)':' (kapalı ✓)'}`;
+  const ir=(db.firmaWp||db.firmaTel||'');if(ir)msg+=`\n\n📞 ${firma}: ${ir}`;
+  return msg;
+}
+function ekstreWa(id){const c=cari(id);if(!c)return;waAc(c.tel,ekstreMetin(id));}
+function ekstreKopya(id){const t=ekstreMetin(id);try{navigator.clipboard.writeText(t).then(()=>toast('📋 Ekstre kopyalandı'),()=>toast('Kopyalanamadı'));}catch(e){toast('Kopyalanamadı');}}
 function tahsilatHatirlat(){
   const list=db.cariler.filter(c=>c.tip==='musteri'&&c.bakiye>0).map(c=>({c,g:gecikmeGun(c.id)})).sort((a,b)=>b.g-a.g);
   const cuma=new Date().getDay()===5;
@@ -2364,7 +2382,8 @@ function ekstreGoster(id){
     <div class="exrow"><div class="exl"><b>Devir (önceki bakiye)</b></div><div class="exb"></div><div class="exr ${devir>0?'neg':devir<0?'pos':''}">${TL(Math.abs(devir))}${devir<0?' A':''}</div></div>
     ${rows||'<div class="mini" style="padding:10px">Hareket yok</div>'}
     <div class="total" style="margin-top:12px"><div class="l">GÜNCEL BAKİYE</div><div class="v ${c.bakiye>0?'neg':c.bakiye<0?'pos':''}">${TL(Math.abs(c.bakiye||0))}${c.bakiye<0?' (alacaklı)':c.bakiye>0?' (borçlu)':''}</div></div>
-    <div class="mini" style="margin-top:6px">Borç kırmızı (+), tahsilat/ödeme yeşil (−). "A" = müşteri alacaklı.</div>
+    <div class="g2" style="margin-top:12px"><button class="btn g sm" onclick="ekstreWa(${id})">📱 WhatsApp'tan Gönder</button><button class="btn ghost sm" onclick="ekstreKopya(${id})">📋 Kopyala</button></div>
+    <div class="mini" style="margin-top:8px">Borç kırmızı (+), tahsilat/ödeme yeşil (−). "A" = müşteri alacaklı.</div>
   `);
 }
 function formOdeme(id){
@@ -4367,7 +4386,7 @@ function rAyarlar(){
     <div class="row" onclick="sifirla()"><div class="av r">🔄</div><div class="mid"><div class="t">Örnek verilere sıfırla</div></div></div>
   </div><input type="file" id="yedekFile" accept="application/json" style="display:none" onchange="yedekYukle(this)">
   <div class="mini" style="margin:8px 3px">💡 Veriler telefonunun tarayıcısında saklanır. Önemli verini ara sıra <b>yedek al</b> — tarayıcı geçmişini silsen bile kaybolmaz.</div>`;
-  html+=`<div class="mini" style="text-align:center;margin-top:18px">Öz Tekstil Toptan Yönetim · prototip v2</div>`;
+  html+=`<div class="mini" style="text-align:center;margin-top:18px">${esc(db.firma||'IQ Basics')} · Toptan Yönetim</div>`;
   $('app').innerHTML=html;
 }
 function formFirma(){open_('Firma Bilgileri',`<div class="mini">Bu bilgiler termal fiş / sipariş fişi çıktısının başlığında görünür.</div>
