@@ -3838,7 +3838,7 @@ function portalCiz(){
     else if(['ortak','magaza','depocu'].includes(bulutKul.rol)){portalPersoneleGec();return;} // personel → portal değil, uygulama görünümü
     else if(bulutKul.rol==='fason'){portalView='fason';}
     else{ if(['giris','bulutgiris','bulutonay','fason'].includes(portalView))portalView='katalog';
-      if(bulutKul.rol==='musteri'&&bulutKul.ad&&!portalMusAd)portalMusAd=bulutKul.ad; } // çalışan müşteri adını elle girer
+      if(bulutKul.rol==='musteri'){if(bulutKul.ad&&!portalMusAd)portalMusAd=bulutKul.ad;if(bulutKul.tel&&!portalTel)portalTel=bulutKul.tel;} } // giriş yapan müşterinin ad+telefonu hazır gelir
   }else if(!portalPreview&&!portalMusteriGiris()){portalView='giris';}
   const cartN=portalSepet.reduce((a,k)=>a+k.mik,0),cartT=portalTotal();
   const kadHint=kademeler().length?kademeler().map(k=>`${k.min}+ %${k.ind}`).join(' · '):'';
