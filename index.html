@@ -1491,7 +1491,7 @@ function cizBeden(){const b=$('beden-box');if(!b)return;
   bTot();
 }
 function bTot(){const t=$('beden-tot');if(!t)return;const s=fBeden.reduce((a,x)=>a+(+x.adet||0),0);t.innerHTML=fBeden.length?`👕 Bir seri = <b>${s}</b> parça · ${fBeden.map(x=>x.beden+(x.adet>1?'×'+x.adet:'')).join(' + ')}`:''}
-function bAdet(i,d){fBeden[i].adet=Math.max(1,(+fBeden[i].adet||1)+d);cizBeden()}
+function bAdet(i,d){if(!fBeden[i])return;fBeden[i].adet=Math.max(1,(+fBeden[i].adet||1)+d);cizBeden()}
 function bedenEkle(){const el=$('beden-in');const v=(el.value||'').trim().toUpperCase();if(v&&!fBeden.some(x=>x.beden===v))fBeden.push({beden:v,adet:1});el.value='';cizBeden();$('beden-in')&&$('beden-in').focus()}
 function bedenPreset(list){fBeden=list.map(b=>({beden:b,adet:1}));cizBeden()}
 function cizRenk(){
