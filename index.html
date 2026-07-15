@@ -523,8 +523,8 @@ const CANLI_DOMEN={
 };
 // Rol → hangi alanları OKUR / YAZAR (veri seviyesinde sınır; arayüz gizlemesiyle birlikte)
 const _CTUM=Object.keys(CANLI_DOMEN);
-const ROL_OKU={admin:_CTUM,ortak:_CTUM,magaza:['stok','cari','satis','ayar'],depocu:['stok','ayar'],fason:[],musteri:[],calisan:[]};
-const ROL_YAZ={admin:_CTUM,ortak:_CTUM,magaza:['stok','cari','satis','ayar'],depocu:['stok'],fason:[],musteri:[],calisan:[]};
+const ROL_OKU={admin:_CTUM,ortak:_CTUM,magaza:['stok','cari','satis','ayar'],depocu:['stok','ayar'],fasontakip:['stok','uretim','ayar'],fason:[],musteri:[],calisan:[]};
+const ROL_YAZ={admin:_CTUM,ortak:_CTUM,magaza:['stok','cari','satis','ayar'],depocu:['stok'],fasontakip:['uretim','ayar'],fason:[],musteri:[],calisan:[]};
 // Bilinen rol → kendisi; bilinmeyen/'?' (sahip, kullanicilar belgesi yoksa) → admin (bulut kuralları asıl kapıyı tutar)
 function canliRol(){const r=(bulutKul&&bulutKul.rol);return (r&&ROL_OKU[r])?r:'admin';}
 let canliAcik=false,_canliUnsub=[],_canliGolge={},_canliUygulaniyor=false,_canliYazT=null,_canliUyari=false;
@@ -666,7 +666,7 @@ function personelGiris(){
 async function personelBaslat(){
   await bulutProfilYukle(); const r=bulutKul&&bulutKul.rol;
   if(!bulutKul||!bulutKul.onay)return toast('Hesabın onaylı değil — yöneticinin onaylaması lazım');
-  if(!['ortak','magaza','depocu'].includes(r))return toast('Bu hesap personel değil (rol: '+(ROL_AD[r]||r||'?')+'). Yönetici seni Ortak/Mağaza/Depocu yapmalı.');
+  if(!['ortak','magaza','depocu','fasontakip'].includes(r))return toast('Bu hesap personel değil (rol: '+(ROL_AD[r]||r||'?')+'). Yönetici seni Ortak/Mağaza/Depocu yapmalı.');
   db.rol=r; db.personelMod=true; _canliUyari=false; save();
   canliBaslat(true); try{closeM()}catch(e){} go('panel');
   toast('👤 '+ROL_AD[r]+' olarak bağlanıldı — canlı veri geliyor…');
@@ -786,13 +786,13 @@ async function bulutSiparisleriCek(){if(!bulutBaslat())return toast('☁️ Bulu
 /* ---- Faz 2: Gerçek kullanıcı girişi (Firebase Auth) ---- */
 /* kullanicilar/{uid}: {rol:'admin'|'musteri'|'calisan'|'fason', ad, tel, mail, onay:bool, cariId} */
 let bulutKul=null; // giriş yapan portal kullanıcısının profili
-const ROL_AD={admin:'Yönetici',ortak:'Ortak',magaza:'Mağaza',depocu:'Depocu',musteri:'Müşteri',calisan:'Çalışan',fason:'Fason'};
+const ROL_AD={admin:'Yönetici',ortak:'Ortak',magaza:'Mağaza',depocu:'Depocu',musteri:'Müşteri',calisan:'Çalışan',fason:'Fason',fasontakip:'Fason Takipçi'};
 // Portal kullanıcı: kendi hesabını oluşturur (onaysız — admin onaylayana kadar giremez)
 // Giriş kimliği: '@' varsa e-posta; yoksa telefon → sentetik e-posta (Firebase e-posta ister ama kullanıcı telefonla girer)
 function kimlikMail(x){x=(''+(x||'')).trim();if(!x)return '';if(x.includes('@'))return x.toLowerCase();const d=x.replace(/\D/g,'');return d?('u'+d+'@iqbasics.app'):'';}
 async function bulutKayit(mail,pw,ad,tel,rolIstek,istenenCari){
   if(!bulutBaslat())return {ok:false,hata:'Bulut ayarlı değil'};
-  const r=['musteri','calisan','fason','magaza','depocu','ortak'].includes(rolIstek)?rolIstek:'musteri';
+  const r=['musteri','calisan','fason','magaza','depocu','ortak','fasontakip'].includes(rolIstek)?rolIstek:'musteri';
   // Telefon birincil kimlik; e-posta yoksa telefondan üretilir
   const authMail=kimlikMail(mail||tel);
   if(!authMail)return {ok:false,hata:'Telefon (veya e-posta) gerekli'};
@@ -1090,6 +1090,7 @@ const ROLLER={
   magaza:{ad:'Mağaza Elemanı',ic:'🏪',kar:false,para:false,urunYaz:false,hammadde:false,views:'panel,satis,stok,cari,ayarlar,daha'},
   depocu:{ad:'Depocu',ic:'📦',kar:false,para:false,urunYaz:false,hammadde:false,views:'panel,stok,ayarlar,daha'},
   fason:{ad:'Fasoncu (Üretim)',ic:'🧵',kar:false,para:false,urunYaz:false,hammadde:true,views:'panel,uretim,stok,cari,ayarlar,daha'},
+  fasontakip:{ad:'Fason Takipçi',ic:'🧵',kar:false,para:false,urunYaz:false,hammadde:true,views:'panel,uretim,stok,ayarlar,daha'},
 };
 function yetki(){return ROLLER[db.rol]||ROLLER.patron}
 function karGoster(){return !!yetki().kar}
@@ -1169,7 +1170,7 @@ async function oturumKilitGiris(){
     // Giriş başarılı → kilit kalkar. (Onay/rol yetkisini Firestore kuralları zaten uygular.)
     localStorage.removeItem('iq_oturumKilit');
     const r=bulutKul&&bulutKul.rol;
-    if(['ortak','magaza','depocu'].includes(r)){db.rol=r;db.personelMod=true;}
+    if(['ortak','magaza','depocu','fasontakip'].includes(r)){db.rol=r;db.personelMod=true;}
     _canliUyari=false; db.canliBulut=true; save();
     const p=$('ok-pw'); if(p)p.value='';
     $('oturumKilit').style.display='none';
@@ -3844,9 +3845,9 @@ function bulutDavetLinki(){davetGenRol='musteri';open_('🔗 Davet Linki & QR',`
   <div id="dav-out" style="margin-top:12px"></div>`);
   davetRolSec('musteri');}
 function davetRolSec(r){davetGenRol=r;
-  const seg=$('dav-seg');if(seg)seg.innerHTML=['musteri','ortak','magaza','depocu','fason'].map(k=>`<div class="o ${davetGenRol===k?'on':''}" onclick="davetRolSec('${k}')">${ROL_AD[k]}</div>`).join('');
+  const seg=$('dav-seg');if(seg)seg.innerHTML=['musteri','ortak','magaza','depocu','fasontakip','fason'].map(k=>`<div class="o ${davetGenRol===k?'on':''}" onclick="davetRolSec('${k}')">${ROL_AD[k]}</div>`).join('');
   const cw=$('dav-cari-wrap');
-  if(cw){if(r==='ortak'||r==='magaza'||r==='depocu'){cw.innerHTML='<div class="mini">Personel/ortak için cari gerekmez — onayladıktan sonra canlı veriye bağlanır.'+(r==='ortak'?' <b>Ortak her şeyi görür (kâr/kasa dahil).</b>':'')+'</div>';}
+  if(cw){if(r==='ortak'||r==='magaza'||r==='depocu'||r==='fasontakip'){cw.innerHTML='<div class="mini">Personel/ortak için cari gerekmez — onayladıktan sonra canlı veriye bağlanır.'+(r==='ortak'?' <b>Ortak her şeyi görür (kâr/kasa dahil).</b>':r==='fasontakip'?' <b>Fason takipçi sadece üretim/iş emri görür; malzeme+fiş girer.</b>':'')+'</div>';}
     else{const list=db.cariler.filter(c=>r==='fason'?c.tip==='fason':c.tip==='musteri');
       cw.innerHTML=`<label>${r==='fason'?'Fason kaydı':'Müşteri carisi'} (önerilir)</label><select id="dav-cari" onchange="davetYenile()"><option value="0">— seçilmedi —</option>${list.map(c=>`<option value="${c.id}">${esc(c.ad)}</option>`).join('')}</select>`;}}
   davetYenile();}
@@ -3886,7 +3887,7 @@ let bulutAuthTab='giris', davetRol='', davetCari=0;
 function bulutAuthSekme(t){bulutAuthTab=t;portalCiz()}
 // Davet linkini oku: #kayit=fason&c=201 → kayıt sekmesi + rol/cari hazır
 function portalDavetOku(){davetRol='';davetCari=0;const h=location.hash||'';
-  const m=h.match(/#kayit=?([a-z]*)/);if(m&&['musteri','calisan','fason','magaza','depocu','ortak'].includes(m[1])){davetRol=m[1];bulutAuthTab='kayit';}
+  const m=h.match(/#kayit=?([a-z]*)/);if(m&&['musteri','calisan','fason','magaza','depocu','ortak','fasontakip'].includes(m[1])){davetRol=m[1];bulutAuthTab='kayit';}
   const c=h.match(/[?&]c=(\d+)/);if(c)davetCari=+c[1];}
 async function portalBulutGiris(){
   const kimlik=($('pb-mail')?.value||'').trim(),pw=$('pb-pw')?.value||'';
@@ -4097,7 +4098,7 @@ function portalCiz(){
   if(bulutMusteriMod){ // bulut modu → Firebase hesabıyla giriş/onay/rol kapısı
     if(!bulutKul)portalView='bulutgiris';
     else if(!bulutKul.onay)portalView='bulutonay';
-    else if(['ortak','magaza','depocu'].includes(bulutKul.rol)){portalPersoneleGec();return;} // personel → portal değil, uygulama görünümü
+    else if(['ortak','magaza','depocu','fasontakip'].includes(bulutKul.rol)){portalPersoneleGec();return;} // personel → portal değil, uygulama görünümü
     else if(bulutKul.rol==='fason'){portalView='fason';}
     else{ if(['giris','bulutgiris','bulutonay','fason'].includes(portalView))portalView='katalog';
       if(bulutKul.rol==='musteri'){if(bulutKul.ad&&!portalMusAd)portalMusAd=bulutKul.ad;if(bulutKul.tel&&!portalTel)portalTel=bulutKul.tel;} } // giriş yapan müşterinin ad+telefonu hazır gelir
@@ -4118,7 +4119,7 @@ function portalCiz(){
         <div style="max-width:330px;margin:16px auto 0">
           ${t==='kayit'?`<label>Ad / Firma</label><input id="pb-ad" placeholder="ör. Yılmaz Tekstil" autocapitalize="words">
           <label>Telefon <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub)">— giriş için kullanılır</span></label><input id="pb-tel" placeholder="05.." inputmode="tel" autocomplete="tel">
-          <label>Kimsiniz?</label><select id="pb-rol" ${davetRol?'disabled style="opacity:.75"':''}><option value="musteri" ${davetRol==='musteri'?'selected':''}>Müşteri (sipariş vermek için)</option><option value="ortak" ${davetRol==='ortak'?'selected':''}>Ortak (yönetici)</option><option value="magaza" ${davetRol==='magaza'?'selected':''}>Mağaza Elemanı</option><option value="depocu" ${davetRol==='depocu'?'selected':''}>Depocu</option><option value="fason" ${davetRol==='fason'?'selected':''}>Fason (üretim)</option></select>`:''}
+          <label>Kimsiniz?</label><select id="pb-rol" ${davetRol?'disabled style="opacity:.75"':''}><option value="musteri" ${davetRol==='musteri'?'selected':''}>Müşteri (sipariş vermek için)</option><option value="ortak" ${davetRol==='ortak'?'selected':''}>Ortak (yönetici)</option><option value="magaza" ${davetRol==='magaza'?'selected':''}>Mağaza Elemanı</option><option value="depocu" ${davetRol==='depocu'?'selected':''}>Depocu</option><option value="fasontakip" ${davetRol==='fasontakip'?'selected':''}>Fason Takipçi</option><option value="fason" ${davetRol==='fason'?'selected':''}>Fason (üretim)</option></select>`:''}
           ${t==='giris'?`<label>Telefon veya E-posta</label><input id="pb-mail" autocapitalize="off" autocomplete="username" placeholder="05.. veya ornek@mail.com">`:''}
           <label>Şifre</label><input id="pb-pw" type="password" autocomplete="${t==='kayit'?'new-password':'current-password'}" placeholder="••••••" onkeydown="if(event.key==='Enter')${t==='kayit'?'portalBulutKayit()':'portalBulutGiris()'}">
           ${t==='kayit'?`<label style="margin-top:8px">E-posta <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub)">— isteğe bağlı</span></label><input id="pb-mail" type="email" autocapitalize="off" placeholder="varsa ornek@mail.com">`:''}

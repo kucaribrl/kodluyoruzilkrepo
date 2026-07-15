@@ -36,7 +36,7 @@ service cloud.firestore {
       allow create: if (girisli()
         && request.auth.uid == uid
         && request.resource.data.onay == false
-        && request.resource.data.rol in ['musteri','calisan','fason','magaza','depocu','ortak'])
+        && request.resource.data.rol in ['musteri','calisan','fason','magaza','depocu','ortak','fasontakip'])
         || (sahipMi() && request.auth.uid == uid);
       // Sahip kendi belgesini güncelleyebilir; onay / rol / silme yönetici (sahip dahil)
       allow update, delete: if adminMi() || (sahipMi() && request.auth.uid == uid);
@@ -74,16 +74,16 @@ service cloud.firestore {
     function rolVar(liste){ return sahipMi() || (girisli()
       && exists(/databases/$(database)/documents/kullanicilar/$(request.auth.uid))
       && (rolu() in liste)); }
-    match /isletme/{iid}/veri/stok   { allow read, write: if rolVar(['admin','ortak','magaza','depocu']); }
+    match /isletme/{iid}/veri/stok   { allow read, write: if rolVar(['admin','ortak','magaza','depocu','fasontakip']); }
     match /isletme/{iid}/veri/cari   { allow read, write: if rolVar(['admin','ortak','magaza']); }
     match /isletme/{iid}/veri/satis  { allow read, write: if rolVar(['admin','ortak','magaza']); }
     match /isletme/{iid}/veri/kasa   { allow read, write: if rolVar(['admin','ortak']); }
     match /isletme/{iid}/veri/cek    { allow read, write: if rolVar(['admin','ortak']); }
-    match /isletme/{iid}/veri/uretim { allow read, write: if rolVar(['admin','ortak']); }
+    match /isletme/{iid}/veri/uretim { allow read, write: if rolVar(['admin','ortak','fasontakip']); }
     // ayar: tüm personel okur (firma/kur/ID sayacı); yazma yönetici+ortak (+ satış yapan mağaza — seq için)
     match /isletme/{iid}/veri/ayar   {
-      allow read:  if rolVar(['admin','ortak','magaza','depocu']);
-      allow write: if rolVar(['admin','ortak','magaza']);
+      allow read:  if rolVar(['admin','ortak','magaza','depocu','fasontakip']);
+      allow write: if rolVar(['admin','ortak','magaza','fasontakip']);
     }
     // Diğer/yeni alanlar → yalnız yönetici+ortak
     match /isletme/{iid}/veri/{domen} { allow read, write: if rolVar(['admin','ortak']); }
