@@ -3812,10 +3812,90 @@ function fiyatListesiMetni(){const aktif=db.urunler.filter(u=>!u.pasif&&stokTop(
   const wp=db.firmaWp||db.firmaTel||'';if(wp)t+=`\n📞 Sipariş: ${wp}`;return t;}
 function fiyatListesiPaylas(){const t=fiyatListesiMetni();
   open_('📋 Toptan Fiyat Listesi',`<div class="mini">Müşteriye WhatsApp'tan gönderebileceğin güncel fiyat listesi. Sadece stokta olan ürünler, seri fiyatlarıyla listelenir.</div>
-    <textarea id="fl-txt" readonly style="width:100%;height:270px;font-size:12px;margin-top:10px;font-family:ui-monospace,monospace;line-height:1.5">${esc(t)}</textarea>
-    <div class="g2" style="margin-top:10px"><button class="btn g sm" onclick="flShare()">📱 Paylaş / Gönder</button><button class="btn ghost sm" onclick="flKopya()">📋 Kopyala</button></div>`);}
+    <button class="btn g" style="margin-top:10px" onclick="fiyatListesiResimGonder()">🖼️ Resimli Katalog Gönder</button>
+    <div class="mini" style="margin:6px 3px 0">Modellerin fotoğrafları + fiyatlarıyla tek görsel — WhatsApp'ta resim olarak gider, en şık paylaşım budur.</div>
+    <div class="sec" style="margin-top:14px">Ya da düz yazı olarak</div>
+    <textarea id="fl-txt" readonly style="width:100%;height:200px;font-size:12px;margin-top:4px;font-family:ui-monospace,monospace;line-height:1.5">${esc(t)}</textarea>
+    <div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="flShare()">📱 Yazıyı Gönder</button><button class="btn ghost sm" onclick="flKopya()">📋 Kopyala</button></div>`);}
 function flShare(){const t=($('fl-txt')&&$('fl-txt').value)||fiyatListesiMetni();if(navigator.share)navigator.share({text:t}).catch(()=>{});else flKopya()}
 function flKopya(){const el=$('fl-txt');const t=(el&&el.value)||'';if(navigator.clipboard)navigator.clipboard.writeText(t).then(()=>toast('Kopyalandı ✓')).catch(()=>{if(el){el.select();document.execCommand('copy');toast('Kopyalandı ✓')}});else if(el){el.select();document.execCommand('copy');toast('Kopyalandı ✓')}}
+// 🖼️ Resimli katalog — modellerin fotoğraflı fiyat listesi (WhatsApp'tan görsel olarak paylaşılır)
+function fiyatListesiResim(cb){
+  const aktif=db.urunler.filter(u=>!u.pasif&&stokTop(u)>0);
+  if(!aktif.length){cb(null);return;}
+  const W=860,P=34,GAP=20,COLS=2,CW=(W-2*P-(COLS-1)*GAP)/COLS,IMGH=Math.round(CW*0.92),TXTH=104,CARDH=IMGH+TXTH;
+  // önce tüm kapak fotoğraflarını yükle (yoksa null)
+  const loadOne=(u)=>new Promise(res=>{const src=urunKapak(u);if(!src)return res({u,im:null});
+    const im=new Image();im.onload=()=>res({u,im});im.onerror=()=>res({u,im:null});im.src=src;});
+  Promise.all(aktif.map(loadOne)).then(items=>{
+    const rows=Math.ceil(items.length/COLS);
+    const HEAD=104,FOOT=64;
+    const ind=kademeler();const indH=ind.length?40:0;
+    const H=HEAD+18+rows*(CARDH+GAP)+indH+FOOT;
+    const dpr=2,c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const g=c.getContext('2d');g.scale(dpr,dpr);
+    g.fillStyle='#f4f5f7';g.fillRect(0,0,W,H);
+    // başlık
+    g.fillStyle='#33333d';g.fillRect(0,0,W,HEAD);
+    g.textBaseline='alphabetic';g.textAlign='left';
+    g.fillStyle='#fff';g.font='800 32px sans-serif';g.fillText(db.firma||'IQ Basics',P,52);
+    g.font='700 17px sans-serif';g.fillStyle='#e6b3b0';g.fillText('TOPTAN FİYAT LİSTESİ',P,80);
+    g.textAlign='right';g.fillStyle='#c9ccd4';g.font='600 15px sans-serif';
+    g.fillText(new Date().toLocaleDateString('tr-TR'),W-P,50);
+    if(db.firmaWp||db.firmaTel)g.fillText('📞 '+(db.firmaWp||db.firmaTel),W-P,76);
+    g.textAlign='left';
+    const clip=(t,font,maxW)=>{g.font=font;t=''+t;if(g.measureText(t).width<=maxW)return t;while(t.length>1&&g.measureText(t+'…').width>maxW)t=t.slice(0,-1);return t+'…';};
+    let gy=HEAD+18;
+    items.forEach((it,idx)=>{
+      const col=idx%COLS,row=Math.floor(idx/COLS);
+      const x=P+col*(CW+GAP),y=gy+row*(CARDH+GAP);
+      // kart zemini
+      g.fillStyle='#fff';roundRectPath(g,x,y,CW,CARDH,14);g.fill();
+      // foto (cover-fit)
+      g.save();roundRectPath(g,x,y,CW,IMGH,14);g.clip();
+      if(it.im){const iw=it.im.width||1,ih=it.im.height||1,sc=Math.max(CW/iw,IMGH/ih);const dw=iw*sc,dh=ih*sc;
+        try{g.drawImage(it.im,x+(CW-dw)/2,y+(IMGH-dh)/2,dw,dh);}catch(e){g.fillStyle='#e9ebef';g.fillRect(x,y,CW,IMGH);}}
+      else{g.fillStyle='#e9ebef';g.fillRect(x,y,CW,IMGH);g.fillStyle='#b7bcc6';g.font='700 15px sans-serif';g.textAlign='center';g.fillText('fotoğraf yok',x+CW/2,y+IMGH/2+5);g.textAlign='left';}
+      g.restore();
+      // metin
+      const u=it.u;let ty=y+IMGH+30;
+      g.fillStyle='#22232a';g.font='800 22px sans-serif';g.fillText(clip(u.ad||'—','800 22px sans-serif',CW-24),x+14,ty);
+      ty+=24;
+      g.fillStyle='#8a8f98';g.font='600 14px sans-serif';
+      const birim=u.birim==='seri'&&birimAdet(u)>1?u.seri+"'li seri":(u.birim||'adet');
+      g.fillText((u.kod?u.kod+' · ':'')+'stok '+stokTop(u),x+14,ty);
+      ty+=30;
+      const esk=portalEskiFiyat(u);
+      g.fillStyle='#22232a';g.font='800 26px sans-serif';const fiy=TL(portalFiyat(u));g.fillText(fiy,x+14,ty);
+      const fw=g.measureText(fiy).width;
+      g.fillStyle='#8a8f98';g.font='600 14px sans-serif';g.fillText('/ '+birim,x+14+fw+8,ty);
+      if(esk){g.fillStyle='#c0392b';g.font='600 16px sans-serif';const et=TL(esk);g.textAlign='right';g.fillText(et,x+CW-14,ty-1);
+        const ew=g.measureText(et).width;g.strokeStyle='#c0392b';g.lineWidth=1.5;g.beginPath();g.moveTo(x+CW-14-ew,ty-6);g.lineTo(x+CW-14,ty-6);g.stroke();g.textAlign='left';}
+    });
+    let fy=gy+rows*(CARDH+GAP)+6;
+    if(ind.length){g.fillStyle='#33333d';g.font='700 16px sans-serif';g.textAlign='center';
+      g.fillText('💰 Toptan indirim: '+ind.map(k=>k.min+'+ %'+k.ind).join('   ·   '),W/2,fy+14);g.textAlign='left';fy+=indH;}
+    g.fillStyle='#8a8f98';g.font='600 14px sans-serif';g.textAlign='center';
+    g.fillText((db.firma||'IQ Basics')+(db.firmaWp?' · '+db.firmaWp:'')+' · Fiyatlar KDV hariç toptan fiyatlardır',W/2,H-24);g.textAlign='left';
+    try{c.toBlob(bl=>cb(bl,c),'image/jpeg',0.9);}catch(e){cb(null,c);}
+  });
+}
+function roundRectPath(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();}
+async function fiyatListesiResimGonder(){
+  const aktif=db.urunler.filter(u=>!u.pasif&&stokTop(u)>0);
+  if(!aktif.length)return toast('Stokta ürün yok');
+  toast('🖼️ Katalog hazırlanıyor…');
+  fiyatListesiResim(async(blob)=>{
+    if(!blob)return toast('Katalog oluşturulamadı');
+    const fname='fiyat-listesi-'+new Date().toISOString().slice(0,10)+'.jpg';
+    const file=new File([blob],fname,{type:'image/jpeg'});
+    const txt=(db.firma||'IQ Basics')+' toptan fiyat listesi';
+    if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){
+      try{await navigator.share({files:[file],text:txt});return;}catch(e){if(e&&e.name==='AbortError')return;}
+    }
+    const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=fname;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);
+    toast('📥 Katalog indirildi — WhatsApp\'tan gönderebilirsin');
+  });
+}
 // müşteri portal giriş bilgileri (kullanıcı adı / şifre)
 function portalKullanicilar(){open_('👤 Müşteri Giriş Bilgileri',`<div class="mini">Her müşteriye portal için <b>kullanıcı adı ve şifre</b> verin. Müşteri bunlarla girip yalnızca kendi siparişlerini ve cari durumunu görür. (Gerçekten kendi telefonundan girebilmesi için uygulamanın sunucuda yayınlanması gerekir.)</div><input id="pk-ara" placeholder="🔍 müşteri ara" oninput="cizPortalKul(this.value)" style="margin-top:10px"><div id="pk-list" style="margin-top:10px;max-height:60vh;overflow:auto"></div>`);cizPortalKul('')}
 function cizPortalKul(q){const el=$('pk-list');if(!el)return;q=(q||'').trim().toLowerCase();
