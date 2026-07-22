@@ -87,5 +87,12 @@ service cloud.firestore {
     }
     // Diğer/yeni alanlar → yalnız yönetici+ortak
     match /isletme/{iid}/veri/{domen} { allow read, write: if rolVar(['admin','ortak']); }
+
+    // YAZDIRMA KUYRUĞU — telefon/kasa fiş atar, bilgisayardaki "yazıcı ajanı" okuyup basar.
+    // Satış yapan herkes (admin/ortak/mağaza) iş ekler; ajan (yönetici hesabı) okur/günceller/siler.
+    match /isletme/{iid}/yazdirma/{jobId} {
+      allow read, update, delete: if rolVar(['admin','ortak']);
+      allow create: if rolVar(['admin','ortak','magaza']);
+    }
   }
 }

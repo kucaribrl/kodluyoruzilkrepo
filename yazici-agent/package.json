@@ -1,0 +1,13 @@
+{
+  "name": "iq-basics-yazici-ajani",
+  "version": "1.0.0",
+  "description": "IQ Basics — buluttaki yazdirma kuyrugunu dinleyip bilgisayara bagli termal yaziciya otomatik fis basar.",
+  "private": true,
+  "main": "agent.js",
+  "scripts": {
+    "start": "node agent.js"
+  },
+  "dependencies": {
+    "firebase": "^10.12.0"
+  }
+}

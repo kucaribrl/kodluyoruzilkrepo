@@ -2029,7 +2029,8 @@ function kaydetSatis(){
   const commit=()=>{
     if(old)revertSatis(old);
     if(sEdit&&old){data.id=old.id;data.tarih=old.tarih;Object.assign(old,data);applySatis(old);save();closeM();go('satis');toast('Satış güncellendi ✓')}
-    else{data.id=nid('s');data.tarih=Date.now();db.satislar.push(data);applySatis(data);save();closeM();go('satis');toast('Satış kaydedildi ✓ '+money(tutar,sPB))}
+    else{data.id=nid('s');data.tarih=Date.now();db.satislar.push(data);applySatis(data);save();closeM();go('satis');toast('Satış kaydedildi ✓ '+money(tutar,sPB));
+      if(db.otoYazdir)try{yaziciyaGonder(data.id,true)}catch(e){}}
   };
   const eskiBorc=old?(old.tutar-old.odenen-(old.kesik||0))*satisDiv(old):0;
   const yeniBorc=m.bakiye-eskiBorc+(tutar-oden-kesik)*div;
@@ -2059,6 +2060,7 @@ function satisFis(id){
     ${s.sevkiyat?`<div class="infobox" style="margin-top:12px">📦 <b>Sevkiyat:</b> ${esc(s.sevkiyat)}</div>`:''}
     ${s.foto?`<div class="sec" style="margin-top:12px">📷 Sipariş Fotoğrafı</div><img src="${s.foto}" style="width:100%;max-height:240px;object-fit:cover;border-radius:12px">`:''}
     <div class="g2" style="margin-top:14px"><button class="btn sm" onclick="fisTermalOnizle(${id})">🧾 Termal Fiş</button><button class="btn g sm" onclick="waFisPreview(${id})">📱 WhatsApp</button></div>
+    ${(bulutVar()&&bulutGirisli())?`<button class="btn sm" style="margin-top:8px" onclick="yaziciyaGonder(${id})">🖨️ Bilgisayardaki Yazıcıya Gönder</button>`:''}
     <div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="faturaYazdir(${id},false)">🧾 A4 Fatura</button><button class="btn ghost sm" onclick="faturaYazdir(${id},true)">📋 İrsaliye (fiyatsız)</button></div>
     ${s.depo?`<button class="btn ${s.depo==='hazir'?'ghost':'g'} sm" style="margin-top:10px" onclick="closeM();setTimeout(()=>depoEmri(${id}),160)">📦 Toplama Emri${s.depo==='hazir'?' (hazır)':''}</button>`:''}
     <div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="closeM();setTimeout(()=>formSatis(0,${id}),160)">✏️ Düzenle</button><button class="btn sm" onclick="satisDurum(${id})">${s.teslimDurum==='ayrildi'?'✓ Teslim Et':'🔖 Ayrıldı Yap'}</button></div>
@@ -2321,6 +2323,148 @@ function fisTermal(id){const s=db.satislar.find(x=>x.id===id);
   document.body.classList.add('printing','thermal');
   setTimeout(()=>{window.print();document.body.classList.remove('printing','thermal');st.remove()},160);
 }
+/* ===== OTOMATİK YAZDIRMA — fişi resme çevir, buluttaki kuyruğa gönder =====
+   Bilgisayardaki "yazıcı ajanı" bu kuyruğu dinler ve termal yazıcıya basar. */
+function fisResimData(s){
+  // 80mm termal ~576px basılabilir genişlik; siyah-beyaz, keskin
+  const W=576,P=18,dpr=2;
+  const mc=document.createElement('canvas').getContext('2d');
+  const money2=(v,pb)=>money(v,pb);
+  const m=cari(s.mid);
+  const d=new Date(s.tarih);const tarih=d.getFullYear()+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+String(d.getDate()).padStart(2,'0')+' '+d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
+  // yükseklik ölç: satır sayısına göre
+  let toplamAdet=0;s.kalemler.forEach(k=>toplamAdet+=k.mik);
+  const div=pbKur(s.pb);const netTL=(s.tutar-s.odenen-(s.kesik||0))*div;
+  const sonBk=m?m.bakiye:null;const oncekiBk=sonBk!=null?sonBk-netTL:null;
+  const iskT=(s.araToplam||0)*(s.iskonto||0)/100;const kalan=Math.max(0,s.tutar-s.odenen-(s.kesik||0));
+  const not=(s.sevkiyat||'').trim();
+  // dinamik yükseklik tahmini
+  let H=40;
+  H+=db.firmaLogo?70:54; // firma
+  H+=8+22; // sipariş fişi
+  H+=(db.firmaTel?20:0)+(db.firmaWp?20:0)+(db.firma?20:0)+(db.firmaAdres?20:0)+10;
+  H+=86; // müşteri kutusu
+  H+=24; // satıcı/no
+  H+=30; // tablo başlık
+  s.kalemler.forEach(k=>{H+=28+((k.renkler&&k.renkler.length)?20:18);});
+  H+=28; // toplam adet
+  H+=34*3+ (s.iskonto?30:0)+(s.tasima?30:0)+(s.kesik?30:0)+(s.kdv!=null?30:0); // toplam kutusu satırları
+  H+=34*2+(oncekiBk!=null?30:0)+(sonBk!=null?30:0); // ödeme kutusu
+  H+=48; // not
+  H+=40; // teşekkür + boşluk
+  const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const g=c.getContext('2d');g.scale(dpr,dpr);
+  g.fillStyle='#fff';g.fillRect(0,0,W,H);g.fillStyle='#000';g.textBaseline='alphabetic';
+  const CX=W/2;const R=W-P;
+  const line=(y,dash)=>{g.save();g.strokeStyle='#000';g.lineWidth=1.4;if(dash)g.setLineDash([4,3]);g.beginPath();g.moveTo(P,y);g.lineTo(R,y);g.stroke();g.restore();};
+  const clip=(t,font,maxW)=>{g.font=font;t=''+t;if(g.measureText(t).width<=maxW)return t;while(t.length>1&&g.measureText(t+'…').width>maxW)t=t.slice(0,-1);return t+'…';};
+  let y=30;
+  // FİRMA
+  g.textAlign='center';
+  if(db.firmaLogo){const im=fisResimData._logo;if(im&&im.complete){const w=Math.min(220,im.width);const h=w*(im.height||1)/(im.width||1);try{g.drawImage(im,CX-w/2,y-14,w,h)}catch(e){}y+=h+6;}else{g.font='800 30px sans-serif';g.fillText((db.firma||'IQ BASICS').toLocaleUpperCase('tr-TR'),CX,y+14);y+=44;}}
+  else{g.font='800 30px sans-serif';g.fillText((db.firma||'IQ BASICS').toLocaleUpperCase('tr-TR'),CX,y+14);y+=44;}
+  line(y,true);y+=24;
+  g.font='800 22px sans-serif';g.fillText('Sipariş Fişi',CX,y);y+=10;line(y,true);y+=20;
+  // İLETİŞİM (sol)
+  g.textAlign='left';g.font='700 14px sans-serif';
+  if(db.firmaTel){g.fillText('Tel: '+db.firmaTel,P,y);y+=20;}
+  if(db.firmaWp){g.fillText('WhatsApp: '+db.firmaWp,P,y);y+=20;}
+  if(db.firma){g.fillText(clip(db.firma,'700 14px sans-serif',W-2*P),P,y);y+=20;}
+  if(db.firmaAdres){g.fillText(clip(db.firmaAdres,'700 14px sans-serif',W-2*P),P,y);y+=20;}
+  y+=6;
+  // MÜŞTERİ KUTUSU
+  const boxTop=y;const boxH=82;g.save();g.strokeStyle='#000';g.lineWidth=1.4;g.setLineDash([4,3]);g.strokeRect(P,boxTop,W-2*P,boxH);g.restore();
+  g.font='700 13px sans-serif';g.textAlign='left';g.fillText('Müşteri:',P+10,boxTop+20);
+  g.textAlign='right';g.fillText(tarih,R-10,boxTop+20);
+  g.textAlign='center';g.font='800 20px sans-serif';g.fillText(clip(s.mus,'800 20px sans-serif',W-2*P-20),CX,boxTop+45);
+  g.font='700 13px sans-serif';const loc=[m&&m.ulke,m&&(m.sehir||m.il)].filter(Boolean).join(' — ')||'—';g.fillText(loc,CX,boxTop+64);
+  if(m&&m.tel)g.fillText(m.tel,CX,boxTop+78);
+  y=boxTop+boxH+22;
+  // SATICI / NO
+  g.textAlign='left';g.font='700 13px sans-serif';g.fillText('Satıcı: '+((db.satici||'').trim()||db.firma||''),P,y);
+  g.textAlign='right';g.fillText('No. '+s.id,R,y);y+=14;
+  // TABLO
+  line(y);y+=18;g.textAlign='left';g.font='800 13px sans-serif';
+  const cAdet=W-210,cFiy=W-135,cTop=R;
+  g.fillText('Ürün',P,y);g.textAlign='right';g.fillText('Adet',cAdet,y);g.fillText('Fiyat',cFiy,y);g.fillText('Toplam',cTop,y);
+  y+=6;line(y);y+=20;
+  s.kalemler.forEach(k=>{const u=urun(k.uid);const kod=(u&&u.kod)||'';
+    g.textAlign='left';g.font='800 15px sans-serif';g.fillText(clip((kod?kod+' · ':'')+k.urun,'800 15px sans-serif',W-2*P),P,y);y+=20;
+    const cl=k.renkler&&k.renkler.length?k.renkler.map(r=>esc(r.ad)+'×'+r.mik).join(' '):'';
+    g.font='600 13px sans-serif';if(cl){g.textAlign='left';g.fillText(clip(cl,'600 13px sans-serif',cAdet-P-40),P,y);}
+    g.textAlign='right';g.font='700 14px sans-serif';g.fillText(''+k.mik,cAdet,y);g.fillText(money2(k.fiyat,s.pb),cFiy,y);g.fillText(money2(k.mik*k.fiyat,s.pb),cTop,y);y+=22;});
+  line(y,true);y+=20;g.textAlign='left';g.font='800 15px sans-serif';g.fillText('Toplam Adet: '+toplamAdet,P,y);y+=16;
+  // TOPLAM KUTUSU
+  const rowsT=[['Sipariş Tutarı',money2(s.araToplam||s.tutar,s.pb),0]];
+  if(s.iskonto)rowsT.push(['Fark / İndirim','−'+money2(iskT,s.pb),0]);
+  if(s.tasima)rowsT.push(['Taşıma / Kargo','+'+money2(s.tasima,s.pb),0]);
+  if(s.kesik)rowsT.push(['Kesik','−'+money2(s.kesik,s.pb),0]);
+  if(s.kdv!=null)rowsT.push(['KDV %'+(s.kdv||0),money2(s.kdvTutar||0,s.pb),0]);
+  rowsT.push(['TOPLAM',money2(s.tutar,s.pb),1]);
+  const drawBox=(rows)=>{const bt=y;const bh=rows.length*30+6;g.save();g.strokeStyle='#000';g.lineWidth=1.4;g.strokeRect(P,bt,W-2*P,bh);g.restore();
+    let ry=bt+22;rows.forEach((r,i)=>{const big=r[2];g.textAlign='left';g.font=(big?'800 18px':'700 14px')+' sans-serif';g.fillText(r[0],P+10,ry);g.textAlign='right';g.font=(big?'800 18px':'700 14px')+' sans-serif';g.fillText(r[1],R-10,ry);if(i<rows.length-1){g.save();g.strokeStyle='#000';g.lineWidth=1;g.beginPath();g.moveTo(P,ry+8);g.lineTo(R,ry+8);g.stroke();g.restore();}ry+=30;});y=bt+bh+12;};
+  drawBox(rowsT);
+  const rowsO=[['Ödeme',money2(s.odenen,s.pb),0],['Kalan',money2(kalan,s.pb),0]];
+  if(oncekiBk!=null)rowsO.push(['Önceki Bakiye',money2(oncekiBk,'TL'),0]);
+  if(sonBk!=null)rowsO.push(['Son Bakiye',money2(sonBk,'TL'),0]);
+  drawBox(rowsO);
+  // NOT
+  const nt=y;g.save();g.strokeStyle='#000';g.lineWidth=1.4;g.setLineDash([4,3]);g.strokeRect(P,nt,W-2*P,34);g.restore();
+  g.textAlign='left';g.font='700 13px sans-serif';g.fillText(clip('Not: '+not,'700 13px sans-serif',W-2*P-16),P+8,nt+22);y=nt+34+22;
+  g.textAlign='center';g.font='700 13px sans-serif';g.fillText('Bizi tercih ettiğiniz için teşekkür ederiz',CX,y);
+  return c.toDataURL('image/png');
+}
+// Firma logosu resimde çıksın diye önceden yükle
+function fisResimLogoHazirla(){if(db.firmaLogo&&(!fisResimData._logo||fisResimData._logo.src!==db.firmaLogo)){const im=new Image();im.src=db.firmaLogo;fisResimData._logo=im;}}
+async function yaziciyaGonder(id,sessiz){
+  const s=db.satislar.find(x=>x.id===id);if(!s)return;
+  if(!(bulutVar()&&bulutBaslat()&&_fb&&bulutGirisli&&bulutGirisli())){if(!sessiz)toast('☁️ Önce buluta giriş yap (otomatik baskı için gerekli)');return;}
+  try{
+    fisResimLogoHazirla();
+    const resim=fisResimData(s);
+    await _fb.collection('isletme').doc(MAGAZA_ID).collection('yazdirma').add({
+      tur:'fis',satisId:s.id,mus:s.mus||'',tutar:s.tutar||0,pb:s.pb||'TL',
+      resim,durum:'bekliyor',kopya:+db.yaziciKopya||1,olusturma:Date.now(),
+      cihaz:(db.satici||'')||'telefon'
+    });
+    if(!sessiz)toast('🖨️ Yazıcıya gönderildi — bilgisayar basıyor');
+  }catch(e){if(!sessiz)toast('Gönderilemedi: '+(e.message||e));}
+}
+function yaziciAyar(){
+  open_('🖨️ Otomatik Yazıcı (Bilgisayar)',`
+    <div class="mini">Bilgisayara bağlı termal yazıcıdan <b>otomatik</b> fiş bassın. Bilgisayarda küçük bir "yazıcı ajanı" açık kalır; satış bitince fiş <b>kendiliğinden</b> çıkar — telefonda onay/dialog yok.</div>
+    <label class="switch" style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Satış bitince otomatik yazıcıya gönder</span><input type="checkbox" ${db.otoYazdir?'checked':''} onchange="db.otoYazdir=this.checked;save();toast(this.checked?'Otomatik baskı açık ✓':'Kapalı')"></label>
+    <label style="margin-top:10px">Kopya sayısı</label><input type="number" inputmode="numeric" value="${+db.yaziciKopya||1}" min="1" max="5" onchange="db.yaziciKopya=Math.max(1,Math.min(5,+this.value||1));save()" style="max-width:100px">
+    <div class="okbox" style="margin-top:12px">⚙️ <b>Kurulum:</b> Bilgisayara ajanı bir kez kurman gerekir. Aşağıdaki adımları takip et (5 dk). Kurulduktan sonra bu düğmeyi aç, satış yaptıkça fiş otomatik çıkar.</div>
+    <button class="btn ghost sm" style="margin-top:10px" onclick="yaziciKurulum()">📋 Kurulum Adımları (Windows)</button>
+    <button class="btn" style="margin-top:10px" onclick="yaziciTest()">🧪 Test Fişi Gönder</button>
+    <div class="mini" style="margin-top:8px">Test için: kuyruğa örnek bir fiş atar; ajan açıksa yazıcıdan çıkar.</div>`);
+}
+function yaziciKurulum(){
+  open_('📋 Yazıcı Ajanı Kurulumu (Windows)',`<div class="mini">Bir kez yapılır. Yazıcının bağlı olduğu bilgisayarda uygula.</div>
+    <ol style="font-size:13.5px;line-height:1.7;padding-left:20px;margin-top:10px">
+      <li><b>Node.js</b> kur: <span style="font-family:monospace">nodejs.org</span> → "LTS" indir, kur.</li>
+      <li>Depodaki <b>yazici-agent</b> klasörünü bilgisayara indir (GitHub → Code → Download ZIP → içinden bu klasör).</li>
+      <li>Klasördeki <b>config.json</b>'u aç; <b>yaziciAdi</b> kısmına Windows'taki yazıcının tam adını yaz (Denetim Masası → Aygıtlar ve Yazıcılar'da görünen ad), <b>email</b> / <b>sifre</b> kısmına buluta girdiğin patron hesabını yaz.</li>
+      <li>Klasörde <b>baslat.bat</b> dosyasına çift tıkla. "Yazıcı ajanı çalışıyor" yazınca hazır. (Pencereyi kapatma; bilgisayar açık kaldıkça basar.)</li>
+      <li>Bu ekrandaki <b>Otomatik baskı</b> düğmesini aç. Bitti — satış yaptıkça fiş çıkar.</li>
+    </ol>
+    <div class="okbox" style="margin-top:6px">Detaylı Türkçe rehber: repo içindeki <b>yazici-agent/BASLA-TR.md</b> dosyasında.</div>`);
+}
+async function yaziciTest(){
+  if(!(bulutVar()&&bulutBaslat()&&_fb&&bulutGirisli&&bulutGirisli()))return toast('Önce buluta giriş yap');
+  try{const resim=fisResimTest();
+    await _fb.collection('isletme').doc(MAGAZA_ID).collection('yazdirma').add({tur:'test',resim,durum:'bekliyor',kopya:1,olusturma:Date.now(),cihaz:'test'});
+    toast('🧪 Test fişi kuyruğa atıldı — ajan açıksa yazıcıdan çıkar');
+  }catch(e){toast('Gönderilemedi: '+(e.message||e))}
+}
+function fisResimTest(){const W=576,dpr=2,H=220;const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const g=c.getContext('2d');g.scale(dpr,dpr);
+  g.fillStyle='#fff';g.fillRect(0,0,W,H);g.fillStyle='#000';g.textAlign='center';
+  g.font='800 28px sans-serif';g.fillText((db.firma||'IQ BASICS').toLocaleUpperCase('tr-TR'),W/2,50);
+  g.font='700 18px sans-serif';g.fillText('TEST FİŞİ',W/2,90);
+  g.font='600 15px sans-serif';g.fillText('Yazıcı ajanı çalışıyor ✓',W/2,130);
+  g.fillText('Otomatik baskı hazır',W/2,158);
+  g.font='600 13px sans-serif';g.fillText(new Date().toLocaleString('tr-TR'),W/2,192);
+  return c.toDataURL('image/png');}
 function satisDurum(id){const s=db.satislar.find(x=>x.id===id);s.teslimDurum=s.teslimDurum==='ayrildi'?'teslim':'ayrildi';save();closeM();go('satis');toast(s.teslimDurum==='ayrildi'?'Mal ayrıldı (rezerve) 🔖':'Teslim edildi ✓')}
 /* ---- Depo toplama/ayırma emri ---- */
 function depoBekleyen(){return db.satislar.filter(s=>s.depo==='bekliyor').sort((a,b)=>a.tarih-b.tarih)}
@@ -4877,7 +5021,8 @@ function rRapor(){
 function rAyarlar(){
   const y=yetki();
   let html=`<div class="sec">Firma</div><div class="card"><div class="row" onclick="formFirma()"><div class="av" style="background:var(--ind)">🏢</div><div class="mid"><div class="t">${esc(db.firma)}</div><div class="s">${esc(db.firmaSlogan||'firma bilgileri · fişte görünür')}</div></div><span style="color:var(--sub)">›</span></div>
-    <div class="row" onclick="formKur()"><div class="av o">💱</div><div class="mid"><div class="t">Kur</div><div class="s">$ ${db.kurUSD.toFixed(2)} · € ${db.kurEUR.toFixed(2)}</div></div><span style="color:var(--sub)">›</span></div></div>`;
+    <div class="row" onclick="formKur()"><div class="av o">💱</div><div class="mid"><div class="t">Kur</div><div class="s">$ ${db.kurUSD.toFixed(2)} · € ${db.kurEUR.toFixed(2)}</div></div><span style="color:var(--sub)">›</span></div>
+    <div class="row" onclick="yaziciAyar()"><div class="av" style="background:${db.otoYazdir?'var(--good)':'var(--ind2)'}">🖨️</div><div class="mid"><div class="t">Otomatik Yazıcı ${db.otoYazdir?'<span class="pill ok">açık</span>':''}</div><div class="s">bilgisayara bağlı termal yazıcıdan otomatik fiş</div></div><span style="color:var(--sub)">›</span></div></div>`;
   html+=`<div class="sec">Kullanıcılar & Roller</div><div class="card">`+Object.keys(ROLLER).map(k=>`<div class="row" onclick="setRol('${k}')"><div class="av" style="background:${rolRenk(k)}">${ROLLER[k].ic}</div><div class="mid"><div class="t">${ROLLER[k].ad}</div><div class="s">${ROLLER[k].kar?'kâr görür':'kâr gizli'}</div></div>${db.rol===k?'<span class="pill ok">aktif</span>':''}</div>`).join('')+`</div>`;
   if(bulutVar())html+=`<div class="sec">Bulut</div><div class="card">
     ${db.personelMod?`<div class="row" onclick="personelCik()"><div class="av" style="background:${rolRenk(db.rol)}">${(ROLLER[db.rol]||{}).ic||'👤'}</div><div class="mid"><div class="t">Personel: ${ROL_AD[db.rol]||db.rol} <span class="pill ok">bağlı</span></div><div class="s">çıkış yapmak için dokun</div></div><span style="color:var(--sub)">›</span></div>`:`
