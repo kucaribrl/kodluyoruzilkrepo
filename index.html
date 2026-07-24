@@ -401,6 +401,7 @@
 /* =================== VERİ KATMANI =================== */
 const KEY='oztekstil_v2';
 function seed(){return{
+  ornek:true, // ÖRNEK/DEMO veri işareti — gerçek veri girilince (nid) temizlenir; buluta ASLA yüklenmez
   firma:'IQ Basics',
   firmaSlogan:'Toptan Tekstil · Erkek Giyim',
   firmaAdres:'Ulubatlı Hasan Sk. No:53/A · Güngören / İstanbul',
@@ -553,6 +554,7 @@ function canliBaslat(sessiz){
       if(js===_canliGolge[domen])return; // kendi yazımızın yankısı → atla
       _canliUygulaniyor=true;
       CANLI_DOMEN[domen].forEach(k=>{if(d[k]!==undefined)db[k]=d[k];});
+      db.ornek=false; // buluttan gerçek veri geldi → artık demo değil
       _canliGolge[domen]=js; localStorage.setItem(KEY,JSON.stringify(db));
       _canliUygulaniyor=false;
       try{if(typeof render==='function'&&typeof cur!=='undefined')render()}catch(e){}
@@ -576,7 +578,9 @@ async function otoSenkron(){
     const bd=d.exists?d.data():null;
     const bulutBos=!bd||(!(bd.urunler&&bd.urunler.length)&&!(bd.hareketler&&bd.hareketler.length));
     const yerelDolu=(db.urunler&&db.urunler.length)||(db.cariler&&db.cariler.length)||(db.satislar&&db.satislar.length);
-    if(bulutBos&&yerelDolu){try{autoYedek('ilk buluta yükleme öncesi')}catch(e){}await canliGonder();} // ilk cihaz → yereli buluta koy
+    // ⚠️ VERİ KAYBI KORUMASI: yalnızca GERÇEK veri (demo değil) buluta yüklenir.
+    // Böylece demo verili bir cihaz, başka cihazın gerçek verisini asla ezemez.
+    if(bulutBos&&yerelDolu&&!db.ornek){try{autoYedek('ilk buluta yükleme öncesi')}catch(e){}await canliGonder();}
   }catch(e){canliIzinHata(e);}
   _otoSenkronCalisti=true;
   return canliBaslat(true);
@@ -592,7 +596,7 @@ async function canliGonder(){
 }
 // save() → değişen domenleri buluta yaz (debounce)
 function canliYaz(){
-  if(!canliAcik||_canliUygulaniyor)return;
+  if(!canliAcik||_canliUygulaniyor||db.ornek)return; // demo veri buluta yazılmaz
   clearTimeout(_canliYazT);
   _canliYazT=setTimeout(()=>{
     (ROL_YAZ[canliRol()]||_CTUM).forEach(domen=>{
@@ -729,7 +733,7 @@ function guvenliCikis(){
 // Çevrimdışı → çevrimiçi geçişte kullanıcıyı bilgilendir (Firestore bekleyenleri otomatik gönderir)
 window.addEventListener('offline',()=>{if(canliAcik)toast('📴 Çevrimdışı — değişiklikler cihazda tutuluyor, internet gelince otomatik yüklenecek');});
 window.addEventListener('online',()=>{if(canliAcik)toast('🌐 İnternet geldi — bekleyen değişiklikler yükleniyor…');});
-function nid(k){if(db.seq[k]==null)db.seq[k]=1000;return db.seq[k]++}
+function nid(k){if(db.ornek)db.ornek=false;/* ilk gerçek kayıt → artık demo değil */if(db.seq[k]==null)db.seq[k]=1000;return db.seq[k]++}
 /* ============ ☁️ BULUT (Firebase) ============ */
 /* Yayına almak için kendi Firebase projenin bilgilerini buraya yapıştır.
    Bu bilgiler gizli değildir (tarayıcıda çalışır) — güvenlik Firestore kurallarıyla sağlanır. */
@@ -742,7 +746,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-6'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-7'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
