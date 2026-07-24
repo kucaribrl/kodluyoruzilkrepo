@@ -742,7 +742,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-5'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-6'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -2480,20 +2480,25 @@ function fisTermalOnizle(id){const s=db.satislar.find(x=>x.id===id);if(!s)return
 }
 // Telefon/bilgisayar tarayıcısından yazdır — TEMİZ GÖRSEL bas (ufak/silik değil),
 // ayrı iframe ile → format doğru, koyu, ve tekrar baskı sorunsuz çalışır.
+let _fisTemizT=null;
+function fisPrintTemizle(){if(_fisTemizT){clearTimeout(_fisTemizT);_fisTemizT=null;}document.body.classList.remove('printing','thermal');const s=document.getElementById('thermStyle');if(s)s.remove();const pa=document.getElementById('printarea');if(pa)pa.innerHTML='';}
+// iPhone/Android/bilgisayar — en uyumlu yol: fişi ANA pencerede bas, sadece fiş görünür.
+// (iframe iOS'ta bazen ana sayfayı basıyordu.) Görsel = fisResimData → format doğru, koyu.
 function fisTermal(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;
   fisResimLogoHazirla();
   const img=fisResimData(s);
-  const eski=document.getElementById('fisPrintFrame');if(eski)eski.remove();
-  const ifr=document.createElement('iframe');ifr.id='fisPrintFrame';ifr.style.cssText='position:fixed;left:-9999px;top:0;width:0;height:0;border:0';
-  document.body.appendChild(ifr);
-  const d=ifr.contentWindow.document;d.open();
-  d.write('<!doctype html><html><head><meta charset="utf-8"><style>@page{size:80mm auto;margin:2mm}html,body{margin:0;padding:0}img{width:100%;display:block}</style></head><body><img id="f" src="'+img+'"></body></html>');
-  d.close();
-  const go2=()=>{try{ifr.contentWindow.focus();ifr.contentWindow.print();}catch(e){try{window.print()}catch(_){}}setTimeout(()=>{try{ifr.remove()}catch(e){}},2500);};
-  const im=d.getElementById('f');
-  if(im&&!im.complete){im.onload=()=>setTimeout(go2,80);im.onerror=()=>setTimeout(go2,80);}
-  else setTimeout(go2,120);
+  const pa=document.getElementById('printarea');pa.innerHTML='<img id="fisImg" src="'+img+'" style="width:80mm;max-width:100%;display:block">';
+  let st=document.getElementById('thermStyle');if(st)st.remove();
+  st=document.createElement('style');st.id='thermStyle';
+  st.textContent='@media print{@page{size:80mm auto;margin:2mm}body.printing>*{display:none!important}body.printing #printarea{display:block!important;padding:0;margin:0}body.printing #printarea img{width:80mm;display:block}}';
+  document.head.appendChild(st);
+  document.body.classList.add('printing');
+  const go2=()=>{try{window.print()}catch(e){}_fisTemizT=setTimeout(fisPrintTemizle,4000);}; // yedek temizlik (afterprint gelmezse)
+  const im=document.getElementById('fisImg');
+  if(im&&!im.complete){im.onload=()=>setTimeout(go2,60);im.onerror=()=>setTimeout(go2,60);}
+  else setTimeout(go2,90);
 }
+window.addEventListener('afterprint',()=>{if(document.body.classList.contains('printing'))fisPrintTemizle();});
 /* ===== OTOMATİK YAZDIRMA — fişi resme çevir, buluttaki kuyruğa gönder =====
    Bilgisayardaki "yazıcı ajanı" bu kuyruğu dinler ve termal yazıcıya basar. */
 function fisResimData(s){
