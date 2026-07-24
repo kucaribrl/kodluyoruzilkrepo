@@ -564,6 +564,23 @@ function canliBaslat(sessiz){
   return true;
 }
 function canliDur(){_canliUnsub.forEach(u=>{try{u()}catch(e){}});_canliUnsub=[];canliAcik=false;db.canliBulut=false;localStorage.setItem(KEY,JSON.stringify(db));}
+// OTOMATİK SENKRON — giriş varsa kendiliğinden bağlanır; kullanıcı hiçbir şey açmaz.
+// Bulut boşsa (ilk cihaz) yereli yükler; doluysa buluttakini alıp canlı dinler.
+let _otoSenkronCalisti=false;
+async function otoSenkron(){
+  if(canliAcik)return true;
+  if(!bulutVar()||!bulutBaslat())return false;
+  if(!bulutGirisli()||bulutMusteriMod)return false;
+  try{
+    const d=await canliRef('stok').get();
+    const bd=d.exists?d.data():null;
+    const bulutBos=!bd||(!(bd.urunler&&bd.urunler.length)&&!(bd.hareketler&&bd.hareketler.length));
+    const yerelDolu=(db.urunler&&db.urunler.length)||(db.cariler&&db.cariler.length)||(db.satislar&&db.satislar.length);
+    if(bulutBos&&yerelDolu){try{autoYedek('ilk buluta yükleme öncesi')}catch(e){}await canliGonder();} // ilk cihaz → yereli buluta koy
+  }catch(e){canliIzinHata(e);}
+  _otoSenkronCalisti=true;
+  return canliBaslat(true);
+}
 // Bu cihazın verisini buluta gönder (ilk kurulum / ana cihaz)
 async function canliGonder(){
   if(!bulutBaslat())return false;
@@ -679,7 +696,7 @@ async function personelBaslat(){
   if(!bulutKul||!bulutKul.onay)return toast('Hesabın onaylı değil — yöneticinin onaylaması lazım');
   if(!['ortak','magaza','depocu','fasontakip'].includes(r))return toast('Bu hesap personel değil (rol: '+(ROL_AD[r]||r||'?')+'). Yönetici seni Ortak/Mağaza/Depocu yapmalı.');
   db.rol=r; db.personelMod=true; _canliUyari=false; save();
-  canliBaslat(true); try{closeM()}catch(e){} go('panel');
+  otoSenkron(); try{closeM()}catch(e){} go('panel');
   toast('👤 '+ROL_AD[r]+' olarak bağlanıldı — canlı veri geliyor…');
 }
 function personelCik(){askConfirm('Çıkış yapılsın mı? Bu cihazdaki veriler temizlenecek (verilerin bulutta güvende kalır).',()=>{try{if(canliAcik)canliDur()}catch(e){}try{bulutCikisPortal()}catch(e){}try{localStorage.removeItem(KEY);localStorage.removeItem('iq_yedekler')}catch(e){}bulutKul=null;location.reload();},'Çıkış yap ve temizle');}
@@ -746,8 +763,8 @@ async function bulutSifreSifirla(){if(!bulutBaslat())return toast('Bulut ayarlı
 async function bulutGirisYap(sonra){if(!bulutBaslat())return toast('Bulut ayarlı değil');
   const mail=($('fbg-mail')?.value||'').trim(),pw=$('fbg-pw')?.value||'';if(!mail||!pw)return toast('E-posta ve şifre gir');
   try{await firebase.auth().signInWithEmailAndPassword(mail,pw);await bulutProfilYukle();closeM();
-    // Daha önce canlı senkron kurulduysa, girişten sonra OTOMATİK yeniden bağlan (tekrar tıklama gerekmez)
-    if(db.canliBulut&&!canliAcik&&bulutGirisli()){_canliUyari=false;canliBaslat(true);}
+    // Girişten sonra OTOMATİK senkron (elle açmak gerekmez)
+    if(!canliAcik&&bulutGirisli()){_canliUyari=false;otoSenkron();}
     if(sonra==='personel'){personelBaslat();return;}
     if(!bulutAdminMi()){toast('⚠️ Bu hesap yönetici değil. Firebase\'de kullanicilar/'+((bulutKul&&bulutKul.uid)||'UID')+' → rol:admin yapın.');return;}
     toast('☁️ Giriş yapıldı ✓');if(sonra==='yayin')bulutYayinla();else if(sonra==='cek')bulutSiparisleriCek();else if(sonra==='kullanici')bulutKullaniciYonet();else if(sonra==='fasonyayin')bulutFasonYayinla();else if(sonra==='fasoncek')bulutFasonDurumCek();else if(sonra==='canli')canliBulutAyar();else if(sonra==='personel')personelBaslat();}
@@ -1185,7 +1202,7 @@ async function oturumKilitGiris(){
     _canliUyari=false; db.canliBulut=true; save();
     const p=$('ok-pw'); if(p)p.value='';
     $('oturumKilit').style.display='none';
-    canliBaslat(true); // 2) canlı buluta OTOMATİK bağlan — veri buluttan gelir/gider
+    otoSenkron(); // 2) canlı buluta OTOMATİK bağlan — ilk cihaz yükler, diğerleri çeker
     try{go('panel')}catch(e){}
     if(bulutKul&&bulutKul.onay===false)toast('⚠️ Giriş yapıldı ama hesabın yönetici onayı beklemede — canlı veri gelmeyebilir.');
     else toast('☁️ Giriş yapıldı — bulut verisi geliyor…');
@@ -5167,7 +5184,7 @@ function rAyarlar(){
   html+=`<div class="sec">Kullanıcılar & Roller</div><div class="card">`+Object.keys(ROLLER).map(k=>`<div class="row" onclick="setRol('${k}')"><div class="av" style="background:${rolRenk(k)}">${ROLLER[k].ic}</div><div class="mid"><div class="t">${ROLLER[k].ad}</div><div class="s">${ROLLER[k].kar?'kâr görür':'kâr gizli'}</div></div>${db.rol===k?'<span class="pill ok">aktif</span>':''}</div>`).join('')+`</div>`;
   if(bulutVar())html+=`<div class="sec">Bulut</div><div class="card">
     ${db.personelMod?`<div class="row" onclick="personelCik()"><div class="av" style="background:${rolRenk(db.rol)}">${(ROLLER[db.rol]||{}).ic||'👤'}</div><div class="mid"><div class="t">Personel: ${ROL_AD[db.rol]||db.rol} <span class="pill ok">bağlı</span></div><div class="s">çıkış yapmak için dokun</div></div><span style="color:var(--sub)">›</span></div>`:`
-    <div class="row" onclick="canliBulutAyar()"><div class="av" style="background:${canliAcik?'var(--good)':'var(--ind2)'}">☁️</div><div class="mid"><div class="t">Canlı Bulut Senkronu ${canliAcik?'<span class="pill ok">açık</span>':''}</div><div class="s">tüm cihazlar aynı canlı veriyi paylaşır (yönetici)</div></div><span style="color:var(--sub)">›</span></div>
+    <div class="row" onclick="canliBulutAyar()"><div class="av" style="background:${canliAcik?'var(--good)':'var(--ind2)'}">☁️</div><div class="mid"><div class="t">Canlı Bulut Senkronu <span class="pill ok">${canliAcik?'açık · otomatik':'otomatik'}</span></div><div class="s">giriş yapılınca kendiliğinden açılır — tüm cihazlar canlı aynı</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="personelGiris()"><div class="av" style="background:var(--pur)">👤</div><div class="mid"><div class="t">Personel Girişi</div><div class="s">depocu / mağaza / ortak — kendi hesabıyla bağlan</div></div><span style="color:var(--sub)">›</span></div>`}
   </div>`;
   html+=`<div class="sec">Güvenlik</div><div class="card">
@@ -5255,8 +5272,8 @@ if(localStorage.getItem('iq_oturumKilit')){
   if(bulutVar())oturumKilidiGoster();
   else{try{localStorage.removeItem('iq_oturumKilit')}catch(e){}if(db.pin)kilitGoster();}
 }else if(db.pin)kilitGoster();
-// Canlı senkron açıksa: bulut+admin girişi hazır olunca sessizce yeniden bağlan
-if(db.canliBulut&&bulutVar()){bulutBaslat();bulutAuthBekle().then(()=>{bulutProfilYukle().then(()=>{if(bulutGirisli())canliBaslat(true);})});}
+// OTOMATİK: buluta giriş yapılmışsa (herhangi bir cihaz) senkron kendiliğinden açılır — elle açmak yok
+if(bulutVar()){bulutBaslat();bulutAuthBekle().then(()=>{if(!bulutGirisli()||bulutMusteriMod)return;bulutProfilYukle().then(()=>otoSenkron()).catch(()=>otoSenkron());});}
 
 /* =================== 📱 PWA: kurulum + çevrimdışı =================== */
 (function(){
