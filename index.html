@@ -1654,8 +1654,8 @@ function barkodYazdir(id){const u=urun(id);let changed=false;renkObjs(u).forEach
   window._bkUrun=id;
   const presets=[['40x60','40 × 60 mm · DİKEY'],['30x50','30 × 50 mm · DİKEY'],['35x60','35 × 60 mm · DİKEY'],['60x40','60 × 40 mm · yatay'],['40x30','40 × 30 mm · yatay'],['50x30','50 × 30 mm · yatay'],['50x40','50 × 40 mm'],['80x50','80 × 50 mm'],['a4','A4 yaprağa dizerek bas']];
   open_('Barkod · '+u.ad,`
-    <div class="mini">Sadece etiketinin <b>ölçüsünü</b> seç — yönü, barkodu, yazıları <b>otomatik</b> ayarlarım. Aşağıda tam olarak <b>çıkacak hali</b> var.</div>
-    <div style="display:flex;justify-content:center;margin:14px 0 8px"><div style="background:repeating-conic-gradient(#e9ebf2 0% 25%,#fff 0% 50%) 50%/16px 16px;padding:16px;border-radius:12px"><img id="bk-onizleme" style="display:block;box-shadow:0 3px 16px rgba(0,0,0,.28);background:#fff;border-radius:2px" alt="etiket önizleme"></div></div>
+    <div class="mini">Sadece etiketinin <b>ölçüsünü</b> seç — yön, barkod, yazılar <b>otomatik</b>. Her ürün için <b>barkod etiketi + ART etiketi</b> (2 etiket) basılır. Aşağıda tam <b>çıkacak hali</b> var.</div>
+    <div style="display:flex;justify-content:center;margin:14px 0 8px"><div style="background:repeating-conic-gradient(#e9ebf2 0% 25%,#fff 0% 50%) 50%/16px 16px;padding:16px;border-radius:12px;display:flex;flex-direction:column;gap:7px;align-items:center"><img id="bk-onizleme" style="display:block;box-shadow:0 3px 16px rgba(0,0,0,.28);background:#fff" alt="barkod etiketi"><img id="bk-onizleme2" style="display:block;box-shadow:0 3px 16px rgba(0,0,0,.28);background:#fff" alt="ART etiketi"></div></div>
     <label style="margin-top:8px">Etiket ölçüsü — <b>En × Boy</b> (rulodaki gerçek ölçü)</label>
     <select id="bk-boy" onchange="etiketOnizle()">${presets.map(o=>`<option value="${o[0]}" ${(db.etiketBoy||'40x60')===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>
     <div class="g2" style="margin-top:6px"><div><label>Özel en (mm)</label><input id="bk-w" type="number" inputmode="numeric" placeholder="—" oninput="etiketOnizle()"></div><div><label>Özel boy (mm)</label><input id="bk-h" type="number" inputmode="numeric" placeholder="—" oninput="etiketOnizle()"></div></div>
@@ -1671,31 +1671,54 @@ function etiketDims(){const cw=+($('bk-w')?.value||0),ch=+($('bk-h')?.value||0);
   if(cw>0&&ch>0)return {en:cw,boy:ch,a4:false,sel:cw+'x'+ch};
   if(sel==='a4')return {en:40,boy:30,a4:true,sel:'a4'};
   const m=sel.split('x');return {en:+m[0]||40,boy:+m[1]||60,a4:false,sel};}
-function etiketOnizle(){const img=$('bk-onizleme');if(!img)return;const u=urun(window._bkUrun);if(!u)return;
+function etiketOnizle(){const img=$('bk-onizleme'),img2=$('bk-onizleme2');if(!img)return;const u=urun(window._bkUrun);if(!u)return;
   const d=etiketDims();const r=(renkObjs(u).find(x=>x.barkod))||renkObjs(u)[0];
-  const en=d.a4?40:d.en,boy=d.a4?30:d.boy;
-  img.src=etiketResimData(u,r,en,boy);
-  const mx=210,sc=mx/Math.max(en,boy);img.style.width=Math.round(en*sc)+'px';img.style.height=Math.round(boy*sc)+'px';}
+  const en=d.a4?45:d.en,boy=d.a4?30:d.boy;
+  const mx=200,sc=mx/Math.max(en,boy),wpx=Math.round(en*sc),hpx=Math.round(boy*sc);
+  img.src=etiketResimData(u,r,en,boy,'ana');img.style.width=wpx+'px';img.style.height=hpx+'px';
+  if(img2){img2.src=etiketResimData(u,r,en,boy,'art');img2.style.width=wpx+'px';img2.style.height=hpx+'px';}}
 function drawBarcodeCanvas(g,code,x,y,w,h){const seq=code128Bseq(''+code);let total=0;for(const ch of seq)total+=+ch;const q=8;total+=2*q;const unit=w/total;
   g.fillStyle='#fff';g.fillRect(x,y,w,h);g.fillStyle='#000';let cx=x+q*unit,bar=true;
   for(const ch of seq){const bw=(+ch)*unit;if(bar){const x0=Math.round(cx),x1=Math.round(cx+bw);g.fillRect(x0,y,Math.max(1,x1-x0),h);}cx+=bw;bar=!bar;}}
-function etiketCiz(g,W,H,u,r,S){const bed=etiketBedenStr(u),code=(r&&r.barkod)||'';
-  g.fillStyle='#fff';g.fillRect(0,0,W,H);
-  g.strokeStyle='#000';g.lineWidth=Math.max(1.5,S*0.22);const bo=g.lineWidth;g.strokeRect(bo/2,bo/2,W-bo,H-bo);
-  const pad=Math.max(4,Math.round(Math.min(W,H)*0.06));const iw=W-2*pad,ih=H-2*pad,iy=pad,ix=pad;
-  const clip=(t,f,mw)=>{g.font=f;t=''+t;if(g.measureText(t).width<=mw)return t;while(t.length>1&&g.measureText(t+'…').width>mw)t=t.slice(0,-1);return t+'…';};
-  const textH=ih*0.42,barH=ih*0.42,numH=ih*0.16;
-  const rows=[['KOD: ',u.kod||'-',0],['',u.ad||'',1],['RENK: ',(r&&r.ad)||'-',0],['',bed,0]];
-  const lineH=textH/4;g.textAlign='center';g.textBaseline='middle';g.fillStyle='#000';
-  rows.forEach((row,i)=>{const bold=row[2];const fs=Math.max(8,Math.min(lineH*0.74,iw*0.15));const f=(bold?'800 ':'700 ')+Math.round(fs)+'px sans-serif';
-    g.fillText(clip(row[0]+row[1],f,iw),W/2,iy+lineH*i+lineH/2);});
-  const by=iy+textH,bh=barH-Math.max(2,S*0.3);drawBarcodeCanvas(g,code,ix,by,iw,bh);
-  const nf=Math.max(8,Math.min(numH*0.82,iw/Math.max(6,(''+code).length)*1.55));
-  g.font='700 '+Math.round(nf)+'px monospace';g.fillStyle='#000';g.textBaseline='middle';g.fillText(''+code,W/2,by+barH+numH/2);}
-// Etiket her zaman DİK (upright) çizilir — içerik doğrudan en×boy kutusuna sığar,
-// yön otomatik doğrudur; döndürme/çevirme numarası yok (eski sorun buydu).
-function etiketResimData(u,r,enMM,boyMM){const S=8;const W=Math.max(8,Math.round(enMM*S)),H=Math.max(8,Math.round(boyMM*S));
-  const c=document.createElement('canvas');c.width=W;c.height=H;etiketCiz(c.getContext('2d'),W,H,u,r,S);
+// clip yardımcı
+function _etClip(g,t,f,mw){g.font=f;t=''+t;if(g.measureText(t).width<=mw)return t;while(t.length>1&&g.measureText(t+'…').width>mw)t=t.slice(0,-1);return t+'…';}
+// ANA barkod etiketi — çerçeveli tablo: KOD/İSİM/RENK/beden + barkod, altında numara
+function etiketCizAna(g,W,H,u,r,S){const bed=etiketBedenStr(u),code=(r&&r.barkod)||'';
+  g.fillStyle='#fff';g.fillRect(0,0,W,H);g.fillStyle='#000';g.textAlign='center';
+  const bw=Math.max(1.5,S*0.2),pad=Math.max(3,Math.round(W*0.02));
+  const numH=Math.max(H*0.14,S*2.1);           // numara kutu DIŞINDA, altta
+  const boxT=bw/2,boxB=H-numH,boxL=bw/2,boxR=W-bw/2;
+  const top=bw,bottom=boxB-bw,innerH=bottom-top,iw=W-2*pad;
+  const textH=innerH*0.55,barH=innerH-textH,rowH=textH/4;
+  const rows=[['KOD: ',u.kod||'-'],['İSİM: ',u.ad||''],['RENK: ',(r&&r.ad)||'-'],['',bed]];
+  g.textBaseline='middle';
+  rows.forEach((row,i)=>{const fs=Math.max(8,Math.min(rowH*0.6,iw*0.13));
+    const f='700 '+Math.round(fs)+'px sans-serif';
+    g.font=f;g.fillStyle='#000';g.fillText(_etClip(g,row[0]+row[1],f,iw),W/2,top+rowH*i+rowH/2);
+    // satır altı çizgi (tablo)
+    g.strokeStyle='#000';g.lineWidth=Math.max(1,S*0.1);g.beginPath();g.moveTo(boxL,top+rowH*(i+1));g.lineTo(boxR,top+rowH*(i+1));g.stroke();});
+  // barkod
+  const by=top+textH+Math.max(2,S*0.3),bh=barH-Math.max(3,S*0.5);drawBarcodeCanvas(g,code,pad,by,iw,bh);
+  // dış çerçeve
+  g.strokeStyle='#000';g.lineWidth=bw;g.strokeRect(boxL,boxT,boxR-boxL,boxB-boxT);
+  // numara (kutu altında)
+  const nf=Math.max(9,Math.min(numH*0.62,iw/Math.max(6,(''+code).length)*1.7));
+  g.font='700 '+Math.round(nf)+'px monospace';g.fillStyle='#000';g.textBaseline='middle';g.fillText(''+code,W/2,boxB+numH/2);}
+// ART etiketi — çerçevesiz: ART.kod / kesikli çizgi / renk / kategori
+function etiketCizArt(g,W,H,u,r,S){const code=u.kod||'',renk=(r&&r.ad)||'',kat=(u.kat||'').toLocaleUpperCase('tr-TR');
+  g.fillStyle='#fff';g.fillRect(0,0,W,H);g.fillStyle='#000';g.textAlign='center';g.textBaseline='middle';
+  const iw=W*0.9;
+  const f1=Math.max(11,Math.min(H*0.14,iw*0.13));
+  g.font='700 '+Math.round(f1)+'px sans-serif';g.fillText(_etClip(g,'ART.'+code,'700 '+Math.round(f1)+'px sans-serif',iw),W/2,H*0.30);
+  // kesikli çizgi
+  g.strokeStyle='#000';g.lineWidth=Math.max(1,S*0.12);g.setLineDash([S*0.7,S*0.5]);g.beginPath();g.moveTo(W*0.28,H*0.46);g.lineTo(W*0.72,H*0.46);g.stroke();g.setLineDash([]);
+  const f2=Math.max(10,Math.min(H*0.12,iw*0.12));
+  g.font='600 '+Math.round(f2)+'px sans-serif';g.fillText(_etClip(g,renk,'600 '+Math.round(f2)+'px sans-serif',iw),W/2,H*0.62);
+  g.font='700 '+Math.round(f2)+'px sans-serif';g.fillText(_etClip(g,kat,'700 '+Math.round(f2)+'px sans-serif',iw),W/2,H*0.77);}
+// Etiket her zaman DİK çizilir — içerik doğrudan en×boy kutusuna sığar (döndürme yok).
+function etiketResimData(u,r,enMM,boyMM,tur){const S=8;const W=Math.max(8,Math.round(enMM*S)),H=Math.max(8,Math.round(boyMM*S));
+  const c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
+  if(tur==='art')etiketCizArt(g,W,H,u,r,S);else etiketCizAna(g,W,H,u,r,S);
   return c.toDataURL('image/png');}
 function seriStr(u){if(u.birim!=='seri')return 'Tekli ürün';if(u.bedenler&&u.bedenler.length)return 'Seri: '+u.bedenler.map(x=>typeof x==='object'?x.beden+(x.adet>1?'×'+x.adet:''):x).join('·')+' ('+u.seri+')';return u.seri+"'li seri"}
 function etiketBedenStr(u){if(u.bedenler&&u.bedenler.length)return u.bedenler.map(x=>typeof x==='object'?x.beden:x).join('-');return u.birim==='seri'?(u.seri+"'li seri"):'Tekli';}
@@ -1705,14 +1728,16 @@ function barkodYap(id){const u=urun(id);const renkler=renkObjs(u).filter(r=>r.ba
   let cells='',toplam=0;
   if(d.a4){
     renkler.forEach((r,i)=>{const n=Math.max(0,+($('bkq-'+i)?.value||0));for(let k=0;k<n;k++){toplam++;
-      cells+=`<div class="lbl"><img src="${etiketResimData(u,r,45,30)}" style="width:100%;height:auto;display:block"></div>`;}});
+      cells+=`<div class="lbl"><img src="${etiketResimData(u,r,45,30,'ana')}" style="width:100%;height:auto;display:block"></div>`;
+      cells+=`<div class="lbl"><img src="${etiketResimData(u,r,45,30,'art')}" style="width:100%;height:auto;display:block"></div>`;}});
     if(!toplam)return toast('Adet gir');
     const st=document.createElement('style');st.id='etiketStyle';
     st.textContent='@media print{@page{size:A4;margin:8mm}body.printing #printarea{display:flex!important;flex-wrap:wrap;gap:4mm;padding:0}body.printing .lbl{width:45mm;border:none;padding:0}}';
     document.head.appendChild(st);
   }else{
     renkler.forEach((r,i)=>{const n=Math.max(0,+($('bkq-'+i)?.value||0));for(let k=0;k<n;k++){toplam++;
-      cells+=`<div class="tpage"><img src="${etiketResimData(u,r,d.en,d.boy)}"></div>`;}});
+      cells+=`<div class="tpage"><img src="${etiketResimData(u,r,d.en,d.boy,'ana')}"></div>`;
+      cells+=`<div class="tpage"><img src="${etiketResimData(u,r,d.en,d.boy,'art')}"></div>`;}});
     if(!toplam)return toast('Adet gir');
     // @page tam etiket ölçüsünde; görsel de aynı ölçüde → 1:1, döndürme yok
     const st=document.createElement('style');st.id='etiketStyle';
