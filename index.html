@@ -742,6 +742,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
+const APP_SURUM = '2026.07.24-5'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -5210,7 +5211,8 @@ function rAyarlar(){
     <div class="row" onclick="sifirla()"><div class="av r">🔄</div><div class="mid"><div class="t">Örnek verilere sıfırla</div></div></div>
   </div><input type="file" id="yedekFile" accept="application/json" style="display:none" onchange="yedekYukle(this)">
   <div class="mini" style="margin:8px 3px">💡 Veriler telefonunun tarayıcısında saklanır. Önemli verini ara sıra <b>yedek al</b> — tarayıcı geçmişini silsen bile kaybolmaz.</div>`;
-  html+=`<div class="mini" style="text-align:center;margin-top:18px">${esc(db.firma||'IQ Basics')} · Toptan Yönetim</div>`;
+  html+=`<div style="text-align:center;margin-top:18px"><button class="btn ghost sm" style="width:auto;display:inline-block" onclick="uygulamayiGuncelle()">🔄 Uygulamayı Güncelle (son sürüm)</button></div>`;
+  html+=`<div class="mini" style="text-align:center;margin-top:8px">${esc(db.firma||'IQ Basics')} · Toptan Yönetim · <b>sürüm ${APP_SURUM}</b></div>`;
   $('app').innerHTML=html;
 }
 function formFirma(){open_('Firma Bilgileri',`<div class="mini">Bu bilgiler termal fiş / sipariş fişi çıktısının başlığında görünür.</div>
@@ -5287,13 +5289,23 @@ if(localStorage.getItem('iq_oturumKilit')){
 // OTOMATİK: buluta giriş yapılmışsa (herhangi bir cihaz) senkron kendiliğinden açılır — elle açmak yok
 if(bulutVar()){bulutBaslat();bulutAuthBekle().then(()=>{if(!bulutGirisli()||bulutMusteriMod)return;bulutProfilYukle().then(()=>otoSenkron()).catch(()=>otoSenkron());});}
 
+// Önbelleği temizleyip en son sürümü zorla getir (eski sürümde kalanlar için)
+async function uygulamayiGuncelle(){
+  toast('🔄 Güncelleniyor…');
+  try{if('caches' in window){const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));}}catch(e){}
+  try{if('serviceWorker' in navigator){const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>{try{return r.update()}catch(e){return null}}));}}catch(e){}
+  setTimeout(()=>{try{location.reload()}catch(e){location.href=location.pathname}},400);
+}
 /* =================== 📱 PWA: kurulum + çevrimdışı =================== */
 (function(){
   // Service worker'ı yalnızca gerçek yayında (http/https) kaydet; file:// önizlemede atla
   if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+    let _swReg=null;
     window.addEventListener('load',()=>{
-      navigator.serviceWorker.register('./sw.js').then(reg=>{try{reg.update()}catch(e){}}).catch(()=>{});
+      navigator.serviceWorker.register('./sw.js').then(reg=>{_swReg=reg;try{reg.update()}catch(e){}}).catch(()=>{});
     });
+    // Uygulama tekrar öne gelince (PWA'yı yeniden açınca) güncelleme kontrol et → yeni sürüm otomatik gelir
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden&&_swReg){try{_swReg.update()}catch(e){}}});
     // Yeni sürüm devralınca sayfayı bir kez otomatik tazele (güncel HTML gelsin)
     let _yenilendi=false;
     navigator.serviceWorker.addEventListener('controllerchange',()=>{if(_yenilendi)return;_yenilendi=true;location.reload();});
