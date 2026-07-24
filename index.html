@@ -2471,15 +2471,27 @@ function fisTermalHTML(s){
   </div>`;
 }
 function fisTermalOnizle(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;
-  open_('Termal Fiş',`<div class="mini">80mm termal yazıcı çıktısı — aynen böyle basılır</div>
-    <div class="thermwrap"><div class="thermpaper">${fisTermalHTML(s)}</div></div>
-    <button class="btn" style="margin-top:12px" onclick="fisTermal(${id})">🖨️ Yazdır</button>`);
+  fisResimLogoHazirla();
+  open_('Termal Fiş',`<div class="mini">80mm termal yazıcı çıktısı — aynen böyle, koyu ve net basılır</div>
+    <div style="display:flex;justify-content:center;margin:12px 0;background:repeating-conic-gradient(#e9ebf2 0% 25%,#fff 0% 50%) 50%/16px 16px;border-radius:10px;padding:14px"><img src="${fisResimData(s)}" style="width:300px;max-width:100%;box-shadow:0 3px 16px rgba(0,0,0,.25);background:#fff"></div>
+    <button class="btn" onclick="fisTermal(${id})">🖨️ Yazdır</button>
+    ${(bulutVar()&&bulutGirisli())?`<button class="btn ghost sm" style="margin-top:8px" onclick="closeM();yaziciyaGonder(${id})">💻 Bilgisayardaki yazıcıya gönder (otomatik)</button>`:''}`);
 }
-function fisTermal(id){const s=db.satislar.find(x=>x.id===id);
-  $('printarea').innerHTML=fisTermalHTML(s);
-  const st=document.createElement('style');st.id='thermStyle';st.textContent='@media print{@page{size:80mm auto;margin:3mm}}';document.head.appendChild(st);
-  document.body.classList.add('printing','thermal');
-  setTimeout(()=>{window.print();document.body.classList.remove('printing','thermal');st.remove()},160);
+// Telefon/bilgisayar tarayıcısından yazdır — TEMİZ GÖRSEL bas (ufak/silik değil),
+// ayrı iframe ile → format doğru, koyu, ve tekrar baskı sorunsuz çalışır.
+function fisTermal(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;
+  fisResimLogoHazirla();
+  const img=fisResimData(s);
+  const eski=document.getElementById('fisPrintFrame');if(eski)eski.remove();
+  const ifr=document.createElement('iframe');ifr.id='fisPrintFrame';ifr.style.cssText='position:fixed;left:-9999px;top:0;width:0;height:0;border:0';
+  document.body.appendChild(ifr);
+  const d=ifr.contentWindow.document;d.open();
+  d.write('<!doctype html><html><head><meta charset="utf-8"><style>@page{size:80mm auto;margin:2mm}html,body{margin:0;padding:0}img{width:100%;display:block}</style></head><body><img id="f" src="'+img+'"></body></html>');
+  d.close();
+  const go2=()=>{try{ifr.contentWindow.focus();ifr.contentWindow.print();}catch(e){try{window.print()}catch(_){}}setTimeout(()=>{try{ifr.remove()}catch(e){}},2500);};
+  const im=d.getElementById('f');
+  if(im&&!im.complete){im.onload=()=>setTimeout(go2,80);im.onerror=()=>setTimeout(go2,80);}
+  else setTimeout(go2,120);
 }
 /* ===== OTOMATİK YAZDIRMA — fişi resme çevir, buluttaki kuyruğa gönder =====
    Bilgisayardaki "yazıcı ajanı" bu kuyruğu dinler ve termal yazıcıya basar. */
