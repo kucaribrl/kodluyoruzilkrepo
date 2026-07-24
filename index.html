@@ -17,6 +17,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<!-- 🔳 QR kod üreteci (fiş altındaki QR için) — yerel dosya, çevrimdışı çalışır -->
+<script src="./qrcode.js"></script>
 <style>
   :root{
     --bg:#f3f2f4; --card:#fff; --ink:#1c1c22; --sub:#71707a; --ln:#e9e8ec; --ln2:#f3f2f5;
@@ -746,7 +748,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-7'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-8'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -2521,9 +2523,9 @@ function fisResimData(s){
   // dinamik yükseklik tahmini
   let H=40;
   H+=db.firmaLogo?70:54; // firma
-  H+=8+22; // sipariş fişi
+  H+=10+26; // sipariş fişi
   H+=(db.firmaTel?20:0)+(db.firmaWp?20:0)+(db.firma?20:0)+(db.firmaAdres?20:0)+10;
-  H+=86; // müşteri kutusu
+  H+=100; // müşteri kutusu
   H+=24; // satıcı/no
   H+=30; // tablo başlık
   s.kalemler.forEach(k=>{H+=28+((k.renkler&&k.renkler.length)?20:18);});
@@ -2532,47 +2534,51 @@ function fisResimData(s){
   H+=34*2+(oncekiBk!=null?30:0)+(sonBk!=null?30:0); // ödeme kutusu
   H+=48; // not
   H+=40; // teşekkür + boşluk
+  H+=(window.qrcode?150:0); // QR kod (MC formatı) — kütüphane varsa
   const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const g=c.getContext('2d');g.scale(dpr,dpr);
   g.fillStyle='#fff';g.fillRect(0,0,W,H);g.fillStyle='#000';g.textBaseline='alphabetic';
   const CX=W/2;const R=W-P;
-  const line=(y,dash)=>{g.save();g.strokeStyle='#000';g.lineWidth=1.4;if(dash)g.setLineDash([4,3]);g.beginPath();g.moveTo(P,y);g.lineTo(R,y);g.stroke();g.restore();};
+  const line=(y,dash)=>{g.save();g.strokeStyle='#000';g.lineWidth=2.2;if(dash)g.setLineDash([4,3]);g.beginPath();g.moveTo(P,y);g.lineTo(R,y);g.stroke();g.restore();};
   const clip=(t,font,maxW)=>{g.font=font;t=''+t;if(g.measureText(t).width<=maxW)return t;while(t.length>1&&g.measureText(t+'…').width>maxW)t=t.slice(0,-1);return t+'…';};
   let y=30;
   // FİRMA
   g.textAlign='center';
-  if(db.firmaLogo){const im=fisResimData._logo;if(im&&im.complete){const w=Math.min(220,im.width);const h=w*(im.height||1)/(im.width||1);try{g.drawImage(im,CX-w/2,y-14,w,h)}catch(e){}y+=h+6;}else{g.font='800 30px sans-serif';g.fillText((db.firma||'IQ BASICS').toLocaleUpperCase('tr-TR'),CX,y+14);y+=44;}}
-  else{g.font='800 30px sans-serif';g.fillText((db.firma||'IQ BASICS').toLocaleUpperCase('tr-TR'),CX,y+14);y+=44;}
+  if(db.firmaLogo){const im=fisResimData._logo;if(im&&im.complete){const w=Math.min(220,im.width);const h=w*(im.height||1)/(im.width||1);try{g.drawImage(im,CX-w/2,y-14,w,h)}catch(e){}y+=h+6;}else{g.font='800 35px sans-serif';g.fillText((db.firma||'IQ BASICS').toLocaleUpperCase('tr-TR'),CX,y+14);y+=44;}}
+  else{g.font='800 35px sans-serif';g.fillText((db.firma||'IQ BASICS').toLocaleUpperCase('tr-TR'),CX,y+14);y+=44;}
   line(y,true);y+=24;
-  g.font='800 22px sans-serif';g.fillText('Sipariş Fişi',CX,y);y+=10;line(y,true);y+=20;
+  g.font='800 26px sans-serif';g.fillText('Sipariş Fişi',CX,y);y+=10;line(y,true);y+=20;
   // İLETİŞİM (sol)
-  g.textAlign='left';g.font='700 14px sans-serif';
+  g.textAlign='left';g.font='800 17px sans-serif';
   if(db.firmaTel){g.fillText('Tel: '+db.firmaTel,P,y);y+=20;}
   if(db.firmaWp){g.fillText('WhatsApp: '+db.firmaWp,P,y);y+=20;}
-  if(db.firma){g.fillText(clip(db.firma,'700 14px sans-serif',W-2*P),P,y);y+=20;}
-  if(db.firmaAdres){g.fillText(clip(db.firmaAdres,'700 14px sans-serif',W-2*P),P,y);y+=20;}
+  if(db.firma){g.fillText(clip(db.firma,'800 17px sans-serif',W-2*P),P,y);y+=20;}
+  if(db.firmaAdres){g.fillText(clip(db.firmaAdres,'800 17px sans-serif',W-2*P),P,y);y+=20;}
   y+=6;
   // MÜŞTERİ KUTUSU
-  const boxTop=y;const boxH=82;g.save();g.strokeStyle='#000';g.lineWidth=1.4;g.setLineDash([4,3]);g.strokeRect(P,boxTop,W-2*P,boxH);g.restore();
-  g.font='700 13px sans-serif';g.textAlign='left';g.fillText('Müşteri:',P+10,boxTop+20);
+  const boxTop=y;const boxH=96;g.save();g.strokeStyle='#000';g.lineWidth=2.2;g.setLineDash([4,3]);g.strokeRect(P,boxTop,W-2*P,boxH);g.restore();
+  g.font='800 15px sans-serif';g.textAlign='left';g.fillText('Müşteri:',P+10,boxTop+20);
   g.textAlign='right';g.fillText(tarih,R-10,boxTop+20);
-  g.textAlign='center';g.font='800 20px sans-serif';g.fillText(clip(s.mus,'800 20px sans-serif',W-2*P-20),CX,boxTop+45);
-  g.font='700 13px sans-serif';const loc=[m&&m.ulke,m&&(m.sehir||m.il)].filter(Boolean).join(' — ')||'—';g.fillText(loc,CX,boxTop+64);
+  g.textAlign='center';g.font='800 24px sans-serif';g.fillText(clip(s.mus,'800 24px sans-serif',W-2*P-20),CX,boxTop+45);
+  g.font='800 15px sans-serif';const loc=[m&&m.ulke,m&&(m.sehir||m.il)].filter(Boolean).join(' — ')||'—';g.fillText(loc,CX,boxTop+64);
   if(m&&m.tel)g.fillText(m.tel,CX,boxTop+78);
   y=boxTop+boxH+22;
   // SATICI / NO
-  g.textAlign='left';g.font='700 13px sans-serif';g.fillText('Satıcı: '+((db.satici||'').trim()||db.firma||''),P,y);
+  g.textAlign='left';g.font='800 15px sans-serif';g.fillText('Satıcı: '+((db.satici||'').trim()||db.firma||''),P,y);
   g.textAlign='right';g.fillText('No. '+s.id,R,y);y+=14;
-  // TABLO
-  line(y);y+=18;g.textAlign='left';g.font='800 13px sans-serif';
-  const cAdet=W-210,cFiy=W-135,cTop=R;
-  g.fillText('Ürün',P,y);g.textAlign='right';g.fillText('Adet',cAdet,y);g.fillText('Fiyat',cFiy,y);g.fillText('Toplam',cTop,y);
+  // TABLO — MC formatı: Kod | Kategori | Adet | Fiyat | Toplam
+  line(y);y+=18;g.textAlign='left';g.font='800 15px sans-serif';
+  const cKat=P+120,cAdet=W-210,cFiy=W-135,cTop=R;
+  g.fillText('Kod',P,y);g.fillText('Kategori',cKat,y);g.textAlign='right';g.fillText('Adet',cAdet,y);g.fillText('Fiyat',cFiy,y);g.fillText('Toplam',cTop,y);
   y+=6;line(y);y+=20;
-  s.kalemler.forEach(k=>{const u=urun(k.uid);const kod=(u&&u.kod)||'';
-    g.textAlign='left';g.font='800 15px sans-serif';g.fillText(clip((kod?kod+' · ':'')+k.urun,'800 15px sans-serif',W-2*P),P,y);y+=20;
+  s.kalemler.forEach(k=>{const u=urun(k.uid);const kod=(u&&u.kod)||'—';const kat=(u&&u.kat)?u.kat.toLocaleUpperCase('tr-TR'):(k.urun||'').toLocaleUpperCase('tr-TR');
+    // 1. satır: KOD + KATEGORİ
+    g.textAlign='left';g.font='800 18px sans-serif';g.fillText(clip(kod,'800 18px sans-serif',cKat-P-8),P,y);g.fillText(clip(kat,'800 18px sans-serif',cTop-cKat-8),cKat,y);y+=19;
+    // 2. satır: ürün adı + renk detayı (sol) · adet/fiyat/toplam (sağ)
     const cl=k.renkler&&k.renkler.length?k.renkler.map(r=>esc(r.ad)+'×'+r.mik).join(' '):'';
-    g.font='600 13px sans-serif';if(cl){g.textAlign='left';g.fillText(clip(cl,'600 13px sans-serif',cAdet-P-40),P,y);}
-    g.textAlign='right';g.font='700 14px sans-serif';g.fillText(''+k.mik,cAdet,y);g.fillText(money2(k.fiyat,s.pb),cFiy,y);g.fillText(money2(k.mik*k.fiyat,s.pb),cTop,y);y+=22;});
-  line(y,true);y+=20;g.textAlign='left';g.font='800 15px sans-serif';g.fillText('Toplam Adet: '+toplamAdet,P,y);y+=16;
+    const alt=(k.urun&&k.urun.toLocaleUpperCase('tr-TR')!==kat?k.urun+(cl?' · ':''):'')+cl;
+    g.font='700 14px sans-serif';g.fillStyle='#000';if(alt){g.textAlign='left';g.fillText(clip(alt,'700 14px sans-serif',cAdet-P-30),P,y);}
+    g.textAlign='right';g.font='800 17px sans-serif';g.fillText(''+k.mik,cAdet,y);g.fillText(money2(k.fiyat,s.pb),cFiy,y);g.fillText(money2(k.mik*k.fiyat,s.pb),cTop,y);y+=22;});
+  line(y,true);y+=20;g.textAlign='left';g.font='800 18px sans-serif';g.fillText('Toplam Adet: '+toplamAdet,P,y);y+=16;
   // TOPLAM KUTUSU
   const rowsT=[['Sipariş Tutarı',money2(s.araToplam||s.tutar,s.pb),0]];
   if(s.iskonto)rowsT.push(['Fark / İndirim','−'+money2(iskT,s.pb),0]);
@@ -2580,17 +2586,26 @@ function fisResimData(s){
   if(s.kesik)rowsT.push(['Kesik','−'+money2(s.kesik,s.pb),0]);
   if(s.kdv!=null)rowsT.push(['KDV %'+(s.kdv||0),money2(s.kdvTutar||0,s.pb),0]);
   rowsT.push(['TOPLAM',money2(s.tutar,s.pb),1]);
-  const drawBox=(rows)=>{const bt=y;const bh=rows.length*30+6;g.save();g.strokeStyle='#000';g.lineWidth=1.4;g.strokeRect(P,bt,W-2*P,bh);g.restore();
-    let ry=bt+22;rows.forEach((r,i)=>{const big=r[2];g.textAlign='left';g.font=(big?'800 18px':'700 14px')+' sans-serif';g.fillText(r[0],P+10,ry);g.textAlign='right';g.font=(big?'800 18px':'700 14px')+' sans-serif';g.fillText(r[1],R-10,ry);if(i<rows.length-1){g.save();g.strokeStyle='#000';g.lineWidth=1;g.beginPath();g.moveTo(P,ry+8);g.lineTo(R,ry+8);g.stroke();g.restore();}ry+=30;});y=bt+bh+12;};
+  const drawBox=(rows)=>{const bt=y;const bh=rows.length*30+6;g.save();g.strokeStyle='#000';g.lineWidth=2.2;g.strokeRect(P,bt,W-2*P,bh);g.restore();
+    let ry=bt+22;rows.forEach((r,i)=>{const big=r[2];g.textAlign='left';g.font=(big?'800 18px':'800 14px')+' sans-serif';g.fillText(r[0],P+10,ry);g.textAlign='right';g.font=(big?'800 18px':'800 14px')+' sans-serif';g.fillText(r[1],R-10,ry);if(i<rows.length-1){g.save();g.strokeStyle='#000';g.lineWidth=1.6;g.beginPath();g.moveTo(P,ry+8);g.lineTo(R,ry+8);g.stroke();g.restore();}ry+=30;});y=bt+bh+12;};
   drawBox(rowsT);
   const rowsO=[['Ödeme',money2(s.odenen,s.pb),0],['Kalan',money2(kalan,s.pb),0]];
   if(oncekiBk!=null)rowsO.push(['Önceki Bakiye',money2(oncekiBk,'TL'),0]);
   if(sonBk!=null)rowsO.push(['Son Bakiye',money2(sonBk,'TL'),0]);
   drawBox(rowsO);
   // NOT
-  const nt=y;g.save();g.strokeStyle='#000';g.lineWidth=1.4;g.setLineDash([4,3]);g.strokeRect(P,nt,W-2*P,34);g.restore();
-  g.textAlign='left';g.font='700 13px sans-serif';g.fillText(clip('Not: '+not,'700 13px sans-serif',W-2*P-16),P+8,nt+22);y=nt+34+22;
-  g.textAlign='center';g.font='700 13px sans-serif';g.fillText('Bizi tercih ettiğiniz için teşekkür ederiz',CX,y);
+  const nt=y;g.save();g.strokeStyle='#000';g.lineWidth=2.2;g.setLineDash([4,3]);g.strokeRect(P,nt,W-2*P,34);g.restore();
+  g.textAlign='left';g.font='800 15px sans-serif';g.fillText(clip('Not: '+not,'800 15px sans-serif',W-2*P-16),P+8,nt+22);y=nt+34+22;
+  g.textAlign='center';g.font='800 15px sans-serif';g.fillText('Bizi tercih ettiğiniz için teşekkür ederiz',CX,y);y+=8;
+  // QR KOD (MC formatı) — fiş özeti; kütüphane yüklüyse çizilir
+  if(window.qrcode){try{
+    const qr=window.qrcode(0,'M');
+    qr.addData((db.firma||'IQ Basics')+' · Fiş #'+s.id+' · '+money2(s.tutar,s.pb)+' · '+tarih+(m&&m.tel?' · '+m.tel:''));
+    qr.make();const n=qr.getModuleCount();const qs=Math.max(2,Math.floor(120/n));const qpx=n*qs;const qx=Math.round(CX-qpx/2),qy=y+8;
+    g.fillStyle='#fff';g.fillRect(qx-6,qy-6,qpx+12,qpx+12);g.fillStyle='#000';
+    for(let r=0;r<n;r++)for(let cc=0;cc<n;cc++){if(qr.isDark(r,cc))g.fillRect(qx+cc*qs,qy+r*qs,qs,qs);}
+    y=qy+qpx+6;
+  }catch(e){}}
   return c.toDataURL('image/png');
 }
 // Firma logosu resimde çıksın diye önceden yükle
