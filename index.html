@@ -2240,15 +2240,105 @@ function saleImages(s){const imgs=[],seen=new Set();
   });
   return imgs;
 }
-function waFisPreview(id){const s=db.satislar.find(x=>x.id===id);const m=cari(s.mid);const imgs=saleImages(s);
-  const wamsg=fisText(s).replace(/\*(.+?)\*/g,'<b>$1</b>').replace(/_(.+?)_/g,'<i>$1</i>');
-  open_('WhatsApp Önizleme',`
-    <div class="mini">Müşteriye gidecek mesaj:</div>
-    <div style="white-space:pre-wrap;background:#e7f6ea;border:1px solid #b6e0bf;border-radius:14px;padding:14px;margin-top:8px;font-size:13.5px;line-height:1.55;color:#0b3d1a">${wamsg}</div>
-    ${imgs.length?`<div class="mini" style="margin-top:10px">🖼️ ${imgs.length} görsel de eklenecek:</div><div class="wagal">${imgs.map(im=>`<div class="wathumb"><img src="${im.src}"><span>${esc(im.ad)}</span></div>`).join('')}</div>`:''}
-    <button class="btn g" onclick="fisWhatsapp(${id})">📱 ${imgs.length?"Görselli Gönder":"WhatsApp'ta Aç ve Gönder"}</button>
-    ${imgs.length?`<div class="mini" style="margin-top:6px">Telefon paylaşım penceresinden WhatsApp'ı seç — mesaj ve görseller birlikte gider. Bilgisayarda sadece mesaj gider, görselleri elle eklersin.</div>`:(!m||!m.tel)?'<div class="mini" style="margin-top:6px">Müşteri telefonu yok — WhatsApp kişi seçtirir.</div>':''}
+function waFisPreview(id){const s=db.satislar.find(x=>x.id===id);const m=cari(s.mid);
+  open_('Müşteriye Fiş Gönder',`
+    <div class="mini">Müşteriye <b>resimli fiş</b> gider — aldığı ürünler <b>fotoğrafı, adedi ve fiyatıyla</b> tek görselde. WhatsApp'ta resim olarak görünür.</div>
+    <div style="display:flex;justify-content:center;margin:12px 0"><div id="mfis-wrap" style="min-height:120px;display:flex;align-items:center;justify-content:center"><span class="mini">🧾 Fiş hazırlanıyor…</span></div></div>
+    <button class="btn g" onclick="musteriFisGonder(${id},'pdf')">📄 PDF Fiş Gönder</button>
+    <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="musteriFisGonder(${id},'jpg')">🖼️ Resim olarak</button><button class="btn ghost sm" onclick="fisWhatsapp(${id})">📝 Düz yazı</button></div>
+    ${(!m||!m.tel)?'<div class="mini" style="margin-top:6px">Müşteri telefonu yok — paylaşımda kişi seçtirir.</div>':''}
   `);
+  musteriFisResim(s,(blob)=>{const w=$('mfis-wrap');if(!w)return;if(!blob){w.innerHTML='<span class="mini">Önizleme oluşturulamadı</span>';return;}
+    const url=URL.createObjectURL(blob);w.innerHTML=`<img src="${url}" style="max-width:100%;border-radius:12px;box-shadow:0 3px 16px rgba(0,0,0,.22)">`;});
+}
+// Müşteriye özel resimli fiş — ürün fotoğrafları + adet + fiyat + toplam
+function musteriFisResim(s,cb){
+  const W=720,P=26,rowH=94;const m=cari(s.mid);
+  const lines=s.kalemler.map(k=>{const u=urun(k.uid);let src='';
+    if(k.renkler&&k.renkler.length&&u&&u.renkler){for(const rc of k.renkler){const ro=(u.renkler||[]).find(x=>x&&typeof x==='object'&&x.ad===rc.ad&&x.foto);if(ro){src=ro.foto;break;}}}
+    if(!src&&u)src=urunKapak(u);
+    return {k,u,src};});
+  const load=(src)=>new Promise(res=>{if(!src)return res(null);const im=new Image();im.onload=()=>res(im);im.onerror=()=>res(null);im.src=src;});
+  Promise.all(lines.map(l=>load(l.src))).then(imgs=>{
+    lines.forEach((l,i)=>l.img=imgs[i]);
+    const d=new Date(s.tarih);const tarih=d.toLocaleDateString('tr-TR',{day:'2-digit',month:'long',year:'numeric'})+' · '+d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
+    const iskT=(s.araToplam||0)*(s.iskonto||0)/100;const kalan=Math.max(0,s.tutar-s.odenen-(s.kesik||0));
+    const totRows=[['Ara Toplam',money(s.araToplam||s.tutar,s.pb)]];
+    if(s.iskonto)totRows.push(['İndirim %'+s.iskonto,'−'+money(iskT,s.pb)]);
+    if(s.kdv)totRows.push(['KDV %'+s.kdv,'+'+money(s.kdvTutar||0,s.pb)]);
+    if(s.tasima)totRows.push(['Taşıma','+'+money(s.tasima,s.pb)]);
+    const HEAD=158,TOT=totRows.length*32+64,PAY=96,FOOT=58;
+    const H=HEAD+lines.length*rowH+16+TOT+14+PAY+FOOT;
+    const dpr=2,c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const g=c.getContext('2d');g.scale(dpr,dpr);
+    g.fillStyle='#f4f5f7';g.fillRect(0,0,W,H);g.textBaseline='alphabetic';
+    const clip=(t,f,mw)=>{g.font=f;t=''+t;if(g.measureText(t).width<=mw)return t;while(t.length>1&&g.measureText(t+'…').width>mw)t=t.slice(0,-1);return t+'…';};
+    // header
+    g.fillStyle='#33333d';g.fillRect(0,0,W,112);
+    g.textAlign='left';g.fillStyle='#fff';g.font='800 30px sans-serif';g.fillText(clip(db.firma||'IQ Basics','800 30px sans-serif',W*0.6),P,52);
+    g.font='600 15px sans-serif';g.fillStyle='#c9ccd4';g.fillText('SATIŞ FİŞİ · No '+s.id,P,82);
+    g.textAlign='right';g.fillStyle='#c9ccd4';g.font='600 15px sans-serif';g.fillText(tarih,W-P,52);
+    if(db.firmaTel||db.firmaWp)g.fillText('📞 '+(db.firmaWp||db.firmaTel),W-P,80);
+    g.textAlign='left';g.fillStyle='#22232a';g.font='800 21px sans-serif';g.fillText(clip('👤 '+(s.mus||''),'800 21px sans-serif',W-2*P),P,146);
+    // ürünler
+    let y=HEAD;
+    lines.forEach((l,i)=>{const ry=y+i*rowH;const k=l.k;
+      g.fillStyle='#fff';roundRectPath(g,P,ry+6,W-2*P,rowH-12,12);g.fill();
+      const ix=P+14,iy=ry+6+(rowH-12-66)/2;
+      g.save();roundRectPath(g,ix,iy,66,66,10);g.clip();
+      if(l.img){const iw=l.img.width||1,ih=l.img.height||1,sc=Math.max(66/iw,66/ih);g.drawImage(l.img,ix+(66-iw*sc)/2,iy+(66-ih*sc)/2,iw*sc,ih*sc);}
+      else{g.fillStyle='#e9ebef';g.fillRect(ix,iy,66,66);g.fillStyle='#b7bcc6';g.font='700 12px sans-serif';g.textAlign='center';g.fillText('foto yok',ix+33,iy+37);}
+      g.restore();
+      const tx=ix+66+16,kod=(l.u&&l.u.kod)?l.u.kod+' · ':'';
+      g.textAlign='left';g.fillStyle='#22232a';g.font='800 19px sans-serif';g.fillText(clip(k.urun,'800 19px sans-serif',W-P-tx-130),tx,ry+40);
+      const sub=k.renkler&&k.renkler.length?k.renkler.map(r=>r.ad+'×'+r.mik).join('  '):k.mik+' '+k.birim;
+      g.fillStyle='#8a8f98';g.font='600 14px sans-serif';g.fillText(clip(kod+sub,'600 14px sans-serif',W-P-tx-130),tx,ry+64);
+      g.textAlign='right';g.fillStyle='#22232a';g.font='800 20px sans-serif';g.fillText(money(k.mik*k.fiyat,s.pb),W-P-14,ry+52);
+    });
+    // toplam + ödeme (sağ blok)
+    let by=HEAD+lines.length*rowH+16;const boxW=Math.min(340,W*0.56),bx=W-P-boxW;
+    g.fillStyle='#fff';roundRectPath(g,bx,by,boxW,TOT,12);g.fill();
+    let ry=by+30;totRows.forEach(r=>{g.textAlign='left';g.fillStyle='#5a5f6a';g.font='600 15px sans-serif';g.fillText(r[0],bx+16,ry);g.textAlign='right';g.fillStyle='#22232a';g.font='700 15px sans-serif';g.fillText(r[1],bx+boxW-16,ry);ry+=32;});
+    g.strokeStyle='#e5e8ed';g.lineWidth=1.5;g.beginPath();g.moveTo(bx+14,ry-14);g.lineTo(bx+boxW-14,ry-14);g.stroke();
+    g.textAlign='left';g.fillStyle='#22232a';g.font='800 22px sans-serif';g.fillText('TOPLAM',bx+16,ry+16);g.textAlign='right';g.fillText(money(s.tutar,s.pb),bx+boxW-16,ry+16);
+    let py=by+TOT+14;g.fillStyle='#fff';roundRectPath(g,bx,py,boxW,PAY,12);g.fill();
+    g.textAlign='left';g.fillStyle='#5a5f6a';g.font='600 15px sans-serif';g.fillText('Ödenen',bx+16,py+30);g.textAlign='right';g.fillStyle='#22232a';g.font='700 15px sans-serif';g.fillText(money(s.odenen,s.pb),bx+boxW-16,py+30);
+    if(kalan>0.5){g.textAlign='left';g.fillStyle='#c0392b';g.font='800 19px sans-serif';g.fillText('KALAN',bx+16,py+66);g.textAlign='right';g.fillText(money(kalan,s.pb),bx+boxW-16,py+66);}
+    else{g.textAlign='center';g.fillStyle='#1a7a3a';g.font='800 18px sans-serif';g.fillText('✓ Ödendi',bx+boxW/2,py+64);}
+    // footer
+    g.textAlign='center';g.fillStyle='#8a8f98';g.font='600 14px sans-serif';g.fillText('Bizi tercih ettiğiniz için teşekkür ederiz 🙏',W/2,H-22);
+    try{c.toBlob(bl=>cb(bl,c),'image/jpeg',0.92);}catch(e){cb(null,c);}
+  });
+}
+// JPEG'i tek sayfalık PDF'e göm (harici kütüphane yok — DCTDecode)
+function jpegToPdfBlob(jpg,pxW,pxH){
+  const Wp=Math.round(pxW*0.6),Hp=Math.round(pxH*0.6); // ~sayfa boyutu (pt)
+  const enc=s=>{const a=new Uint8Array(s.length);for(let i=0;i<s.length;i++)a[i]=s.charCodeAt(i)&255;return a;};
+  const parts=[];let len=0;const off=[];
+  const push=u=>{parts.push(u);len+=u.length;};const ps=s=>push(enc(s));
+  ps('%PDF-1.4\n%\xFF\xFF\xFF\xFF\n');
+  off[1]=len;ps('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+  off[2]=len;ps('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n');
+  off[3]=len;ps(`3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${Wp} ${Hp}] /Resources << /XObject << /Im0 5 0 R >> >> /Contents 4 0 R >>\nendobj\n`);
+  const cont=`q\n${Wp} 0 0 ${Hp} 0 0 cm\n/Im0 Do\nQ\n`;
+  off[4]=len;ps(`4 0 obj\n<< /Length ${cont.length} >>\nstream\n`);ps(cont);ps('endstream\nendobj\n');
+  off[5]=len;ps(`5 0 obj\n<< /Type /XObject /Subtype /Image /Width ${pxW} /Height ${pxH} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpg.length} >>\nstream\n`);push(jpg);ps('\nendstream\nendobj\n');
+  const xr=len;let x='xref\n0 6\n0000000000 65535 f \n';for(let i=1;i<=5;i++)x+=String(off[i]).padStart(10,'0')+' 00000 n \n';ps(x);
+  ps(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xr}\n%%EOF`);
+  const out=new Uint8Array(len);let o=0;for(const p of parts){out.set(p,o);o+=p.length;}
+  return new Blob([out],{type:'application/pdf'});
+}
+async function musteriFisGonder(id,fmt){const s=db.satislar.find(x=>x.id===id);if(!s)return;
+  fmt=fmt||'pdf';toast('🧾 Fiş hazırlanıyor…');
+  musteriFisResim(s,async(blob,c)=>{if(!blob)return toast('Fiş oluşturulamadı');
+    let file,fname;
+    if(fmt==='pdf'){const jpg=new Uint8Array(await blob.arrayBuffer());const pdf=jpegToPdfBlob(jpg,c.width,c.height);fname='fis-'+s.id+'.pdf';file=new File([pdf],fname,{type:'application/pdf'});}
+    else{fname='fis-'+s.id+'.jpg';file=new File([blob],fname,{type:'image/jpeg'});}
+    const txt=(db.firma||'IQ Basics')+' · Satış Fişi No '+s.id;
+    if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){
+      try{await navigator.share({files:[file],text:txt});return;}catch(e){if(e&&e.name==='AbortError')return;}}
+    const url=URL.createObjectURL(file);const a=document.createElement('a');a.href=url;a.download=fname;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);
+    toast('📥 '+(fmt==='pdf'?'PDF':'Görsel')+' indirildi — WhatsApp\'tan gönderebilirsin');
+  });
 }
 function dataURLtoFile(durl,name){const arr=durl.split(',');const mime=(arr[0].match(/:(.*?);/)||[])[1]||'image/jpeg';const bstr=atob(arr[1]);let n=bstr.length;const u8=new Uint8Array(n);while(n--)u8[n]=bstr.charCodeAt(n);return new File([u8],name,{type:mime})}
 async function fisWhatsapp(id){const s=db.satislar.find(x=>x.id===id);const m=cari(s.mid);const txt=fisText(s);
