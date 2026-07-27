@@ -748,7 +748,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-10'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-11'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1686,6 +1686,7 @@ function barkodYazdir(id){const u=urun(id);let changed=false;renkObjs(u).forEach
     <div class="mini" style="margin-top:4px">Özel ölçü girersen seçimi geçersiz kılar. <b>En</b> = rulonun genişliği, <b>Boy</b> = her etiketin boyu.</div>
     <div id="bk-list" style="margin-top:12px">${renkler.map((r,i)=>`<div class="bkrow" style="align-items:center;gap:10px"><div style="flex:1;min-width:0"><b>${esc(u.ad)} · ${esc(r.ad||'—')}</b><div class="mini">${esc(u.kod||'')} · ${esc(r.barkod)}</div></div><div style="text-align:right;flex:0 0 auto"><label style="font-size:11px">Kaç adet?</label><input id="bkq-${i}" type="number" inputmode="numeric" value="${r.stok||1}" style="width:78px;padding:8px;margin:2px 0 0"></div></div>`).join('')}</div>
     <button class="btn" style="margin-top:12px" onclick="barkodYap(${id})">🖨️ Yazdır</button>
+    ${(bulutVar()&&bulutGirisli())?`<button class="btn ghost sm" style="margin-top:8px" onclick="etiketleriYaziciyaGonder(${id})">💻 Bilgisayardaki barkod yazıcısına gönder (otomatik)</button>`:''}
     <div class="mini" style="margin-top:8px">Yazdırma penceresinde: <b>Kenar boşlukları = Yok</b>, <b>Ölçek = %100</b> (Sığdır kapalı), yazıcı = barkod yazıcın. Önizlemedeki yön neyse çıktı da odur.</div>
   `);
   etiketOnizle();
@@ -1775,6 +1776,26 @@ function barkodYap(id){const u=urun(id);const renkler=renkObjs(u).filter(r=>r.ba
   }
   const area=document.getElementById('printarea');area.innerHTML=cells;document.body.classList.add('printing');
   setTimeout(()=>{window.print();document.body.classList.remove('printing');const s=document.getElementById('etiketStyle');if(s)s.remove();},250);
+}
+// Etiket görsellerini üret (barkodYap ile aynı kural: renk başına N ana + 1 ART)
+function etiketResimListesi(id){const u=urun(id);const renkler=renkObjs(u).filter(r=>r.barkod);if(!renkler.length)return null;
+  const d=etiketDims();const en=d.a4?45:d.en,boy=d.a4?30:d.boy;const imgs=[];
+  renkler.forEach((r,i)=>{const n=Math.max(0,+($('bkq-'+i)?.value||0));if(n<=0)return;
+    for(let k=0;k<n;k++)imgs.push(etiketResimData(u,r,en,boy,'ana'));
+    imgs.push(etiketResimData(u,r,en,boy,'art'));});
+  return imgs.length?{imgs,en,boy,sel:d.sel}:null;}
+// Barkod etiketlerini BİLGİSAYARDAKİ barkod yazıcısına gönder (ajan basar, ekransız)
+async function etiketleriYaziciyaGonder(id){
+  if(!(bulutVar()&&bulutBaslat()&&_fb&&bulutGirisli&&bulutGirisli()))return toast('Önce buluta giriş yap (otomatik baskı için)');
+  const L=etiketResimListesi(id);if(!L)return toast('Adet gir');
+  db.etiketBoy=L.sel;save();
+  try{
+    const CH=35; // Firestore 1MB sınırı için parça parça gönder
+    for(let i=0;i<L.imgs.length;i+=CH){const part=L.imgs.slice(i,i+CH);
+      await _fb.collection('isletme').doc(MAGAZA_ID).collection('yazdirma').add({
+        tur:'etiket',resimler:part,en:L.en,boy:L.boy,adet:part.length,durum:'bekliyor',olusturma:Date.now(),cihaz:(db.satici||'')||'telefon'});}
+    toast('🖨️ '+L.imgs.length+' etiket barkod yazıcısına gönderildi');
+  }catch(e){toast('Gönderilemedi: '+(e.message||e))}
 }
 /* ---- Aktif / Pasif (arşiv) ---- */
 function urunAktifToggle(id){const u=urun(id);if(!u)return;u.pasif=!u.pasif;save();render();toast(u.pasif?'Pasife alındı (arşiv) 🗄️':'Aktif edildi ✓')}

@@ -49,13 +49,13 @@ function dataUrlToPng(dataUrl, file) {
   fs.writeFileSync(file, Buffer.from(b64, 'base64'));
 }
 
-function printImage(file, copies) {
+function printImage(file, copies, printerName) {
   return new Promise((resolve, reject) => {
     copies = Math.max(1, Math.min(5, +copies || 1));
     if (isWin) {
       const ps = path.join(__dirname, 'print-image.ps1');
       const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps, '-img', file, '-copies', String(copies)];
-      if (cfg.yaziciAdi) args.push('-printer', cfg.yaziciAdi);
+      if (printerName) args.push('-printer', printerName);
       const child = spawn('powershell.exe', args, { windowsHide: true });
       let err = '';
       child.stderr.on('data', d => err += d);
@@ -64,7 +64,7 @@ function printImage(file, copies) {
     } else {
       // macOS / Linux — CUPS lp
       const args = ['-n', String(copies)];
-      if (cfg.yaziciAdi) { args.push('-d', cfg.yaziciAdi); }
+      if (printerName) { args.push('-d', printerName); }
       args.push('-o', 'fit-to-page', file);
       const child = spawn('lp', args);
       let err = '';
@@ -79,18 +79,25 @@ async function handleJob(db, snapDoc) {
   const id = snapDoc.id;
   if (inFlight.has(id)) return;
   const data = snapDoc.data();
-  if (!data || data.durum !== 'bekliyor' || !data.resim) return;
+  // fiş: tek görsel (data.resim) · barkod etiket: görsel dizisi (data.resimler)
+  const imgs = (data && data.tur === 'etiket' && Array.isArray(data.resimler)) ? data.resimler
+             : (data && data.resim ? [data.resim] : null);
+  if (!data || data.durum !== 'bekliyor' || !imgs || !imgs.length) return;
   inFlight.add(id);
   const ref = doc(db, 'isletme', MAGAZA_ID, 'yazdirma', id);
+  // hangi yazıcı? etiket → etiketYaziciAdi, fiş → yaziciAdi (biri boşsa diğerine/​varsayılana düşer)
+  const etiket = data.tur === 'etiket';
+  const printer = etiket ? (cfg.etiketYaziciAdi || cfg.yaziciAdi || '') : (cfg.yaziciAdi || '');
   try {
-    // Hemen "basiliyor" işaretle → tekrar tetiklenmesin
     await updateDoc(ref, { durum: 'basiliyor' });
-    const tmp = path.join(os.tmpdir(), 'iq-fis-' + id + '.png');
-    dataUrlToPng(data.resim, tmp);
-    log('🖨️  Basılıyor:', data.tur === 'test' ? 'TEST' : ('Fiş #' + (data.satisId || '') + ' · ' + (data.mus || '')));
-    await printImage(tmp, data.kopya || cfg.kopyaVarsayilan || 1);
-    try { fs.unlinkSync(tmp); } catch (e) {}
-    // Başarılı → sil (kuyruğu temiz tut). İstersen 'basildi' de yapılabilir.
+    log('🖨️  Basılıyor:', etiket ? (imgs.length + ' barkod etiketi → ' + (printer || 'varsayılan'))
+        : (data.tur === 'test' ? 'TEST' : ('Fiş #' + (data.satisId || '') + ' · ' + (data.mus || ''))));
+    for (let i = 0; i < imgs.length; i++) {
+      const tmp = path.join(os.tmpdir(), 'iq-' + (etiket ? 'etiket' : 'fis') + '-' + id + '-' + i + '.png');
+      dataUrlToPng(imgs[i], tmp);
+      await printImage(tmp, etiket ? 1 : (data.kopya || cfg.kopyaVarsayilan || 1), printer);
+      try { fs.unlinkSync(tmp); } catch (e) {}
+    }
     await deleteDoc(ref);
     log('✅ Basıldı ve kuyruktan silindi.');
   } catch (e) {
@@ -103,7 +110,8 @@ async function handleJob(db, snapDoc) {
 
 async function main() {
   console.log('\n=== IQ Basics · Yazıcı Ajanı ===');
-  console.log('Yazıcı:', cfg.yaziciAdi || '(Windows/işletim sistemi varsayılan yazıcısı)');
+  console.log('Fiş yazıcısı   :', cfg.yaziciAdi || '(varsayılan yazıcı)');
+  console.log('Barkod yazıcısı:', cfg.etiketYaziciAdi || '(fiş yazıcısı/varsayılan)');
   const app = initializeApp(FB_CONFIG);
   const auth = getAuth(app);
   const db = getFirestore(app);

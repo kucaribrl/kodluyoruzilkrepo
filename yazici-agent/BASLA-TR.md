@@ -33,17 +33,20 @@ Bilgisayar **açık ve bu pencere çalışır** olduğu sürece basar.
   "email": "birol575@hotmail.com",
   "sifre": "BULUTA_GIRDIGIN_SIFRE",
   "yaziciAdi": "",
+  "etiketYaziciAdi": "",
   "kopyaVarsayilan": 1
 }
 ```
 
 - **email / sifre**: uygulamada buluta girdiğin **patron hesabı** (aynısı).
-- **yaziciAdi**: termal yazıcının Windows'taki **tam adı**.
-  - Bul: **Başlat → Ayarlar → Bluetooth ve cihazlar → Yazıcılar ve tarayıcılar**
-    (veya Denetim Masası → Aygıtlar ve Yazıcılar). Oradaki ismi **birebir** yaz.
-    Örn: `"yaziciAdi": "XP-80C"`
-  - Boş bırakırsan (`""`) Windows'un **varsayılan** yazıcısına basar. Termal yazıcıyı
-    varsayılan yaparsan boş bırakabilirsin.
+- **yaziciAdi**: **TERMAL FİŞ** yazıcının Windows'taki **tam adı**.
+- **etiketYaziciAdi**: **BARKOD ETİKET** yazıcının adı (ör. `"XP-490B"`).
+  - İki yazıcın da varsa ikisini de yaz → ajan **her işi doğru yazıcıya** basar
+    (fiş → fiş yazıcısı, barkod → barkod yazıcısı). Elle varsayılan değiştirmek yok.
+  - Yazıcı adını bul: **Başlat → Ayarlar → Bluetooth ve cihazlar → Yazıcılar ve tarayıcılar**
+    (veya Denetim Masası → Aygıtlar ve Yazıcılar). İsmi **birebir** yaz.
+  - Tek yazıcın varsa sadece `yaziciAdi`'nı yaz; `etiketYaziciAdi`'nı boş bırak.
+  - İkisi de boşsa Windows'un **varsayılan** yazıcısına basar.
 
 > 🔒 `config.json` içinde şifren var — bu dosyayı kimseyle paylaşma, ZIP'e koyup gönderme.
 

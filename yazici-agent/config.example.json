@@ -3,5 +3,8 @@
   "email": "birol575@hotmail.com",
   "sifre": "BULUT_SIFREN",
   "yaziciAdi": "",
-  "kopyaVarsayilan": 1
+  "etiketYaziciAdi": "",
+  "kopyaVarsayilan": 1,
+  "_not_yaziciAdi": "TERMAL FIS yazicisinin Windows'taki tam adi (bos = varsayilan yazici).",
+  "_not_etiketYaziciAdi": "BARKOD ETIKET yazicisinin adi (or. XP-490B). Bos birakirsan fis yazicisina/varsayilana basar."
 }
