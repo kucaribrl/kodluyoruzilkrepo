@@ -229,24 +229,6 @@
     body.printing .lbl .l-ad{font-size:12px;font-weight:800;line-height:1.3;margin-bottom:2px}
     body.printing .lbl .l-line{font-size:10px;font-weight:700;line-height:1.4}
     body.printing .lbl svg{margin-top:4px}
-    body.printing .fis{width:100%;color:#000;font-size:13px;font-family:ui-sans-serif,system-ui,sans-serif}
-    body.printing .fis h2{margin:0 0 4px;font-size:20px}
-    body.printing .fis table{width:100%;border-collapse:collapse;margin-top:10px}
-    body.printing .fis td{padding:5px 0;border-bottom:1px solid #ddd;vertical-align:top}
-    body.printing .fis td.r{text-align:right;white-space:nowrap}
-    body.printing .fis small{color:#555}
-    body.printing .fis .tot td{font-weight:800;font-size:16px;border-top:2px solid #000;border-bottom:none}
-    body.thermal #printarea{display:block!important;padding:0}
-    body.thermal .lbl{display:none!important}
-    .fisT{font-family:'Courier New',ui-monospace,monospace;color:#000;width:100%;font-size:12px;line-height:1.5;letter-spacing:.2px}
-    /* Termal yazıcı soluk basmasın: koyu, kalın, saf siyah zorla */
-    body.thermal,body.thermal .fisT,body.thermal .fisT *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color:#000!important}
-    body.thermal .fisT{font-weight:700;font-size:12.5px;text-rendering:geometricPrecision;-webkit-font-smoothing:none}
-    body.thermal .fisT .th-ct,body.thermal .fisT .sat,body.thermal .fisT .mbox .mtop,body.thermal .fisT .mbox .ml,body.thermal .fisT table.it,body.thermal .fisT table.it td,body.thermal .fisT .notbox,body.thermal .fisT .ft{font-weight:700}
-    body.thermal .fisT .rs,body.thermal .fisT .toplamadet{border-top-color:#000;border-top-width:1.5px}
-    body.thermal .fisT .mbox,body.thermal .fisT .notbox{border-color:#000;border-width:1.5px}
-    body.thermal .fisT .tbox,body.thermal .fisT .tbox .rw{border-color:#000!important}
-    body.thermal .fisT svg *{shape-rendering:crispEdges}
     /* Barkod etiketi: barlar saf siyah ve keskin bassın (tarayıcı okusun) */
     body.printing .tl-tbl,body.printing .tl-r,body.printing .lbl{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color:#000!important}
     body.printing .tl-bar svg,body.printing .lbl svg{shape-rendering:crispEdges;image-rendering:pixelated}
@@ -268,37 +250,6 @@
   .ieA4 .r{text-align:right}
   .ieA4 .ieimg{max-height:200px;max-width:60%;border:1px solid #000}
   .ieA4 .iesign{display:flex;justify-content:space-between;margin-top:44px;font-size:12.5px}
-  /* Termal fiş iç stilleri (önizleme + baskı ortak) */
-  .thermwrap{background:repeating-linear-gradient(45deg,#e6e8ee,#e6e8ee 10px,#e1e3ea 10px,#e1e3ea 20px);border-radius:12px;padding:18px 10px;margin-top:10px;display:flex;justify-content:center}
-  .thermpaper{background:#fff;width:300px;max-width:100%;padding:16px 16px 6px;box-shadow:0 4px 18px rgba(0,0,0,.22);clip-path:polygon(0 0,100% 0,100% calc(100% - 6px),97% 100%,94% calc(100% - 6px),91% 100%,88% calc(100% - 6px),85% 100%,82% calc(100% - 6px),79% 100%,76% calc(100% - 6px),73% 100%,70% calc(100% - 6px),67% 100%,64% calc(100% - 6px),61% 100%,58% calc(100% - 6px),55% 100%,52% calc(100% - 6px),49% 100%,46% calc(100% - 6px),43% 100%,40% calc(100% - 6px),37% 100%,34% calc(100% - 6px),31% 100%,28% calc(100% - 6px),25% 100%,22% calc(100% - 6px),19% 100%,16% calc(100% - 6px),13% 100%,10% calc(100% - 6px),7% 100%,4% calc(100% - 6px),1% 100%,0 calc(100% - 6px))}
-  .thermpaper .fisT{color:#000;font-family:'Courier New',ui-monospace,monospace;font-size:12px;line-height:1.5;letter-spacing:.2px}
-  .fisT .th-logo{text-align:center;margin:2px 0 4px}.fisT .th-logo img{max-height:48px;max-width:78%;object-fit:contain}
-  .fisT .th-name{text-align:center;font-size:21px;font-weight:800;letter-spacing:2px}
-  .fisT .th-title{text-align:center;font-size:18px;font-weight:800;letter-spacing:1px;margin:2px 0}
-  .fisT .th-ct{font-size:11px;margin:2px 0;display:flex;gap:6px;align-items:flex-start}.fisT .th-ct .ci{flex:0 0 auto}
-  .fisT .rs{border-top:1px dashed #000;margin:6px 0}
-  .fisT .tc{text-align:center}.fisT .tb{font-weight:800}.fisT .r{text-align:right}
-  .fisT .mbox{border:1px dashed #000;padding:6px 9px;margin:6px 0}
-  .fisT .mbox .mtop{display:flex;justify-content:space-between;font-size:11px}
-  .fisT .mbox .mn{text-align:center;font-weight:800;font-size:15px;margin-top:3px}
-  .fisT .mbox .ml{text-align:center;font-size:11.5px;margin-top:1px}
-  .fisT .sat{display:flex;justify-content:space-between;font-size:11px;margin:4px 0 2px}
-  .fisT table.it{width:100%;border-collapse:collapse;font-size:11px;margin-top:2px}
-  .fisT table.it th{text-align:left;border-bottom:1.5px solid #000;padding:3px 2px 4px;font-size:10.5px;font-weight:800}
-  .fisT table.it td{padding:1px 2px;vertical-align:top}
-  .fisT table.it tr.itr td{padding-top:4px}
-  .fisT table.it .knm{font-weight:800}
-  .fisT table.it .cl{font-size:10.5px}
-  .fisT .toplamadet{border-top:1px dashed #000;padding-top:4px;margin-top:3px;font-weight:800;font-size:12px}
-  .fisT .tbox{border:1px solid #000;margin:7px 0}
-  .fisT .tbox .rw{display:flex;justify-content:space-between;padding:5px 9px;border-bottom:1px solid #000}
-  .fisT .tbox .rw:last-child{border-bottom:none}
-  .fisT .tbox .rw.big{font-weight:800;font-size:15px}
-  .fisT .tbox .rw .lb{font-weight:700}
-  .fisT .notbox{border:1px dashed #000;padding:6px 9px;margin:7px 0;min-height:34px;font-size:11px}
-  .fisT .th-bc{text-align:center;margin:9px 0 2px}
-  .fisT .th-bc svg{max-width:180px}
-  .fisT .ft{text-align:center;font-size:10px;margin-top:4px;line-height:1.5}
   .warnbox{background:var(--bad-s);color:var(--bad);border-radius:11px;padding:10px 13px;font-size:12px;font-weight:700;margin-top:10px}
   .infobox{background:var(--thr-s);color:var(--thr);border-radius:11px;padding:10px 13px;font-size:12px;font-weight:700;margin-top:10px}
   .okbox{background:var(--good-s);color:var(--good);border-radius:11px;padding:10px 13px;font-size:12px;font-weight:700;margin-top:10px}
@@ -748,7 +699,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-12'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-13'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1672,8 +1623,6 @@ function barkodOkutSayim(){barkodTara((code)=>{const f=barkodBul(code);
   if(!f)return toast('❓ "'+code+'" barkodlu ürün bulunamadı');
   formSayim(f.u.id,1);toast('📦 '+f.u.ad);
 },'Sayılacak ürünün barkodunu okut');}
-function barkodSVG(text,h=48,noText){const seq=code128Bseq(''+text);const q=10;let x=q,rects='',bar=true;for(const ch of seq){const w=+ch;if(bar)rects+=`<rect x="${x}" y="0" width="${w}" height="${h}"/>`;x+=w;bar=!bar}const W=x+q;const H=noText?h:h+15;
-  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" shape-rendering="crispEdges" style="width:100%;max-width:${noText?'none':'230px'};height:auto;image-rendering:pixelated"><rect x="0" y="0" width="${W}" height="${H}" fill="#fff"/><g fill="#000" shape-rendering="crispEdges">${rects}</g>${noText?'':`<text x="${W/2}" y="${h+12}" font-size="11" text-anchor="middle" fill="#000" font-family="monospace" letter-spacing="1">${esc(''+text)}</text>`}</svg>`}
 function barkodYazdir(id){const u=urun(id);let changed=false;renkObjs(u).forEach(r=>{if(!r.barkod){r.barkod=genBarkod();changed=true}});if(changed)save();const renkler=renkObjs(u);if(!renkler.length)return toast('Bu üründe renk yok');
   window._bkUrun=id;
   const presets=[['58x38','58 × 38 mm · yatay'],['58x40','58 × 40 mm · yatay'],['60x40','60 × 40 mm · yatay'],['40x60','40 × 60 mm · DİKEY'],['38x58','38 × 58 mm · DİKEY'],['30x50','30 × 50 mm · DİKEY'],['40x30','40 × 30 mm · yatay'],['50x30','50 × 30 mm · yatay'],['50x40','50 × 40 mm'],['80x50','80 × 50 mm'],['a4','A4 yaprağa dizerek bas']];
@@ -2437,66 +2386,6 @@ function faturaYazdir(id,irsaliye){const s=db.satislar.find(x=>x.id===id);if(!s)
   const st=document.createElement('style');st.id='a4Style';st.textContent='@media print{@page{size:A4;margin:12mm}}';document.head.appendChild(st);
   document.body.classList.add('printing');
   setTimeout(()=>{window.print();document.body.classList.remove('printing');st.remove()},200);
-}
-function fisTermalHTML(s){
-  const rw=(l,r,cls)=>`<div class="rw${cls?' '+cls:''}"><span class="lb">${l}</span><span>${r}</span></div>`;
-  const d=new Date(s.tarih);const tarih=d.getFullYear()+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+String(d.getDate()).padStart(2,'0')+' '+d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
-  const m=cari(s.mid);
-  // ürün tablosu (Kod · Ürün / Adet · Fiyat · Toplam)
-  let toplamAdet=0;
-  const items=s.kalemler.map(k=>{
-    const u=urun(k.uid);const kod=(u&&u.kod)||'—';toplamAdet+=k.mik;
-    const cl=k.renkler&&k.renkler.length?k.renkler.map(r=>esc(r.ad)+'×'+r.mik).join(' '):'';
-    return `<tr class="itr"><td class="knm">${esc(kod)}</td><td colspan="4">${esc(k.urun)}</td></tr>
-      <tr><td colspan="2" class="cl">${cl}</td><td class="r">${k.mik}</td><td class="r">${money(k.fiyat,s.pb)}</td><td class="r">${money(k.mik*k.fiyat,s.pb)}</td></tr>`;
-  }).join('');
-  // toplamlar
-  const iskT=(s.araToplam||0)*(s.iskonto||0)/100;
-  const kalan=Math.max(0,s.tutar-s.odenen-(s.kesik||0));
-  // cari bakiye (TL) — bu satıştan önce / sonra
-  const div=pbKur(s.pb);const netTL=(s.tutar-s.odenen-(s.kesik||0))*div;
-  const sonBk=m?m.bakiye:null;const oncekiBk=sonBk!=null?sonBk-netTL:null;
-  const sat=(db.satici||'').trim();
-  const not=(s.sevkiyat||'').trim();
-  return `<div class="fisT">
-    ${db.firmaLogo?`<div class="th-logo"><img src="${db.firmaLogo}"></div>`:`<div class="th-name">${esc((db.firma||'ÖZ TEKSTİL').toLocaleUpperCase('tr-TR'))}</div>`}
-    <div class="rs"></div>
-    <div class="th-title">Sipariş Fişi</div>
-    <div class="rs"></div>
-    ${db.firmaTel?`<div class="th-ct"><span class="ci">📞</span><span>Tel: ${esc(db.firmaTel)}</span></div>`:''}
-    ${db.firmaWp?`<div class="th-ct"><span class="ci">🟢</span><span>WhatsApp: ${esc(db.firmaWp)}</span></div>`:''}
-    <div class="th-ct"><span class="ci">🏪</span><span>${esc(db.firma||'')}</span></div>
-    ${db.firmaAdres?`<div class="th-ct"><span class="ci">📍</span><span>${esc(db.firmaAdres)}</span></div>`:''}
-    <div class="mbox">
-      <div class="mtop"><span><b>Müşteri:</b></span><span>${tarih}</span></div>
-      <div class="mn">${esc(s.mus)}</div>
-      <div class="ml">${esc([m&&m.ulke,m&&(m.sehir||m.il)].filter(Boolean).join(' — ')||'—')}</div>
-      ${m&&m.tel?`<div class="ml">${esc(m.tel)}</div>`:''}
-    </div>
-    <div class="sat"><span>Satıcı: ${esc(sat||db.firma||'')}</span><span>No. ${s.id}</span></div>
-    <table class="it">
-      <thead><tr><th>Kod</th><th>Ürün</th><th class="r">Adet</th><th class="r">Fiyat</th><th class="r">Toplam</th></tr></thead>
-      <tbody>${items}</tbody>
-    </table>
-    <div class="toplamadet">Toplam Adet: ${toplamAdet}</div>
-    <div class="tbox">
-      ${rw('Sipariş Tutarı',money(s.araToplam||s.tutar,s.pb))}
-      ${s.iskonto?rw('Fark / İndirim','−'+money(iskT,s.pb)):''}
-      ${s.tasima?rw('Taşıma / Kargo','+'+money(s.tasima,s.pb)):''}
-      ${s.kesik?rw('Kesik','−'+money(s.kesik,s.pb)):''}
-      ${(s.kdv!=null)?rw('KDV %'+(s.kdv||0),money(s.kdvTutar||0,s.pb)):''}
-      ${rw('TOPLAM',money(s.tutar,s.pb),'big')}
-    </div>
-    <div class="tbox">
-      ${rw('Ödeme',money(s.odenen,s.pb))}
-      ${rw('Kalan',money(kalan,s.pb))}
-      ${oncekiBk!=null?rw('Önceki Bakiye',money(oncekiBk,'TL')):''}
-      ${sonBk!=null?rw('Son Bakiye',money(sonBk,'TL')):''}
-    </div>
-    <div class="notbox">Not: ${esc(not)}</div>
-    <div class="ft">Bizi tercih ettiğiniz için teşekkür ederiz 🙏</div>
-    <div style="height:14px"></div>
-  </div>`;
 }
 function fisTermalOnizle(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;
   fisResimLogoHazirla();
