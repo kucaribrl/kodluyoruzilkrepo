@@ -699,7 +699,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-13'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-14'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -2418,7 +2418,7 @@ window.addEventListener('afterprint',()=>{if(document.body.classList.contains('p
 /* ===== OTOMATİK YAZDIRMA — fişi resme çevir, buluttaki kuyruğa gönder =====
    Bilgisayardaki "yazıcı ajanı" bu kuyruğu dinler ve termal yazıcıya basar. */
 function fisResimData(s){
-  // 80mm termal ~576px basılabilir genişlik; BÜYÜK punto, koyu, keskin
+  // 80mm termal ~576px — SİYAH VURGULU stil, büyük punto, 1-bit keskin
   const W=576,P=16,dpr=2;
   const money2=(v,pb)=>money(v,pb);
   const m=cari(s.mid);
@@ -2428,74 +2428,59 @@ function fisResimData(s){
   const sonBk=m?m.bakiye:null;const oncekiBk=sonBk!=null?sonBk-netTL:null;
   const iskT=(s.araToplam||0)*(s.iskonto||0)/100;const kalan=Math.max(0,s.tutar-s.odenen-(s.kesik||0));
   const not=(s.sevkiyat||'').trim();
-  const rowsT=[['Sipariş Tutarı',money2(s.araToplam||s.tutar,s.pb),0]];
-  if(s.iskonto)rowsT.push(['Fark / İndirim','−'+money2(iskT,s.pb),0]);
-  if(s.tasima)rowsT.push(['Taşıma / Kargo','+'+money2(s.tasima,s.pb),0]);
-  if(s.kesik)rowsT.push(['Kesik','−'+money2(s.kesik,s.pb),0]);
-  if(s.kdv!=null)rowsT.push(['KDV %'+(s.kdv||0),money2(s.kdvTutar||0,s.pb),0]);
-  rowsT.push(['TOPLAM',money2(s.tutar,s.pb),1]);
-  const rowsO=[['Ödeme',money2(s.odenen,s.pb),0],['Kalan',money2(kalan,s.pb),0]];
-  if(oncekiBk!=null)rowsO.push(['Önceki Bakiye',money2(oncekiBk,'TL'),0]);
-  if(sonBk!=null)rowsO.push(['Son Bakiye',money2(sonBk,'TL'),0]);
-  const BR=42; // kutu satır yüksekliği (büyük punto)
-  const cnt=(db.firmaTel?1:0)+(db.firmaWp?1:0)+(db.firma?1:0)+(db.firmaAdres?1:0);
-  // yükseklik tahmini (büyük punto ile uyumlu)
-  let H=34 + (db.firmaLogo?78:64) + 48 + cnt*28 + 16 + 126 + 34 + 46 + s.kalemler.length*56 + 38
-        + (rowsT.length*BR+8) + 16 + (rowsO.length*BR+8) + 16 + 50 + 38 + (window.qrcode?154:0) + 16;
+  const ara=[['Ara Toplam',money2(s.araToplam||s.tutar,s.pb)]];
+  if(s.iskonto)ara.push(['İndirim %'+s.iskonto,'−'+money2(iskT,s.pb)]);
+  if(s.tasima)ara.push(['Taşıma / Kargo','+'+money2(s.tasima,s.pb)]);
+  if(s.kesik)ara.push(['Kesik','−'+money2(s.kesik,s.pb)]);
+  if(s.kdv!=null)ara.push(['KDV %'+(s.kdv||0),'+'+money2(s.kdvTutar||0,s.pb)]);
+  const ode=[['Ödenen',money2(s.odenen,s.pb)],['KALAN',money2(kalan,s.pb)]];
+  if(oncekiBk!=null)ode.push(['Önceki Bakiye',money2(oncekiBk,'TL')]);
+  if(sonBk!=null)ode.push(['Son Bakiye',money2(sonBk,'TL')]);
+  const cnt=(db.firmaTel?1:0)+(db.firmaWp?1:0)+(db.firmaAdres?1:0);
+  let H=92 + 88 + cnt*28 + 58 + 44 + 40 + s.kalemler.length*56 + 62 + ara.length*30 + 80 + ode.length*30 + (not?34:0) + 42 + (window.qrcode?162:0) + 18;
   const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const g=c.getContext('2d');g.scale(dpr,dpr);
-  g.fillStyle='#fff';g.fillRect(0,0,W,H);g.fillStyle='#000';g.textBaseline='alphabetic';
-  const CX=W/2;const R=W-P;
-  const line=(y,dash)=>{g.save();g.strokeStyle='#000';g.lineWidth=2.4;if(dash)g.setLineDash([5,3]);g.beginPath();g.moveTo(P,y);g.lineTo(R,y);g.stroke();g.restore();};
-  const clip=(t,font,maxW)=>{g.font=font;t=''+t;if(g.measureText(t).width<=maxW)return t;while(t.length>1&&g.measureText(t+'…').width>maxW)t=t.slice(0,-1);return t+'…';};
-  let y=34;
-  // FİRMA
-  g.textAlign='center';
-  if(db.firmaLogo){const im=fisResimData._logo;if(im&&im.complete){const w=Math.min(240,im.width);const h=w*(im.height||1)/(im.width||1);try{g.drawImage(im,CX-w/2,y-16,w,h)}catch(e){}y+=h+10;}else{g.font='800 44px sans-serif';g.fillText((db.firma||'IQ BASICS').toLocaleUpperCase('tr-TR'),CX,y+16);y+=52;}}
-  else{g.font='800 44px sans-serif';g.fillText((db.firma||'IQ BASICS').toLocaleUpperCase('tr-TR'),CX,y+16);y+=52;}
-  line(y,true);y+=30;
-  g.font='800 32px sans-serif';g.fillText('Sipariş Fişi',CX,y);y+=14;line(y,true);y+=28;
-  // İLETİŞİM (sol) — büyük
-  g.textAlign='left';g.font='800 22px sans-serif';
-  if(db.firmaTel){g.fillText(clip('Tel: '+db.firmaTel,'800 22px sans-serif',W-2*P),P,y);y+=28;}
-  if(db.firmaWp){g.fillText(clip('WhatsApp: '+db.firmaWp,'800 22px sans-serif',W-2*P),P,y);y+=28;}
-  if(db.firma){g.fillText(clip(db.firma,'800 22px sans-serif',W-2*P),P,y);y+=28;}
-  if(db.firmaAdres){g.fillText(clip(db.firmaAdres,'800 22px sans-serif',W-2*P),P,y);y+=28;}
-  y+=10;
-  // MÜŞTERİ KUTUSU
-  const boxTop=y;const boxH=116;g.save();g.strokeStyle='#000';g.lineWidth=2.4;g.setLineDash([5,3]);g.strokeRect(P,boxTop,W-2*P,boxH);g.restore();
-  g.font='800 19px sans-serif';g.textAlign='left';g.fillText('Müşteri:',P+12,boxTop+26);
-  g.textAlign='right';g.fillText(tarih,R-12,boxTop+26);
-  g.textAlign='center';g.font='800 32px sans-serif';g.fillText(clip(s.mus,'800 32px sans-serif',W-2*P-24),CX,boxTop+62);
-  g.font='800 19px sans-serif';const loc=[m&&m.ulke,m&&(m.sehir||m.il)].filter(Boolean).join(' — ')||'—';g.fillText(loc,CX,boxTop+87);
-  if(m&&m.tel)g.fillText(m.tel,CX,boxTop+108);
-  y=boxTop+boxH+28;
-  // SATICI / NO
-  g.textAlign='left';g.font='800 19px sans-serif';g.fillText(clip('Satıcı: '+((db.satici||'').trim()||db.firma||''),'800 19px sans-serif',W*0.6),P,y);
-  g.textAlign='right';g.fillText('No. '+s.id,R,y);y+=18;
-  // TABLO — MC formatı: Kod | Kategori | Adet | Fiyat | Toplam
-  line(y);y+=24;g.textAlign='left';g.font='800 19px sans-serif';
-  const cKat=P+132,cAdet=W-198,cFiy=W-108,cTop=R;
-  g.fillText('Kod',P,y);g.fillText('Kategori',cKat,y);g.textAlign='right';g.fillText('Adet',cAdet,y);g.fillText('Fiyat',cFiy,y);g.fillText('Toplam',cTop,y);
-  y+=8;line(y);y+=26;
+  g.fillStyle='#fff';g.fillRect(0,0,W,H);const CX=W/2,R=W-P;
+  const clip=(t,f,mw)=>{g.font=f;t=''+t;if(g.measureText(t).width<=mw)return t;while(t.length>1&&g.measureText(t+'…').width>mw)t=t.slice(0,-1);return t+'…';};
+  const dash=(y)=>{g.save();g.strokeStyle='#000';g.lineWidth=2.4;g.setLineDash([5,3]);g.beginPath();g.moveTo(P,y);g.lineTo(R,y);g.stroke();g.restore();};
+  // ===== SİYAH BAŞLIK BANDI =====
+  g.fillStyle='#000';g.fillRect(0,0,W,92);g.fillStyle='#fff';g.textAlign='center';g.textBaseline='middle';
+  g.font='800 40px sans-serif';g.fillText(clip((db.firma||'IQ BASICS').toLocaleUpperCase('tr-TR'),'800 40px sans-serif',W-40),CX,db.firmaSlogan?38:48);
+  if(db.firmaSlogan){g.font='600 18px sans-serif';g.fillText(clip(db.firmaSlogan,'600 18px sans-serif',W-40),CX,72);}
+  g.textBaseline='alphabetic';g.fillStyle='#000';let y=128;
+  g.textAlign='center';g.font='800 28px sans-serif';g.fillText('SİPARİŞ FİŞİ',CX,y);
+  g.font='700 17px sans-serif';g.fillText('No: '+s.id+'   ·   '+tarih,CX,y+24);y+=54;
+  // iletişim (ikonlu)
+  g.textAlign='left';g.font='700 19px sans-serif';
+  [['📞 ',db.firmaTel],['🟢 ',db.firmaWp],['📍 ',db.firmaAdres]].forEach(x=>{if(x[1]){g.fillText(clip(x[0]+x[1],'700 19px sans-serif',W-2*P),P,y);y+=28;}});
+  y+=6;dash(y);y+=26;
+  // müşteri
+  g.textAlign='left';g.font='700 16px sans-serif';g.fillText('MÜŞTERİ',P,y);g.textAlign='right';g.font='700 15px sans-serif';g.fillText(tarih,R,y);y+=30;
+  g.textAlign='left';g.font='800 28px sans-serif';g.fillText(clip(s.mus||'—','800 28px sans-serif',W-2*P),P,y);y+=22;
+  g.font='700 15px sans-serif';const loc=[m&&m.ulke,m&&(m.sehir||m.il),m&&m.tel].filter(Boolean).join(' · ');if(loc)g.fillText(clip(loc,'700 15px sans-serif',W-2*P),P,y);y+=18;
+  // ===== SİYAH TABLO BAŞLIĞI =====
+  y+=6;g.fillStyle='#000';g.fillRect(P,y,W-2*P,34);g.fillStyle='#fff';g.textBaseline='middle';
+  const cKat=P+128,cAd=W-190,cFi=W-104,cTo=R-8;
+  g.font='800 16px sans-serif';g.textAlign='left';g.fillText('KOD',P+8,y+18);g.fillText('KATEGORİ',cKat,y+18);g.textAlign='right';g.fillText('ADET',cAd,y+18);g.fillText('FİYAT',cFi,y+18);g.fillText('TOPLAM',cTo,y+18);
+  g.textBaseline='alphabetic';y+=34+26;g.fillStyle='#000';
   s.kalemler.forEach(k=>{const u=urun(k.uid);const kod=(u&&u.kod)||'—';const kat=(u&&u.kat)?u.kat.toLocaleUpperCase('tr-TR'):(k.urun||'').toLocaleUpperCase('tr-TR');
-    // 1. satır: KOD + KATEGORİ + adet/fiyat/toplam (sağ)
-    g.textAlign='left';g.font='800 23px sans-serif';g.fillText(clip(kod,'800 23px sans-serif',cKat-P-8),P,y);g.fillText(clip(kat,'800 23px sans-serif',cAdet-cKat-10),cKat,y);
-    g.textAlign='right';g.font='800 22px sans-serif';g.fillText(''+k.mik,cAdet,y);g.fillText(money2(k.fiyat,s.pb),cFiy,y);g.fillText(money2(k.mik*k.fiyat,s.pb),cTop,y);y+=27;
-    // 2. satır: ürün adı + renk detayı (küçük, sol)
+    g.textAlign='left';g.font='800 22px sans-serif';g.fillText(clip(kod,'800 22px sans-serif',cKat-P-8),P,y);g.fillText(clip(kat,'800 22px sans-serif',cAd-cKat-10),cKat,y);
+    g.textAlign='right';g.font='800 21px sans-serif';g.fillText(''+k.mik,cAd,y);g.fillText(money2(k.fiyat,s.pb),cFi,y);g.fillText(money2(k.mik*k.fiyat,s.pb),cTo,y);y+=26;
     const cl=k.renkler&&k.renkler.length?k.renkler.map(r=>esc(r.ad)+'×'+r.mik).join(' '):'';
     const alt=(k.urun&&k.urun.toLocaleUpperCase('tr-TR')!==kat?k.urun+(cl?' · ':''):'')+cl;
-    g.textAlign='left';g.font='700 17px sans-serif';if(alt)g.fillText(clip(alt,'700 17px sans-serif',W-2*P),P,y);y+=29;});
-  line(y,true);y+=26;g.textAlign='left';g.font='800 23px sans-serif';g.fillText('Toplam Adet: '+toplamAdet,P,y);y+=20;
-  // TOPLAM + ÖDEME KUTULARI
-  const drawBox=(rows)=>{const bt=y;const bh=rows.length*BR+6;g.save();g.strokeStyle='#000';g.lineWidth=2.4;g.strokeRect(P,bt,W-2*P,bh);g.restore();
-    let ry=bt+29;rows.forEach((r,i)=>{const big=r[2];g.textAlign='left';g.font=(big?'800 27px':'800 19px')+' sans-serif';g.fillText(r[0],P+12,ry);g.textAlign='right';g.font=(big?'800 27px':'800 19px')+' sans-serif';g.fillText(r[1],R-12,ry);if(i<rows.length-1){g.save();g.strokeStyle='#000';g.lineWidth=1.6;g.beginPath();g.moveTo(P,ry+11);g.lineTo(R,ry+11);g.stroke();g.restore();}ry+=BR;});y=bt+bh+14;};
-  drawBox(rowsT);
-  drawBox(rowsO);
-  // NOT
-  const nt=y;g.save();g.strokeStyle='#000';g.lineWidth=2.4;g.setLineDash([5,3]);g.strokeRect(P,nt,W-2*P,40);g.restore();
-  g.textAlign='left';g.font='800 19px sans-serif';g.fillText(clip('Not: '+not,'800 19px sans-serif',W-2*P-20),P+10,nt+27);y=nt+40+28;
-  g.textAlign='center';g.font='800 20px sans-serif';g.fillText('Bizi tercih ettiğiniz için teşekkür ederiz',CX,y);y+=10;
-  // QR KOD (MC formatı) — fiş özeti; kütüphane yüklüyse çizilir
+    g.textAlign='left';g.font='600 16px sans-serif';if(alt)g.fillText(clip(alt,'600 16px sans-serif',W-2*P),P,y);y+=30;});
+  dash(y);y+=26;g.textAlign='left';g.font='800 22px sans-serif';g.fillText('Toplam Adet: '+toplamAdet,P,y);y+=32;
+  // ara satırlar
+  g.font='700 19px sans-serif';ara.forEach(r=>{g.textAlign='left';g.fillText(r[0],P,y);g.textAlign='right';g.fillText(r[1],R,y);y+=30;});y+=4;
+  // ===== TOPLAM SİYAH KUTU =====
+  g.fillStyle='#000';g.fillRect(P,y,W-2*P,52);g.fillStyle='#fff';g.textBaseline='middle';
+  g.textAlign='left';g.font='800 28px sans-serif';g.fillText('TOPLAM',P+16,y+27);g.textAlign='right';g.font='800 32px sans-serif';g.fillText(money2(s.tutar,s.pb),R-16,y+27);
+  g.textBaseline='alphabetic';y+=52+26;g.fillStyle='#000';
+  // ödeme
+  ode.forEach(r=>{const big=(r[0]==='KALAN');g.textAlign='left';g.font=(big?'800 22px':'700 19px')+' sans-serif';g.fillText(r[0],P,y);g.textAlign='right';g.fillText(r[1],R,y);y+=30;});
+  // not (varsa)
+  if(not){y+=4;g.textAlign='left';g.font='700 17px sans-serif';g.fillText(clip('Not: '+not,'700 17px sans-serif',W-2*P),P,y);y+=28;}
+  y+=10;g.textAlign='center';g.font='700 18px sans-serif';g.fillText('★   Bizi tercih ettiğiniz için teşekkürler   ★',CX,y);y+=14;
+  // QR KOD — fiş özeti
   if(window.qrcode){try{
     const qr=window.qrcode(0,'M');
     qr.addData((db.firma||'IQ Basics')+' · Fiş #'+s.id+' · '+money2(s.tutar,s.pb)+' · '+tarih+(m&&m.tel?' · '+m.tel:''));
@@ -2504,8 +2489,7 @@ function fisResimData(s){
     for(let r=0;r<n;r++)for(let cc=0;cc<n;cc++){if(qr.isDark(r,cc))g.fillRect(qx+cc*qs,qy+r*qs,qs,qs);}
     y=qy+qpx+8;
   }catch(e){}}
-  // 🖨️ TERMAL NETLİK: gri (yumuşak) kenarları KALDIR → saf siyah-beyaz (1-bit).
-  // Termal yazıcı gri basamaz; bu olmadan yazılar bulanık/soluk çıkar. Bununla keskin basar.
+  // 🖨️ TERMAL NETLİK: 1-bit saf siyah-beyaz
   try{const id=g.getImageData(0,0,c.width,c.height);const px=id.data;
     for(let i=0;i<px.length;i+=4){const lum=0.299*px[i]+0.587*px[i+1]+0.114*px[i+2];const v=(px[i+3]<128||lum>176)?255:0;px[i]=px[i+1]=px[i+2]=v;px[i+3]=255;}
     g.putImageData(id,0,0);}catch(e){}
