@@ -65,11 +65,19 @@ satış fişini aç → **🖨️ Bilgisayardaki Yazıcıya Gönder**.
 
 ---
 
-## Bilgisayar her açıldığında kendi başlasın (isteğe bağlı)
+## Bilgisayar her açıldığında kendi başlasın (önerilir)
 
-Bilgisayarı her açtığında ajanın otomatik çalışmasını istersen:
-1. `Win + R` → `shell:startup` yaz → Enter (Başlangıç klasörü açılır).
-2. `baslat.bat` dosyasına sağ tık → **Kısayol oluştur** → kısayolu bu klasöre taşı.
+Ajanın, bilgisayar her açıldığında **kendiliğinden** çalışmasını istersen:
+
+- Klasördeki **`otomatik-baslat-kur.bat`** dosyasına **çift tıkla**. Bitti! ✅
+  - Artık bilgisayar her açıldığında ajan **küçültülmüş bir pencere** olarak otomatik başlar.
+  - Kurulum sırasında "şimdi de başlatayım mı?" diye sorar; **E** dersen hemen çalışır.
+
+Geri almak (otomatik başlatmayı kapatmak) istersen:
+- **`otomatik-baslat-kaldir.bat`** dosyasına çift tıkla. (Ajanı yine `baslat.bat` ile elle açabilirsin.)
+
+> Elle yapmak istersen: `Win + R` → `shell:startup` → Enter (Başlangıç klasörü açılır);
+> `baslat.bat`'a sağ tık → **Kısayol oluştur** → kısayolu bu klasöre taşı.
 
 ---
 
