@@ -88,6 +88,7 @@ Geri almak (otomatik başlatmayı kapatmak) istersen:
 | "config.json bulunamadı" | 3. adımı yap: `config.example.json` → `config.json` kopyala, doldur. |
 | "Bulut girişi başarısız" | e-posta/şifre yanlış. Uygulamada girdiğin hesabın aynısı olmalı. |
 | Test fişi kuyruğa gitti ama çıkmadı | `yaziciAdi` yanlış olabilir. Windows'taki yazıcı adını birebir yaz. Ya da yazıcıyı **varsayılan** yapıp `yaziciAdi`'nı boş bırak. |
+| "yazıcıya erişim ayarları geçerli değil" / InvalidPrinterException | Yazıcı adı Windows'takiyle uyuşmuyor. **`yazicilari-listele.bat`**'a çift tıkla → çıkan tam adı `config.json`'a birebir yaz, ajanı kapatıp `baslat.bat` ile tekrar aç. (Yeni sürüm adı otomatik eşlemeye çalışır.) |
 | İzin/permission hatası | Uygulamada **Ayarlar → Senkron Teşhis → Bu Hesabı Yönetici Yap** ve `firestore.rules`'u Firebase Console'da yayınla. |
 | Fiş çıkıyor ama soluk | Yazıcının **koyuluk/density** ayarını yükselt (yazıcı sürücüsü → Tercihler). |
 | Fiş çok geniş/dar | Yazıcı sürücüsünde kağıt genişliğini (58/80 mm) doğru seç. |
