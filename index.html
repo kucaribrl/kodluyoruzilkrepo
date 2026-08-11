@@ -699,7 +699,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-15'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-16'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -2321,6 +2321,20 @@ function jpegToPdfBlob(jpg,pxW,pxH){
   const out=new Uint8Array(len);let o=0;for(const p of parts){out.set(p,o);o+=p.length;}
   return new Blob([out],{type:'application/pdf'});
 }
+// 📄 Bir canvas'ı tek sayfalık PDF yapıp WhatsApp/paylaşım ile gönder (paylaşım yoksa indir)
+async function canvasPdfPaylas(canvas,fname,text){
+  if(!canvas){toast('PDF oluşturulamadı');return;}
+  const jpgBlob=await new Promise(res=>{try{canvas.toBlob(res,'image/jpeg',0.92)}catch(e){res(null)}});
+  if(!jpgBlob){toast('PDF oluşturulamadı');return;}
+  const jpg=new Uint8Array(await jpgBlob.arrayBuffer());
+  const pdf=jpegToPdfBlob(jpg,canvas.width,canvas.height);
+  const file=new File([pdf],fname,{type:'application/pdf'});
+  if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){
+    try{await navigator.share({files:[file],text:text||''});return;}catch(e){if(e&&e.name==='AbortError')return;}
+  }
+  const url=URL.createObjectURL(pdf);const a=document.createElement('a');a.href=url;a.download=fname;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);
+  toast('📥 PDF indirildi — WhatsApp\'tan gönderebilirsin');
+}
 async function musteriFisGonder(id,fmt){const s=db.satislar.find(x=>x.id===id);if(!s)return;
   fmt=fmt||'pdf';toast('🧾 Fiş hazırlanıyor…');
   musteriFisResim(s,async(blob,c)=>{if(!blob)return toast('Fiş oluşturulamadı');
@@ -3150,11 +3164,38 @@ function cekFotoStrip(c){if(!c.foto&&!c.fotoArka)return '';
   return `<div class="g2" style="margin:12px 0">${c.foto?`<img src="${c.foto}" style="width:100%;border-radius:10px;border:1px solid var(--ln)">`:'<div></div>'}${c.fotoArka?`<img src="${c.fotoArka}" style="width:100%;border-radius:10px;border:1px solid var(--ln)">`:''}</div>`;
 }
 async function cekPaylas(id){const c=db.cekler.find(x=>x.id===id);if(!c)return;
-  const t=`🏷️ ÇEK ${c.tip==='alinan'?'(Alacak)':'(Borç)'}\n${c.cari||''}\nTutar: ${TL(c.tutar)}\nVade: ${dstr(c.vade)}\nBanka: ${c.banka||'—'}${c.cekNo?'\nÇek No: '+c.cekNo:''}${c.sube?'\nŞube: '+c.sube:''}`;
-  try{if(navigator.share){const files=[];if(c.foto)files.push(dataURLtoFile(c.foto,'cek-on.jpg'));if(c.fotoArka)files.push(dataURLtoFile(c.fotoArka,'cek-arka.jpg'));
-    if(files.length&&navigator.canShare&&navigator.canShare({files})){await navigator.share({files,text:t});return}
-    await navigator.share({text:t});return}}catch(e){if(e&&e.name==='AbortError')return}
-  try{await navigator.clipboard.writeText(t);toast('Çek bilgisi kopyalandı ✓')}catch(e){open_('Çek Bilgisi',`<textarea readonly style="width:100%;height:150px;font-size:12px">${esc(t)}</textarea>`)}
+  toast('📄 Çek PDF hazırlanıyor…');
+  cekPdfCiz(c,(cv)=>{if(!cv)return toast('Oluşturulamadı');
+    canvasPdfPaylas(cv,'cek-'+(c.cekNo||c.id)+'.pdf',(db.firma||'IQ Basics')+' · Çek '+(c.tip==='alinan'?'(Alacak)':'(Borç)')+' · '+TL(c.tutar));});
+}
+// Çeki tek sayfalık belge (özet + ön/arka foto) olarak çiz
+function cekPdfCiz(c,cb){
+  const W=760,P=36;
+  const loadImg=(src)=>new Promise(res=>{if(!src)return res(null);const im=new Image();im.onload=()=>res(im);im.onerror=()=>res(null);im.src=src;});
+  Promise.all([loadImg(c.foto),loadImg(c.fotoArka)]).then(([f1,f2])=>{
+    const rows=[['Taraf',c.tip==='alinan'?'Alınan çek (Alacak)':'Verilen çek (Borç)'],['Cari',c.cari||'—'],['Tutar',TL(c.tutar)],['Vade',dstr(c.vade)],['Banka',c.banka||'—']];
+    if(c.cekNo)rows.push(['Çek No',''+c.cekNo]);
+    if(c.sube)rows.push(['Şube',''+c.sube]);
+    if(c.kesideci)rows.push(['Çek sahibi',''+c.kesideci]);
+    const imgs=[f1,f2].filter(Boolean);const IMGW=W-2*P;const imgH=imgs.map(im=>Math.min(380,IMGW*(im.height||1)/(im.width||1)));
+    const HEAD=104;let H=HEAD+18+rows.length*38+10;
+    if(imgs.length){H+=28;imgH.forEach(h=>H+=h+14);}
+    H+=42;
+    const dpr=2,cv=document.createElement('canvas');cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);
+    g.fillStyle='#f4f5f7';g.fillRect(0,0,W,H);g.textBaseline='alphabetic';
+    g.fillStyle='#33333d';g.fillRect(0,0,W,HEAD);
+    g.textAlign='left';g.fillStyle='#fff';g.font='800 28px sans-serif';g.fillText(db.firma||'IQ Basics',P,52);
+    g.font='600 15px sans-serif';g.fillStyle='#c9ccd4';g.fillText('ÇEK BELGESİ',P,80);
+    g.textAlign='right';g.fillStyle='#fff';g.font='800 24px sans-serif';g.fillText(TL(c.tutar),W-P,50);
+    g.font='600 14px sans-serif';g.fillStyle='#e6b3b0';g.fillText('Vade: '+dstr(c.vade),W-P,76);
+    g.textAlign='left';let y=HEAD+18+22;
+    rows.forEach(r=>{g.fillStyle='#8a8f98';g.font='600 14px sans-serif';g.fillText(r[0],P,y);g.fillStyle='#22232a';g.font='800 18px sans-serif';g.textAlign='right';g.fillText(''+r[1],W-P,y);g.textAlign='left';
+      g.strokeStyle='#e5e8ed';g.lineWidth=1;g.beginPath();g.moveTo(P,y+12);g.lineTo(W-P,y+12);g.stroke();y+=38;});
+    if(imgs.length){y+=16;g.fillStyle='#8a8f98';g.font='700 14px sans-serif';g.fillText('ÇEK GÖRSELİ',P,y);y+=12;
+      imgs.forEach((im,ix)=>{const h=imgH[ix];try{g.drawImage(im,P,y,IMGW,h)}catch(e){}g.strokeStyle='#d7dbe2';g.lineWidth=1;g.strokeRect(P,y,IMGW,h);y+=h+14;});}
+    g.fillStyle='#8a8f98';g.font='600 13px sans-serif';g.fillText((db.firma||'IQ Basics')+(db.firmaWp?' · '+db.firmaWp:''),P,H-18);
+    cb(cv);
+  });
 }
 function cekIslem(id){
   const c=db.cekler.find(x=>x.id===id);if(!c)return;
@@ -3832,7 +3873,7 @@ function isEmriPaylas(id,x){
     <div class="mini">${f?esc(f.ad)+(f.tel?' · '+esc(f.tel):''):'Fason'} — gidecek mesaj:</div>
     <div style="white-space:pre-wrap;background:#e7f6ea;border:1px solid #b6e0bf;border-radius:14px;padding:14px;margin-top:8px;font-size:13px;line-height:1.5;color:#0b3d1a">${esc(txt).replace(/\*(.+?)\*/g,'<b>$1</b>')}</div>
     ${i.foto?`<div class="mini" style="margin-top:8px">🖼️ Ürün fotoğrafı da eklenecek</div><img src="${i.foto}" style="width:100%;max-height:190px;object-fit:cover;border-radius:12px;margin-top:6px">`:''}
-    <button class="btn g" onclick="isEmriResimGonder(${id},${x==null?'null':x})">🖼️ Resimli Form Gönder</button>
+    <button class="btn g" onclick="isEmriResimGonder(${id},${x==null?'null':x})">📄 PDF Form Gönder</button>
     <button class="btn ghost sm" style="margin-top:8px" onclick="isEmriWa(${id},${x==null?'null':x})">💬 Sadece Yazı Gönder</button>
     <button class="btn ghost sm" style="margin-top:8px" onclick="isEmriA4(${id})">📄 A4 Form Yazdır</button>`);
 }
@@ -3896,18 +3937,11 @@ function isEmriResimYap(id,x,cb){
 }
 async function isEmriResimGonder(id,x){
   const i=db.isemirleri.find(v=>v.id===id);if(!i)return;
-  toast('🖼️ Görsel hazırlanıyor…');
-  isEmriResimYap(id,x,async(blob)=>{
-    if(!blob)return toast('Görsel oluşturulamadı');
+  toast('📄 İş emri PDF hazırlanıyor…');
+  isEmriResimYap(id,x,(blob,c)=>{
+    if(!c)return toast('Form oluşturulamadı');
     const durak=(x!=null&&x>=0&&i.duraklar[x])?i.duraklar[x]:null;
-    const fname='is-emri-'+i.id+(durak?'-'+durak.ad:'')+'.jpg';
-    const file=new File([blob],fname,{type:'image/jpeg'});
-    const txt=ieShareText(i,x);
-    if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){
-      try{await navigator.share({files:[file],text:txt});return;}catch(e){if(e&&e.name==='AbortError')return;}
-    }
-    const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=fname;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);
-    toast('📥 Görsel indirildi — WhatsApp\'tan gönderebilirsin');
+    canvasPdfPaylas(c,'is-emri-'+i.id+(durak?'-'+durak.ad:'')+'.pdf',ieShareText(i,x));
   });
 }
 function isEmriA4(id){
@@ -4050,8 +4084,8 @@ function fiyatListesiMetni(){const aktif=db.urunler.filter(u=>!u.pasif&&stokTop(
   const wp=db.firmaWp||db.firmaTel||'';if(wp)t+=`\n📞 Sipariş: ${wp}`;return t;}
 function fiyatListesiPaylas(){const t=fiyatListesiMetni();
   open_('📋 Toptan Fiyat Listesi',`<div class="mini">Müşteriye WhatsApp'tan gönderebileceğin güncel fiyat listesi. Sadece stokta olan ürünler, seri fiyatlarıyla listelenir.</div>
-    <button class="btn g" style="margin-top:10px" onclick="fiyatListesiResimGonder()">🖼️ Resimli Katalog Gönder</button>
-    <div class="mini" style="margin:6px 3px 0">Modellerin fotoğrafları + fiyatlarıyla tek görsel — WhatsApp'ta resim olarak gider, en şık paylaşım budur.</div>
+    <button class="btn g" style="margin-top:10px" onclick="fiyatListesiResimGonder()">📄 PDF Katalog Gönder</button>
+    <div class="mini" style="margin:6px 3px 0">Modellerin fotoğrafları + fiyatlarıyla tek <b>PDF</b> — WhatsApp'tan belge olarak gider, en şık paylaşım budur.</div>
     <div class="sec" style="margin-top:14px">Ya da düz yazı olarak</div>
     <textarea id="fl-txt" readonly style="width:100%;height:200px;font-size:12px;margin-top:4px;font-family:ui-monospace,monospace;line-height:1.5">${esc(t)}</textarea>
     <div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="flShare()">📱 Yazıyı Gönder</button><button class="btn ghost sm" onclick="flKopya()">📋 Kopyala</button></div>`);}
@@ -4121,17 +4155,10 @@ function roundRectPath(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,
 async function fiyatListesiResimGonder(){
   const aktif=db.urunler.filter(u=>!u.pasif&&stokTop(u)>0);
   if(!aktif.length)return toast('Stokta ürün yok');
-  toast('🖼️ Katalog hazırlanıyor…');
-  fiyatListesiResim(async(blob)=>{
-    if(!blob)return toast('Katalog oluşturulamadı');
-    const fname='fiyat-listesi-'+new Date().toISOString().slice(0,10)+'.jpg';
-    const file=new File([blob],fname,{type:'image/jpeg'});
-    const txt=(db.firma||'IQ Basics')+' toptan fiyat listesi';
-    if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){
-      try{await navigator.share({files:[file],text:txt});return;}catch(e){if(e&&e.name==='AbortError')return;}
-    }
-    const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=fname;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);
-    toast('📥 Katalog indirildi — WhatsApp\'tan gönderebilirsin');
+  toast('📄 Katalog PDF hazırlanıyor…');
+  fiyatListesiResim((blob,c)=>{
+    if(!c)return toast('Katalog oluşturulamadı');
+    canvasPdfPaylas(c,'fiyat-listesi-'+new Date().toISOString().slice(0,10)+'.pdf',(db.firma||'IQ Basics')+' toptan fiyat listesi');
   });
 }
 // müşteri portal giriş bilgileri (kullanıcı adı / şifre)
@@ -4811,7 +4838,7 @@ function rapOzet(R){let h='';
     // KDV
     h+=`<div class="sec">KDV Özeti <span class="mini" style="text-transform:none;font-weight:600">${R.donemAd}</span></div><div class="card" style="padding:13px 15px"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11.5px;font-weight:700;color:var(--sub)">HESAPLANAN KDV (satış)</div><div class="mini">satış fişlerindeki toplam KDV</div></div><div style="font-size:20px;font-weight:800;color:var(--ind)">${TL(R.kdv)}</div></div></div>`;
   }
-  h+=`<div class="g2" style="margin-top:14px"><button class="btn ghost sm" onclick="rapPaylas()">📤 Metin Paylaş</button><button class="btn sm" onclick="rapGorselPaylas()">🖼️ Görsel Paylaş</button></div>`;
+  h+=`<div class="g2" style="margin-top:14px"><button class="btn ghost sm" onclick="rapPaylas()">📤 Metin Paylaş</button><button class="btn sm" onclick="rapGorselPaylas()">📄 PDF Paylaş</button></div>`;
   return h;
 }
 function rapSatis(R){let h='';
@@ -5080,12 +5107,12 @@ function rapGorsel(){
     x.fillStyle='#141d2b';x.font='700 14px sans-serif';x.textAlign='right';x.fillText(''+t[1],W-36,y);x.textAlign='left'});
   else{y+=34;x.fillStyle='#a9b6c6';x.font='500 14px sans-serif';x.fillText('Bu dönemde satış yok',36,y)}
   x.fillStyle='#a9b6c6';x.font='600 12px sans-serif';x.fillText((db.firmaSlogan||'IQ Basics Yönetim'),36,H-24);
-  return c.toDataURL('image/png');
+  return c;
 }
 async function rapGorselPaylas(){
-  let durl;try{durl=rapGorsel()}catch(e){return toast('Görsel oluşturulamadı')}
-  try{if(navigator.share&&navigator.canShare){const f=dataURLtoFile(durl,'rapor.png');if(navigator.canShare({files:[f]})){await navigator.share({files:[f],text:rapMetni()});return}}}catch(e){if(e&&e.name==='AbortError')return}
-  const a=document.createElement('a');a.href=durl;a.download='rapor-'+Date.now()+'.png';document.body.appendChild(a);a.click();a.remove();toast('Rapor görseli indirildi ✓');
+  let c;try{c=rapGorsel()}catch(e){return toast('Görsel oluşturulamadı')}
+  toast('📄 Rapor PDF hazırlanıyor…');
+  canvasPdfPaylas(c,'rapor-'+new Date().toISOString().slice(0,10)+'.pdf',rapMetni());
 }
 function rRapor(){
   const R=rapCtx();
