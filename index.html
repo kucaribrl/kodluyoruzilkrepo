@@ -699,7 +699,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-17'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-18'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -2263,9 +2263,10 @@ function musteriFisResim(s,cb){
     if(s.tasima)totRows.push(['Taşıma','+'+money(s.tasima,s.pb)]);
     const gold='#d8a24a',ink='#22232a',mut='#8a8f98';
     const toplamAdet=s.kalemler.reduce((a,k)=>a+(+k.mik||0),0);const kalemN=s.kalemler.length;
+    const portalUrl=(db.firmaSite||'').trim()||(location.href.split('#')[0]+'#siparis');
     const HEAD=238;
     const SUM=Math.max(totRows.length*34+150,196);
-    const FOOT=132;
+    const FOOT=146;
     const H=HEAD+lines.length*rowH+10+SUM+FOOT;
     const dpr=2,c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const g=c.getContext('2d');g.scale(dpr,dpr);
     g.fillStyle='#eef0f3';g.fillRect(0,0,W,H);g.textBaseline='alphabetic';
@@ -2328,16 +2329,20 @@ function musteriFisResim(s,cb){
     g.textAlign='left';g.fillStyle='#5a5f6a';g.font='600 15px sans-serif';g.fillText('Ödenen',rx,ry);g.textAlign='right';g.fillStyle=ink;g.font='700 15px sans-serif';g.fillText(money(s.odenen,s.pb),rr,ry);ry+=14;
     g.fillStyle='#2b2c34';roundRectPath(g,rx-8,ry,rr-rx+16,50,10);g.fill();
     g.textAlign='left';g.fillStyle=gold;g.font='800 16px sans-serif';g.fillText('TOPLAM',rx+8,ry+32);g.textAlign='right';g.fillStyle='#fff';g.font='800 25px sans-serif';g.fillText(money(s.tutar,s.pb),rr-8,ry+32);
-    // ── footer (QR + marka) ──
-    const fy=H-FOOT+10;g.strokeStyle='#dfe2e8';g.lineWidth=1;g.beginPath();g.moveTo(P,fy);g.lineTo(W-P,fy);g.stroke();
+    // ── footer (QR = portal linki · "güncel modeller" çağrısı + marka) ──
+    const fy=H-FOOT+12;g.strokeStyle='#dfe2e8';g.lineWidth=1;g.beginPath();g.moveTo(P,fy);g.lineTo(W-P,fy);g.stroke();
     let qok=false;
-    if(window.qrcode){try{const q=window.qrcode(0,'M');q.addData((db.firma||'IQ Basics')+' · Fiş #'+s.id+' · '+money(s.tutar,s.pb)+' · '+tarih+(m&&m.tel?' · '+m.tel:''));q.make();
-      const n=q.getModuleCount(),qs=Math.max(2,Math.floor(84/n)),qpx=n*qs,qx=P,qy=fy+18;g.fillStyle='#fff';g.fillRect(qx-2,qy-2,qpx+4,qpx+4);g.fillStyle=ink;
+    if(window.qrcode){try{const q=window.qrcode(0,'M');q.addData(portalUrl);q.make();
+      const n=q.getModuleCount(),qs=Math.max(2,Math.floor(88/n)),qpx=n*qs,qx=P,qy=fy+20;g.fillStyle='#fff';g.fillRect(qx-3,qy-3,qpx+6,qpx+6);g.fillStyle=ink;
       for(let r=0;r<n;r++)for(let cc=0;cc<n;cc++)if(q.isDark(r,cc))g.fillRect(qx+cc*qs,qy+r*qs,qs,qs);qok=true;
-      g.textAlign='left';g.fillStyle=mut;g.font='600 12px sans-serif';g.fillText('Fiş doğrulama',qx+qpx+14,qy+22);g.fillStyle=ink;g.font='700 14px sans-serif';g.fillText('No '+s.id+' · '+money(s.tutar,s.pb),qx+qpx+14,qy+44);
+      const lx=qx+qpx+18;
+      g.textAlign='left';g.fillStyle=gold;g.font='800 16px sans-serif';g.fillText('🛍️ Güncel modellerimiz',lx,qy+22);
+      g.fillStyle=ink;g.font='700 13px sans-serif';g.fillText('QR\'ı okutun — kataloğu telefonunuzdan görün',lx,qy+45);
+      g.fillStyle=mut;g.font='600 12px sans-serif';g.fillText(clip(portalUrl.replace(/^https?:\/\//,''),'600 12px sans-serif',W*0.52),lx,qy+66);
     }catch(e){}}
-    g.textAlign=qok?'right':'center';g.fillStyle=mut;g.font='700 14px sans-serif';g.fillText(db.firma||'IQ Basics',qok?W-P:W/2,fy+40);
-    g.font='600 12px sans-serif';g.fillText([db.firmaWp&&('📞 '+db.firmaWp),db.firmaAdres].filter(Boolean).join('  ·  '),qok?W-P:W/2,fy+62);
+    if(!qok){g.textAlign='center';g.fillStyle=gold;g.font='800 16px sans-serif';g.fillText('🛍️ Güncel modellerimizi buradan takip edin',W/2,fy+34);g.fillStyle=mut;g.font='600 12px sans-serif';g.fillText(portalUrl.replace(/^https?:\/\//,''),W/2,fy+58);g.textAlign='left';}
+    g.textAlign=qok?'right':'center';g.fillStyle=mut;g.font='700 14px sans-serif';g.fillText(db.firma||'IQ Basics',qok?W-P:W/2,fy+38);
+    g.font='600 12px sans-serif';g.fillText([db.firmaWp&&('📞 '+db.firmaWp),db.firmaAdres].filter(Boolean).join('  ·  '),qok?W-P:W/2,fy+60);
     g.fillStyle='#b7bcc6';g.font='600 11px sans-serif';g.fillText('Bu belge dijital olarak oluşturulmuştur.',qok?W-P:W/2,fy+82);g.textAlign='left';
     try{c.toBlob(bl=>cb(bl,c),'image/jpeg',0.92);}catch(e){cb(null,c);}
   });
