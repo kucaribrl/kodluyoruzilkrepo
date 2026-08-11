@@ -699,7 +699,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-18'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-19'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -4014,7 +4014,7 @@ function isEmriA4(id){
 function rPortal(){
   try{if(bulutVar()&&bulutGirisli())siparisDinle();}catch(e){} // portal açıkken siparişler otomatik gelsin
   let html=`<div class="g2"><button class="btn sm" onclick="portalOnizle()">👁️ Müşteri Sipariş Ekranı</button><button class="btn ghost sm" onclick="portalPaylas()">🔗 Linki Paylaş</button></div>
-    <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="portalKullanicilar()">👤 Giriş Bilgileri</button><button class="btn ghost sm" onclick="fiyatListesiPaylas()">📋 Fiyat Listesi Paylaş</button></div>
+    <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="portalKullanicilar()">👤 Giriş Bilgileri</button><button class="btn ghost sm" onclick="fiyatListesiPaylas()">📗 Katalog Oluştur</button></div>
     ${bulutVar()?`<div style="margin-top:8px"><button class="btn sm" onclick="bulutYayinla()">☁️ Buluta Yayınla (katalog)</button></div>
     <div class="okbox" style="margin-top:8px;display:flex;align-items:center;justify-content:space-between;gap:8px"><span>🔔 Siparişler otomatik geliyor${_sipUnsub?' <b style="color:var(--good)">✓ dinleniyor</b>':''}</span><button class="btn ghost sm" style="width:auto;margin:0;padding:6px 10px;flex:0 0 auto" onclick="bulutSiparisleriCek()">🔄 Yenile</button></div>
     <div style="margin-top:8px"><button class="btn ghost sm" onclick="bulutKullaniciYonet()">👥 Bulut Kullanıcıları <span id="bk-rozet"></span></button></div>
@@ -4127,9 +4127,9 @@ function fiyatListesiMetni(){const aktif=db.urunler.filter(u=>!u.pasif&&stokTop(
   const ind=kademeler();if(ind.length)t+=`\n💰 Toptan indirim: ${ind.map(k=>k.min+'+ %'+k.ind).join(' · ')}`;
   const wp=db.firmaWp||db.firmaTel||'';if(wp)t+=`\n📞 Sipariş: ${wp}`;return t;}
 function fiyatListesiPaylas(){const t=fiyatListesiMetni();
-  open_('📋 Toptan Fiyat Listesi',`<div class="mini">Müşteriye WhatsApp'tan gönderebileceğin güncel fiyat listesi. Sadece stokta olan ürünler, seri fiyatlarıyla listelenir.</div>
-    <button class="btn g" style="margin-top:10px" onclick="fiyatListesiResimGonder()">📄 PDF Katalog Gönder</button>
-    <div class="mini" style="margin:6px 3px 0">Modellerin fotoğrafları + fiyatlarıyla tek <b>PDF</b> — WhatsApp'tan belge olarak gider, en şık paylaşım budur.</div>
+  open_('📗 Ürün Kataloğu',`<div class="mini">Katalog oluştur dediğinde, <b>o anki stok durumunun</b> anlık görüntüsünü (snapshot) alır: stokta olan <b>modeller ve her modelin stoktaki renkleri</b> (renk + adet), fotoğraf, kod, beden ve fiyatla tek PDF'te. Dosya olduğu için sonradan değişmez.</div>
+    <button class="btn g" style="margin-top:10px" onclick="fiyatListesiResimGonder()">📗 Katalog Oluştur & Gönder (PDF)</button>
+    <div class="mini" style="margin:6px 3px 0">Model + <b>mevcut renkler</b> + fiyat tek <b>PDF</b> — WhatsApp'tan belge olarak gider.</div>
     <div class="sec" style="margin-top:14px">Ya da düz yazı olarak</div>
     <textarea id="fl-txt" readonly style="width:100%;height:200px;font-size:12px;margin-top:4px;font-family:ui-monospace,monospace;line-height:1.5">${esc(t)}</textarea>
     <div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="flShare()">📱 Yazıyı Gönder</button><button class="btn ghost sm" onclick="flKopya()">📋 Kopyala</button></div>`);}
@@ -4137,62 +4137,77 @@ function flShare(){const t=($('fl-txt')&&$('fl-txt').value)||fiyatListesiMetni()
 function flKopya(){const el=$('fl-txt');const t=(el&&el.value)||'';if(navigator.clipboard)navigator.clipboard.writeText(t).then(()=>toast('Kopyalandı ✓')).catch(()=>{if(el){el.select();document.execCommand('copy');toast('Kopyalandı ✓')}});else if(el){el.select();document.execCommand('copy');toast('Kopyalandı ✓')}}
 // 🖼️ Resimli katalog — modellerin fotoğraflı fiyat listesi (WhatsApp'tan görsel olarak paylaşılır)
 function fiyatListesiResim(cb){
+  // O ANKİ stok durumunun snapshot'ı: stokta olan modeller + her modelin stoktaki renkleri
   const aktif=db.urunler.filter(u=>!u.pasif&&stokTop(u)>0);
   if(!aktif.length){cb(null);return;}
-  const W=860,P=34,GAP=20,COLS=2,CW=(W-2*P-(COLS-1)*GAP)/COLS,IMGH=Math.round(CW*0.92),TXTH=104,CARDH=IMGH+TXTH;
-  // önce tüm kapak fotoğraflarını yükle (yoksa null)
-  const loadOne=(u)=>new Promise(res=>{const src=urunKapak(u);if(!src)return res({u,im:null});
-    const im=new Image();im.onload=()=>res({u,im});im.onerror=()=>res({u,im:null});im.src=src;});
+  const W=860,P=34,GAP=16,gold='#d8a24a',ink='#22232a',mut='#8a8f98';
+  const CARDPAD=20,PHOTO=150,rightX=P+CARDPAD+PHOTO+22,rightW=(W-P-CARDPAD)-rightX;
+  const colorsOf=(u)=>(u.renkler&&u.renkler.length&&typeof u.renkler[0]==='object')
+    ? u.renkler.filter(r=>(+r.stok||0)>0).map(r=>({ad:r.ad||'—',stok:+r.stok||0,hex:r.hex||hexFromAd(r.ad)||'#c9ccd0'})) : [];
+  const loadOne=(u)=>new Promise(res=>{const src=urunKapak(u);if(!src)return res({u,im:null,colors:colorsOf(u)});
+    const im=new Image();im.onload=()=>res({u,im,colors:colorsOf(u)});im.onerror=()=>res({u,im:null,colors:colorsOf(u)});im.src=src;});
   Promise.all(aktif.map(loadOne)).then(items=>{
-    const rows=Math.ceil(items.length/COLS);
-    const HEAD=104,FOOT=64;
-    const ind=kademeler();const indH=ind.length?40:0;
-    const H=HEAD+18+rows*(CARDH+GAP)+indH+FOOT;
+    const mctx=document.createElement('canvas').getContext('2d');
+    // renk çipi satırlarını (kaydırmalı) hesapla
+    const layout=(colors)=>{mctx.font='700 14px sans-serif';const gap=10,rows=[];let row=[],x=0;
+      (colors.length?colors:[{ad:'—',stok:0,hex:'#c9ccd0',_bos:1}]).forEach(cl=>{const label=cl.ad+(cl.stok?' ('+cl.stok+')':'');const w=28+mctx.measureText(label).width+14;
+        if(x+w>rightW&&row.length){rows.push(row);row=[];x=0;}row.push({cl,label,w,x});x+=w+gap;});
+      if(row.length)rows.push(row);return rows;};
+    items.forEach(it=>{it.rows=layout(it.colors);const beden=(it.u.bedenler&&it.u.bedenler.length)?24:0;
+      it.h=Math.max(PHOTO+2*CARDPAD, 130+beden+24+it.rows.length*32+12);it.beden=beden;});
+    const HEAD=128,FOOT=76;const ind=kademeler();const indH=ind.length?42:0;
+    const bodyH=items.reduce((a,it)=>a+it.h+GAP,0);
+    const H=HEAD+18+bodyH+indH+FOOT;
+    const modelN=items.length,renkN=items.reduce((a,it)=>a+it.colors.length,0);
     const dpr=2,c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const g=c.getContext('2d');g.scale(dpr,dpr);
-    g.fillStyle='#f4f5f7';g.fillRect(0,0,W,H);
-    // başlık
-    g.fillStyle='#33333d';g.fillRect(0,0,W,HEAD);
-    g.textBaseline='alphabetic';g.textAlign='left';
-    g.fillStyle='#fff';g.font='800 32px sans-serif';g.fillText(db.firma||'IQ Basics',P,52);
-    g.font='700 17px sans-serif';g.fillStyle='#e6b3b0';g.fillText('TOPTAN FİYAT LİSTESİ',P,80);
-    g.textAlign='right';g.fillStyle='#c9ccd4';g.font='600 15px sans-serif';
-    g.fillText(new Date().toLocaleDateString('tr-TR'),W-P,50);
-    if(db.firmaWp||db.firmaTel)g.fillText('📞 '+(db.firmaWp||db.firmaTel),W-P,76);
-    g.textAlign='left';
+    g.fillStyle='#eef0f3';g.fillRect(0,0,W,H);g.textBaseline='alphabetic';
     const clip=(t,font,maxW)=>{g.font=font;t=''+t;if(g.measureText(t).width<=maxW)return t;while(t.length>1&&g.measureText(t+'…').width>maxW)t=t.slice(0,-1);return t+'…';};
-    let gy=HEAD+18;
-    items.forEach((it,idx)=>{
-      const col=idx%COLS,row=Math.floor(idx/COLS);
-      const x=P+col*(CW+GAP),y=gy+row*(CARDH+GAP);
-      // kart zemini
-      g.fillStyle='#fff';roundRectPath(g,x,y,CW,CARDH,14);g.fill();
-      // foto (cover-fit)
-      g.save();roundRectPath(g,x,y,CW,IMGH,14);g.clip();
-      if(it.im){const iw=it.im.width||1,ih=it.im.height||1,sc=Math.max(CW/iw,IMGH/ih);const dw=iw*sc,dh=ih*sc;
-        try{g.drawImage(it.im,x+(CW-dw)/2,y+(IMGH-dh)/2,dw,dh);}catch(e){g.fillStyle='#e9ebef';g.fillRect(x,y,CW,IMGH);}}
-      else{g.fillStyle='#e9ebef';g.fillRect(x,y,CW,IMGH);g.fillStyle='#b7bcc6';g.font='700 15px sans-serif';g.textAlign='center';g.fillText('fotoğraf yok',x+CW/2,y+IMGH/2+5);g.textAlign='left';}
+    const chip=(txt,cx,cyy,bg,fg)=>{g.font='700 12px sans-serif';const w=g.measureText(txt).width+18;g.fillStyle=bg;roundRectPath(g,cx,cyy-14,w,20,10);g.fill();g.fillStyle=fg;g.textAlign='left';g.fillText(txt,cx+9,cyy);return w;};
+    // ── başlık ──
+    const hg=g.createLinearGradient(0,0,W,124);hg.addColorStop(0,'#2b2c34');hg.addColorStop(1,'#41434f');
+    g.fillStyle=hg;g.fillRect(0,0,W,124);g.fillStyle=gold;g.fillRect(0,124,W,4);
+    g.textAlign='left';g.fillStyle='#fff';g.font='800 32px sans-serif';g.fillText(clip(db.firma||'IQ Basics','800 32px sans-serif',W*0.6),P,52);
+    if(db.firmaSlogan){g.fillStyle='#b9bcc6';g.font='600 14px sans-serif';g.fillText(clip(db.firmaSlogan,'600 14px sans-serif',W*0.6),P,76);}
+    g.fillStyle=gold;g.font='700 14px sans-serif';g.fillText('ÜRÜN KATALOĞU',P,103);
+    g.textAlign='right';g.fillStyle='#c9ccd4';g.font='600 15px sans-serif';g.fillText(new Date().toLocaleDateString('tr-TR'),W-P,50);
+    if(db.firmaWp||db.firmaTel)g.fillText('📞 '+(db.firmaWp||db.firmaTel),W-P,76);
+    g.fillStyle=gold;g.font='700 13px sans-serif';g.fillText(modelN+' model · '+renkN+' renk',W-P,101);
+    g.textAlign='left';
+    // ── modeller (tam genişlik kartlar) ──
+    let y=HEAD+18;
+    items.forEach(it=>{const u=it.u,cardX=P,cardW=W-2*P;
+      g.fillStyle='#fff';roundRectPath(g,cardX,y,cardW,it.h,16);g.fill();
+      // foto
+      const px=cardX+CARDPAD,py=y+(it.h-PHOTO)/2;
+      g.save();roundRectPath(g,px,py,PHOTO,PHOTO,12);g.clip();
+      if(it.im){const iw=it.im.width||1,ih=it.im.height||1,sc=Math.max(PHOTO/iw,PHOTO/ih);g.drawImage(it.im,px+(PHOTO-iw*sc)/2,py+(PHOTO-ih*sc)/2,iw*sc,ih*sc);}
+      else{g.fillStyle='#eef0f3';g.fillRect(px,py,PHOTO,PHOTO);g.fillStyle='#b7bcc6';g.font='700 13px sans-serif';g.textAlign='center';g.fillText('fotoğraf yok',px+PHOTO/2,py+PHOTO/2+4);g.textAlign='left';}
       g.restore();
-      // metin
-      const u=it.u;let ty=y+IMGH+30;
-      g.fillStyle='#22232a';g.font='800 22px sans-serif';g.fillText(clip(u.ad||'—','800 22px sans-serif',CW-24),x+14,ty);
-      ty+=24;
-      g.fillStyle='#8a8f98';g.font='600 14px sans-serif';
+      // isim + çipler
+      let ty=y+44;g.textAlign='left';g.fillStyle=ink;g.font='800 25px sans-serif';g.fillText(clip(u.ad||'—','800 25px sans-serif',rightW-140),rightX,ty);
+      // fiyat (sağ üst)
+      const esk=portalEskiFiyat(u);g.textAlign='right';g.fillStyle=ink;g.font='800 26px sans-serif';g.fillText(TL(portalFiyat(u)),W-P-CARDPAD,ty);
       const birim=u.birim==='seri'&&birimAdet(u)>1?u.seri+"'li seri":(u.birim||'adet');
-      g.fillText((u.kod?u.kod+' · ':'')+'stok '+stokTop(u),x+14,ty);
-      ty+=30;
-      const esk=portalEskiFiyat(u);
-      g.fillStyle='#22232a';g.font='800 26px sans-serif';const fiy=TL(portalFiyat(u));g.fillText(fiy,x+14,ty);
-      const fw=g.measureText(fiy).width;
-      g.fillStyle='#8a8f98';g.font='600 14px sans-serif';g.fillText('/ '+birim,x+14+fw+8,ty);
-      if(esk){g.fillStyle='#c0392b';g.font='600 16px sans-serif';const et=TL(esk);g.textAlign='right';g.fillText(et,x+CW-14,ty-1);
-        const ew=g.measureText(et).width;g.strokeStyle='#c0392b';g.lineWidth=1.5;g.beginPath();g.moveTo(x+CW-14-ew,ty-6);g.lineTo(x+CW-14,ty-6);g.stroke();g.textAlign='left';}
+      g.fillStyle=mut;g.font='600 13px sans-serif';g.fillText('/ '+birim,W-P-CARDPAD,ty+20);
+      if(esk){g.fillStyle='#c0392b';g.font='600 15px sans-serif';const et=TL(esk),ew=g.measureText(et).width;g.fillText(et,W-P-CARDPAD,ty-30);g.strokeStyle='#c0392b';g.lineWidth=1.4;g.beginPath();g.moveTo(W-P-CARDPAD-ew,ty-35);g.lineTo(W-P-CARDPAD,ty-35);g.stroke();}
+      g.textAlign='left';let cx=rightX;ty+=26;
+      if(u.kod){cx+=chip(u.kod,cx,ty,'#f2ede2',gold)+6;}if(u.kat){cx+=chip(u.kat.toLocaleUpperCase('tr-TR'),cx,ty,'#eef0f3',mut)+6;}
+      const bed=(u.bedenler&&u.bedenler.length)?u.bedenler.join('·'):'';if(bed){g.fillStyle=mut;g.font='600 13px sans-serif';g.fillText('Beden: '+bed,cx+2,ty);}
+      // renkler
+      let ry=y+(it.beden?150:126);g.textAlign='left';g.fillStyle=mut;g.font='700 12px sans-serif';g.fillText('MEVCUT RENKLER',rightX,ry);ry+=26;
+      it.rows.forEach(row=>{row.forEach(ch=>{const bx=rightX+ch.x;
+        g.fillStyle='#fff';g.strokeStyle='#e0e3e9';g.lineWidth=1;roundRectPath(g,bx,ry-16,ch.w,26,13);g.fill();g.stroke();
+        g.fillStyle=ch.cl._bos?'#e9ebef':ch.cl.hex;g.beginPath();g.arc(bx+15,ry-3,8,0,Math.PI*2);g.fill();g.strokeStyle='rgba(0,0,0,.12)';g.stroke();
+        g.fillStyle=ink;g.font='700 14px sans-serif';g.textAlign='left';g.fillText(ch.label,bx+28,ry+2);});ry+=32;});
+      y+=it.h+GAP;
     });
-    let fy=gy+rows*(CARDH+GAP)+6;
-    if(ind.length){g.fillStyle='#33333d';g.font='700 16px sans-serif';g.textAlign='center';
-      g.fillText('💰 Toptan indirim: '+ind.map(k=>k.min+'+ %'+k.ind).join('   ·   '),W/2,fy+14);g.textAlign='left';fy+=indH;}
-    g.fillStyle='#8a8f98';g.font='600 14px sans-serif';g.textAlign='center';
-    g.fillText((db.firma||'IQ Basics')+(db.firmaWp?' · '+db.firmaWp:'')+' · Fiyatlar KDV hariç toptan fiyatlardır',W/2,H-24);g.textAlign='left';
-    try{c.toBlob(bl=>cb(bl,c),'image/jpeg',0.9);}catch(e){cb(null,c);}
+    // ── alt: indirim + snapshot notu ──
+    let fy=HEAD+18+bodyH+8;
+    if(ind.length){g.fillStyle=ink;g.font='700 15px sans-serif';g.textAlign='center';g.fillText('💰 Toptan indirim:  '+ind.map(k=>k.min+'+ %'+k.ind).join('   ·   '),W/2,fy+16);g.textAlign='left';fy+=indH;}
+    g.strokeStyle='#dfe2e8';g.lineWidth=1;g.beginPath();g.moveTo(P,fy+6);g.lineTo(W-P,fy+6);g.stroke();
+    g.textAlign='center';g.fillStyle=mut;g.font='700 14px sans-serif';g.fillText((db.firma||'IQ Basics')+(db.firmaWp?'  ·  📞 '+db.firmaWp:''),W/2,fy+32);
+    g.fillStyle='#b7bcc6';g.font='600 12px sans-serif';g.fillText('Bu katalog '+new Date().toLocaleDateString('tr-TR')+' tarihli stok durumudur · Fiyatlar KDV hariç toptandır',W/2,fy+54);g.textAlign='left';
+    try{c.toBlob(bl=>cb(bl,c),'image/jpeg',0.92);}catch(e){cb(null,c);}
   });
 }
 function roundRectPath(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();}
