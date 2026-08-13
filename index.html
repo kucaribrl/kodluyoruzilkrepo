@@ -769,7 +769,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-34'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-35'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1158,7 +1158,7 @@ function karGoster(){return !!yetki().kar}
 function paraGoster(){return !!yetki().para}
 function canUrunYaz(){return !!yetki().urunYaz}
 function canHammadde(){return !!yetki().hammadde}
-function canSee(v){if(v==='envanter')v='stok';return yetki().views.split(',').includes(v)}
+function canSee(v){if(v==='envanter')return canHammadde();return yetki().views.split(',').includes(v)}
 function rolRenk(k){return {patron:'#b5820a',ortak:'#24487a',magaza:'#0f9d63',depocu:'#2d6cdf',fason:'#7a4fd0'}[k]||'#24487a'}
 function navFor(){
   const r=db.rol;
@@ -1367,7 +1367,7 @@ function modulListe(){
   ];
   const list=all.filter(m=>canSee(m.v)&&!navVs.includes(m.v)).map(m=>({ic:m.ic,ad:m.ad,bd:m.bd,act:`go('${m.v}')`}));
   if(db.rol==='depocu')list.unshift({ic:'📋',ad:'Sayım',act:'depoSayim()'});
-  if(canSee('stok'))list.unshift({ic:'🗂️',ad:'Envanter',act:'envanterAc()'}); // hammadde + mamül tek bakışta
+  if(canHammadde())list.unshift({ic:'🗂️',ad:'Envanter',act:'envanterAc()'}); // sadece malzemeler (kumaş/aksesuar...)
   if(paraGoster())list.push({ic:'💰',ad:'Maliyet',act:'maliyetAc()'}); // koleksiyon maliyetleri — üretim dışında da erişim
   return list;
 }
@@ -1421,42 +1421,29 @@ function rStokList(){
   attachSwipe();
 }
 function emp(i,t){return `<div class="empty"><div class="i">${i}</div><p>${t}</p></div>`}
-// 🗂️ ENVANTER — bütün stok tek ekranda (mamül + kumaş/aksesuar/etiket/ambalaj), üretimden bağımsız
+// 🗂️ ENVANTER — sadece malzemeler (kumaş/aksesuar/etiket/ambalaj); bitmiş ürünler burada DEĞİL
 function envKatIc(kt){return kt==='Kumaş'?'🧵':kt==='Aksesuar'?'🔘':kt==='Etiket'?'🏷️':kt==='Ambalaj'?'📦':'📦'}
-let envTab='mamul', envKat='Tümü', envMalKat='Tümü';
+let envMalKat='Tümü';
 function envanterAc(){go('envanter')}
 function rEnvanter(){
-  const ham=canHammadde(); if(!ham)envTab='mamul';
   const gizli=!paraGoster();
-  let html=`<div class="tabs"><div class="tb ${envTab==='mamul'?'on':''}" onclick="envTab='mamul';rEnvanter()">👕 Mamül</div>${ham?`<div class="tb ${envTab==='malzeme'?'on':''}" onclick="envTab='malzeme';rEnvanter()">🧵 Malzeme</div>`:''}</div>`;
-  if(envTab==='mamul'){
-    const urunler=db.urunler.filter(u=>!u.pasif);
-    const parca=urunler.reduce((a,u)=>a+(+u.stok||0),0);
-    const deger=urunler.reduce((a,u)=>a+(+u.stok||0)*(+u.satis||0)*pbKur(u.pb||'TL'),0);
-    const kats=['Tümü',...new Set(db.urunler.map(u=>u.kat).filter(Boolean))];
-    html+=`<div class="envtot"><span>👕 ${urunler.length} model · ${parca.toLocaleString('tr-TR')} parça</span>${gizli?'':`<b>${TL(deger)}</b>`}</div>`;
-    html+=`<div style="display:flex;gap:8px;align-items:stretch"><input class="search" id="ara-env" placeholder="🔍 Ürün, kod ara..." oninput="rEnvMamulList()" style="flex:1;margin-bottom:10px"><button class="btn ghost" style="width:auto;flex:0 0 auto;padding:0 15px;margin:0 0 10px;font-size:19px" onclick="barkodOkutAra()" title="Barkod okut">📷</button></div>`;
-    html+=`<div class="segs">`+kats.map(k=>`<div class="seg ${k===envKat?'on':''}" onclick="envKat='${esc(k)}';rEnvanter()">${esc(k)}</div>`).join('')+`</div>`;
-    if(canUrunYaz())html+=`<button class="btn g" style="margin-bottom:10px" onclick="formUrun()">＋ Yeni Ürün / Hazır Alım</button>`;
-    html+=`<div class="card" id="env-list"></div>`;
-    $('app').innerHTML=html; rEnvMamulList();
-  }else{
-    const mkats=['Tümü','Kumaş','Aksesuar','Etiket','Ambalaj'];
-    const arr=db.hammadde.filter(h=>envMalKat==='Tümü'||h.kat===envMalKat);
-    const deger=arr.reduce((a,h)=>a+(+h.stok||0)*(+h.alis||0)*pbKur(h.pb||'TL'),0);
-    html+=`<div class="envtot"><span>🧵 ${arr.length} çeşit${envMalKat!=='Tümü'?' · '+envMalKat:''}</span>${gizli?'':`<b>${TL(deger)}</b>`}</div>`;
-    html+=`<div class="segs">`+mkats.map(k=>`<div class="seg ${k===envMalKat?'on':''}" onclick="envMalKat='${k}';rEnvanter()">${k==='Tümü'?'Tümü':envKatIc(k)+' '+k}</div>`).join('')+`</div>`;
-    const yeniKat=envMalKat==='Tümü'?'Kumaş':envMalKat;
-    html+=`<button class="btn g" style="margin-bottom:10px" onclick="formHammadde(0,'${yeniKat}')">＋ ${envMalKat==='Tümü'?'Malzeme':yeniKat} Alımı / Ekle</button>`;
-    html+=`<div class="card">`+(arr.length?arr.map(h=>{const rk=(h.renkler&&h.renkler.length)?h.renkler.map(r=>esc(r.ad)+' '+r.stok).join(' · '):'';const az=(+h.stok||0)<=(+h.kritik||0);const fyt=h.alis>0?` · ${h.pb==='USD'?'$':'₺'}${(+h.alis).toLocaleString('tr-TR')}`:'';return `<div class="row" onclick="formHammadde(${h.id})"><div class="av gray">${envKatIc(h.kat)}</div><div class="mid"><div class="t">${esc(h.ad)}</div><div class="s">${rk?'🎨 '+rk:esc(h.detay||'—')}${fyt}</div></div><div class="end"><div class="n ${az?'warnc':''}">${(+h.stok||0).toLocaleString('tr-TR')}</div><div class="u">${esc(h.birim||'')}</div>${az?'<span class="pill low">Az</span>':'<span class="pill ok">Var</span>'}</div></div>`}).join(''):emp('🧵',(envMalKat==='Tümü'?'Malzeme':envMalKat)+' yok — "＋ ekle" ile gir'))+`</div>`;
-    $('app').innerHTML=html;
-  }
+  const mkats=['Tümü','Kumaş','Aksesuar','Etiket','Ambalaj'];
+  const arr=db.hammadde.filter(h=>envMalKat==='Tümü'||h.kat===envMalKat);
+  const deger=arr.reduce((a,h)=>a+(+h.stok||0)*(+h.alis||0)*pbKur(h.pb||'TL'),0);
+  const azSay=arr.filter(h=>(+h.stok||0)<=(+h.kritik||0)).length;
+  let html=`<div class="envtot"><span>🧵 ${arr.length} çeşit${envMalKat!=='Tümü'?' · '+envMalKat:''}${azSay?` · <span style="color:#ffd7d0">${azSay} az</span>`:''}</span>${gizli?'':`<b>${TL(deger)}</b>`}</div>`;
+  html+=`<input class="search" id="ara-env" placeholder="🔍 Malzeme ara..." oninput="rEnvList()" style="margin-bottom:10px">`;
+  html+=`<div class="segs">`+mkats.map(k=>`<div class="seg ${k===envMalKat?'on':''}" onclick="envMalKat='${k}';rEnvanter()">${k==='Tümü'?'Tümü':envKatIc(k)+' '+k}</div>`).join('')+`</div>`;
+  const yeniKat=envMalKat==='Tümü'?'Kumaş':envMalKat;
+  html+=`<button class="btn g" style="margin-bottom:10px" onclick="formHammadde(0,'${yeniKat}')">＋ ${envMalKat==='Tümü'?'Malzeme':yeniKat} Alımı / Ekle</button>`;
+  html+=`<div class="card" id="env-list"></div>`;
+  $('app').innerHTML=html; rEnvList();
 }
-function rEnvMamulList(){
+function rEnvList(){
   const q=($('ara-env')?.value||'').toLowerCase();
-  const list=db.urunler.filter(u=>(envKat==='Tümü'||u.kat===envKat)&&(u.ad.toLowerCase().includes(q)||u.kod.toLowerCase().includes(q)||(u.marka||'').toLowerCase().includes(q))).sort((a,b)=>(a.pasif?1:0)-(b.pasif?1:0));
+  const arr=db.hammadde.filter(h=>(envMalKat==='Tümü'||h.kat===envMalKat)&&((h.ad||'').toLowerCase().includes(q)||(h.detay||'').toLowerCase().includes(q)));
   const el=$('env-list');if(!el)return;
-  el.innerHTML=list.length?list.map(u=>{const kap=urunKapak(u);return `<div class="row${u.pasif?' pasifrow':''}" onclick="urunDetay(${u.id})"><div class="av gray" style="overflow:hidden;padding:0">${kap?`<img src="${kap}" style="width:100%;height:100%;object-fit:cover">`:'👕'}</div><div class="mid"><div class="t">${esc(u.ad)}${u.pasif?'<span class="tag" style="background:var(--bad-s);color:var(--bad)">Pasif</span>':''}</div><div class="s">${esc(u.kod)} · ${money(u.satis,u.pb||'TL')}/${u.birim}${u.kaynak==='alim'?' · hazır alım':''}</div>${dots(u.renkler)}</div><div class="end"><div class="n" style="${u.stok<=0?'color:var(--bad)':u.stok<=u.kritik?'color:var(--warn)':''}">${u.stok}</div><div class="u">${u.birim}</div>${stokPill(u)}</div></div>`}).join(''):emp('📦','Ürün yok');
+  el.innerHTML=arr.length?arr.map(h=>{const rk=(h.renkler&&h.renkler.length)?h.renkler.map(r=>esc(r.ad)+' '+r.stok).join(' · '):'';const az=(+h.stok||0)<=(+h.kritik||0);const fyt=h.alis>0?` · ${h.pb==='USD'?'$':'₺'}${(+h.alis).toLocaleString('tr-TR')}`:'';return `<div class="row" onclick="formHammadde(${h.id})"><div class="av gray">${envKatIc(h.kat)}</div><div class="mid"><div class="t">${esc(h.ad)}</div><div class="s">${rk?'🎨 '+rk:esc(h.detay||'—')}${fyt}</div></div><div class="end"><div class="n ${az?'warnc':''}">${(+h.stok||0).toLocaleString('tr-TR')}</div><div class="u">${esc(h.birim||'')}</div>${az?'<span class="pill low">Az</span>':'<span class="pill ok">Var</span>'}</div></div>`}).join(''):emp('🧵',(envMalKat==='Tümü'?'Malzeme':envMalKat)+' yok — "＋ ekle" ile gir');
 }
 
 function urunKapak(u){const r=(u.renkler||[]).find(x=>x&&typeof x==='object'&&x.foto);return r?r.foto:''}
@@ -5590,9 +5577,9 @@ function open_(t,h){$('mT').textContent=t;$('mB').innerHTML=h;$('ov').classList.
 let _cariReturn=null,_saleStash=null;
 function closeM(){$('ov').classList.remove('show');_cariReturn=null}
 $('ov').addEventListener('click',e=>{if(e.target.id==='ov')closeM()});
-function fabShow(v){if(!canSee(v))return false;if(v==='stok'||v==='envanter')return canUrunYaz()||canHammadde();if(v==='cari'||v==='satis')return true;return false}
+function fabShow(v){if(!canSee(v))return false;if(v==='stok')return canUrunYaz()||canHammadde();if(v==='envanter')return canHammadde();if(v==='cari'||v==='satis')return true;return false}
 function fabAction(){if(cur==='stok'){(stokTab==='hammadde'&&canHammadde())?formHammadde():(canUrunYaz()?formUrun():toast('Bu işlem için yetkiniz yok'))}
-  else if(cur==='envanter'){(envTab==='malzeme'&&canHammadde())?formHammadde(0,envMalKat==='Tümü'?'Kumaş':envMalKat):(canUrunYaz()?formUrun():toast('Bu işlem için yetkiniz yok'))}
+  else if(cur==='envanter'){canHammadde()?formHammadde(0,envMalKat==='Tümü'?'Kumaş':envMalKat):toast('Bu işlem için yetkiniz yok')}
   else if(cur==='cari')formCari(cariTab);else if(cur==='satis')formSatis()}
 
 /* =================== BAŞLAT =================== */
