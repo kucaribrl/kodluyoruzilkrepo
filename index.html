@@ -727,7 +727,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-23'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-24'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -3698,12 +3698,23 @@ function kaydetIsEmri(){
   save();closeM();rUretim();toast('İş emri açıldı ✓ · '+hedef+' '+birim);
 }
 /* --- İş emri detay --- */
+// İş emri fotoğrafı — kendi fotosu yoksa BAĞLI ÜRÜNÜN fotoğrafına düş (kapak → galeri → fotolar)
+function ieUrunFoto(i){
+  if(!i)return '';
+  if(i.foto)return i.foto;
+  let u=i.urunId?urun(i.urunId):null;
+  if(!u){const k=(''+(i.kod||'')).toLowerCase(),n=(''+(i.urun||'')).toLowerCase();
+    u=db.urunler.find(x=>(k&&x.kod&&(''+x.kod).toLowerCase()===k)||(n&&x.ad&&x.ad.toLowerCase()===n));}
+  if(!u)return '';
+  return urunKapak(u)||((urunGaleri(u)[0]||{}).foto)||((u.fotolar||[])[0])||'';
+}
 function uretimDetay(id){
   const i=db.isemirleri.find(x=>x.id===id);if(!i)return;
+  const foto=ieUrunFoto(i);
   const kar=karGoster();const saglam=ieSaglam(i);const birim=ieBirimMaliyet(i);
   const durIc={tamam:'✅',devam:'🔵',bekliyor:'⬜'};
   let html=`<div class="card" style="padding:14px"><div style="display:flex;gap:12px">
-      ${i.foto?`<img src="${i.foto}" style="width:64px;height:64px;border-radius:10px;object-fit:cover;flex:0 0 auto">`:''}
+      ${foto?`<img src="${foto}" style="width:64px;height:64px;border-radius:10px;object-fit:cover;flex:0 0 auto">`:''}
       <div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="font-weight:800;font-size:16px">${esc(i.urun)}${i.urunId?'':' <span class="pill low" style="vertical-align:middle">numune</span>'}</div><span class="pill ${i.durum==='tamam'?'ok':'low'}">${i.durum==='tamam'?'Tamam':'Devam'}</span></div>
       <div class="mini" style="margin-top:2px">${esc(i.kod||'')} · başladı ${dstr(i.baslangic)} · hedef ${i.hedef} ${esc(i.birim||'adet')}${i.birim==='seri'&&ieCarpan(i)>1?' ('+(i.hedef*ieCarpan(i))+' adet)':''}</div></div></div>
     ${i.renkDagilim&&i.renkDagilim.length?`<div class="mini" style="margin-top:8px">🎨 ${i.renkDagilim.map(r=>esc(r.ad)+' '+r.adet).join(' · ')}</div>`:''}</div>
@@ -3958,7 +3969,7 @@ function isEmriPaylas(id,x){
   open_('📤 İş Emri Gönder'+(durak?' · '+durak.ad:''),`
     <div class="mini">${f?esc(f.ad)+(f.tel?' · '+esc(f.tel):''):'Fason'} — gidecek mesaj:</div>
     <div style="white-space:pre-wrap;background:#e7f6ea;border:1px solid #b6e0bf;border-radius:14px;padding:14px;margin-top:8px;font-size:13px;line-height:1.5;color:#0b3d1a">${esc(txt).replace(/\*(.+?)\*/g,'<b>$1</b>')}</div>
-    ${i.foto?`<div class="mini" style="margin-top:8px">🖼️ Ürün fotoğrafı da eklenecek</div><img src="${i.foto}" style="width:100%;max-height:190px;object-fit:cover;border-radius:12px;margin-top:6px">`:''}
+    ${ieUrunFoto(i)?`<div class="mini" style="margin-top:8px">🖼️ Ürün fotoğrafı da eklenecek</div><img src="${ieUrunFoto(i)}" style="width:100%;max-height:190px;object-fit:cover;border-radius:12px;margin-top:6px">`:''}
     <button class="btn g" onclick="isEmriResimGonder(${id},${x==null?'null':x})">📄 PDF Form Gönder</button>
     <button class="btn ghost sm" style="margin-top:8px" onclick="isEmriWa(${id},${x==null?'null':x})">💬 Sadece Yazı Gönder</button>
     <button class="btn ghost sm" style="margin-top:8px" onclick="isEmriA4(${id})">📄 A4 Form Yazdır</button>`);
@@ -3969,7 +3980,8 @@ async function isEmriWa(id,x){
   const f=durak&&durak.fasonId?cari(durak.fasonId):null;
   const txt=ieShareText(i,x);
   let ph=((f&&f.tel)||'').replace(/\D/g,'');if(ph){if(ph.length===10)ph='90'+ph;else if(ph[0]==='0')ph='9'+ph}
-  if(i.foto&&navigator.share){try{const file=dataURLtoFile(i.foto,'isemri-'+id+'.jpg');if(!navigator.canShare||navigator.canShare({files:[file]})){await navigator.share({files:[file],text:txt});return}}catch(e){if(e&&e.name==='AbortError')return}}
+  const _wfoto=ieUrunFoto(i);
+  if(_wfoto&&navigator.share){try{const file=dataURLtoFile(_wfoto,'isemri-'+id+'.jpg');if(!navigator.canShare||navigator.canShare({files:[file]})){await navigator.share({files:[file],text:txt});return}}catch(e){if(e&&e.name==='AbortError')return}}
   window.open(`https://wa.me/${ph}?text=${encodeURIComponent(txt)}`,'_blank');
 }
 // 🖼️ İş emrini TEK GÖRSEL (form gibi) olarak çiz — bilgiler + ürün fotoğrafı bir arada
@@ -4018,7 +4030,8 @@ function isEmriResimYap(id,x,cb){
     g.fillStyle='#8a8f98';g.font='600 14px sans-serif';g.fillText((db.firma||'IQ Basics')+(db.firmaWp?' · '+db.firmaWp:''),P,H-22);
     try{c.toBlob(bl=>cb(bl,c),'image/jpeg',0.92);}catch(e){cb(null,c);}
   };
-  if(i.foto){const el=new Image();el.onload=()=>{let w=Math.min(520,el.width||520);let hh=w*(el.height||1)/(el.width||1);if(hh>360){hh=360;w=hh*(el.width||1)/(el.height||1)}proceed({el,w,h:hh});};el.onerror=()=>proceed(null);el.src=i.foto;}
+  const _iefoto=ieUrunFoto(i);
+  if(_iefoto){const el=new Image();el.onload=()=>{let w=Math.min(520,el.width||520);let hh=w*(el.height||1)/(el.width||1);if(hh>360){hh=360;w=hh*(el.width||1)/(el.height||1)}proceed({el,w,h:hh});};el.onerror=()=>proceed(null);el.src=_iefoto;}
   else proceed(null);
 }
 async function isEmriResimGonder(id,x){
