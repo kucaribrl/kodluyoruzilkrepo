@@ -512,7 +512,7 @@ const CANLI_DOMEN={
   satis:['satislar','bekleyenPortal','islenenSiparis'],
   cek:['cekler'],
   uretim:['isemirleri'],
-  ayar:['firma','firmaSlogan','firmaAdres','firmaTel','firmaWp','firmaLogo','satici','kurUSD','kurEUR','seq','kademe','minSiparis','kampanya','kurTarih','portalFav','portalTaslak','duzenliGider']
+  ayar:['firma','firmaSlogan','firmaAdres','firmaTel','firmaWp','firmaLogo','firmaSite','satici','kurUSD','kurEUR','seq','kademe','minSiparis','kampanya','kurTarih','portalFav','portalTaslak','duzenliGider','cldName','cldPreset']
 };
 // Rol → hangi alanları OKUR / YAZAR (veri seviyesinde sınır; arayüz gizlemesiyle birlikte)
 const _CTUM=Object.keys(CANLI_DOMEN);
@@ -755,7 +755,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-29'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-30'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1496,6 +1496,30 @@ const PBSYM={TL:'₺',USD:'$',EUR:'€'};
 const ISLEMLER=['Kesim','Dikim','Nakış','Baskı','Ütü / Paket','Yıkama'];
 let fRenk=[], fBeden=[], uPB='TL', uTab='genel', uKaynak='uretim';
 function resizeImg(file,cb,max=900,q=0.72){const r=new FileReader();r.onload=()=>{const img=new Image();img.onload=()=>{let w=img.width,h=img.height;if(w>h&&w>max){h=Math.round(h*max/w);w=max}else if(h>max){w=Math.round(w*max/h);h=max}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);try{cb(c.toDataURL('image/jpeg',q))}catch(e){cb(r.result)}};img.src=r.result};r.readAsDataURL(file)}
+// 🖼️ Fotoğrafı Cloudinary'ye yükle (ayarlıysa) → kısa link döndür; ayar yoksa/yüklenemezse base64 döndür (fallback → hiçbir şey bozulmaz)
+function resimYukle(dataUrl,cb){
+  const cloud=(db.cldName||'').trim(),preset=(db.cldPreset||'').trim();
+  if(!dataUrl||!cloud||!preset||!/^data:/.test(dataUrl)){cb(dataUrl);return;}
+  try{const fd=new FormData();fd.append('file',dataUrl);fd.append('upload_preset',preset);fd.append('folder','iqbasics');
+    fetch('https://api.cloudinary.com/v1_1/'+cloud+'/image/upload',{method:'POST',body:fd})
+      .then(r=>r.json()).then(j=>cb(j&&j.secure_url?j.secure_url:dataUrl)).catch(()=>cb(dataUrl));
+  }catch(e){cb(dataUrl);}
+}
+// Dosya seç → küçült → (varsa) Cloudinary'ye yükle → cb(link/base64)
+function resimSecYukle(file,cb,max,q){resizeImg(file,d=>resimYukle(d,cb),max,q);}
+function cloudinaryAyar(){
+  open_('🖼️ Fotoğraf Depolama (Cloudinary)',`
+    <div class="mini">Çok fotoğraf yükleyebilmek için fotoğraflar <b>Cloudinary</b>'ye (ücretsiz) yüklenir; veriye sadece kısa link konur. <b>cloudinary.com</b>'da ücretsiz üye ol, aşağıdaki 2 bilgiyi gir.</div>
+    <label style="margin-top:10px">Cloud name</label><input id="cld-name" value="${esc(db.cldName||'')}" placeholder="ör. iohwfj2n" autocapitalize="off" autocomplete="off">
+    <label>Unsigned upload preset</label><input id="cld-preset" value="${esc(db.cldPreset||'')}" placeholder="ör. iq_basics" autocapitalize="off" autocomplete="off">
+    <div class="mini" style="margin-top:6px">Preset'i: Cloudinary → Settings → Upload → <b>Add upload preset</b> → Signing mode: <b>Unsigned</b> → kaydet, adını buraya yaz.</div>
+    <button class="btn" style="margin-top:12px" onclick="cloudinaryKaydet()">Kaydet</button>
+    ${(db.cldName&&db.cldPreset)?`<button class="btn ghost" style="margin-top:8px" onclick="cloudinaryTest()">🧪 Test Yükle</button>`:''}
+    <div class="okbox" style="margin-top:10px">Boş bırakırsan fotoğraflar eskisi gibi cihazda/veride tutulur (az fotoğraf için yeterli). Doldurursan yeni yüklenen fotoğraflar Cloudinary'ye gider; eskiler çalışmaya devam eder.</div>`);
+}
+function cloudinaryKaydet(){db.cldName=($('cld-name').value||'').trim();db.cldPreset=($('cld-preset').value||'').trim();save();closeM();toast(db.cldName&&db.cldPreset?'✓ Kaydedildi — fotoğraflar artık Cloudinary\'ye yüklenecek':'Temizlendi — fotoğraflar cihazda tutulur');}
+function cloudinaryTest(){const c=document.createElement('canvas');c.width=c.height=220;const g=c.getContext('2d');g.fillStyle='#5b54d6';g.fillRect(0,0,220,220);g.fillStyle='#fff';g.font='bold 26px sans-serif';g.textAlign='center';g.fillText('IQ TEST',110,118);toast('🧪 Yükleniyor…');
+  resimYukle(c.toDataURL('image/jpeg',0.8),url=>{if(/^https?:/.test(url))open_('✅ Cloudinary çalışıyor',`<div class="mini">Test fotoğrafı yüklendi:</div><img src="${url}" style="width:100%;border-radius:12px;margin-top:8px"><div class="mini" style="margin-top:8px;word-break:break-all">${esc(url)}</div>`);else toast('⚠️ Yüklenemedi — Cloud name / preset\'i (Unsigned mı?) kontrol et');});}
 function genBarkod(){let s='869';for(let i=0;i<10;i++)s+=Math.floor(Math.random()*10);return s}
 function formUrun(id,base){
   if(!canUrunYaz())return toast('Bu işlem için yetkiniz yok');
@@ -1582,7 +1606,7 @@ function cizRenkSwatch(i,inp){if(!fRenk[i])return;const hx=hexFromAd(inp.value);
 function renkTot(){const t=$('renk-tot');if(!t)return;if(!fRenk.length){t.textContent='';return}const s=fRenk.reduce((a,r)=>a+(+r.stok||0),0);const k=fRenk.reduce((a,r)=>a+(r.kirik?Object.values(r.kirik).reduce((b,x)=>b+(+x||0),0):0),0);t.innerHTML=`📦 Toplam: <b>${s}</b> seri${k?` + ${k} tek (kırık)`:''}`}
 function renkEkle(){fRenk.push({ad:'',hex:'#8a8f98',foto:'',barkod:genBarkod(),stok:0,kirik:null});cizRenk()}
 function renkFotoSec(i){const el=$('rf-'+i);if(el)el.click()}
-function renkFoto(i,input){const f=input.files&&input.files[0];if(!f)return;resizeImg(f,d=>{fRenk[i].foto=d;cizRenk()})}
+function renkFoto(i,input){const f=input.files&&input.files[0];if(!f)return;const el=$('rfp-'+i);if(el)el.textContent='⏳';resimSecYukle(f,d=>{if(fRenk[i])fRenk[i].foto=d;cizRenk()},1000,0.75)}
 function renkKirik(i){if(!fBeden.length){urunTab('genel');return toast('Önce seri içeriği (beden) ekle')}fRenk[i]._kirikOpen=!fRenk[i]._kirikOpen;if(fRenk[i]._kirikOpen&&!fRenk[i].kirik)fRenk[i].kirik={};cizRenk()}
 function setKirik(i,bd,v){if(!fRenk[i].kirik)fRenk[i].kirik={};const n=+v||0;if(n>0)fRenk[i].kirik[bd]=n;else delete fRenk[i].kirik[bd];renkTot()}
 function setBirim(b){$('sb-seri').classList.toggle('on',b==='seri');$('sb-adet').classList.toggle('on',b==='adet');const bw=$('beden-wrap');if(bw)bw.style.display=b==='seri'?'':'none';renkTot()}
@@ -5393,7 +5417,8 @@ function rAyarlar(){
   const y=yetki();
   let html=`<div class="sec">Firma</div><div class="card"><div class="row" onclick="formFirma()"><div class="av" style="background:var(--ind)">🏢</div><div class="mid"><div class="t">${esc(db.firma)}</div><div class="s">${esc(db.firmaSlogan||'firma bilgileri · fişte görünür')}</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="formKur()"><div class="av o">💱</div><div class="mid"><div class="t">Kur</div><div class="s">$ ${db.kurUSD.toFixed(2)} · € ${db.kurEUR.toFixed(2)}</div></div><span style="color:var(--sub)">›</span></div>
-    <div class="row" onclick="yaziciAyar()"><div class="av" style="background:${db.otoYazdir?'var(--good)':'var(--ind2)'}">🖨️</div><div class="mid"><div class="t">Otomatik Yazıcı ${db.otoYazdir?'<span class="pill ok">açık</span>':''}</div><div class="s">bilgisayara bağlı termal yazıcıdan otomatik fiş</div></div><span style="color:var(--sub)">›</span></div></div>`;
+    <div class="row" onclick="yaziciAyar()"><div class="av" style="background:${db.otoYazdir?'var(--good)':'var(--ind2)'}">🖨️</div><div class="mid"><div class="t">Otomatik Yazıcı ${db.otoYazdir?'<span class="pill ok">açık</span>':''}</div><div class="s">bilgisayara bağlı termal yazıcıdan otomatik fiş</div></div><span style="color:var(--sub)">›</span></div>
+    <div class="row" onclick="cloudinaryAyar()"><div class="av" style="background:${db.cldName?'var(--good)':'var(--ind2)'}">🖼️</div><div class="mid"><div class="t">Fotoğraf Depolama ${db.cldName?'<span class="pill ok">açık</span>':''}</div><div class="s">çok fotoğraf için Cloudinary (ücretsiz) — ${db.cldName?esc(db.cldName):'kurulu değil'}</div></div><span style="color:var(--sub)">›</span></div></div>`;
   html+=`<div class="sec">Kullanıcılar & Roller</div><div class="card">`+Object.keys(ROLLER).map(k=>`<div class="row" onclick="setRol('${k}')"><div class="av" style="background:${rolRenk(k)}">${ROLLER[k].ic}</div><div class="mid"><div class="t">${ROLLER[k].ad}</div><div class="s">${ROLLER[k].kar?'kâr görür':'kâr gizli'}</div></div>${db.rol===k?'<span class="pill ok">aktif</span>':''}</div>`).join('')+`</div>`;
   if(bulutVar())html+=`<div class="sec">Bulut</div><div class="card">
     ${db.personelMod?`<div class="row" onclick="personelCik()"><div class="av" style="background:${rolRenk(db.rol)}">${(ROLLER[db.rol]||{}).ic||'👤'}</div><div class="mid"><div class="t">Personel: ${ROL_AD[db.rol]||db.rol} <span class="pill ok">bağlı</span></div><div class="s">çıkış yapmak için dokun</div></div><span style="color:var(--sub)">›</span></div>`:`
