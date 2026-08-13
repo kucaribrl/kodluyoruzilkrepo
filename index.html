@@ -502,11 +502,14 @@ function canliRef(domen){return _fb.collection('isletme').doc(MAGAZA_ID).collect
 // tekrar "bekleyen" olarak geri gelmez, satışı da kaybolmaz.
 function canliSatisUzlas(yerelIslenen,yerelSatis){
   const merged=Array.from(new Set([...(yerelIslenen||[]),...(db.islenenSiparis||[])]));
-  db.islenenSiparis=merged;
+  db.islenenSiparis=merged;const kset=new Set(merged);
+  const satKey=s=>s.bulutId?s.bulutId:('bp'+(s.portalId||''));
   const bulutSatisId=new Set((db.satislar||[]).map(s=>s.id));
-  const bulutSatisB=new Set((db.satislar||[]).map(s=>s.bulutId).filter(Boolean));
-  (yerelSatis||[]).forEach(s=>{ if(s&&s.kaynak==='portal'&&s.bulutId&&merged.includes(s.bulutId)&&!bulutSatisId.has(s.id)&&!bulutSatisB.has(s.bulutId)){db.satislar.push(s);bulutSatisB.add(s.bulutId);} });
-  db.bekleyenPortal=(db.bekleyenPortal||[]).filter(o=> !(o&&o.bulutId&&(merged.includes(o.bulutId)||bulutSatisB.has(o.bulutId))));
+  const bulutKeys=new Set((db.satislar||[]).map(satKey));
+  // yerelde onaylanıp buluta gitmemiş portal satışlarını KORU (bulutId olsun olmasın)
+  (yerelSatis||[]).forEach(s=>{ if(!s||s.kaynak!=='portal')return; const k=satKey(s); if(kset.has(k)&&!bulutSatisId.has(s.id)&&!bulutKeys.has(k)){db.satislar.push(s);bulutSatisId.add(s.id);bulutKeys.add(k);} });
+  // işlenmiş (onay/red) siparişleri bekleyenden temizle — anahtar bulutId ya da yerel id
+  db.bekleyenPortal=(db.bekleyenPortal||[]).filter(o=>{const k=sipKey(o);return !(kset.has(k)||(o&&o.bulutId&&bulutKeys.has(o.bulutId)));});
 }
 function canliBaslat(sessiz){
   if(canliAcik)return true; if(!bulutBaslat())return false;
@@ -581,7 +584,7 @@ function canliYazHemen(domenler){
   const list=(domenler||izin).filter(dm=>izin.includes(dm));
   const ps=[];
   list.forEach(domen=>{const data=canliAl(db,domen);const js=JSON.stringify(data);
-    if(js!==_canliGolge[domen]){_canliGolge[domen]=js;ps.push(canliRef(domen).set(data).catch(e=>{console.warn('canlı-yaz-hemen',domen,e&&e.code);canliIzinHata(e);}));}});
+    if(js!==_canliGolge[domen]){_canliGolge[domen]=js;ps.push(canliRef(domen).set(data).catch(e=>{console.warn('canlı-yaz-hemen',domen,e&&e.code);if(canliIzinHata(e)!=='permission-denied'&&(''+e).includes('longer than'))toast('⚠️ '+domen+' verisi 1MB sınırını aştı (fotoğraflar) — buluta yazılamadı. Fotoğrafları küçültün.');}));}});
   return Promise.all(ps);
 }
 function save(){localStorage.setItem(KEY,JSON.stringify(db));if(canliAcik&&!_canliUygulaniyor)canliYaz();}
@@ -724,7 +727,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-22'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-23'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -786,7 +789,9 @@ async function bulutSiparisGonder(o){if(!bulutBaslat())return false;
   try{await _fb.collection('siparisler').add({...o,uid:bulutKul.uid,magaza:MAGAZA_ID,durum:'yeni',olusturma:Date.now()});return true;}catch(e){toast('Sipariş gönderilemedi: '+(e.message||e));return false}}
 function bulutSiparisDurum(bulutId,durum){if(!bulutId||!bulutBaslat())return;try{_fb.collection('siparisler').doc(bulutId).update({durum}).catch(e=>{console.warn('sipdurum yazılamadı',e&&e.code)})}catch(e){}}
 // Onaylanan/reddedilen portal siparişleri: bir daha "bekleyen" olarak gelmesin diye yerel defter (buluta da senkronlanır)
-function siparisIsle(bid){if(!bid)return;db.islenenSiparis=db.islenenSiparis||[];if(!db.islenenSiparis.includes(bid))db.islenenSiparis.push(bid);if(db.islenenSiparis.length>1000)db.islenenSiparis=db.islenenSiparis.slice(-1000);}
+// Anahtar: bulutId varsa o, YOKSA yerel sipariş id'si ('bp'+id) — demo/kiosk (bulutId'siz) siparişlerde de çalışır.
+function sipKey(o){return (o&&o.bulutId)?o.bulutId:('bp'+((o&&o.id)||''));}
+function siparisIsle(o){const k=sipKey(o);if(!k||k==='bp')return;db.islenenSiparis=db.islenenSiparis||[];if(!db.islenenSiparis.includes(k))db.islenenSiparis.push(k);if(db.islenenSiparis.length>2000)db.islenenSiparis=db.islenenSiparis.slice(-2000);}
 function siparisIslendiMi(bid){if(!bid)return true;return (db.islenenSiparis||[]).includes(bid)||(db.bekleyenPortal||[]).some(x=>x.bulutId===bid)||(db.satislar||[]).some(s=>s.bulutId===bid);}
 // Admin: buluttaki yeni siparişleri çek → bekleyenPortal'a ekle
 async function bulutSiparisleriCek(){if(!bulutBaslat())return toast('☁️ Bulut ayarlı değil');
@@ -4118,10 +4123,10 @@ function portalOnay(id,override,force){
   const oran=(override&&baseT>0)?override/baseT:1;
   const kalemler=o.kalemler.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:oran===1?k.fiyat:Math.round((+k.fiyat||0)*oran),renkler:k.renkler?k.renkler.map(r=>({...r})):undefined}));
   const tutar=override||o.tutar;
-  const sat={id:nid('s'),tip:'satis',mid:m.id,mus:m.ad,tarih:Date.now(),kalemler,araToplam:tutar,iskonto:0,tutar,odenen:0,kesik:0,pb:'TL',satisKur:1,durum:'tamam',teslimDurum:'ayrildi',odemeler:[],kaynak:'portal',bulutId:o.bulutId||null,sipDurum:'onaylandi',sipGecmis:[{k:'onaylandi',t:Date.now()}]};
+  const sat={id:nid('s'),tip:'satis',mid:m.id,mus:m.ad,tarih:Date.now(),kalemler,araToplam:tutar,iskonto:0,tutar,odenen:0,kesik:0,pb:'TL',satisKur:1,durum:'tamam',teslimDurum:'ayrildi',odemeler:[],kaynak:'portal',bulutId:o.bulutId||null,portalId:o.id,sipDurum:'onaylandi',sipGecmis:[{k:'onaylandi',t:Date.now()}]};
   db.satislar.push(sat);applySatis(sat);
   if(o.bulutId)bulutSiparisDurum(o.bulutId,'onaylandi');
-  siparisIsle(o.bulutId);
+  siparisIsle(o);
   db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);
   save();try{canliYazHemen(['satis'])}catch(e){} // onayı ANINDA buluta yaz (sekme kapanmadan)
   closeM&&closeM();go('portal');toast('Sipariş onaylandı ✓ '+TL(tutar)+' · mal ayrıldı');
@@ -4152,7 +4157,7 @@ function kampanyaKaydet(){const bas=($('kmp-bas')?.value||'').trim();if(!bas)ret
   db.kampanya={baslik:bas,metin:($('kmp-met')?.value||'').trim(),urunId:uid,bitis:bt?new Date(bt).getTime():0};
   save();closeM();rPortal();toast('📣 Kampanya yayınlandı ✓');}
 function kademeKaydet(){db.kademe=_kad.filter(k=>+k.min>0&&+k.ind>0).sort((a,b)=>a.min-b.min);save();closeM();rPortal();toast('İndirim kademeleri kaydedildi ✓')}
-function portalRed(id){const o=db.bekleyenPortal.find(x=>x.id===id);if(o&&o.bulutId)bulutSiparisDurum(o.bulutId,'red');if(o)siparisIsle(o.bulutId);db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);save();try{canliYazHemen(['satis'])}catch(e){}rPortal();toast('Sipariş reddedildi')}
+function portalRed(id){const o=db.bekleyenPortal.find(x=>x.id===id);if(o&&o.bulutId)bulutSiparisDurum(o.bulutId,'red');if(o)siparisIsle(o);db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);save();try{canliYazHemen(['satis'])}catch(e){}rPortal();toast('Sipariş reddedildi')}
 // Toptan fiyat listesi (müşteriye WhatsApp'tan) — seri fiyatlarıyla, kategoriye göre
 function fiyatListesiMetni(){const aktif=db.urunler.filter(u=>!u.pasif&&stokTop(u)>0);
   const kats={};aktif.forEach(u=>{const k=u.kat||'Diğer';(kats[k]=kats[k]||[]).push(u)});
