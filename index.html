@@ -755,7 +755,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-31'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-32'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1353,8 +1353,6 @@ function modulListe(){
   ];
   const list=all.filter(m=>canSee(m.v)&&!navVs.includes(m.v)).map(m=>({ic:m.ic,ad:m.ad,bd:m.bd,act:`go('${m.v}')`}));
   if(db.rol==='depocu')list.unshift({ic:'📋',ad:'Sayım',act:'depoSayim()'});
-  // 🔄 Sipariş önerisi — azalan stok varsa, sipariş verebilen roller için
-  if((paraGoster()||db.rol==='magaza'||db.rol==='depocu')){const az=reorderListe().length;if(az)list.unshift({ic:'🔄',ad:'Sipariş Öner',bd:az,act:'reorderAc()'});}
   if(paraGoster())list.push({ic:'💰',ad:'Maliyet',act:'maliyetAc()'}); // koleksiyon maliyetleri — üretim dışında da erişim
   return list;
 }
