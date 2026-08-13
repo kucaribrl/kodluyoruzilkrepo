@@ -727,7 +727,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-24'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-25'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -3984,54 +3984,91 @@ async function isEmriWa(id,x){
   if(_wfoto&&navigator.share){try{const file=dataURLtoFile(_wfoto,'isemri-'+id+'.jpg');if(!navigator.canShare||navigator.canShare({files:[file]})){await navigator.share({files:[file],text:txt});return}}catch(e){if(e&&e.name==='AbortError')return}}
   window.open(`https://wa.me/${ph}?text=${encodeURIComponent(txt)}`,'_blank');
 }
-// 🖼️ İş emrini TEK GÖRSEL (form gibi) olarak çiz — bilgiler + ürün fotoğrafı bir arada
+// 📄 İş emrini RAPOR/BELGE olarak çiz — künye kartı + renk + aşama tablosu + imza
 function isEmriResimYap(id,x,cb){
   const i=db.isemirleri.find(v=>v.id===id);if(!i){cb(null);return;}
   const durak=(x!=null&&x>=0&&i.duraklar[x])?i.duraklar[x]:null;
-  const W=820,P=46;
+  const W=820,P=40,gold='#d8a24a',ink='#22232a',mut='#8a8f98';
   const proceed=(im)=>{
     const mc=document.createElement('canvas').getContext('2d');
     const wrap=(t,font,maxW)=>{mc.font=font;const ws=(''+t).split(/\s+/),out=[];let cur='';ws.forEach(w=>{const tt=cur?cur+' '+w:w;if(mc.measureText(tt).width>maxW&&cur){out.push(cur);cur=w}else cur=tt});if(cur)out.push(cur);return out;};
-    const renkArr=(i.renkDagilim&&i.renkDagilim.length)?i.renkDagilim:[];
+    const renk=(i.renkDagilim&&i.renkDagilim.length)?i.renkDagilim:[];
     const durakArr=durak?[durak]:(i.duraklar||[]);
-    const notTxt=(durak&&durak.not)||i.not||'';const notLines=notTxt?wrap('📝 '+notTxt,'22px sans-serif',W-2*P):[];
-    let H=96+34+Math.ceil(5/2)*40+16;
-    if(im)H+=im.h+26;
-    if(renkArr.length)H+=26+Math.ceil(renkArr.length/2)*40+12;
-    H+=26+durakArr.length*40+4;
-    if(notLines.length)H+=notLines.length*30+8;
-    H+=54;
-    const dpr=2,c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const g=c.getContext('2d');g.scale(dpr,dpr);
-    g.fillStyle='#ffffff';g.fillRect(0,0,W,H);
-    g.fillStyle='#33333d';g.fillRect(0,0,W,96);
-    g.textBaseline='alphabetic';g.textAlign='left';
-    g.fillStyle='#fff';g.font='800 30px sans-serif';g.fillText(db.firma||'IQ Basics',P,54);
-    g.font='600 15px sans-serif';g.fillStyle='#c9ccd4';g.fillText((db.firmaTel||db.firmaWp||''),P,79);
-    g.textAlign='right';g.fillStyle='#fff';g.font='800 26px sans-serif';g.fillText('İŞ EMRİ #'+i.id,W-P,50);
-    g.font='600 15px sans-serif';g.fillStyle='#e6b3b0';g.fillText(durak?durak.ad:'Üretim',W-P,76);
-    g.textAlign='left';
-    let y=96+34;const colW=(W-2*P)/2;
-    const info=[['ÜRÜN',i.urun||'—'],['KOD',i.kod||'—'],['TARİH',dstr(i.baslangic)],['TERMİN',(i.gun||'-')+' gün'],['HEDEF',(i.hedef||0)+' '+(i.birim||'adet')]];
-    info.forEach((kv,idx)=>{const col=idx%2,row=Math.floor(idx/2),xx=P+col*colW,yy=y+row*40;
-      g.fillStyle='#8a8f98';g.font='600 13px sans-serif';g.fillText(kv[0],xx,yy);
-      g.fillStyle='#22232a';g.font='800 20px sans-serif';g.fillText(''+kv[1],xx,yy+23);});
-    y+=Math.ceil(info.length/2)*40+16;
-    if(im){const px=(W-im.w)/2;try{g.drawImage(im.el,px,y,im.w,im.h)}catch(e){}g.strokeStyle='#e5e8ed';g.strokeRect(px,y,im.w,im.h);y+=im.h+26;}
-    if(renkArr.length){g.fillStyle='#8a8f98';g.font='700 14px sans-serif';g.fillText('RENK DAĞILIMI',P,y);y+=26;
-      renkArr.forEach((r,idx)=>{const col=idx%2,row=Math.floor(idx/2),xx=P+col*colW,yy=y+row*40;
-        g.fillStyle=hexFromAd(r.ad)||'#ccc';g.fillRect(xx,yy-15,18,18);g.strokeStyle='#e5e8ed';g.strokeRect(xx,yy-15,18,18);
-        g.fillStyle='#22232a';g.font='700 19px sans-serif';g.fillText((r.ad||'—')+': '+r.adet,xx+26,yy);});
-      y+=Math.ceil(renkArr.length/2)*40+12;}
-    g.fillStyle='#8a8f98';g.font='700 14px sans-serif';g.fillText(durak?'İŞLEM':'ÜRETİM AŞAMALARI',P,y);y+=26;
-    durakArr.forEach((d,k)=>{g.fillStyle='#22232a';g.font='700 18px sans-serif';
-      g.fillText((durak?'':(k+1)+'. ')+(d.ad||'')+(fasonAd(d)?' · '+fasonAd(d):'')+(d.ucret?' · ₺'+d.ucret+'/ad':''),P,y+8);y+=40;});
-    y+=4;
-    if(notLines.length){g.fillStyle='#4a4a55';g.font='22px sans-serif';notLines.forEach(l=>{g.fillText(l,P,y+8);y+=30;});y+=8;}
-    g.fillStyle='#8a8f98';g.font='600 14px sans-serif';g.fillText((db.firma||'IQ Basics')+(db.firmaWp?' · '+db.firmaWp:''),P,H-22);
+    const toplamAdet=renk.reduce((a,r)=>a+(+r.adet||0),0)||(+i.hedef||0);
+    const termin=i.baslangic?dstr(i.baslangic+(+i.gun||0)*86400000):'—';
+    const notTxt=(durak&&durak.not)||i.not||'';const notLines=notTxt?wrap(notTxt,'16px sans-serif',W-2*P-28):[];
+    // ── ölçüler ── (geçici tuvale çiz, sonda içeriğe göre kırp)
+    const HEAD=118,GAP=14,KUN=176,IMZA=92;
+    const renkRows=Math.ceil(renk.length/3);
+    const dpr=2,temp=document.createElement('canvas');temp.width=W*dpr;temp.height=2400*dpr;const g=temp.getContext('2d');g.scale(dpr,dpr);
+    g.fillStyle='#eef0f3';g.fillRect(0,0,W,2400);g.textBaseline='alphabetic';
+    const clip=(t,f,mw)=>{g.font=f;t=''+t;if(g.measureText(t).width<=mw)return t;while(t.length>1&&g.measureText(t+'…').width>mw)t=t.slice(0,-1);return t+'…';};
+    const chip=(txt,cx,cyy,bg,fg)=>{g.font='700 12px sans-serif';const w=g.measureText(txt).width+18;g.fillStyle=bg;roundRectPath(g,cx,cyy-14,w,20,10);g.fill();g.fillStyle=fg;g.textAlign='left';g.fillText(txt,cx+9,cyy);return w;};
+    const secTitle=(t,yy)=>{g.textAlign='left';g.fillStyle=mut;g.font='700 13px sans-serif';g.fillText(t,P,yy);};
+    // ── başlık ──
+    const hg=g.createLinearGradient(0,0,W,114);hg.addColorStop(0,'#2b2c34');hg.addColorStop(1,'#41434f');
+    g.fillStyle=hg;g.fillRect(0,0,W,114);g.fillStyle=gold;g.fillRect(0,114,W,4);
+    g.textAlign='left';g.fillStyle='#fff';g.font='800 30px sans-serif';g.fillText(clip(db.firma||'IQ Basics','800 30px sans-serif',W*0.55),P,52);
+    if(db.firmaSlogan){g.fillStyle='#b9bcc6';g.font='600 14px sans-serif';g.fillText(clip(db.firmaSlogan,'600 14px sans-serif',W*0.55),P,76);}
+    g.fillStyle=gold;g.font='700 13px sans-serif';g.fillText((db.firmaWp||db.firmaTel)?('📞 '+(db.firmaWp||db.firmaTel)):'ÜRETİM İŞ EMRİ',P,100);
+    g.textAlign='right';g.fillStyle='#fff';g.font='800 28px sans-serif';g.fillText('İŞ EMRİ #'+i.id,W-P,50);
+    g.fillStyle=gold;g.font='700 14px sans-serif';g.fillText(durak?('İşlem: '+durak.ad):'ÜRETİM FORMU',W-P,78);
+    g.fillStyle='#c9ccd4';g.font='600 13px sans-serif';g.fillText(dstr(i.baslangic),W-P,100);
+    // ── künye kartı (foto sol · bilgiler sağ) ──
+    let y=HEAD+GAP;g.fillStyle='#fff';roundRectPath(g,P,y,W-2*P,KUN,16);g.fill();
+    const px=P+18,py=y+18,PS=140;
+    g.save();roundRectPath(g,px,py,PS,PS,12);g.clip();
+    if(im){const iw=im.width||1,ih=im.height||1,sc=Math.max(PS/iw,PS/ih);g.drawImage(im,px+(PS-iw*sc)/2,py+(PS-ih*sc)/2,iw*sc,ih*sc);}
+    else{g.fillStyle='#eef0f3';g.fillRect(px,py,PS,PS);g.fillStyle='#b7bcc6';g.font='40px sans-serif';g.textAlign='center';g.fillText('👕',px+PS/2,py+PS/2+14);g.textAlign='left';}
+    g.restore();g.strokeStyle='#e5e8ed';g.lineWidth=1;roundRectPath(g,px,py,PS,PS,12);g.stroke();
+    const ix=px+PS+24,iw2=W-P-18-ix;
+    g.textAlign='left';g.fillStyle=mut;g.font='700 12px sans-serif';g.fillText('ÜRÜN',ix,y+34);
+    g.fillStyle=ink;g.font='800 26px sans-serif';g.fillText(clip(i.urun||'—','800 26px sans-serif',iw2),ix,y+62);
+    let cx=ix;if(i.kod)cx+=chip(i.kod,cx,y+88,'#f2ede2',gold)+6;
+    cx+=chip(i.durum==='tamam'?'TAMAMLANDI':'DEVAM EDİYOR',cx,y+88,i.durum==='tamam'?'#e7f6ea':'#eaf0fb',i.durum==='tamam'?'#1a7a3a':'#2f5c9e')+6;
+    if(!i.urunId)chip('NUMUNE',cx,y+88,'#fdece0','#c0392b');
+    // mini bilgi ızgarası
+    const facts=[['BAŞLANGIÇ',dstr(i.baslangic)],['TERMİN',termin+'  ('+(i.gun||'-')+' gün)'],['HEDEF',(i.hedef||0)+' '+(i.birim||'adet')+(i.birim==='seri'&&ieCarpan(i)>1?' ('+(i.hedef*ieCarpan(i))+' ad)':'')],['TOPLAM ADET',''+toplamAdet]];
+    const gcolW=iw2/2;facts.forEach((f,k)=>{const col=k%2,row=Math.floor(k/2),xx=ix+col*gcolW,yy=y+118+row*34;
+      g.fillStyle=mut;g.font='600 11px sans-serif';g.fillText(f[0],xx,yy);g.fillStyle=ink;g.font='800 16px sans-serif';g.fillText(clip(f[1],'800 16px sans-serif',gcolW-12),xx,yy+20);});
+    y+=KUN+GAP;
+    // ── renk dağılımı ──
+    if(renk.length){secTitle('RENK DAĞILIMI · '+renk.length+' renk',y);y+=16;
+      const rcol=(W-2*P)/3;
+      renk.forEach((r,idx)=>{const col=idx%3,row=Math.floor(idx/3),xx=P+col*rcol,yy=y+row*34+18;
+        g.fillStyle=r.hex||hexFromAd(r.ad)||'#c9ccd0';g.beginPath();g.arc(xx+11,yy-5,9,0,Math.PI*2);g.fill();g.strokeStyle='rgba(0,0,0,.14)';g.lineWidth=1;g.stroke();
+        g.fillStyle=ink;g.font='700 16px sans-serif';g.textAlign='left';g.fillText(clip((r.ad||'—')+': '+r.adet,'700 16px sans-serif',rcol-34),xx+28,yy);});
+      y+=renkRows*34+GAP;}
+    // ── üretim aşamaları (tablo) ──
+    secTitle(durak?'İŞLEM':'ÜRETİM AŞAMALARI',y);y+=8;
+    const tblY=y,cNo=P,cAd=P+46,cFas=P+300,cUc=W-P;
+    g.fillStyle=ink;roundRectPath(g,P,tblY,W-2*P,32,8);g.fill();g.fillStyle='#fff';g.font='800 13px sans-serif';
+    g.textAlign='left';g.fillText('#',cNo+12,tblY+21);g.fillText('AŞAMA / İŞLEM',cAd,tblY+21);g.fillText('FASONCU',cFas,tblY+21);g.textAlign='right';g.fillText('ÜCRET',cUc-12,tblY+21);
+    g.textAlign='left';y=tblY+32;
+    durakArr.forEach((d,k)=>{const durIc=d.durum==='tamam'?' ✓':'';
+      g.fillStyle=ink;g.font='800 16px sans-serif';g.textAlign='left';g.fillText(durak?'•':(k+1),cNo+12,y+26);
+      g.fillText(clip((d.ad||'')+durIc,'800 16px sans-serif',cFas-cAd-10),cAd,y+26);
+      g.font='700 15px sans-serif';g.fillText(clip(fasonAd(d)||'—','700 15px sans-serif',cUc-90-cFas),cFas,y+26);
+      g.textAlign='right';g.font='800 15px sans-serif';g.fillText(d.ucret?('₺'+d.ucret+'/ad'):'—',cUc-12,y+26);
+      g.strokeStyle='#e5e8ed';g.lineWidth=1;g.beginPath();g.moveTo(P,y+40);g.lineTo(W-P,y+40);g.stroke();y+=40;});
+    g.strokeStyle='#dfe2e8';g.lineWidth=1.4;g.strokeRect(P,tblY,W-2*P,y-tblY);y+=GAP;
+    // ── not ──
+    if(notLines.length){secTitle('NOT',y);y+=8;g.fillStyle='#fffbe9';roundRectPath(g,P,y,W-2*P,14+notLines.length*24,10);g.fill();g.strokeStyle='#efe2b8';g.lineWidth=1;g.stroke();
+      g.fillStyle='#5a4a1a';g.font='16px sans-serif';g.textAlign='left';let ny=y+24;notLines.forEach(l=>{g.fillText(l,P+14,ny);ny+=24;});y+=14+notLines.length*24+GAP;}
+    // ── teslim imza ──
+    g.strokeStyle='#c7ccd4';g.lineWidth=1.4;
+    const sw=(W-2*P-40)/2;
+    [['Teslim eden',P],['Teslim alan',P+sw+40]].forEach(s=>{g.beginPath();g.moveTo(s[1],y+44);g.lineTo(s[1]+sw,y+44);g.stroke();g.fillStyle=mut;g.font='600 13px sans-serif';g.textAlign='left';g.fillText(s[0],s[1],y+64);});
+    y+=IMZA;
+    // ── footer ──
+    g.strokeStyle='#dfe2e8';g.lineWidth=1;g.beginPath();g.moveTo(P,y);g.lineTo(W-P,y);g.stroke();
+    g.textAlign='center';g.fillStyle=mut;g.font='600 13px sans-serif';g.fillText((db.firma||'IQ Basics')+(db.firmaWp?'  ·  📞 '+db.firmaWp:'')+'  ·  '+dstr(i.baslangic),W/2,y+28);g.textAlign='left';
+    const endY=Math.ceil(y+46);
+    const c=document.createElement('canvas');c.width=W*dpr;c.height=endY*dpr;const og=c.getContext('2d');og.drawImage(temp,0,0,W*dpr,endY*dpr,0,0,W*dpr,endY*dpr);
     try{c.toBlob(bl=>cb(bl,c),'image/jpeg',0.92);}catch(e){cb(null,c);}
   };
   const _iefoto=ieUrunFoto(i);
-  if(_iefoto){const el=new Image();el.onload=()=>{let w=Math.min(520,el.width||520);let hh=w*(el.height||1)/(el.width||1);if(hh>360){hh=360;w=hh*(el.width||1)/(el.height||1)}proceed({el,w,h:hh});};el.onerror=()=>proceed(null);el.src=_iefoto;}
+  if(_iefoto){const el=new Image();el.onload=()=>proceed(el);el.onerror=()=>proceed(null);el.src=_iefoto;}
   else proceed(null);
 }
 async function isEmriResimGonder(id,x){
