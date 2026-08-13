@@ -755,7 +755,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-27'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-28'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1838,7 +1838,9 @@ function formHammadde(id){
     <div class="g2"><div><label>Kategori</label><select id="h-kat" onchange="hamKatDegis()"><option ${h.kat==='Kumaş'?'selected':''}>Kumaş</option><option ${h.kat==='Aksesuar'?'selected':''}>Aksesuar</option><option ${h.kat==='Etiket'?'selected':''}>Etiket</option><option ${h.kat==='Ambalaj'?'selected':''}>Ambalaj</option></select></div><div><label>Birim</label><select id="h-birim" onchange="cizHamRenk()"><option ${birim==='metre'?'selected':''}>metre</option><option ${birim==='kg'?'selected':''}>kg</option><option ${birim==='adet'?'selected':''}>adet</option><option ${birim==='koni'?'selected':''}>koni</option><option ${birim==='top'?'selected':''}>top</option></select></div></div>
     <label>Açıklama</label><input id="h-detay" value="${esc(h.detay||'')}" placeholder="30/1 · pamuk">
     <label class="ckrow" style="margin-top:10px"><input type="checkbox" id="h-renkli" ${renkli?'checked':''} onchange="hamRenkliToggle()"><span>🎨 Renk renk stok tut (kumaş vb.)</span></label>
-    <div id="ham-renk-wrap" style="display:${renkli?'':'none'};margin-top:6px"><div id="ham-renk-box"></div></div>
+    <div id="ham-renk-wrap" style="display:${renkli?'':'none'};margin-top:6px"><div id="ham-renk-box"></div>
+      <label style="margin-top:10px">1 top ≈ kaç ${birim}? <span style="font-weight:600;color:var(--sub);text-transform:none">(stoğu top olarak da görmek için · opsiyonel)</span></label>
+      <input id="h-topmik" type="number" inputmode="decimal" value="${h.topMik||''}" placeholder="ör. 25"></div>
     <div id="ham-tek-wrap" style="display:${renkli?'none':''}"><label>Stok</label><input id="h-stok" type="number" inputmode="numeric" value="${h.stok||0}"></div>
     <label>Kritik seviye (uyarı)</label><input id="h-kritik" type="number" inputmode="numeric" value="${h.kritik||0}">
     <label>Alış Fiyatı (birim başı)</label><input id="h-alis" type="number" inputmode="numeric" value="${h.alis||0}">
@@ -1867,7 +1869,7 @@ function kaydetHammadde(id){const ad=$('h-ad').value.trim();if(!ad)return toast(
   let renkler=[],stok=0;
   if(renkli){renkler=fHamRenk.filter(r=>(r.ad||'').trim()||+r.stok>0).map(r=>({ad:(r.ad||'').trim()||'—',stok:+r.stok||0}));stok=renkler.reduce((a,r)=>a+r.stok,0);}
   else stok=+($('h-stok')?.value||0);
-  const o={ad,kat:$('h-kat').value,birim:$('h-birim').value,detay:$('h-detay').value.trim(),stok,renkler,kritik:+$('h-kritik').value||0,alis:+$('h-alis').value||0};
+  const o={ad,kat:$('h-kat').value,birim:$('h-birim').value,detay:$('h-detay').value.trim(),stok,renkler,kritik:+$('h-kritik').value||0,alis:+$('h-alis').value||0,topMik:+($('h-topmik')?.value||0)||0};
   if(id){Object.assign(db.hammadde.find(x=>x.id===id),o)}else{o.id=nid('h');db.hammadde.push(o)}
   save();closeM();rStok();toast('Kaydedildi ✓')}
 function silHammadde(id){askConfirm('Silinsin mi?',()=>{db.hammadde=db.hammadde.filter(x=>x.id!==id);save();closeM();rStok();toast('Silindi')})}
@@ -3644,8 +3646,12 @@ function ieModSet(m){if(ieMod===m)return;ieMod=m;
   else{ieKumasId=0;ieRenk=ieRenk.filter(r=>(r.ad||'').trim()).map(r=>({ad:r.ad,adet:+r.adet||0}));if(!ieRenk.length)ieRenk=[{ad:'',adet:0}];}
   cizIeRenk();ieToplamCiz();}
 function ieKumasSec(){const id=+($('ie-kumas')?.value||0);ieKumasId=id;const k=id?db.hammadde.find(h=>h.id===id):null;
-  ieRenk=k?(k.renkler||[]).filter(r=>(+r.stok||0)>0).map(r=>({ad:r.ad,adet:0,hex:hexFromAd(r.ad),stok:+r.stok||0,birim:k.birim||''})):[];
+  ieRenk=k?(k.renkler||[]).filter(r=>(+r.stok||0)>0).map(r=>({ad:r.ad,adet:0,hex:hexFromAd(r.ad),stok:+r.stok||0,birim:k.birim||'',topMik:+k.topMik||0})):[];
   cizIeRenk();ieToplamCiz();}
+// Stok rozeti: birim + (top çevrimi varsa) top
+function ieStokStr(r){const bir=esc(r.birim||'');let s=(+r.stok||0)+' '+bir;
+  if(r.topMik>0){const t=(+r.stok||0)/r.topMik;s+=' · ~'+t.toLocaleString('tr-TR',{maximumFractionDigits:1})+' top';}
+  return s;}
 function ieRenkArt(i,d){const r=ieRenk[i];if(!r)return;r.adet=Math.max(0,(+r.adet||0)+d);const el=$('ierk-'+i);if(el)el.value=r.adet;ieToplamCiz();}
 function ieTerminSet(g,el){if($('ie-gun'))$('ie-gun').value=g;document.querySelectorAll('#ie-termin .c').forEach(c=>c.classList.remove('on'));if(el)el.classList.add('on');ieTerminHesap();ieOzetCiz();}
 function ieTerminOzel(el){const v=prompt('Kaç gün?',$('ie-gun')?.value||'15');if(v==null)return;const g=Math.max(1,Math.round(+v||15));if($('ie-gun'))$('ie-gun').value=g;document.querySelectorAll('#ie-termin .c').forEach(c=>c.classList.remove('on'));if(el){el.classList.add('on');el.textContent=g+' gün';}ieTerminHesap();ieOzetCiz();}
@@ -3720,7 +3726,7 @@ function cizIeRenk(){const b=$('ie-renk');if(!b)return;
   let h='';
   if(!ieRenk.length){h=`<div class="mini">${ieMod==='kumas'?'Bu kumaşın stokta rengi yok.':'"+ Renk ekle" ile renk gir.'}</div>`;}
   else{h=ieRenk.map((r,i)=>{const sw=r.hex||hexFromAd(r.ad)||'#c9ccd0';
-    const stk=(ieMod==='kumas'&&r.stok!=null)?`<span class="iestk ${(+r.stok||0)<=15?'az':''}">📦 ${(+r.stok||0)} ${esc(r.birim||'')} ${(+r.stok||0)<=15?'kaldı':'var'}</span>`:'';
+    const stk=(ieMod==='kumas'&&r.stok!=null)?`<span class="iestk ${(+r.stok||0)<=15?'az':''}">📦 ${ieStokStr(r)} ${(+r.stok||0)<=15?'kaldı':'var'}</span>`:'';
     const nm=ieMod==='kumas'
       ? `<div class="ienm"><b>${esc(r.ad||'—')}</b>${stk}</div>`
       : `<div class="ienm"><input list="ie-renk-dl" value="${esc(r.ad||'')}" placeholder="renk" oninput="ieRenkSet(${i},'ad',this.value)" style="margin:0;padding:8px 9px"></div>`;
