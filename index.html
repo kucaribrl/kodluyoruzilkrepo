@@ -331,6 +331,20 @@
   .iechips{display:flex;gap:8px;flex-wrap:wrap}
   .iechips .c{padding:9px 15px;border-radius:11px;border:1.5px solid var(--ln);font-weight:800;font-size:14px;color:var(--sub);cursor:pointer}
   .iechips .c.on{border-color:var(--ind);background:var(--ind-s);color:var(--ind)}
+  .iekchips{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+  .iekc{padding:7px 11px;border-radius:10px;border:1.5px solid var(--ln);font-weight:800;font-size:13px;cursor:pointer;display:flex;flex-direction:column;line-height:1.3}
+  .iekc span{font-size:10.5px;color:var(--sub);font-weight:700}
+  .iekc.on{border-color:var(--ind);background:var(--ind-s);color:var(--ind)}
+  .iekc.on span{color:var(--ind)}
+  .ieyeni{font-size:11.5px;color:var(--thr,#d8a24a);font-weight:800;background:var(--thr-s,#f7efe0);border-radius:9px;padding:7px 10px;margin-top:8px}
+  .iekfi{font-size:12.5px;font-weight:700}
+  .envkpi{display:flex;gap:10px;margin-bottom:4px}
+  .envkpi .ek{flex:1;min-width:0;background:var(--card);border:1px solid var(--ln);border-radius:14px;padding:13px;cursor:pointer}
+  .ek .ekic{font-size:22px;line-height:1}.ek .ekt{font-size:11px;color:var(--sub);font-weight:800;margin-top:5px;text-transform:uppercase;letter-spacing:.3px}
+  .ek .ekv{font-size:23px;font-weight:800;margin-top:2px;white-space:nowrap}.ek .ekv small{font-size:12px;color:var(--sub);font-weight:700}
+  .ek .eks{font-size:11.5px;color:var(--sub);font-weight:700;margin-top:3px}
+  .envtot{display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,#2b2c34,#3d3f4a);color:#fff;border-radius:14px;padding:13px 16px;margin-top:12px;font-size:13px;font-weight:700}
+  .envtot b{font-size:19px;font-weight:800;color:var(--thr,#d8a24a)}
   .iesum{background:linear-gradient(135deg,#2b2c34,#3d3f4a);color:#fff;border-radius:16px;padding:14px;margin-top:4px}
   .iesum h4{font-size:11.5px;color:var(--thr,#d8a24a);font-weight:800;letter-spacing:.4px;margin-bottom:8px}
   .iesum .r{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #ffffff18;font-size:13.5px}
@@ -755,7 +769,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-32'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-33'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1353,6 +1367,7 @@ function modulListe(){
   ];
   const list=all.filter(m=>canSee(m.v)&&!navVs.includes(m.v)).map(m=>({ic:m.ic,ad:m.ad,bd:m.bd,act:`go('${m.v}')`}));
   if(db.rol==='depocu')list.unshift({ic:'📋',ad:'Sayım',act:'depoSayim()'});
+  if(canSee('stok'))list.unshift({ic:'🗂️',ad:'Envanter',act:'envanterAc()'}); // hammadde + mamül tek bakışta
   if(paraGoster())list.push({ic:'💰',ad:'Maliyet',act:'maliyetAc()'}); // koleksiyon maliyetleri — üretim dışında da erişim
   return list;
 }
@@ -1406,6 +1421,41 @@ function rStokList(){
   attachSwipe();
 }
 function emp(i,t){return `<div class="empty"><div class="i">${i}</div><p>${t}</p></div>`}
+// 🗂️ Envanter — mamül + hammadde tek bakışta
+function envKatIc(kt){return kt==='Kumaş'?'🧵':kt==='Aksesuar'?'🔘':kt==='Etiket'?'🏷️':kt==='Ambalaj'?'📦':'📦'}
+function envanterAc(){
+  const gizli=!paraGoster();
+  const urunler=db.urunler.filter(u=>!u.pasif);
+  const mModel=urunler.length;
+  const mParca=urunler.reduce((a,u)=>a+(+u.stok||0),0);
+  const mDeger=urunler.reduce((a,u)=>a+(+u.stok||0)*(+u.satis||0)*pbKur(u.pb||'TL'),0);
+  const mKritik=urunler.filter(u=>(+u.stok||0)<=(+u.kritik||0)).length;
+  const ham=canHammadde();
+  const kats=['Kumaş','Aksesuar','Etiket','Ambalaj'];
+  const hByKat=kats.map(kt=>{const arr=db.hammadde.filter(h=>h.kat===kt);
+    return {kt,adet:arr.length,deger:arr.reduce((a,h)=>a+(+h.stok||0)*(+h.alis||0)*pbKur(h.pb||'TL'),0),kritik:arr.filter(h=>(+h.stok||0)<=(+h.kritik||0)).length};
+  }).filter(x=>x.adet>0);
+  const hCesit=db.hammadde.length;
+  const hDeger=hByKat.reduce((a,x)=>a+x.deger,0);
+  const hKritik=hByKat.reduce((a,x)=>a+x.kritik,0);
+  const dgr=v=>gizli?'—':TL(v);
+  let html=`<div class="infobox">Elindeki tüm stok tek yerde — mamül (ürün) ve hammadde. Detay için karta dokun.</div>
+    <div class="envkpi">
+      <div class="ek" onclick="closeM();stokTab='mamul';go('stok')">
+        <div class="ekic">👕</div><div class="ekt">Mamül</div>
+        <div class="ekv">${mParca.toLocaleString('tr-TR')}<small> parça</small></div>
+        <div class="eks">${mModel} model · ${dgr(mDeger)}${mKritik?` · <span style="color:var(--bad)">${mKritik} kritik</span>`:''}</div>
+      </div>
+      ${ham?`<div class="ek" onclick="closeM();stokTab='hammadde';go('stok')">
+        <div class="ekic">🧵</div><div class="ekt">Hammadde</div>
+        <div class="ekv">${hCesit}<small> çeşit</small></div>
+        <div class="eks">${dgr(hDeger)}${hKritik?` · <span style="color:var(--bad)">${hKritik} kritik</span>`:''}</div>
+      </div>`:''}
+    </div>`;
+  if(ham){html+=`<div class="sec">Hammadde Dağılımı</div><div class="card">`+(hByKat.length?hByKat.map(x=>`<div class="row" onclick="closeM();stokTab='hammadde';go('stok')"><div class="av gray">${envKatIc(x.kt)}</div><div class="mid"><div class="t">${x.kt}</div><div class="s">${x.adet} çeşit${x.kritik?` · <span style="color:var(--bad)">${x.kritik} kritik</span>`:''}</div></div><div class="end">${gizli?'':`<div class="n">${TL(x.deger)}</div>`}<span style="color:var(--sub)">›</span></div></div>`).join(''):emp('🧵','Hammadde yok'))+`</div>`;}
+  if(!gizli)html+=`<div class="envtot"><span>Toplam envanter değeri</span><b>${TL(mDeger+hDeger)}</b></div>`;
+  open_('🗂️ Envanter',html);
+}
 
 function urunKapak(u){const r=(u.renkler||[]).find(x=>x&&typeof x==='object'&&x.foto);return r?r.foto:''}
 // ürünün tüm görselleri (renk fotoğrafları + genel fotolar) — galeri için
@@ -1865,7 +1915,8 @@ function formHammadde(id){
       <input id="h-topmik" type="number" inputmode="decimal" value="${h.topMik||''}" placeholder="ör. 25"></div>
     <div id="ham-tek-wrap" style="display:${renkli?'none':''}"><label>Stok</label><input id="h-stok" type="number" inputmode="numeric" value="${h.stok||0}"></div>
     <label>Kritik seviye (uyarı)</label><input id="h-kritik" type="number" inputmode="numeric" value="${h.kritik||0}">
-    <label>Alış Fiyatı (birim başı)</label><input id="h-alis" type="number" inputmode="numeric" value="${h.alis||0}">
+    <label>Alış Fiyatı (birim başı)</label>
+    <div style="display:flex;gap:6px"><input id="h-alis" type="number" inputmode="decimal" value="${h.alis||0}" style="flex:1;min-width:0;margin:0"><select id="h-pb" style="width:64px;flex:0 0 auto;margin:0"><option value="TL" ${(h.pb||'TL')==='TL'?'selected':''}>₺</option><option value="USD" ${h.pb==='USD'?'selected':''}>$</option></select></div>
     <button class="btn" onclick="kaydetHammadde(${id||0})">Kaydet</button>
     ${id?`<button class="btn danger" onclick="silHammadde(${id})">Sil</button>`:''}`);
   if(renkli){if(!fHamRenk.length)fHamRenk=[{ad:'',stok:0}];cizHamRenk();}
@@ -1891,7 +1942,7 @@ function kaydetHammadde(id){const ad=$('h-ad').value.trim();if(!ad)return toast(
   let renkler=[],stok=0;
   if(renkli){renkler=fHamRenk.filter(r=>(r.ad||'').trim()||+r.stok>0).map(r=>({ad:(r.ad||'').trim()||'—',stok:+r.stok||0}));stok=renkler.reduce((a,r)=>a+r.stok,0);}
   else stok=+($('h-stok')?.value||0);
-  const o={ad,kat:$('h-kat').value,birim:$('h-birim').value,detay:$('h-detay').value.trim(),stok,renkler,kritik:+$('h-kritik').value||0,alis:+$('h-alis').value||0,topMik:+($('h-topmik')?.value||0)||0};
+  const o={ad,kat:$('h-kat').value,birim:$('h-birim').value,detay:$('h-detay').value.trim(),stok,renkler,kritik:+$('h-kritik').value||0,alis:+$('h-alis').value||0,pb:$('h-pb')?.value||'TL',topMik:+($('h-topmik')?.value||0)||0};
   if(id){Object.assign(db.hammadde.find(x=>x.id===id),o)}else{o.id=nid('h');db.hammadde.push(o)}
   save();closeM();rStok();toast('Kaydedildi ✓')}
 function silHammadde(id){askConfirm('Silinsin mi?',()=>{db.hammadde=db.hammadde.filter(x=>x.id!==id);save();closeM();rStok();toast('Silindi')})}
@@ -3620,11 +3671,11 @@ function maliyetUretimeYolla(id){const m=(db.maliyetler||[]).find(x=>x.id===id);
   toast('💰 Maliyetten dolduruldu — adet/renk gir, aç');
 },160);}
 /* --- Yeni iş emri --- */
-let ieMal=[], ieRenk=[], ieFoto='', ieUrunId=0, ieKumasId=0, ieMod='elle';
+let ieMal=[], ieRenk=[], ieFoto='', ieUrunId=0, ieKumasId=0, ieKumasAd='', ieKumasFiyat=0, ieKumasPB='TL', ieKumasRenkli=false, ieMod='elle';
 function formIsEmri(){
-  ieMal=[];ieRenk=[];ieFoto='';ieUrunId=0;ieKumasId=0;
+  ieMal=[];ieRenk=[];ieFoto='';ieUrunId=0;ieKumasId=0;ieKumasAd='';ieKumasFiyat=0;ieKumasPB='TL';ieKumasRenkli=false;
   const fs=fasonlar();
-  const kumaslar=db.hammadde.filter(h=>h.kat==='Kumaş'&&(h.renkler||[]).some(r=>(+r.stok||0)>0));
+  const kumaslar=db.hammadde.filter(h=>h.kat==='Kumaş');
   ieMod=kumaslar.length?'kumas':'elle';
   open_('🏭 Yeni İş Emri',`
     <datalist id="ie-urun-dl">${db.urunler.filter(u=>!u.pasif).map(u=>`<option value="${esc(u.ad)}">`).join('')}</datalist>
@@ -3641,8 +3692,16 @@ function formIsEmri(){
     <div class="iestep"><div class="iesh"><span class="n">2</span><b>Kumaş &amp; Renk</b><small>elindeki kumaştan</small></div>
       ${kumaslar.length?`<div class="seg2" style="margin-bottom:11px"><div class="o ${ieMod==='kumas'?'on':''}" id="iem-kumas" onclick="ieModSet('kumas')">Kumaştan seç</div><div class="o ${ieMod==='elle'?'on':''}" id="iem-elle" onclick="ieModSet('elle')">Elle gir</div></div>`:''}
       <div id="ie-kumas-wrap" style="display:${ieMod==='kumas'?'':'none'}">
-        <label>Hangi kumaş?</label>
-        <select id="ie-kumas" onchange="ieKumasSec()"><option value="0">— kumaş seç —</option>${kumaslar.map(k=>{const t=(k.renkler||[]).reduce((a,r)=>a+(+r.stok||0),0);return `<option value="${k.id}">${esc(k.ad)}${k.detay?' · '+esc(k.detay):''} · ${t} ${esc(k.birim||'')}</option>`}).join('')}</select>
+        <label>Hangi kumaş? <span style="font-weight:600;color:var(--sub);text-transform:none">— seç, yaz ya da yeni ekle</span></label>
+        <input id="ie-kumas-ad" list="ie-kumas-dl" autocomplete="off" placeholder="🔍 Kumaş adı yaz / seç..." oninput="ieKumasYaz()">
+        <datalist id="ie-kumas-dl">${kumaslar.map(k=>`<option value="${esc(k.ad)}">`).join('')}</datalist>
+        <div class="iekchips" id="ie-kumas-chips">${kumaslar.map(k=>{const t=(k.renkler||[]).reduce((a,r)=>a+(+r.stok||0),0);return `<div class="iekc" data-kid="${k.id}" onclick="ieKumasSecId(${k.id})">${esc(k.ad)}<span>📦 ${t} ${esc(k.birim||'')}${(k.alis>0)?' · '+(k.pb==='USD'?'$':'₺')+(+k.alis).toLocaleString('tr-TR'):''}</span></div>`}).join('')}</div>
+        <div id="ie-kumas-fiyat-wrap" style="display:none;margin-top:11px">
+          <label>Kumaş fiyatı (birim başı)</label>
+          <div style="display:flex;gap:6px"><input id="ie-kumas-fiyat" type="number" inputmode="decimal" placeholder="0" oninput="ieKumasFiyatCiz()" style="flex:1;min-width:0;margin:0"><select id="ie-kumas-pb" onchange="ieKumasFiyatCiz()" style="width:64px;flex:0 0 auto;margin:0"><option value="TL">₺</option><option value="USD">$</option></select></div>
+          <div class="iekfi" id="ie-kumas-fiyat-info" style="margin-top:7px"></div>
+          <div id="ie-kumas-yeni"></div>
+        </div>
       </div>
       <div id="ie-renk" style="margin-top:6px"></div>
       <div id="ie-toplam-box"></div>
@@ -3664,12 +3723,47 @@ function formIsEmri(){
 function ieModSet(m){if(ieMod===m)return;ieMod=m;
   $('iem-kumas')&&$('iem-kumas').classList.toggle('on',m==='kumas');$('iem-elle')&&$('iem-elle').classList.toggle('on',m==='elle');
   const kw=$('ie-kumas-wrap');if(kw)kw.style.display=m==='kumas'?'':'none';
-  if(m==='kumas'){ieKumasId=0;const s=$('ie-kumas');if(s)s.value='0';ieRenk=[];}
-  else{ieKumasId=0;ieRenk=ieRenk.filter(r=>(r.ad||'').trim()).map(r=>({ad:r.ad,adet:+r.adet||0}));if(!ieRenk.length)ieRenk=[{ad:'',adet:0}];}
+  if(m==='kumas'){ieKumasId=0;ieKumasAd='';ieKumasFiyat=0;ieKumasPB='TL';ieKumasRenkli=false;const s=$('ie-kumas-ad');if(s)s.value='';ieRenk=[];ieKumasFiyatWrap(false);}
+  else{ieKumasId=0;ieKumasAd='';ieKumasRenkli=false;ieRenk=ieRenk.filter(r=>(r.ad||'').trim()).map(r=>({ad:r.ad,adet:+r.adet||0}));if(!ieRenk.length)ieRenk=[{ad:'',adet:0}];}
   cizIeRenk();ieToplamCiz();}
-function ieKumasSec(){const id=+($('ie-kumas')?.value||0);ieKumasId=id;const k=id?db.hammadde.find(h=>h.id===id):null;
-  ieRenk=k?(k.renkler||[]).filter(r=>(+r.stok||0)>0).map(r=>({ad:r.ad,adet:0,hex:hexFromAd(r.ad),stok:+r.stok||0,birim:k.birim||'',topMik:+k.topMik||0})):[];
-  cizIeRenk();ieToplamCiz();}
+// Renk satırları düzenlenebilir mi? (elle mod, ya da renk-renk stok tutmayan / yeni kumaş)
+function ieRenkDuzenlenir(){return ieMod==='elle'||!ieKumasRenkli;}
+function ieKumasFiyatWrap(g){const w=$('ie-kumas-fiyat-wrap');if(w)w.style.display=g?'':'none';}
+// Chip'e tıklanınca — stoktaki kumaşı seç
+function ieKumasSecId(id){const k=db.hammadde.find(h=>h.id===id);if(!k)return;const inp=$('ie-kumas-ad');if(inp)inp.value=k.ad;ieKumasUygula(k);}
+// Kutuya yazınca — eşleşen kumaş varsa seç, yoksa yeni kumaş
+function ieKumasYaz(){const ad=($('ie-kumas-ad')?.value||'').trim();
+  const k=ad?db.hammadde.find(h=>h.kat==='Kumaş'&&(h.ad||'').toLowerCase()===ad.toLowerCase()):null;
+  ieKumasUygula(k,ad);}
+function ieKumasUygula(k,yeniAd){
+  if(k){ // stoktaki kumaş
+    ieKumasId=k.id;ieKumasAd=k.ad;
+    const stokRenk=(k.renkler||[]).filter(r=>(+r.stok||0)>0);
+    if(stokRenk.length){ieKumasRenkli=true;ieRenk=stokRenk.map(r=>({ad:r.ad,adet:0,hex:hexFromAd(r.ad),stok:+r.stok||0,birim:k.birim||'',topMik:+k.topMik||0}));}
+    else{ieKumasRenkli=false;ieRenk=[{ad:'',adet:0}];} // renk-renk stok tutmayan kumaş → renkleri elle
+    if($('ie-kumas-fiyat'))$('ie-kumas-fiyat').value=k.alis>0?k.alis:'';
+    if($('ie-kumas-pb'))$('ie-kumas-pb').value=k.pb||'TL';
+    ieKumasFiyat=+k.alis||0;ieKumasPB=k.pb||'TL';
+    ieKumasFiyatWrap(true);
+  }else if(yeniAd){ // stokta olmayan — yeni/alınacak kumaş
+    ieKumasId=0;ieKumasAd=yeniAd;ieKumasRenkli=false;
+    if(!ieRenk.length||ieRenk.some(r=>r.stok!=null))ieRenk=[{ad:'',adet:0}];
+    ieKumasFiyatWrap(true);
+  }else{ // boş
+    ieKumasId=0;ieKumasAd='';ieKumasRenkli=false;ieRenk=[];ieKumasFiyatWrap(false);
+  }
+  cizIeRenk();ieToplamCiz();ieKumasChipVurgu();ieKumasFiyatCiz();
+}
+function ieKumasChipVurgu(){document.querySelectorAll('#ie-kumas-chips .iekc').forEach(c=>c.classList.toggle('on',+c.getAttribute('data-kid')===ieKumasId&&ieKumasId>0));
+  const yn=$('ie-kumas-yeni');if(yn)yn.innerHTML=(ieKumasAd&&!ieKumasId)?`<div class="ieyeni">🆕 "${esc(ieKumasAd)}" stokta yok — iş emrine <b>alınacak kumaş</b> olarak yazılır. Renkleri aşağıdan elle gir.</div>`:'';}
+function ieKumasFiyatCiz(){ieKumasFiyat=+($('ie-kumas-fiyat')?.value||0);ieKumasPB=$('ie-kumas-pb')?.value||'TL';
+  const info=$('ie-kumas-fiyat-info');if(!info)return;const f=ieKumasFiyat,pb=ieKumasPB;
+  if(!f){info.innerHTML='';ieOzetCiz();return;}
+  if(pb==='USD'){const kur=+db.kurUSD||0;const tl=kur?f*kur:0;
+    info.innerHTML=`💵 $${f.toLocaleString('tr-TR')} × kur ${kur?kur.toFixed(2):'<span style="color:var(--bad)">kur gir</span>'} = <b>${tl?TL(tl):'—'}</b> /birim`;
+  }else{const kur=+db.kurUSD||0;const usd=kur?f/kur:0;
+    info.innerHTML=`<b>${TL(f)}</b> /birim${usd?` · ≈ $${usd.toLocaleString('tr-TR',{maximumFractionDigits:2})}`:''}`;}
+  ieOzetCiz();}
 // Stok rozeti: birim + (top çevrimi varsa) top
 function ieStokStr(r){const bir=esc(r.birim||'');let s=(+r.stok||0)+' '+bir;
   if(r.topMik>0){const t=(+r.stok||0)/r.topMik;s+=' · ~'+t.toLocaleString('tr-TR',{maximumFractionDigits:1})+' top';}
@@ -3688,9 +3782,13 @@ function ieOzetCiz(){const el=$('ie-ozet');if(!el)return;
   const seri=$('ie-birim')?.value==='seri';const sa=Math.max(1,+($('ie-seriadet')?.value||1));const parca=seri?t*sa:t;
   const iscilik=((+($('dk-kesim-uc')?.value||0))+(+($('ie-gg')?.value||0)))*parca;
   const k=ieKumasId?db.hammadde.find(h=>h.id===ieKumasId):null;
+  const kad=ieKumasAd||(k?k.ad:'');
+  const kf=+($('ie-kumas-fiyat')?.value||0);const kpb=$('ie-kumas-pb')?.value||'TL';const _kur=+db.kurUSD||0;
+  let kfStr='';if(kf){kfStr=(kpb==='USD')?`$${kf.toLocaleString('tr-TR')}${_kur?' · '+TL(kf*_kur):''}`:`${TL(kf)}${_kur?' · $'+(kf/_kur).toLocaleString('tr-TR',{maximumFractionDigits:2}):''}`;}
   el.innerHTML=`<div class="iesum"><h4>📋 ÖZET</h4>
     <div class="r"><span class="k">Ürün</span><span class="v">${esc(ad||'—')}</span></div>
-    ${k?`<div class="r"><span class="k">Kumaş</span><span class="v">${esc(k.ad)}</span></div>`:''}
+    ${kad?`<div class="r"><span class="k">Kumaş${ieKumasId?'':' 🆕 alınacak'}</span><span class="v">${esc(kad)}</span></div>`:''}
+    ${kad&&kf?`<div class="r"><span class="k">Kumaş fiyatı</span><span class="v">${kfStr} /birim</span></div>`:''}
     <div class="r"><span class="k">Toplam</span><span class="v">${t} ${seri?'seri':'adet'}${rn?' · '+rn+' renk':''}${seri&&sa>1?' ('+parca+' adet)':''}</span></div>
     <div class="r"><span class="k">Termin</span><span class="v">${g} gün · ${d.toLocaleDateString('tr-TR',{day:'2-digit',month:'short'})}</span></div>
     <div class="r"><span class="k">Tahmini işçilik</span><span class="v" style="color:#e8c987">${TL(iscilik)}</span></div></div>`;}
@@ -3741,20 +3839,21 @@ function durakEkleKaydet(id){const i=db.isemirleri.find(v=>v.id===id);const op=$
   save();closeM();uretimDetay(id);toast(ad+' durağı eklendi ✓');
 }
 function ieRenkEkle(){ieRenk.push({ad:'',adet:0});cizIeRenk();ieToplamCiz()}
-function ieRenkSil(i){ieRenk.splice(i,1);if(!ieRenk.length&&ieMod==='elle')ieRenk=[{ad:'',adet:0}];cizIeRenk();ieToplamCiz()}
+function ieRenkSil(i){ieRenk.splice(i,1);if(!ieRenk.length&&ieRenkDuzenlenir())ieRenk=[{ad:'',adet:0}];cizIeRenk();ieToplamCiz()}
 function ieRenkSet(i,k,v){const r=ieRenk[i];if(!r)return;if(k==='adet'){r.adet=Math.max(0,+v||0);ieToplamCiz()}else{r.ad=v;const sw=document.querySelector('#ie-renk .iesw[data-i="'+i+'"]');if(sw)sw.style.background=hexFromAd(v)||'#c9ccd0';ieOzetCiz()}}
 function cizIeRenk(){const b=$('ie-renk');if(!b)return;
-  if(ieMod==='kumas'&&!ieKumasId){b.innerHTML='<div class="mini" style="padding:4px 0">👆 Yukarıdan kumaş seç — o kumaşın <b>stoktaki renkleri</b> burada çıkar.</div>';return;}
+  const duzen=ieRenkDuzenlenir();
+  if(ieMod==='kumas'&&!ieKumasId&&!ieKumasAd){b.innerHTML='<div class="mini" style="padding:4px 0">👆 Yukarıdan kumaş seç ya da yaz — stoktaki kumaşın <b>renkleri</b> burada çıkar, yeni kumaşta renkleri elle girersin.</div>';return;}
   let h='';
-  if(!ieRenk.length){h=`<div class="mini">${ieMod==='kumas'?'Bu kumaşın stokta rengi yok.':'"+ Renk ekle" ile renk gir.'}</div>`;}
+  if(!ieRenk.length){h=`<div class="mini">${duzen?'"+ Renk ekle" ile renk gir.':'Bu kumaşın stokta rengi yok.'}</div>`;}
   else{h=ieRenk.map((r,i)=>{const sw=r.hex||hexFromAd(r.ad)||'#c9ccd0';
-    const stk=(ieMod==='kumas'&&r.stok!=null)?`<span class="iestk ${(+r.stok||0)<=15?'az':''}">📦 ${ieStokStr(r)} ${(+r.stok||0)<=15?'kaldı':'var'}</span>`:'';
-    const nm=ieMod==='kumas'
+    const stk=(ieKumasId>0&&r.stok!=null)?`<span class="iestk ${(+r.stok||0)<=15?'az':''}">📦 ${ieStokStr(r)} ${(+r.stok||0)<=15?'kaldı':'var'}</span>`:'';
+    const nm=!duzen
       ? `<div class="ienm"><b>${esc(r.ad||'—')}</b>${stk}</div>`
       : `<div class="ienm"><input list="ie-renk-dl" value="${esc(r.ad||'')}" placeholder="renk" oninput="ieRenkSet(${i},'ad',this.value)" style="margin:0;padding:8px 9px"></div>`;
-    return `<div class="ierow"><span class="iesw" data-i="${i}" style="background:${sw}"></span>${nm}<div class="iestp"><button type="button" onclick="ieRenkArt(${i},-1)">−</button><input id="ierk-${i}" type="number" inputmode="numeric" value="${r.adet||0}" onchange="ieRenkSet(${i},'adet',this.value)" onfocus="this.select()"><button type="button" onclick="ieRenkArt(${i},1)">+</button></div>${ieMod==='elle'?`<button class="del" onclick="ieRenkSil(${i})" style="flex:0 0 auto">✕</button>`:''}</div>`;
+    return `<div class="ierow"><span class="iesw" data-i="${i}" style="background:${sw}"></span>${nm}<div class="iestp"><button type="button" onclick="ieRenkArt(${i},-1)">−</button><input id="ierk-${i}" type="number" inputmode="numeric" value="${r.adet||0}" onchange="ieRenkSet(${i},'adet',this.value)" onfocus="this.select()"><button type="button" onclick="ieRenkArt(${i},1)">+</button></div>${duzen?`<button class="del" onclick="ieRenkSil(${i})" style="flex:0 0 auto">✕</button>`:''}</div>`;
   }).join('');}
-  if(ieMod==='elle')h+=`<div style="margin-top:9px"><a onclick="ieRenkEkle()" style="color:var(--ind);font-weight:800;font-size:13px;cursor:pointer">＋ Renk ekle</a></div>`;
+  if(duzen)h+=`<div style="margin-top:9px"><a onclick="ieRenkEkle()" style="color:var(--ind);font-weight:800;font-size:13px;cursor:pointer">＋ Renk ekle</a></div>`;
   b.innerHTML=h;
 }
 function ieMalEkle(){ieMal.push({ad:'',mik:0,birim:'kg',tutar:0,pb:'TL',durum:'var',renk:''});cizIeMal()}
@@ -3820,7 +3919,9 @@ function kaydetIsEmri(){
   malzeme.forEach(m=>{if(m.durum==='var'&&m.hid){const h=db.hammadde.find(x=>x.id===m.hid);if(h)h.stok=(+h.stok||0)-m.mik}});
   const seriAdet=birim==='seri'?Math.max(1,+$('ie-seriadet').value||1):1;
   const _kk=ieKumasId?db.hammadde.find(h=>h.id===ieKumasId):null;
-  db.isemirleri.push({id:nid('ie'),urunId:ieUrunId||null,urun:ad,kod,foto:ieFoto,birim,seriAdet,hedef,renkDagilim,malzeme,duraklar,genelGiderBirim:+$('ie-gg').value||0,kumasId:ieKumasId||null,kumasAd:_kk?_kk.ad:'',baslangic:Date.now(),gun,durum:'devam',stoklandi:false});
+  const _kad=_kk?_kk.ad:(ieKumasAd||'').trim();
+  const _kfiyat=+($('ie-kumas-fiyat')?.value||ieKumasFiyat||0);const _kpb=$('ie-kumas-pb')?.value||ieKumasPB||'TL';
+  db.isemirleri.push({id:nid('ie'),urunId:ieUrunId||null,urun:ad,kod,foto:ieFoto,birim,seriAdet,hedef,renkDagilim,malzeme,duraklar,genelGiderBirim:+$('ie-gg').value||0,kumasId:ieKumasId||null,kumasAd:_kad,kumasFiyat:_kfiyat,kumasPB:_kpb,kumasYeni:(!ieKumasId&&!!_kad),baslangic:Date.now(),gun,durum:'devam',stoklandi:false});
   save();closeM();rUretim();toast('İş emri açıldı ✓ · '+hedef+' '+birim);
 }
 /* --- İş emri detay --- */
