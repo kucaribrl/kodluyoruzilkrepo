@@ -497,6 +497,17 @@ function canliIzinHata(e){const c=(e&&e.code)||'';if(c==='permission-denied'&&!_
 function canliAl(obj,domen){const o={};CANLI_DOMEN[domen].forEach(k=>{if(obj[k]!==undefined)o[k]=obj[k];});return o;}
 function canliRef(domen){return _fb.collection('isletme').doc(MAGAZA_ID).collection('veri').doc(domen);}
 // Dinleyicileri kur — ilk snapshot buluttaki veriyi getirir (başka cihaz katılınca)
+// Buluttan gelen 'satis' verisi ESKİ olabilir (onay henüz buluta yazılmadan sekme kapandıysa).
+// Yerelde onaylanan portal siparişlerini KORU ve bekleyenden temizle — böylece onaylanan sipariş
+// tekrar "bekleyen" olarak geri gelmez, satışı da kaybolmaz.
+function canliSatisUzlas(yerelIslenen,yerelSatis){
+  const merged=Array.from(new Set([...(yerelIslenen||[]),...(db.islenenSiparis||[])]));
+  db.islenenSiparis=merged;
+  const bulutSatisId=new Set((db.satislar||[]).map(s=>s.id));
+  const bulutSatisB=new Set((db.satislar||[]).map(s=>s.bulutId).filter(Boolean));
+  (yerelSatis||[]).forEach(s=>{ if(s&&s.kaynak==='portal'&&s.bulutId&&merged.includes(s.bulutId)&&!bulutSatisId.has(s.id)&&!bulutSatisB.has(s.bulutId)){db.satislar.push(s);bulutSatisB.add(s.bulutId);} });
+  db.bekleyenPortal=(db.bekleyenPortal||[]).filter(o=> !(o&&o.bulutId&&(merged.includes(o.bulutId)||bulutSatisB.has(o.bulutId))));
+}
 function canliBaslat(sessiz){
   if(canliAcik)return true; if(!bulutBaslat())return false;
   try{autoYedek('senkron öncesi')}catch(e){} // buluttan gelen ilk veri yerelin üzerine yazmadan önce güvenlik yedeği
@@ -506,7 +517,10 @@ function canliBaslat(sessiz){
       if(!snap.exists)return; const d=snap.data(); const js=JSON.stringify(canliAl(d,domen));
       if(js===_canliGolge[domen])return; // kendi yazımızın yankısı → atla
       _canliUygulaniyor=true;
+      const yIslenen=(domen==='satis')?(db.islenenSiparis||[]).slice():null;
+      const ySatis=(domen==='satis')?(db.satislar||[]).slice():null;
       CANLI_DOMEN[domen].forEach(k=>{if(d[k]!==undefined)db[k]=d[k];});
+      if(domen==='satis')canliSatisUzlas(yIslenen,ySatis);
       db.ornek=false; // buluttan gerçek veri geldi → artık demo değil
       _canliGolge[domen]=js; localStorage.setItem(KEY,JSON.stringify(db));
       _canliUygulaniyor=false;
@@ -558,6 +572,17 @@ function canliYaz(){
         canliRef(domen).set(data).catch(e=>{console.warn('canlı-yaz',domen,e&&e.code);if(canliIzinHata(e)!=='permission-denied'&&(''+e).includes('longer than'))toast('⚠️ '+domen+' verisi çok büyük (fotoğraflar) — canlı senkron için küçültün');});}
     });
   },450);
+}
+// ANINDA buluta yaz (debounce beklemeden) — kritik işlerde (onay) ve sekme kapanırken kullanılır
+function canliYazHemen(domenler){
+  if(!canliAcik||_canliUygulaniyor||db.ornek)return Promise.resolve();
+  clearTimeout(_canliYazT);
+  const izin=ROL_YAZ[canliRol()]||_CTUM;
+  const list=(domenler||izin).filter(dm=>izin.includes(dm));
+  const ps=[];
+  list.forEach(domen=>{const data=canliAl(db,domen);const js=JSON.stringify(data);
+    if(js!==_canliGolge[domen]){_canliGolge[domen]=js;ps.push(canliRef(domen).set(data).catch(e=>{console.warn('canlı-yaz-hemen',domen,e&&e.code);canliIzinHata(e);}));}});
+  return Promise.all(ps);
 }
 function save(){localStorage.setItem(KEY,JSON.stringify(db));if(canliAcik&&!_canliUygulaniyor)canliYaz();}
 function canliBulutAyar(){
@@ -699,7 +724,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-21'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-22'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -4098,7 +4123,8 @@ function portalOnay(id,override,force){
   if(o.bulutId)bulutSiparisDurum(o.bulutId,'onaylandi');
   siparisIsle(o.bulutId);
   db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);
-  save();closeM&&closeM();go('portal');toast('Sipariş onaylandı ✓ '+TL(tutar)+' · mal ayrıldı');
+  save();try{canliYazHemen(['satis'])}catch(e){} // onayı ANINDA buluta yaz (sekme kapanmadan)
+  closeM&&closeM();go('portal');toast('Sipariş onaylandı ✓ '+TL(tutar)+' · mal ayrıldı');
 }
 function portalFiyatBelirle(id){const o=db.bekleyenPortal.find(x=>x.id===id);if(!o)return;
   open_('Fiyat Belirle & Onayla',`<div class="mini">Bu sipariş için anlaştığınız toplam fiyatı girin (pazarlık/karşı teklif). Satır fiyatları orantılı ayarlanır, mal ayrılır.</div>
@@ -4126,7 +4152,7 @@ function kampanyaKaydet(){const bas=($('kmp-bas')?.value||'').trim();if(!bas)ret
   db.kampanya={baslik:bas,metin:($('kmp-met')?.value||'').trim(),urunId:uid,bitis:bt?new Date(bt).getTime():0};
   save();closeM();rPortal();toast('📣 Kampanya yayınlandı ✓');}
 function kademeKaydet(){db.kademe=_kad.filter(k=>+k.min>0&&+k.ind>0).sort((a,b)=>a.min-b.min);save();closeM();rPortal();toast('İndirim kademeleri kaydedildi ✓')}
-function portalRed(id){const o=db.bekleyenPortal.find(x=>x.id===id);if(o&&o.bulutId)bulutSiparisDurum(o.bulutId,'red');if(o)siparisIsle(o.bulutId);db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);save();rPortal();toast('Sipariş reddedildi')}
+function portalRed(id){const o=db.bekleyenPortal.find(x=>x.id===id);if(o&&o.bulutId)bulutSiparisDurum(o.bulutId,'red');if(o)siparisIsle(o.bulutId);db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);save();try{canliYazHemen(['satis'])}catch(e){}rPortal();toast('Sipariş reddedildi')}
 // Toptan fiyat listesi (müşteriye WhatsApp'tan) — seri fiyatlarıyla, kategoriye göre
 function fiyatListesiMetni(){const aktif=db.urunler.filter(u=>!u.pasif&&stokTop(u)>0);
   const kats={};aktif.forEach(u=>{const k=u.kat||'Diğer';(kats[k]=kats[k]||[]).push(u)});
@@ -5285,6 +5311,9 @@ async function musteriBulutAc(){bulutMusteriMod=true;await bulutKatalogYukle();a
 function portalHashAc(){const h=location.hash||'';if(h==='#siparis'||h.indexOf('#kayit')===0){portalDavetOku();if(bulutVar()){if(!bulutMusteriMod)setTimeout(musteriBulutAc,300);else portalAc();}else portalAc();return true;}return false;}
 portalHashAc();
 window.addEventListener('hashchange',()=>{portalHashAc();});
+// Sekme gizlenince/kapanınca bekleyen değişiklikleri ANINDA buluta yaz (onay vb. kaybolmasın)
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){try{canliYazHemen()}catch(e){}}});
+window.addEventListener('pagehide',()=>{try{canliYazHemen()}catch(e){}});
 // açılışta kur eskiyse (yok veya 3 saatten eski) sessizce güncelle
 if(!db.kurTarih || Date.now()-db.kurTarih > 3*3600000){
   kurCek().then(ok=>{if(ok&&cur==='panel')render()});
