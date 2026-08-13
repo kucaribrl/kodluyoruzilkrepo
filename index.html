@@ -433,7 +433,7 @@ function seed(){return{
   duzenliGider:[],
 };}
 let db=load();
-function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(!d||!d.urunler)return seed();seqFix(d);if(!d.kademe)d.kademe=[{min:20,ind:3},{min:50,ind:6},{min:100,ind:10}];if(!d.portalFav)d.portalFav=[];if(d.minSiparis==null)d.minSiparis=0;if(!d.portalTaslak)d.portalTaslak=[];if(d.kampanya===undefined)d.kampanya=null;if(!d.duzenliGider)d.duzenliGider=[];if(!d.maliyetler)d.maliyetler=[];return d}catch(e){return seed()}}
+function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(!d||!d.urunler)return seed();seqFix(d);if(!d.kademe)d.kademe=[{min:20,ind:3},{min:50,ind:6},{min:100,ind:10}];if(!d.portalFav)d.portalFav=[];if(d.minSiparis==null)d.minSiparis=0;if(!d.portalTaslak)d.portalTaslak=[];if(d.kampanya===undefined)d.kampanya=null;if(!d.duzenliGider)d.duzenliGider=[];if(!d.maliyetler)d.maliyetler=[];if(!d.islenenSiparis)d.islenenSiparis=[];return d}catch(e){return seed()}}
 function kademeler(){return (db.kademe&&db.kademe.length)?db.kademe.slice().filter(k=>+k.min>0).sort((a,b)=>a.min-b.min):[]}
 function kademeIsk(mik){let ind=0;kademeler().forEach(k=>{if((+mik||0)>=(+k.min||0))ind=+k.ind||0});return ind}
 function portalKalemFiyat(k){const u=urun(k.uid);const base=u?portalFiyat(u):(+k.fiyat||0);
@@ -481,7 +481,7 @@ const CANLI_DOMEN={
   stok:['urunler'],
   cari:['cariler'],
   kasa:['hesaplar','hareketler'],
-  satis:['satislar','bekleyenPortal'],
+  satis:['satislar','bekleyenPortal','islenenSiparis'],
   cek:['cekler'],
   uretim:['isemirleri'],
   ayar:['firma','firmaSlogan','firmaAdres','firmaTel','firmaWp','firmaLogo','satici','kurUSD','kurEUR','seq','kademe','minSiparis','kampanya','kurTarih','portalFav','portalTaslak','duzenliGider']
@@ -699,7 +699,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-20'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-21'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -759,12 +759,15 @@ async function bulutKatalogYukle(){if(!bulutBaslat())return false;
 async function bulutSiparisGonder(o){if(!bulutBaslat())return false;
   if(!bulutKul||!bulutKul.uid){toast('Sipariş için giriş yapmalısınız');return false}
   try{await _fb.collection('siparisler').add({...o,uid:bulutKul.uid,magaza:MAGAZA_ID,durum:'yeni',olusturma:Date.now()});return true;}catch(e){toast('Sipariş gönderilemedi: '+(e.message||e));return false}}
-function bulutSiparisDurum(bulutId,durum){if(!bulutId||!bulutBaslat())return;try{_fb.collection('siparisler').doc(bulutId).update({durum}).catch(()=>{})}catch(e){}}
+function bulutSiparisDurum(bulutId,durum){if(!bulutId||!bulutBaslat())return;try{_fb.collection('siparisler').doc(bulutId).update({durum}).catch(e=>{console.warn('sipdurum yazılamadı',e&&e.code)})}catch(e){}}
+// Onaylanan/reddedilen portal siparişleri: bir daha "bekleyen" olarak gelmesin diye yerel defter (buluta da senkronlanır)
+function siparisIsle(bid){if(!bid)return;db.islenenSiparis=db.islenenSiparis||[];if(!db.islenenSiparis.includes(bid))db.islenenSiparis.push(bid);if(db.islenenSiparis.length>1000)db.islenenSiparis=db.islenenSiparis.slice(-1000);}
+function siparisIslendiMi(bid){if(!bid)return true;return (db.islenenSiparis||[]).includes(bid)||(db.bekleyenPortal||[]).some(x=>x.bulutId===bid)||(db.satislar||[]).some(s=>s.bulutId===bid);}
 // Admin: buluttaki yeni siparişleri çek → bekleyenPortal'a ekle
 async function bulutSiparisleriCek(){if(!bulutBaslat())return toast('☁️ Bulut ayarlı değil');
   if(!bulutGirisli())return bulutGirisIste('cek');
   try{const snap=await _fb.collection('siparisler').where('magaza','==',MAGAZA_ID).where('durum','==','yeni').get();
-    let n=0;snap.forEach(doc=>{const o=doc.data();if(db.bekleyenPortal.some(x=>x.bulutId===doc.id))return;
+    let n=0;snap.forEach(doc=>{const o=doc.data();if(siparisIslendiMi(doc.id))return;
       db.bekleyenPortal.push({id:nid('bp'),bulutId:doc.id,mus:o.mus,mid:o.mid||0,tarih:o.tarih||o.olusturma||Date.now(),kalemler:o.kalemler||[],tutar:o.tutar||0,not:o.not||'',tel:o.tel||'',adres:o.adres||'',sehir:o.sehir||''});n++;});
     if(n){save();rPortal();}toast(n?('☁️ '+n+' yeni sipariş alındı ✓'):'Yeni sipariş yok');
   }catch(e){toast('Sipariş çekme hatası: '+(e.message||e))}
@@ -975,7 +978,7 @@ function siparisDinle(){
   try{if('Notification'in window&&Notification.permission==='default')Notification.requestPermission().catch(()=>{})}catch(e){}
   try{
     _sipUnsub=_fb.collection('siparisler').where('magaza','==',MAGAZA_ID).where('durum','==','yeni').onSnapshot(snap=>{
-      let n=0;snap.forEach(doc=>{const o=doc.data();if((db.bekleyenPortal||[]).some(x=>x.bulutId===doc.id))return;
+      let n=0;snap.forEach(doc=>{const o=doc.data();if(siparisIslendiMi(doc.id))return;
         db.bekleyenPortal.push({id:nid('bp'),bulutId:doc.id,mus:o.mus,mid:o.mid||0,tarih:o.tarih||o.olusturma||Date.now(),kalemler:o.kalemler||[],tutar:o.tutar||0,not:o.not||'',tel:o.tel||'',adres:o.adres||'',sehir:o.sehir||'',calisan:o.calisan||''});n++;});
       if(n){save();try{if(typeof render==='function'&&typeof cur!=='undefined')render()}catch(e){}
         toast('🔔 '+n+' yeni sipariş geldi!');
@@ -4090,9 +4093,10 @@ function portalOnay(id,override,force){
   const oran=(override&&baseT>0)?override/baseT:1;
   const kalemler=o.kalemler.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:oran===1?k.fiyat:Math.round((+k.fiyat||0)*oran),renkler:k.renkler?k.renkler.map(r=>({...r})):undefined}));
   const tutar=override||o.tutar;
-  const sat={id:nid('s'),tip:'satis',mid:m.id,mus:m.ad,tarih:Date.now(),kalemler,araToplam:tutar,iskonto:0,tutar,odenen:0,kesik:0,pb:'TL',satisKur:1,durum:'tamam',teslimDurum:'ayrildi',odemeler:[],kaynak:'portal',sipDurum:'onaylandi',sipGecmis:[{k:'onaylandi',t:Date.now()}]};
+  const sat={id:nid('s'),tip:'satis',mid:m.id,mus:m.ad,tarih:Date.now(),kalemler,araToplam:tutar,iskonto:0,tutar,odenen:0,kesik:0,pb:'TL',satisKur:1,durum:'tamam',teslimDurum:'ayrildi',odemeler:[],kaynak:'portal',bulutId:o.bulutId||null,sipDurum:'onaylandi',sipGecmis:[{k:'onaylandi',t:Date.now()}]};
   db.satislar.push(sat);applySatis(sat);
   if(o.bulutId)bulutSiparisDurum(o.bulutId,'onaylandi');
+  siparisIsle(o.bulutId);
   db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);
   save();closeM&&closeM();go('portal');toast('Sipariş onaylandı ✓ '+TL(tutar)+' · mal ayrıldı');
 }
@@ -4122,7 +4126,7 @@ function kampanyaKaydet(){const bas=($('kmp-bas')?.value||'').trim();if(!bas)ret
   db.kampanya={baslik:bas,metin:($('kmp-met')?.value||'').trim(),urunId:uid,bitis:bt?new Date(bt).getTime():0};
   save();closeM();rPortal();toast('📣 Kampanya yayınlandı ✓');}
 function kademeKaydet(){db.kademe=_kad.filter(k=>+k.min>0&&+k.ind>0).sort((a,b)=>a.min-b.min);save();closeM();rPortal();toast('İndirim kademeleri kaydedildi ✓')}
-function portalRed(id){const o=db.bekleyenPortal.find(x=>x.id===id);if(o&&o.bulutId)bulutSiparisDurum(o.bulutId,'red');db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);save();rPortal();toast('Sipariş reddedildi')}
+function portalRed(id){const o=db.bekleyenPortal.find(x=>x.id===id);if(o&&o.bulutId)bulutSiparisDurum(o.bulutId,'red');if(o)siparisIsle(o.bulutId);db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);save();rPortal();toast('Sipariş reddedildi')}
 // Toptan fiyat listesi (müşteriye WhatsApp'tan) — seri fiyatlarıyla, kategoriye göre
 function fiyatListesiMetni(){const aktif=db.urunler.filter(u=>!u.pasif&&stokTop(u)>0);
   const kats={};aktif.forEach(u=>{const k=u.kat||'Diğer';(kats[k]=kats[k]||[]).push(u)});
