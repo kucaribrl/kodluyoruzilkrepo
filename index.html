@@ -727,7 +727,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-25'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-26'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1824,7 +1824,7 @@ function cizHamRenk(){const box=$('ham-renk-box');if(!box)return;const bir=$('h-
   box.innerHTML=fHamRenk.map((r,i)=>{const sw=hexFromAd(r.ad)||'#8a8f98';
     return `<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
       <span style="width:22px;height:22px;flex:0 0 auto;border-radius:6px;background:${sw};border:1px solid var(--ln)"></span>
-      <input class="rad" list="renkList" autocomplete="off" value="${esc(r.ad||'')}" placeholder="Renk (Beyaz...)" oninput="fHamRenk[${i}].ad=this.value;cizHamRenk()" style="flex:1;min-width:0;margin:0;padding:8px 9px">
+      <input class="rad" list="renkList" autocomplete="off" value="${esc(r.ad||'')}" placeholder="Renk (Beyaz...)" oninput="fHamRenk[${i}].ad=this.value;hamRenkSwatch(this)" style="flex:1;min-width:0;margin:0;padding:8px 9px">
       <input type="number" inputmode="numeric" min="0" value="${r.stok||0}" oninput="fHamRenk[${i}].stok=Math.max(0,+this.value||0);hamRenkTot()" placeholder="0" style="width:66px;margin:0;padding:8px" title="${bir}">
       <button type="button" class="del" onclick="fHamRenk.splice(${i},1);if(!fHamRenk.length)fHamRenk=[{ad:'',stok:0}];cizHamRenk()" style="flex:0 0 auto">✕</button>
     </div>`;}).join('')+`<datalist id="renkList">${['Beyaz','Siyah','Lacivert','Gri','Antrasit','Bej','Bordo','Yeşil','Haki','Ekru','Mavi','Kırmızı','Kahverengi','Vizon','Füme'].map(c=>`<option value="${c}">`).join('')}</datalist>
@@ -1832,6 +1832,8 @@ function cizHamRenk(){const box=$('ham-renk-box');if(!box)return;const bir=$('h-
     <div class="mini" id="ham-renk-tot" style="margin-top:6px;font-weight:700"></div>`;
   hamRenkTot();}
 function hamRenkTot(){const t=$('ham-renk-tot');if(!t)return;const bir=$('h-birim')?.value||'metre';const s=fHamRenk.reduce((a,r)=>a+(+r.stok||0),0);t.textContent=`📦 Toplam: ${s} ${bir}`;}
+// Renk adı yazılırken sadece o satırın renk örneğini güncelle (yeniden çizme → odak kaybolmasın)
+function hamRenkSwatch(inp){const sw=inp&&inp.previousElementSibling;if(sw)sw.style.background=hexFromAd(inp.value)||'#8a8f98';}
 function kaydetHammadde(id){const ad=$('h-ad').value.trim();if(!ad)return toast('Ad gerekli');
   const renkli=$('h-renkli')?.checked;
   let renkler=[],stok=0;
@@ -3484,11 +3486,12 @@ function msHesap(){const g=id=>+($(id)?.value||0);
 /* ===== 💰 MALİYET & KOLEKSİYON — ürün maliyetlerini sakla, içinden üretime yolla ===== */
 function maliyetHesapla(m){
   const adet=Math.max(1,+m.adet||1);const fire=+m.fire||0;const saglam=Math.max(1,Math.round(adet*(1-fire/100)));
-  const kumasToplam=(+m.kumasKg||0)*(+m.kumasFiyat||0);const kumasPU=kumasToplam/adet; // toplam kumaş, adete bölünür
+  const kumasKur=(m.kumasPB==='USD')?(+db.kurUSD||1):(m.kumasPB==='EUR')?(+db.kurEUR||1):1;
+  const kumasToplam=(+m.kumasKg||0)*(+m.kumasFiyat||0)*kumasKur;const kumasPU=kumasToplam/adet; // toplam kumaş (TL'ye çevrili), adete bölünür
   const malPU=(m.malzeme||[]).reduce((a,x)=>a+((+x.mik||0)*(+x.fiyat||0)),0);
   const fasonPU=(+m.kes||0)+(+m.nak||0)+(+m.dik||0)+(+m.utu||0);const ggPU=+m.gg||0;
   const perStarted=kumasPU+malPU+fasonPU+ggPU;const toplam=perStarted*adet;const birim=toplam/saglam;const satis=birim*(1+(+m.kar||0)/100);
-  return {saglam,kumasKg:+m.kumasKg||0,kumasFiyat:+m.kumasFiyat||0,kumasToplam,kumasPU,malPU,fasonPU,ggPU,toplam,birim,satis};
+  return {saglam,kumasKg:+m.kumasKg||0,kumasFiyat:+m.kumasFiyat||0,kumasPB:m.kumasPB||'TL',kumasKur,kumasToplam,kumasPU,malPU,fasonPU,ggPU,toplam,birim,satis};
 }
 function maliyetAc(){
   const list=(db.maliyetler||[]).slice().sort((a,b)=>(b.tarih||0)-(a.tarih||0));
@@ -3511,7 +3514,7 @@ function maliyetForm(id){
     <div class="g2"><div><label>Ürün kodu</label><input id="mk-kod" value="${esc(m?m.kod||'':'')}" placeholder="2026Y500"></div><div><label>📷 Foto</label><div id="mk-foto-box"></div></div></div>
     <div class="g2" style="margin-top:6px"><div><label>Adet</label><input id="mk-adet" type="number" inputmode="numeric" value="${m?m.adet:100}" oninput="mkHesap()"></div><div><label>Fire %</label><input id="mk-fire" type="number" inputmode="numeric" value="${m?m.fire:5}" oninput="mkHesap()"></div></div>
     <div class="sec" style="margin-top:12px">🧵 Kumaş</div>
-    <div class="g2"><div><label>Kumaş (kg) — toplam</label><input id="mk-kumaskg" type="number" inputmode="decimal" value="${m&&m.kumasKg?m.kumasKg:''}" placeholder="ör. 180" oninput="mkHesap()"></div><div><label>Kumaş ₺/kg</label><input id="mk-kumasfiyat" type="number" inputmode="decimal" value="${m&&m.kumasFiyat?m.kumasFiyat:''}" placeholder="ör. 120" oninput="mkHesap()"></div></div>
+    <div class="g2"><div><label>Kumaş (kg) — toplam</label><input id="mk-kumaskg" type="number" inputmode="decimal" value="${m&&m.kumasKg?m.kumasKg:''}" placeholder="ör. 180" oninput="mkHesap()"></div><div><label>Kumaş fiyatı /kg</label><div style="display:flex;gap:6px"><input id="mk-kumasfiyat" type="number" inputmode="decimal" value="${m&&m.kumasFiyat?m.kumasFiyat:''}" placeholder="ör. 120" oninput="mkHesap()" style="flex:1;min-width:0;margin:0"><select id="mk-kumaspb" onchange="mkHesap()" style="width:66px;flex:0 0 auto;margin:0">${['TL','USD'].map(pb=>`<option value="${pb}" ${((m&&m.kumasPB)||'TL')===pb?'selected':''}>${pb==='USD'?'$':'₺'}</option>`).join('')}</select></div></div></div>
     <div class="mini" id="mk-kumas-info" style="margin-top:5px"></div>
     <div class="sec" style="margin-top:12px">➕ Diğer malzeme / aksesuar <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub)">(1 ürüne giren · opsiyonel)</span> <a onclick="mkK.push({ad:'',mik:'',birim:'adet',fiyat:''});cizMkK()">+ ekle</a></div>
     <div id="mk-list"></div>
@@ -3536,14 +3539,15 @@ function cizMkK(){const box=$('mk-list');if(!box)return;
 }
 function mkTopla(){return {ad:($('mk-ad')?.value||'').trim(),kod:($('mk-kod')?.value||'').trim(),foto:mkFoto,
   adet:+($('mk-adet')?.value||0),fire:+($('mk-fire')?.value||0),
-  kumasKg:+($('mk-kumaskg')?.value||0),kumasFiyat:+($('mk-kumasfiyat')?.value||0),
+  kumasKg:+($('mk-kumaskg')?.value||0),kumasFiyat:+($('mk-kumasfiyat')?.value||0),kumasPB:$('mk-kumaspb')?.value||'TL',
   malzeme:mkK.filter(x=>(x.ad||'').trim()||+x.mik||+x.fiyat).map(x=>({ad:(x.ad||'').trim(),mik:+x.mik||0,birim:(x.birim||'').trim(),fiyat:+x.fiyat||0})),
   kes:+($('mk-kes')?.value||0),nak:+($('mk-nak')?.value||0),dik:+($('mk-dik')?.value||0),utu:+($('mk-utu')?.value||0),
   gg:+($('mk-gg')?.value||0),kar:+($('mk-kar')?.value||0),hazir:+($('mk-hazir')?.value||0)};}
 function mkHesap(){const m=mkTopla();const r=maliyetHesapla(m);
+  const _sym=r.kumasPB==='USD'?'$':r.kumasPB==='EUR'?'€':'₺';
   const ki=$('mk-kumas-info');if(ki)ki.innerHTML=r.kumasToplam>0
-    ? `Kumaş: <b>${r.kumasKg} kg × ${TL(r.kumasFiyat)}/kg = ${TL(r.kumasToplam)}</b> toplam · birim <b>${TL(r.kumasPU)}</b> (${Math.max(1,m.adet||0)} adete bölündü)`
-    : 'Kaç kilo kumaş gitti ve kilosu kaç ₺? Girince birim maliyet otomatik hesaplanır.';
+    ? `Kumaş: <b>${r.kumasKg} kg × ${_sym}${(+r.kumasFiyat).toLocaleString('tr-TR')}/kg = ${TL(r.kumasToplam)}</b> toplam · birim <b>${TL(r.kumasPU)}</b> (${Math.max(1,m.adet||0)} adete bölündü)${r.kumasPB!=='TL'?' · kur '+(+r.kumasKur).toFixed(2):''}`
+    : 'Kaç kilo kumaş gitti ve kilosu kaç? ₺ ya da $ seç — birim maliyet otomatik hesaplanır.';
   const el=$('mk-sonuc');if(!el)return;
   let cmp='';if(m.hazir>0){const fark=m.hazir-r.birim;cmp=fark>=0?`<div class="okbox" style="margin-top:8px">✅ Üretim <b>${TL(fark)}/ad</b> daha ucuz — üretmek mantıklı.</div>`:`<div class="warnbox" style="margin-top:8px">⚠️ Hazır alım <b>${TL(-fark)}/ad</b> daha ucuz — almak mantıklı.</div>`;}
   el.innerHTML=`<div class="total"><div><div class="l">Net Birim Maliyet</div><div class="v">${TL(r.birim)}</div></div><div style="text-align:right"><div class="l">Önerilen Satış +%${m.kar}</div><div class="v pos">${TL(r.satis)}</div></div></div>
