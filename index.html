@@ -755,7 +755,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-30'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-31'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1963,14 +1963,14 @@ function formSatis(pre,editId){
 function cizSatisFoto(){const b=$('s-foto-box');if(!b)return;
   b.innerHTML=`<div class="satfoto" onclick="$('s-foto-in').click()">${sFoto?`<img src="${sFoto}"><span class="rm" onclick="event.stopPropagation();sFoto='';cizSatisFoto()">✕</span>`:'<span class="ph">📷 Fotoğraf ekle / çek</span>'}</div><input type="file" id="s-foto-in" accept="image/*" style="display:none" onchange="satisFotoSec(this)">`;
 }
-function satisFotoSec(input){const f=input.files&&input.files[0];if(!f)return;resizeImg(f,d=>{sFoto=d;cizSatisFoto()},1400,0.72)}
+function satisFotoSec(input){const f=input.files&&input.files[0];if(!f)return;resimSecYukle(f,d=>{sFoto=d;cizSatisFoto()},1400,0.72)}
 /* --- Karma ödeme (kalemler) --- */
 const ODEME_TUR=['Nakit','Kredi Kartı','Havale','Çek'];
 function odemeToplamTL(){return sOdemeler.reduce((a,l)=>a+(+l.tutar||0)*pbKur(l.pb),0)}
 function odemeEkle(){sOdemeler.push({tur:'Nakit',tutar:0,pb:sPB,hesapId:(db.hesaplar[0]&&db.hesaplar[0].id)||0,vade:0,foto:''});cizOdeme()}
 function odemeSil(i){sOdemeler.splice(i,1);if(!sOdemeler.length)sOdemeler=[{tur:'Nakit',tutar:0,pb:sPB,hesapId:(db.hesaplar[0]&&db.hesaplar[0].id)||0,vade:0,foto:''}];cizOdeme()}
 function odemeSet(i,key,val){const l=sOdemeler[i];if(!l)return;if(key==='tutar')l.tutar=Math.max(0,+val||0);else if(key==='vade')l.vade=val?new Date(val).getTime():0;else if(key==='hesapId')l.hesapId=+val;else l[key]=val;if(key==='tutar'||key==='pb')odemeOzet();}
-function odemeFoto(i,input){const f=input.files&&input.files[0];if(!f)return;resizeImg(f,d=>{sOdemeler[i].foto=d;cizOdeme()},1200,0.7)}
+function odemeFoto(i,input){const f=input.files&&input.files[0];if(!f)return;resimSecYukle(f,d=>{sOdemeler[i].foto=d;cizOdeme()},1200,0.7)}
 function odemeKalan(){const div=satisHesap().div;const saleTL=satisHesap().tutar*div;const kalanTL=saleTL-odemeToplamTL();if(kalanTL<=0)return toast('Kalan yok');
   const bos=sOdemeler.find(l=>!(+l.tutar));if(bos){bos.tutar=Math.round(kalanTL/pbKur(bos.pb))}else sOdemeler.push({tur:'Nakit',tutar:Math.round(kalanTL/pbKur(sPB)),pb:sPB,hesapId:(db.hesaplar[0]&&db.hesaplar[0].id)||0,vade:0,foto:''});cizOdeme()}
 function cizOdeme(){const box=$('s-odeme-list');if(!box)return;
@@ -2341,7 +2341,7 @@ function musteriFisResim(s,cb){
     if(k.renkler&&k.renkler.length&&u&&u.renkler){for(const rc of k.renkler){const ro=(u.renkler||[]).find(x=>x&&typeof x==='object'&&x.ad===rc.ad&&x.foto);if(ro){src=ro.foto;break;}}}
     if(!src&&u)src=urunKapak(u);
     return {k,u,src};});
-  const load=(src)=>new Promise(res=>{if(!src)return res(null);const im=new Image();im.onload=()=>res(im);im.onerror=()=>res(null);im.src=src;});
+  const load=(src)=>new Promise(res=>{if(!src)return res(null);const im=new Image();if(/^https?:/.test(src))im.crossOrigin='anonymous';im.onload=()=>res(im);im.onerror=()=>res(null);im.src=src;});
   Promise.all(lines.map(l=>load(l.src))).then(imgs=>{
     lines.forEach((l,i)=>l.img=imgs[i]);
     const d=new Date(s.tarih);const tarih=d.toLocaleDateString('tr-TR',{day:'2-digit',month:'long',year:'numeric'})+' · '+d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
@@ -2810,7 +2810,7 @@ function dvzSel(idn,val){return `<select id="${idn}"><option ${(!val||val==='TL'
 function optList(arr,val){return arr.map(x=>`<option ${val===x?'selected':''}>${x}</option>`).join('')}
 let musYabanci=false, cFoto='';
 function setMusTip(yb){musYabanci=!!yb;$('mt-yerli')&&$('mt-yerli').classList.toggle('on',!yb);$('mt-yabanci')&&$('mt-yabanci').classList.toggle('on',!!yb);const y=$('mt-yerli-box'),z=$('mt-yabanci-box');if(y)y.style.display=yb?'none':'block';if(z)z.style.display=yb?'block':'none'}
-function cariFotoSec(input){const f=input.files&&input.files[0];if(!f)return;resizeImg(f,d=>{cFoto=d;const b=$('c-foto');if(b)b.innerHTML=`<img src="${d}">`},700,0.72)}
+function cariFotoSec(input){const f=input.files&&input.files[0];if(!f)return;resimSecYukle(f,d=>{cFoto=d;const b=$('c-foto');if(b)b.innerHTML=`<img src="${d}">`},700,0.72)}
 function formCari(tip,id,preAd){
   const c=id?cari(id):{tip,ad:preAd||''};
   const t=c.tip||tip;
@@ -3263,7 +3263,7 @@ function cizCekFoto(){const on=$('ck-foto-on'),arka=$('ck-foto-arka');if(!on)ret
   on.innerHTML=`<div class="satfoto" style="height:104px" onclick="$('ckf-on-in').click()">${ckFotoOn?`<img src="${ckFotoOn}"><span class="rm" onclick="event.stopPropagation();ckFotoOn='';cizCekFoto()">✕</span>`:'<span class="ph">📷 ön yüz</span>'}</div><input type="file" id="ckf-on-in" accept="image/*" style="display:none" onchange="ckFotoSec('on',this)">`;
   arka.innerHTML=`<div class="satfoto" style="height:104px" onclick="$('ckf-arka-in').click()">${ckFotoArka?`<img src="${ckFotoArka}"><span class="rm" onclick="event.stopPropagation();ckFotoArka='';cizCekFoto()">✕</span>`:'<span class="ph">📷 arka yüz</span>'}</div><input type="file" id="ckf-arka-in" accept="image/*" style="display:none" onchange="ckFotoSec('arka',this)">`;
 }
-function ckFotoSec(which,input){const f=input.files&&input.files[0];if(!f)return;resizeImg(f,d=>{if(which==='on')ckFotoOn=d;else ckFotoArka=d;cizCekFoto()},1200,0.72)}
+function ckFotoSec(which,input){const f=input.files&&input.files[0];if(!f)return;resimSecYukle(f,d=>{if(which==='on')ckFotoOn=d;else ckFotoArka=d;cizCekFoto()},1200,0.72)}
 function kaydetCek(editId){
   const c0=editId?db.cekler.find(x=>x.id===editId):null;
   const al=c0?c0.tip==='alinan':cekTab==='alinan';const tut=+$('ck-tut').value||0;
@@ -3304,7 +3304,7 @@ async function cekPaylas(id){const c=db.cekler.find(x=>x.id===id);if(!c)return;
 // Çeki tek sayfalık belge (özet + ön/arka foto) olarak çiz
 function cekPdfCiz(c,cb){
   const W=760,P=36;
-  const loadImg=(src)=>new Promise(res=>{if(!src)return res(null);const im=new Image();im.onload=()=>res(im);im.onerror=()=>res(null);im.src=src;});
+  const loadImg=(src)=>new Promise(res=>{if(!src)return res(null);const im=new Image();if(/^https?:/.test(src))im.crossOrigin='anonymous';im.onload=()=>res(im);im.onerror=()=>res(null);im.src=src;});
   Promise.all([loadImg(c.foto),loadImg(c.fotoArka)]).then(([f1,f2])=>{
     const rows=[['Taraf',c.tip==='alinan'?'Alınan çek (Alacak)':'Verilen çek (Borç)'],['Cari',c.cari||'—'],['Tutar',TL(c.tutar)],['Vade',dstr(c.vade)],['Banka',c.banka||'—']];
     if(c.cekNo)rows.push(['Çek No',''+c.cekNo]);
@@ -3613,7 +3613,7 @@ function maliyetKaydet(id){const m=mkTopla();if(!m.ad)return toast('Ürün adı 
   save();maliyetAc();toast('💾 Maliyet kaydedildi ✓');}
 function maliyetSil(id){askConfirm('Bu maliyet kartı silinsin mi?',()=>{db.maliyetler=(db.maliyetler||[]).filter(x=>x.id!==id);save();maliyetAc();toast('Silindi');});}
 function cizMkFoto(){const b=$('mk-foto-box');if(!b)return;b.innerHTML=`<div class="cfoto" onclick="$('mk-foto-in').click()" style="height:38px;display:flex;align-items:center;justify-content:center">${mkFoto?`<img src="${mkFoto}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">`:'📷'}</div><input type="file" accept="image/*" id="mk-foto-in" style="display:none" onchange="mkFotoSec(this)">`;}
-function mkFotoSec(input){const f=input.files&&input.files[0];if(!f)return;resizeImg(f,d=>{mkFoto=d;cizMkFoto()})}
+function mkFotoSec(input){const f=input.files&&input.files[0];if(!f)return;resimSecYukle(f,d=>{mkFoto=d;cizMkFoto()})}
 function maliyetUretimeYolla(id){const m=(db.maliyetler||[]).find(x=>x.id===id);if(!m)return;closeM();setTimeout(()=>{formIsEmri();
   if($('ie-ad')){$('ie-ad').value=m.ad||'';try{ieUrunAra()}catch(e){}}
   if($('ie-kod'))$('ie-kod').value=m.kod||'';
@@ -3719,7 +3719,7 @@ function ieKodKontrol(){const el=$('ie-kod-uyari');if(!el)return;const kod=($('i
 function cizIeFoto(){const b=$('ie-foto-box');if(!b)return;
   b.innerHTML=`<div class="satfoto" onclick="$('ie-foto-in').click()">${ieFoto?`<img src="${ieFoto}"><span class="rm" onclick="event.stopPropagation();ieFoto='';cizIeFoto()">✕</span>`:'<span class="ph">📷 Numune / ürün fotoğrafı</span>'}</div><input type="file" id="ie-foto-in" accept="image/*" style="display:none" onchange="ieFotoSec(this)">`;
 }
-function ieFotoSec(input){const f=input.files&&input.files[0];if(!f)return;resizeImg(f,d=>{ieFoto=d;cizIeFoto()},1200,0.75)}
+function ieFotoSec(input){const f=input.files&&input.files[0];if(!f)return;resimSecYukle(f,d=>{ieFoto=d;cizIeFoto()},1200,0.75)}
 function ieDurakFiyat(x){const fid=+($('dkfas-'+x)?.value||0);const uc=$('dkuc-'+x);if(!fid||!uc)return;const f=cari(fid);const s=ISTASYON[x];
   if(f&&f.fiyatlar&&f.fiyatlar[s])uc.value=f.fiyatlar[s];}
 function ieKesimFiyat(){const fid=+($('dk-kesim-fas')?.value||0);const uc=$('dk-kesim-uc');if(!fid||!uc)return;const f=cari(fid);if(f&&f.fiyatlar&&f.fiyatlar['Kesim'])uc.value=f.fiyatlar['Kesim'];}
@@ -3803,7 +3803,7 @@ function cizIeMal(){const b=$('ie-mal');if(!b)return;
   </div>`}).join(''):'<div class="mini">Kumaş/malzeme eklemek için "+ malzeme".</div>';
 }
 function ieMalFisSec(i){const el=$('mal-fis-'+i);if(el)el.click()}
-function ieMalFis(i,input){const f=input.files&&input.files[0];if(!f||!ieMal[i])return;resizeImg(f,d=>{ieMal[i].fis=d;cizIeMal()},1400,0.72)}
+function ieMalFis(i,input){const f=input.files&&input.files[0];if(!f||!ieMal[i])return;resimSecYukle(f,d=>{ieMal[i].fis=d;cizIeMal()},1400,0.72)}
 function ieMalFisGoster(i){const m=ieMal[i];if(!m||!m.fis)return;open_('🧾 Fiş · '+(m.ad||'malzeme'),`<img src="${m.fis}" style="width:100%;border-radius:12px">`)}
 function isEmriFisGoster(id,mi){const i=db.isemirleri.find(v=>v.id===id);const m=i&&i.malzeme&&i.malzeme[mi];if(!m||!m.fis)return;open_('🧾 Fiş · '+(m.ad||'malzeme'),`<img src="${m.fis}" style="width:100%;border-radius:12px">`)}
 function kaydetIsEmri(){
@@ -3913,7 +3913,7 @@ function durakGuncelle(id,x){
 function cizDurakFoto(){const b=$('d-foto-box');if(!b)return;
   b.innerHTML=`<div class="satfoto" onclick="$('d-foto-in').click()">${dFoto?`<img src="${dFoto}"><span class="rm" onclick="event.stopPropagation();dFoto='';cizDurakFoto()">✕</span>`:'<span class="ph">📷 Fotoğraf ekle</span>'}</div><input type="file" id="d-foto-in" accept="image/*" style="display:none" onchange="durakFotoSec(this)">`;
 }
-function durakFotoSec(input){const f=input.files&&input.files[0];if(!f)return;resizeImg(f,d=>{dFoto=d;cizDurakFoto()},1200,0.72)}
+function durakFotoSec(input){const f=input.files&&input.files[0];if(!f)return;resimSecYukle(f,d=>{dFoto=d;cizDurakFoto()},1200,0.72)}
 function durakKaydet(id,x){
   const i=db.isemirleri.find(v=>v.id===id);const d=i.duraklar[x];
   // Fason adını çöz: varsa eşleştir, yoksa yeni fason carisi oluştur (yazılabilir alan)
@@ -4200,7 +4200,7 @@ function isEmriResimYap(id,x,cb){
     try{c.toBlob(bl=>cb(bl,c),'image/jpeg',0.92);}catch(e){cb(null,c);}
   };
   const _iefoto=ieUrunFoto(i);
-  if(_iefoto){const el=new Image();el.onload=()=>proceed(el);el.onerror=()=>proceed(null);el.src=_iefoto;}
+  if(_iefoto){const el=new Image();if(/^https?:/.test(_iefoto))el.crossOrigin='anonymous';el.onload=()=>proceed(el);el.onerror=()=>proceed(null);el.src=_iefoto;}
   else proceed(null);
 }
 async function isEmriResimGonder(id,x){
@@ -4371,7 +4371,7 @@ function fiyatListesiResim(cb){
   const colorsOf=(u)=>(u.renkler&&u.renkler.length&&typeof u.renkler[0]==='object')
     ? u.renkler.filter(r=>(+r.stok||0)>0).map(r=>({ad:r.ad||'—',stok:+r.stok||0,hex:r.hex||hexFromAd(r.ad)||'#c9ccd0'})) : [];
   const loadOne=(u)=>new Promise(res=>{const src=urunKapak(u);if(!src)return res({u,im:null,colors:colorsOf(u)});
-    const im=new Image();im.onload=()=>res({u,im,colors:colorsOf(u)});im.onerror=()=>res({u,im:null,colors:colorsOf(u)});im.src=src;});
+    const im=new Image();if(/^https?:/.test(src))im.crossOrigin='anonymous';im.onload=()=>res({u,im,colors:colorsOf(u)});im.onerror=()=>res({u,im:null,colors:colorsOf(u)});im.src=src;});
   Promise.all(aktif.map(loadOne)).then(items=>{
     const mctx=document.createElement('canvas').getContext('2d');
     // renk çipi satırlarını (kaydırmalı) hesapla
