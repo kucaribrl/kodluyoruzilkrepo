@@ -771,7 +771,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-39'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-40'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -2090,8 +2090,17 @@ function kaydetHammadde(id){const ad=$('h-ad').value.trim();if(!ad)return toast(
   const ted=($('h-ted')?.value||'').trim();const tedC=ted?db.cariler.find(c=>c.tip==='tedarikci'&&c.ad.toLowerCase()===ted.toLowerCase()):null;
   const topSay=renkli?fHamRenk.reduce((a,r)=>a+(+r.top||0),0):0;
   const o={ad,kat:$('h-kat').value,kod:($('h-kod')?.value||'').trim(),gramaj:+($('h-gramaj')?.value||0)||0,birim:$('h-birim').value,detay:$('h-detay').value.trim(),stok,top:topSay,renkler,kritik:+$('h-kritik').value||0,alis:+$('h-alis').value||0,pb:$('h-pb')?.value||'TL',ted,tedId:tedC?tedC.id:null,foto:fHamFoto||''};
-  if(id){Object.assign(db.hammadde.find(x=>x.id===id),o)}else{o.id=nid('h');db.hammadde.push(o)}
-  save();closeM();envStokTazele();toast('Kaydedildi ✓')}
+  let kayit;
+  if(id){kayit=db.hammadde.find(x=>x.id===id);Object.assign(kayit,o)}else{o.id=nid('h');db.hammadde.push(o);kayit=o}
+  save();closeM();envStokTazele();
+  // Tedarikçi yazılmış ama carilerde yoksa — cari açmayı öner (ondan alıp borçlanacaksın)
+  if(ted&&!tedC){
+    askConfirm(`"${ted}" tedarikçilerde kayıtlı değil.\nCari olarak eklensin mi? (ondan alım borcunu takip edebilirsin)`,()=>{
+      const nc={id:nid('c'),tip:'tedarikci',ad:ted,bakiye:0};db.cariler.push(nc);kayit.tedId=nc.id;save();envStokTazele();toast(`✓ ${ted} carilere eklendi`);
+    },'Cari Aç');
+    return;
+  }
+  toast('Kaydedildi ✓')}
 function hamFotoSec(input){const f=input.files&&input.files[0];if(!f)return;const b=$('h-foto-box');if(b)b.textContent='⏳';resimSecYukle(f,d=>{fHamFoto=d;const bx=$('h-foto-box');if(bx)bx.innerHTML=`<img src="${d}">`},900,0.75)}
 function silHammadde(id){askConfirm('Silinsin mi?',()=>{db.hammadde=db.hammadde.filter(x=>x.id!==id);save();closeM();envStokTazele();toast('Silindi')})}
 // Malzeme kaydı sonrası: hangi ekrandan geldiyse oraya dön (Envanter ya da Stok)

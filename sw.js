@@ -1,5 +1,5 @@
 /* IQ Basics — Service Worker (çevrimdışı çalışma + kurulabilir PWA) */
-const CACHE = 'iqbasics-v39';
+const CACHE = 'iqbasics-v40';
 
 /* Uygulama kabuğu: internet olmasa da açılması gereken dosyalar */
 const SHELL = [
