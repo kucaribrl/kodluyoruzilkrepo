@@ -769,7 +769,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-35'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-36'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1888,19 +1888,28 @@ function urunSatisOzet(id){let seri=0,ciro=0,sonTarih=0;const renkSay={};
   return {seri,ciro,sonTarih,best};
 }
 
+// Kategoriye göre form ayarı — aksesuar/etiket/ambalaj kumaş gibi görünmesin
+const KAT_CFG={
+  Kumaş:{adPh:'Süprem Kumaş',detayPh:'30/1 · pamuk',renkLabel:'🎨 Renk renk stok tut (kumaş rengi)',top:true,birimler:['metre','kg','top'],renkPh:'Renk (Beyaz...)'},
+  Aksesuar:{adPh:'Sedef Düğme / Fermuar / Yaka',detayPh:'ölçü / model / boy',renkLabel:'🎨 Renk renk stok tut (düğme/fermuar rengi)',top:false,birimler:['adet','koni','paket'],renkPh:'Renk / çeşit'},
+  Etiket:{adPh:'Dokuma etiket / Beden etiketi',detayPh:'marka / beden',renkLabel:'🎨 Çeşit çeşit stok tut',top:false,birimler:['adet','paket'],renkPh:'Çeşit (S/M/L...)'},
+  Ambalaj:{adPh:'Poşet / Koli / Askı',detayPh:'ölçü',renkLabel:'🎨 Çeşit çeşit stok tut',top:false,birimler:['adet','koli','paket'],renkPh:'Çeşit / ölçü'},
+};
+const HAM_BIRIMLER=['metre','kg','adet','koni','top','koli','paket'];
 let fHamRenk=[];
 function formHammadde(id,presetKat){
-  const h=id?db.hammadde.find(x=>x.id===id):{birim:(presetKat&&presetKat!=='Kumaş')?'adet':'metre',kat:presetKat||'Kumaş'};
+  const h=id?db.hammadde.find(x=>x.id===id):{kat:presetKat||'Kumaş'};
+  const kat=h.kat||'Kumaş';const cfg=KAT_CFG[kat]||KAT_CFG.Kumaş;
+  const birim=h.birim||cfg.birimler[0];
   fHamRenk=(h.renkler||[]).map(r=>({ad:r.ad||'',stok:+r.stok||0}));
-  const renkli=fHamRenk.length>0||(!id&&(h.kat==='Kumaş'));
-  const birim=h.birim||'metre';
+  const renkli=fHamRenk.length>0||(!id&&kat==='Kumaş');
   open_(id?'Malzeme Düzenle':'Yeni Malzeme',`
-    <label>Malzeme Adı</label><input id="h-ad" value="${esc(h.ad||'')}" placeholder="Süprem Kumaş">
-    <div class="g2"><div><label>Kategori</label><select id="h-kat" onchange="hamKatDegis()"><option ${h.kat==='Kumaş'?'selected':''}>Kumaş</option><option ${h.kat==='Aksesuar'?'selected':''}>Aksesuar</option><option ${h.kat==='Etiket'?'selected':''}>Etiket</option><option ${h.kat==='Ambalaj'?'selected':''}>Ambalaj</option></select></div><div><label>Birim</label><select id="h-birim" onchange="cizHamRenk()"><option ${birim==='metre'?'selected':''}>metre</option><option ${birim==='kg'?'selected':''}>kg</option><option ${birim==='adet'?'selected':''}>adet</option><option ${birim==='koni'?'selected':''}>koni</option><option ${birim==='top'?'selected':''}>top</option></select></div></div>
-    <label>Açıklama</label><input id="h-detay" value="${esc(h.detay||'')}" placeholder="30/1 · pamuk">
-    <label class="ckrow" style="margin-top:10px"><input type="checkbox" id="h-renkli" ${renkli?'checked':''} onchange="hamRenkliToggle()"><span>🎨 Renk renk stok tut (kumaş vb.)</span></label>
-    <div id="ham-renk-wrap" style="display:${renkli?'':'none'};margin-top:6px"><div id="ham-renk-box"></div>
-      <label style="margin-top:10px">1 top ≈ kaç ${birim}? <span style="font-weight:600;color:var(--sub);text-transform:none">(stoğu top olarak da görmek için · opsiyonel)</span></label>
+    <div class="g2"><div><label>Kategori</label><select id="h-kat" onchange="hamKatDegis()">${['Kumaş','Aksesuar','Etiket','Ambalaj'].map(k=>`<option ${kat===k?'selected':''}>${k}</option>`).join('')}</select></div><div><label>Birim</label><select id="h-birim" onchange="cizHamRenk()">${HAM_BIRIMLER.map(x=>`<option ${birim===x?'selected':''}>${x}</option>`).join('')}</select></div></div>
+    <label>${kat==='Kumaş'?'Kumaş':kat==='Aksesuar'?'Aksesuar':'Malzeme'} Adı</label><input id="h-ad" value="${esc(h.ad||'')}" placeholder="${cfg.adPh}">
+    <label>Açıklama</label><input id="h-detay" value="${esc(h.detay||'')}" placeholder="${cfg.detayPh}">
+    <label class="ckrow" style="margin-top:10px"><input type="checkbox" id="h-renkli" ${renkli?'checked':''} onchange="hamRenkliToggle()"><span id="ham-renk-lbl">${cfg.renkLabel}</span></label>
+    <div id="ham-renk-wrap" style="display:${renkli?'':'none'};margin-top:6px"><div id="ham-renk-box"></div></div>
+    <div id="ham-top-wrap" style="display:${cfg.top?'':'none'}"><label style="margin-top:10px">1 top ≈ kaç ${birim}? <span style="font-weight:600;color:var(--sub);text-transform:none">(stoğu top olarak da görmek için · opsiyonel)</span></label>
       <input id="h-topmik" type="number" inputmode="decimal" value="${h.topMik||''}" placeholder="ör. 25"></div>
     <div id="ham-tek-wrap" style="display:${renkli?'none':''}"><label>Stok</label><input id="h-stok" type="number" inputmode="numeric" value="${h.stok||0}"></div>
     <label>Kritik seviye (uyarı)</label><input id="h-kritik" type="number" inputmode="numeric" value="${h.kritik||0}">
@@ -1910,13 +1919,22 @@ function formHammadde(id,presetKat){
     ${id?`<button class="btn danger" onclick="silHammadde(${id})">Sil</button>`:''}`);
   if(renkli){if(!fHamRenk.length)fHamRenk=[{ad:'',stok:0}];cizHamRenk();}
 }
-function hamKatDegis(){const renkli=($('h-kat')?.value==='Kumaş');const ck=$('h-renkli');if(ck&&!ck.checked&&renkli&&!fHamRenk.some(r=>r.ad||r.stok)){ck.checked=true;hamRenkliToggle();}}
+function hamKatDegis(){const kat=$('h-kat')?.value||'Kumaş';const cfg=KAT_CFG[kat]||KAT_CFG.Kumaş;
+  if($('h-ad'))$('h-ad').placeholder=cfg.adPh;
+  if($('h-detay'))$('h-detay').placeholder=cfg.detayPh;
+  if($('ham-renk-lbl'))$('ham-renk-lbl').textContent=cfg.renkLabel;
+  const tw=$('ham-top-wrap');if(tw)tw.style.display=cfg.top?'':'none';
+  const bs=$('h-birim');if(bs&&!cfg.birimler.includes(bs.value))bs.value=cfg.birimler[0];
+  const ck=$('h-renkli');
+  if(kat==='Kumaş'){if(ck&&!ck.checked&&!fHamRenk.some(r=>r.ad||r.stok)){ck.checked=true;hamRenkliToggle();}}
+  cizHamRenk();
+}
 function hamRenkliToggle(){const on=$('h-renkli')?.checked;$('ham-renk-wrap').style.display=on?'':'none';$('ham-tek-wrap').style.display=on?'none':'';if(on){if(!fHamRenk.length)fHamRenk=[{ad:'',stok:0}];cizHamRenk();}}
-function cizHamRenk(){const box=$('ham-renk-box');if(!box)return;const bir=$('h-birim')?.value||'metre';
+function cizHamRenk(){const box=$('ham-renk-box');if(!box)return;const bir=$('h-birim')?.value||'metre';const _cfg=KAT_CFG[$('h-kat')?.value||'Kumaş']||KAT_CFG.Kumaş;
   box.innerHTML=fHamRenk.map((r,i)=>{const sw=hexFromAd(r.ad)||'#8a8f98';
     return `<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
       <span style="width:22px;height:22px;flex:0 0 auto;border-radius:6px;background:${sw};border:1px solid var(--ln)"></span>
-      <input class="rad" list="renkList" autocomplete="off" value="${esc(r.ad||'')}" placeholder="Renk (Beyaz...)" oninput="fHamRenk[${i}].ad=this.value;hamRenkSwatch(this)" style="flex:1;min-width:0;margin:0;padding:8px 9px">
+      <input class="rad" list="renkList" autocomplete="off" value="${esc(r.ad||'')}" placeholder="${_cfg.renkPh}" oninput="fHamRenk[${i}].ad=this.value;hamRenkSwatch(this)" style="flex:1;min-width:0;margin:0;padding:8px 9px">
       <input type="number" inputmode="numeric" min="0" value="${r.stok||0}" oninput="fHamRenk[${i}].stok=Math.max(0,+this.value||0);hamRenkTot()" placeholder="0" style="width:66px;margin:0;padding:8px" title="${bir}">
       <button type="button" class="del" onclick="fHamRenk.splice(${i},1);if(!fHamRenk.length)fHamRenk=[{ad:'',stok:0}];cizHamRenk()" style="flex:0 0 auto">✕</button>
     </div>`;}).join('')+`<datalist id="renkList">${['Beyaz','Siyah','Lacivert','Gri','Antrasit','Bej','Bordo','Yeşil','Haki','Ekru','Mavi','Kırmızı','Kahverengi','Vizon','Füme'].map(c=>`<option value="${c}">`).join('')}</datalist>
@@ -1933,8 +1951,10 @@ function kaydetHammadde(id){const ad=$('h-ad').value.trim();if(!ad)return toast(
   else stok=+($('h-stok')?.value||0);
   const o={ad,kat:$('h-kat').value,birim:$('h-birim').value,detay:$('h-detay').value.trim(),stok,renkler,kritik:+$('h-kritik').value||0,alis:+$('h-alis').value||0,pb:$('h-pb')?.value||'TL',topMik:+($('h-topmik')?.value||0)||0};
   if(id){Object.assign(db.hammadde.find(x=>x.id===id),o)}else{o.id=nid('h');db.hammadde.push(o)}
-  save();closeM();rStok();toast('Kaydedildi ✓')}
-function silHammadde(id){askConfirm('Silinsin mi?',()=>{db.hammadde=db.hammadde.filter(x=>x.id!==id);save();closeM();rStok();toast('Silindi')})}
+  save();closeM();envStokTazele();toast('Kaydedildi ✓')}
+function silHammadde(id){askConfirm('Silinsin mi?',()=>{db.hammadde=db.hammadde.filter(x=>x.id!==id);save();closeM();envStokTazele();toast('Silindi')})}
+// Malzeme kaydı sonrası: hangi ekrandan geldiyse oraya dön (Envanter ya da Stok)
+function envStokTazele(){if(cur==='envanter')rEnvanter();else rStok();}
 
 /* ---------- SATIŞ ---------- */
 let satisFilt='tum';
