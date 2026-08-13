@@ -771,7 +771,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-41'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-42'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1582,7 +1582,6 @@ function kaydetMalSip(id){
   const beklenen=bekV?new Date(bekV).getTime():0;const siparisTarih=sipV?new Date(sipV).getTime():Date.now();
   const not=($('ms-not')?.value||'').trim();
   let tedC=ted?db.cariler.find(c=>c.tip==='tedarikci'&&c.ad.toLowerCase()===ted.toLowerCase()):null;
-  if(!tedC&&ted){tedC={id:nid('c'),tip:'tedarikci',ad:ted,bakiye:0};db.cariler.push(tedC);}
   let hh=db.hammadde.find(h=>h.kat===kat&&(h.ad||'').toLowerCase()===ad.toLowerCase());
   if(!hh){ // henüz elimde yok — 0 stoklu kart aç (Envanter'de "yolda" olarak görünsün)
     hh={id:nid('h'),ad,kat,birim,detay:'',stok:0,renkler:(kat==='Kumaş'?satirlar.filter(l=>l.renk).map(l=>({ad:l.renk,stok:0,top:0})):[]),kritik:0,alis:fiyat,pb,ted,tedId:tedC?tedC.id:null,foto:''};
@@ -1591,7 +1590,10 @@ function kaydetMalSip(id){
   const o={kat,ad,hid:hh.id,ted,tedId:tedC?tedC.id:null,satirlar,miktar,birim,fiyat,pb,siparisTarih,beklenen,not};
   if(id){const s=db.malSiparis.find(x=>x.id===id);if(s){o.durum=s.durum;o.gelenMiktar=s.gelenMiktar||0;o.gelenTarih=s.gelenTarih||0;o.gelenNot=s.gelenNot||'';o.borclandi=s.borclandi;o.borcTutar=s.borcTutar;o.borcPB=s.borcPB;Object.assign(s,o);}}
   else{o.id=nid('ms');o.durum='bekliyor';o.gelenMiktar=0;o.gelenTarih=0;o.gelenNot='';db.malSiparis.push(o);}
-  save();closeM();envView='siparis';rEnvanter();toast(id?'Sipariş güncellendi ✓':'Sipariş oluşturuldu ✓');
+  save();closeM();envView='siparis';rEnvanter();
+  // Tedarikçi carilerde yoksa — kayıt ekranını aç (kullanıcı kendi kaydetsin)
+  if(!tedC&&ted){toast('Sipariş oluşturuldu ✓ · tedarikçiyi kaydet');formCari('tedarikci',0,ted);return;}
+  toast(id?'Sipariş güncellendi ✓':'Sipariş oluşturuldu ✓');
 }
 function malSipTeslim(id){
   const s=db.malSiparis.find(x=>x.id===id);if(!s||s.durum!=='bekliyor')return;
@@ -1626,11 +1628,14 @@ function kaydetMalSipTeslim(id){
   if(!h){h={id:nid('h'),ad:s.ad,kat:s.kat,birim:s.birim,detay:'',stok:0,renkler:[],kritik:0,alis:+s.fiyat||0,pb:s.pb||'TL',ted:s.ted||'',tedId:s.tedId||null};db.hammadde.push(h);}
   s.hid=h.id;if(s.fiyat>0){h.alis=+s.fiyat;h.pb=s.pb;}
   lines.forEach(l=>malStoklaRenk(h,l.renk,+l.gelen||0));
-  // tedarikçiyi borçlandır (toplam gelen × fiyat) — sadece bir kez
+  // tedarikçiyi borçlandır (toplam gelen × fiyat) — sadece bir kez; tedId boşsa isimden bul
   let borcMsj='';
-  if(s.tedId&&s.fiyat>0&&!s.borclandi){const ted=cari(s.tedId);if(ted){const tutar=tg*(+s.fiyat||0),pb=s.pb||'TL';
+  let ted=s.tedId?cari(s.tedId):null;
+  if(!ted&&s.ted)ted=db.cariler.find(c=>c.tip==='tedarikci'&&(c.ad||'').toLowerCase()===(s.ted||'').toLowerCase());
+  if(ted)s.tedId=ted.id;
+  if(ted&&s.fiyat>0&&!s.borclandi){const tutar=tg*(+s.fiyat||0),pb=s.pb||'TL';
     if(pb==='USD'){ted.doviz='USD';ted.bakiyeUSD=(+ted.bakiyeUSD||0)+tutar}else{ted.bakiye=(+ted.bakiye||0)+tutar}
-    s.borclandi=true;s.borcTutar=tutar;s.borcPB=pb;borcMsj=' · '+esc(ted.ad)+' bakiyesine '+money(tutar,pb)+' borç yazıldı';}}
+    s.borclandi=true;s.borcTutar=tutar;s.borcPB=pb;borcMsj=' · '+esc(ted.ad)+' bakiyesine '+money(tutar,pb)+' borç yazıldı';}
   const to=sipTopMik(s);
   save();closeM();envView='siparis';rEnvanter();
   toast((Math.abs(tg-to)<0.001?'✓ Teslim alındı, stoğa eklendi':'⚠️ Fark var — teslim alındı, stoğa eklendi')+borcMsj);
@@ -2149,11 +2154,11 @@ function kaydetHammadde(id){const ad=$('h-ad').value.trim();if(!ad)return toast(
   const ted=($('h-ted')?.value||'').trim();const tedC=ted?db.cariler.find(c=>c.tip==='tedarikci'&&c.ad.toLowerCase()===ted.toLowerCase()):null;
   const topSay=renkli?fHamRenk.reduce((a,r)=>a+(+r.top||0),0):0;
   const o={ad,kat:$('h-kat').value,kod:($('h-kod')?.value||'').trim(),gramaj:+($('h-gramaj')?.value||0)||0,birim:$('h-birim').value,detay:$('h-detay').value.trim(),stok,top:topSay,renkler,kritik:+$('h-kritik').value||0,alis:+$('h-alis').value||0,pb:$('h-pb')?.value||'TL',ted,tedId:tedC?tedC.id:null,foto:fHamFoto||''};
-  // Tedarikçi yazılmış ama carilerde yoksa — doğrudan cari aç (ondan alıp borçlanacaksın)
-  let yeniTed='';
-  if(ted&&!tedC){const nc={id:nid('c'),tip:'tedarikci',ad:ted,bakiye:0};db.cariler.push(nc);o.tedId=nc.id;yeniTed=ted;}
   if(id){Object.assign(db.hammadde.find(x=>x.id===id),o)}else{o.id=nid('h');db.hammadde.push(o)}
-  save();closeM();envStokTazele();toast(yeniTed?`Kaydedildi ✓ · ${yeniTed} carilere eklendi`:'Kaydedildi ✓')}
+  save();closeM();envStokTazele();
+  // Tedarikçi yazılmış ama carilerde yoksa — kayıt ekranını aç (kullanıcı kendi kaydetsin)
+  if(ted&&!tedC){toast('Kaydedildi ✓ · tedarikçiyi kaydet');formCari('tedarikci',0,ted);return;}
+  toast('Kaydedildi ✓')}
 function hamFotoSec(input){const f=input.files&&input.files[0];if(!f)return;const b=$('h-foto-box');if(b)b.textContent='⏳';resimSecYukle(f,d=>{fHamFoto=d;const bx=$('h-foto-box');if(bx)bx.innerHTML=`<img src="${d}">`},900,0.75)}
 function silHammadde(id){askConfirm('Silinsin mi?',()=>{db.hammadde=db.hammadde.filter(x=>x.id!==id);save();closeM();envStokTazele();toast('Silindi')})}
 // Malzeme kaydı sonrası: hangi ekrandan geldiyse oraya dön (Envanter ya da Stok)
