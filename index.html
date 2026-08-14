@@ -772,7 +772,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-48'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-49'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1520,6 +1520,7 @@ function malSipDetay(id){
   if(sipAcik(s)){
     if(s.durum==='bekliyor'&&s.ted&&s.fiyat>0)h+=`<div class="okbox" style="margin-top:10px">🚚 Teslim alınca gelen tutar <b>${esc(s.ted)}</b> bakiyesine <b>borç</b> yazılır.</div>`;
     h+=`<button class="btn g" style="margin-top:12px" onclick="malSipTeslim(${id})">✓ Teslim Al (${kismi?'kalanı ':''}tartıp gir)</button>
+      <button class="btn ghost" style="margin-top:8px" onclick="malSipGonder(${id})">📱 Kumaşçıya Gönder (WhatsApp)</button>
       ${s.durum==='bekliyor'?`<button class="btn ghost" style="margin-top:8px" onclick="malSipForm(${id})">✏️ Düzenle</button>`:''}
       <button class="btn ghost" style="margin-top:8px" onclick="malSipIptal(${id})">Siparişi İptal Et</button>`;
   }else{
@@ -1653,6 +1654,17 @@ function kaydetMalSipTeslim(id){
     s.borclandi=true;s.borcTutar=(+s.borcTutar||0)+tutar;s.borcPB=pb;borcMsj=' · '+esc(ted.ad)+' +'+money(tutar,pb)+' borç';}
   save();closeM();envView='siparis';rEnvanter();
   toast((tamam?'✓ Sipariş tamamlandı, stoğa eklendi':'📦 Kısmi teslim — kalan yolda')+borcMsj);
+}
+// Siparişi tedarikçiye (kumaşçıya) WhatsApp'tan gönder
+function malSipGonder(id){const s=db.malSiparis.find(x=>x.id===id);if(!s)return;
+  const firma=db.firma||'IQ Basics';const lines=sipSatirlar(s);const bir=s.birim||'';const renkli=lines.some(l=>l.renk);
+  let t=`🧵 *${firma}* — Malzeme Siparişi\n${new Date().toLocaleDateString('tr-TR')}\n\n*${s.ad}*`;
+  if(renkli)t+='\n'+lines.map(l=>`• ${l.renk||'—'} — *${(+l.miktar||0).toLocaleString('tr-TR')} ${bir}*`).join('\n');
+  t+=`\n\nToplam: *${sipTopMik(s).toLocaleString('tr-TR')} ${bir}*`;
+  if(s.beklenen)t+=`\nİstenen teslim: ${dstr(s.beklenen)}`;
+  if(s.not)t+=`\nNot: ${s.not}`;
+  const ir=(db.firmaWp||db.firmaTel||'');if(ir)t+=`\n\n📞 ${firma}: ${ir}`;
+  const ted=s.tedId?cari(s.tedId):null;waAc(ted?ted.tel:'',t);
 }
 function malSipIptal(id){askConfirm('Sipariş iptal edilsin mi?',()=>{const s=db.malSiparis.find(x=>x.id===id);if(s)s.durum='iptal';save();closeM();envView='siparis';rEnvanter();toast('Sipariş iptal edildi');});}
 function malSipSil(id){askConfirm('Sipariş kaydı silinsin mi?',()=>{db.malSiparis=db.malSiparis.filter(x=>x.id!==id);save();closeM();envView='siparis';rEnvanter();toast('Silindi');});}
@@ -3929,6 +3941,9 @@ function formIsEmri(){
           <div style="display:flex;gap:6px"><input id="ie-kumas-fiyat" type="number" inputmode="decimal" placeholder="0" oninput="ieKumasFiyatCiz()" style="flex:1;min-width:0;margin:0"><select id="ie-kumas-pb" onchange="ieKumasFiyatCiz()" style="width:64px;flex:0 0 auto;margin:0"><option value="TL">₺</option><option value="USD">$</option></select></div>
           <div class="iekfi" id="ie-kumas-fiyat-info" style="margin-top:7px"></div>
           <div id="ie-kumas-yeni"></div>
+          <label style="margin-top:9px">1 parça için kumaş tüketimi <span style="font-weight:600;color:var(--sub);text-transform:none">— stoktan düşülür (opsiyonel)</span></label>
+          <input id="ie-kumas-tuk" type="number" inputmode="decimal" placeholder="ör. 0.3" oninput="ieTukCiz()">
+          <div class="mini" id="ie-kumas-tuk-info" style="margin-top:5px"></div>
         </div>
       </div>
       <div id="ie-renk" style="margin-top:6px"></div>
@@ -3991,7 +4006,13 @@ function ieKumasFiyatCiz(){ieKumasFiyat=+($('ie-kumas-fiyat')?.value||0);ieKumas
     info.innerHTML=`💵 $${f.toLocaleString('tr-TR')} × kur ${kur?kur.toFixed(2):'<span style="color:var(--bad)">kur gir</span>'} = <b>${tl?TL(tl):'—'}</b> /birim`;
   }else{const kur=+db.kurUSD||0;const usd=kur?f/kur:0;
     info.innerHTML=`<b>${TL(f)}</b> /birim${usd?` · ≈ $${usd.toLocaleString('tr-TR',{maximumFractionDigits:2})}`:''}`;}
-  ieOzetCiz();}
+  ieOzetCiz();ieTukCiz();}
+// Kumaş tüketimi göster (1 parça × adet toplamı)
+function ieTukToplam(){const pu=+($('ie-kumas-tuk')?.value||0);if(!pu)return 0;const seri=$('ie-birim')?.value==='seri';const sa=Math.max(1,+($('ie-seriadet')?.value||1));return ieRenk.reduce((a,r)=>a+(+r.adet||0)*(seri?sa:1),0)*pu;}
+function ieTukCiz(){const el=$('ie-kumas-tuk-info');if(!el)return;const pu=+($('ie-kumas-tuk')?.value||0);
+  if(!pu||!ieKumasId){el.innerHTML='';return;}
+  const k=db.hammadde.find(h=>h.id===ieKumasId);const bir=esc(k?(k.birim||''):'');const t=ieTukToplam();
+  el.innerHTML=`🧵 Toplam gidecek kumaş: <b>${t.toLocaleString('tr-TR',{maximumFractionDigits:2})} ${bir}</b> · kaydedince stoktan <b>renk renk düşülür</b>`;}
 // Stok rozeti: birim + (top çevrimi varsa) top
 function ieStokStr(r){const bir=esc(r.birim||'');let s=(+r.stok||0)+' '+bir;
   if(+r.top>0)s+=' · '+(+r.top)+' top';
@@ -4023,7 +4044,7 @@ function ieOzetCiz(){const el=$('ie-ozet');if(!el)return;
 function ieToplam(){return ieRenk.reduce((a,r)=>a+(+r.adet||0),0)}
 function ieToplamCiz(){const el=$('ie-toplam-box');if(!el)return;const t=ieToplam();const seri=$('ie-birim')?.value==='seri';const sa=Math.max(1,+($('ie-seriadet')?.value||1));
   el.innerHTML=t>0?`<div class="ietot"><span class="l">TOPLAM ÜRETİM</span><span class="v">${t} ${seri?'seri':'adet'}${seri&&sa>1?' · '+(t*sa)+' adet':''}</span></div>`:'';
-  ieOzetCiz();
+  ieOzetCiz();ieTukCiz();
 }
 function ieUrunAra(){const ad=($('ie-ad')?.value||'').trim().toLowerCase();const u=db.urunler.find(x=>!x.pasif&&x.ad.toLowerCase()===ad);
   if(u&&u.id!==ieUrunId){ieUrunId=u.id;if($('ie-kod'))$('ie-kod').value=u.kod||'';if($('ie-birim'))$('ie-birim').value=u.birim||'seri';
@@ -4149,8 +4170,11 @@ function kaydetIsEmri(){
   const _kk=ieKumasId?db.hammadde.find(h=>h.id===ieKumasId):null;
   const _kad=_kk?_kk.ad:(ieKumasAd||'').trim();
   const _kfiyat=+($('ie-kumas-fiyat')?.value||ieKumasFiyat||0);const _kpb=$('ie-kumas-pb')?.value||ieKumasPB||'TL';
-  db.isemirleri.push({id:nid('ie'),urunId:ieUrunId||null,urun:ad,kod,foto:ieFoto,birim,seriAdet,hedef,renkDagilim,malzeme,duraklar,genelGiderBirim:+$('ie-gg').value||0,kumasId:ieKumasId||null,kumasAd:_kad,kumasFiyat:_kfiyat,kumasPB:_kpb,kumasYeni:(!ieKumasId&&!!_kad),baslangic:Date.now(),gun,durum:'devam',stoklandi:false});
-  save();closeM();rUretim();toast('İş emri açıldı ✓ · '+hedef+' '+birim);
+  // kumaş tüketimini renk renk stoktan düş (1 parça × adet × tüketim)
+  const _ktuk=+($('ie-kumas-tuk')?.value||0);let _ktukTop=0;
+  if(_kk&&_ktuk>0){renkDagilim.forEach(r=>{const parca=r.adet*(birim==='seri'?seriAdet:1);const kg=parca*_ktuk;_ktukTop+=kg;malStoklaRenk(_kk,r.ad,-kg);});}
+  db.isemirleri.push({id:nid('ie'),urunId:ieUrunId||null,urun:ad,kod,foto:ieFoto,birim,seriAdet,hedef,renkDagilim,malzeme,duraklar,genelGiderBirim:+$('ie-gg').value||0,kumasId:ieKumasId||null,kumasAd:_kad,kumasFiyat:_kfiyat,kumasPB:_kpb,kumasYeni:(!ieKumasId&&!!_kad),kumasTukBirim:_ktuk,kumasTukToplam:_ktukTop,baslangic:Date.now(),gun,durum:'devam',stoklandi:false});
+  save();closeM();rUretim();toast('İş emri açıldı ✓ · '+hedef+' '+birim+(_ktukTop>0?' · '+_ktukTop.toLocaleString('tr-TR',{maximumFractionDigits:2})+' '+(_kk.birim||'')+' kumaş düşüldü':''));
 }
 /* --- İş emri detay --- */
 // İş emri fotoğrafı — kendi fotosu yoksa BAĞLI ÜRÜNÜN fotoğrafına düş (kapak → galeri → fotolar)
