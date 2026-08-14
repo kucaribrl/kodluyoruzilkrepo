@@ -771,7 +771,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-44'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-45'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -2164,14 +2164,27 @@ function kaydetHammadde(id){const ad=$('h-ad').value.trim();if(!ad)return toast(
   else stok=+($('h-stok')?.value||0);
   const ted=($('h-ted')?.value||'').trim();const tedC=ted?db.cariler.find(c=>c.tip==='tedarikci'&&c.ad.toLowerCase()===ted.toLowerCase()):null;
   const topSay=renkli?fHamRenk.reduce((a,r)=>a+(+r.top||0),0):0;
+  const oldStok=id?(db.hammadde.find(x=>x.id===id)?.stok||0):0;
   const o={ad,kat:$('h-kat').value,kod:($('h-kod')?.value||'').trim(),gramaj:+($('h-gramaj')?.value||0)||0,birim:$('h-birim').value,detay:$('h-detay').value.trim(),stok,top:topSay,renkler,kritik:+$('h-kritik').value||0,alis:+$('h-alis').value||0,pb:$('h-pb')?.value||'TL',ted,tedId:tedC?tedC.id:null,foto:fHamFoto||''};
   if(id){Object.assign(db.hammadde.find(x=>x.id===id),o)}else{o.id=nid('h');db.hammadde.push(o)}
+  const savedId=id||o.id;const delta=id?Math.max(0,stok-oldStok):stok; // yeni gelen miktar
   save();closeM();envStokTazele();
-  // Tedarikçi yazılmış ama carilerde yoksa — kayıt ekranını aç (kullanıcı kendi kaydetsin)
-  if(ted&&!tedC){const savedId=id||o.id;toast('Kaydedildi ✓ · tedarikçiyi kaydet');
-    _cariReturn=(ncid)=>{const m=db.hammadde.find(x=>x.id===savedId);if(m){m.tedId=ncid;save();}formHammadde(savedId);}; // kayıttan sonra malzeme formuna dön
+  // Tedarikçi yazılmış ama carilerde yoksa — kayıt ekranını aç, sonra borç sor
+  if(ted&&!tedC){toast('Kaydedildi ✓ · tedarikçiyi kaydet');
+    _cariReturn=(ncid)=>{const m=db.hammadde.find(x=>x.id===savedId);if(m){m.tedId=ncid;save();}formHammadde(savedId);setTimeout(()=>hamBorcSor(savedId,ncid,delta),220);};
     setTimeout(()=>formCari('tedarikci',0,ted),150);return;}
+  // Kayıtlı tedarikçi + fiyat + yeni miktar → borç yazmayı öner
+  if(tedC&&(+o.alis>0)&&delta>0){hamBorcSor(savedId,tedC.id,delta);return;}
   toast('Kaydedildi ✓')}
+// Doğrudan alımda tedarikçiye borç yazmayı öner (formUrun'daki hazır-alım mantığı)
+function hamBorcSor(hid,tedId,delta){const h=db.hammadde.find(x=>x.id===hid);const ted=cari(tedId);
+  if(!h||!ted||!(delta>0)||!(+h.alis>0)){toast('Kaydedildi ✓');return;}
+  const tutar=delta*(+h.alis||0),pb=h.pb||'TL';
+  askConfirm(`${delta.toLocaleString('tr-TR')} ${h.birim} × ${money(h.alis,pb)} = ${money(tutar,pb)}\n${ted.ad} firmasına borç yazılsın mı?`,()=>{
+    if(pb==='USD'){ted.doviz='USD';ted.bakiyeUSD=(+ted.bakiyeUSD||0)+tutar}else{ted.bakiye=(+ted.bakiye||0)+tutar}
+    save();toast(`${ted.ad} firmasına ${money(tutar,pb)} borç yazıldı`);
+  },'Borç Yaz');
+}
 function hamFotoSec(input){const f=input.files&&input.files[0];if(!f)return;const b=$('h-foto-box');if(b)b.textContent='⏳';resimSecYukle(f,d=>{fHamFoto=d;const bx=$('h-foto-box');if(bx)bx.innerHTML=`<img src="${d}">`},900,0.75)}
 function silHammadde(id){askConfirm('Silinsin mi?',()=>{db.hammadde=db.hammadde.filter(x=>x.id!==id);save();closeM();envStokTazele();toast('Silindi')})}
 // Malzeme kaydı sonrası: hangi ekrandan geldiyse oraya dön (Envanter ya da Stok)
