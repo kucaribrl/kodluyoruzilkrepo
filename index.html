@@ -771,7 +771,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-43'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-44'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1595,7 +1595,9 @@ function kaydetMalSip(id){
   else{o.id=nid('ms');o.durum='bekliyor';o.gelenMiktar=0;o.gelenTarih=0;o.gelenNot='';db.malSiparis.push(o);}
   save();closeM();envView='siparis';rEnvanter();
   // Tedarikçi carilerde yoksa — kayıt ekranını aç (kullanıcı kendi kaydetsin)
-  if(!tedC&&ted){toast('Sipariş oluşturuldu ✓ · tedarikçiyi kaydet');setTimeout(()=>formCari('tedarikci',0,ted),150);return;}
+  if(!tedC&&ted){const sid=id||o.id;toast('Sipariş oluşturuldu ✓ · tedarikçiyi kaydet');
+    _cariReturn=(ncid)=>{const sp=db.malSiparis.find(x=>x.id===sid);if(sp){sp.tedId=ncid;const hh2=sp.hid?db.hammadde.find(x=>x.id===sp.hid):null;if(hh2&&!hh2.tedId)hh2.tedId=ncid;save();}envView='siparis';rEnvanter();malSipDetay(sid);}; // kayıttan sonra siparişe dön
+    setTimeout(()=>formCari('tedarikci',0,ted),150);return;}
   toast(id?'Sipariş güncellendi ✓':'Sipariş oluşturuldu ✓');
 }
 function malSipTeslim(id){
@@ -2166,7 +2168,9 @@ function kaydetHammadde(id){const ad=$('h-ad').value.trim();if(!ad)return toast(
   if(id){Object.assign(db.hammadde.find(x=>x.id===id),o)}else{o.id=nid('h');db.hammadde.push(o)}
   save();closeM();envStokTazele();
   // Tedarikçi yazılmış ama carilerde yoksa — kayıt ekranını aç (kullanıcı kendi kaydetsin)
-  if(ted&&!tedC){toast('Kaydedildi ✓ · tedarikçiyi kaydet');setTimeout(()=>formCari('tedarikci',0,ted),150);return;}
+  if(ted&&!tedC){const savedId=id||o.id;toast('Kaydedildi ✓ · tedarikçiyi kaydet');
+    _cariReturn=(ncid)=>{const m=db.hammadde.find(x=>x.id===savedId);if(m){m.tedId=ncid;save();}formHammadde(savedId);}; // kayıttan sonra malzeme formuna dön
+    setTimeout(()=>formCari('tedarikci',0,ted),150);return;}
   toast('Kaydedildi ✓')}
 function hamFotoSec(input){const f=input.files&&input.files[0];if(!f)return;const b=$('h-foto-box');if(b)b.textContent='⏳';resimSecYukle(f,d=>{fHamFoto=d;const bx=$('h-foto-box');if(bx)bx.innerHTML=`<img src="${d}">`},900,0.75)}
 function silHammadde(id){askConfirm('Silinsin mi?',()=>{db.hammadde=db.hammadde.filter(x=>x.id!==id);save();closeM();envStokTazele();toast('Silindi')})}
@@ -3132,7 +3136,7 @@ function kaydetCari(tip,id){const ad=$('c-ad').value.trim();if(!ad)return toast(
   if(o.doviz&&o.doviz!=='TL'&&!id){o.bakiyeUSD=o.bakiye;o.bakiye=0}
   if(id){Object.assign(cari(id),o)}else{o.id=nid('c');db.cariler.push(o)}
   save();
-  if(!id&&tip==='musteri'&&_cariReturn){const cb=_cariReturn;_cariReturn=null;$('ov').classList.remove('show');toast('Müşteri eklendi ✓');setTimeout(()=>cb(o.id),130);return}
+  if(!id&&_cariReturn){const cb=_cariReturn;_cariReturn=null;$('ov').classList.remove('show');toast(({musteri:'Müşteri',tedarikci:'Tedarikçi',fason:'Fason',gider:'Gider'}[tip]||'Kayıt')+' eklendi ✓');setTimeout(()=>cb(o.id),130);return}
   closeM();rCari();toast('Kaydedildi ✓')}
 function silCari(id){
   const c=cari(id);if(!c)return;
