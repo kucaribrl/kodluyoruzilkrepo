@@ -772,7 +772,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-46'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-47'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -3005,41 +3005,6 @@ function depoBekleyen(){return db.satislar.filter(s=>s.depo==='bekliyor').sort((
 // Hazırlanmış (toplanmış) siparişlerin geçmişi — kim/ne zaman hazırladı
 function depoHazirGecmis(){return db.satislar.filter(s=>s.depo==='hazir').sort((a,b)=>((b.depoHazir&&b.depoHazir.t)||b.tarih||0)-((a.depoHazir&&a.depoHazir.t)||a.tarih||0))}
 /* ---------- 🔄 AZALAN STOK / SİPARİŞ ÖNERİSİ ---------- */
-function urunSatis30(uid){const since=Date.now()-30*86400000;let n=0;
-  db.satislar.filter(s=>s.tarih>=since&&s.tip!=='iade').forEach(s=>(s.kalemler||[]).forEach(k=>{if(k.uid===uid)n+=(+k.mik||0)}));return n;}
-function reorderListe(){const arr=[];
-  db.urunler.filter(u=>!u.pasif).forEach(u=>{
-    const cur=stokTop(u);const kr=+u.kritik||0;
-    if(kr>0?cur>kr:cur>0)return; // kritik varsa altına düşünce, yoksa sadece bitince öner
-    const sat30=urunSatis30(u.id);
-    let oner=sat30>0?Math.ceil(sat30)-cur:Math.max(kr*2,1)-cur; // ~30 günlük satış kadar, yoksa 2×kritik'e tamamla
-    oner=Math.max(oner,kr>0?kr:1);
-    const seri=+u.seri||1;if(u.birim==='seri'&&seri>1)oner=Math.ceil(oner/seri)*seri;
-    oner=Math.max(1,Math.round(oner));
-    arr.push({u,cur,kritik:kr,sat30,oner});
-  });
-  return arr.sort((a,b)=>(a.cur-a.kritik)-(b.cur-b.kritik));}
-function reorderAc(){
-  const list=reorderListe();
-  if(!list.length)return open_('🔄 Sipariş Önerisi',`<div class="empty"><div class="i">✅</div><p>Stok seviyeleri iyi — sipariş önerisi yok.</p></div>`);
-  const rows=list.map(x=>{const u=x.u;const az=x.cur<=0;
-    return `<div class="row" style="align-items:center"><div class="av" style="background:${az?'var(--bad-s)':'var(--warn-s)'}">${az?'⛔':'⚠️'}</div>
-      <div class="mid"><div class="t">${esc(u.ad)}</div><div class="s">${esc(u.kod||'')} · mevcut <b style="color:${az?'var(--bad)':'var(--warn)'}">${x.cur}</b>${x.kritik?' / kritik '+x.kritik:''}${x.sat30?' · 30g satış '+x.sat30:''}</div></div>
-      <div class="end" style="display:flex;align-items:center;gap:4px"><input id="ro-${u.id}" type="number" inputmode="numeric" value="${x.oner}" min="0" style="width:66px;padding:8px;text-align:center;font-weight:800"><div class="u">${esc(u.birim||'ad')}</div></div></div>`;}).join('');
-  open_('🔄 Sipariş Önerisi · '+list.length,`
-    <div class="infobox">Kritik seviyenin altına düşen ürünler. Önerilen miktar son 30 günün satışına göre hesaplandı — istediğin gibi değiştir, sonra listeyi tedarikçine/fasona gönder.</div>
-    <div class="card" style="margin-top:8px">${rows}</div>
-    <div class="g2" style="margin-top:12px"><button class="btn g" onclick="reorderPaylas()">📱 WhatsApp'tan Gönder</button><button class="btn ghost" onclick="reorderKopya()">📋 Kopyala</button></div>
-  `);
-}
-function reorderTopla(){return reorderListe().map(x=>{const el=document.getElementById('ro-'+x.u.id);const mik=el?Math.max(0,+el.value||0):x.oner;return {u:x.u,cur:x.cur,mik};}).filter(r=>r.mik>0);}
-function reorderMetin(){const firma=db.firma||'IQ Basics';const items=reorderTopla();
-  let t=`🔄 *${firma}* — Sipariş / Üretim İhtiyaç Listesi\n${new Date().toLocaleDateString('tr-TR')}\n`;
-  t+=`\n`+items.map(r=>`• ${r.u.ad}${r.u.kod?` _(${r.u.kod})_`:''} — *${r.mik} ${r.u.birim||'ad'}*`).join('\n');
-  const ir=(db.firmaWp||db.firmaTel||'');if(ir)t+=`\n\n📞 ${firma}: ${ir}`;
-  return t;}
-function reorderPaylas(){const items=reorderTopla();if(!items.length)return toast('Liste boş');waAc('',reorderMetin());}
-function reorderKopya(){const t=reorderMetin();try{navigator.clipboard.writeText(t).then(()=>toast('📋 Sipariş listesi kopyalandı'),()=>toast('Kopyalanamadı'));}catch(e){toast('Kopyalanamadı');}}
 function depoLines(s){ // rafa göre sıralı, tek tek toplanacak satırlar
   const lines=[];
   s.kalemler.forEach((k,ki)=>{const u=urun(k.uid);const raf=(u&&u.raf)?u.raf:'—';
