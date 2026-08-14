@@ -771,7 +771,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-42'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-43'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1532,8 +1532,9 @@ function malSipForm(id){
     <div class="g2"><div><label>Tür</label><select id="ms-kat" onchange="msKatDegis()">${['Kumaş','Aksesuar','Etiket','Ambalaj'].map(k=>`<option ${kat===k?'selected':''}>${k}</option>`).join('')}</select></div><div><label>Birim</label><select id="ms-birim" onchange="cizMsSatir()">${HAM_BIRIMLER.map(x=>`<option ${((s&&s.birim)||'kg')===x?'selected':''}>${x}</option>`).join('')}</select></div></div>
     <label>Ne sipariş ettin?</label><input id="ms-ad" list="ms-ad-dl" autocomplete="off" value="${esc(s?s.ad:'')}" placeholder="Süprem Kumaş / Sedef Düğme / Fermuar..." oninput="msAdDegis()">
     <datalist id="ms-ad-dl">${db.hammadde.map(h=>`<option value="${esc(h.ad)}">`).join('')}</datalist>
-    <label>Tedarikçi (kumaşçı / aksesuarcı)</label><input id="ms-ted" list="ms-ted-dl" autocomplete="off" value="${esc(s?s.ted||'':'')}" placeholder="ör. Antep Kumaşçı">
+    <label>Tedarikçi (kumaşçı / aksesuarcı)</label><input id="ms-ted" list="ms-ted-dl" autocomplete="off" value="${esc(s?s.ted||'':'')}" placeholder="ör. Antep Kumaşçı" oninput="msTedBorc()">
     <datalist id="ms-ted-dl">${teds.map(c=>`<option value="${esc(c.ad)}">`).join('')}</datalist>
+    <div class="mini" id="ms-ted-borc" style="margin-top:3px"></div>
     <label style="margin-top:8px">Birim fiyat</label>
     <div style="display:flex;gap:6px"><input id="ms-fiyat" type="number" inputmode="decimal" value="${s&&s.fiyat?s.fiyat:''}" placeholder="0" oninput="malSipFiyatCiz()" style="flex:1;min-width:0;margin:0"><select id="ms-pb" onchange="malSipFiyatCiz()" style="width:56px;flex:0 0 auto;margin:0"><option value="TL" ${((s&&s.pb)||'TL')==='TL'?'selected':''}>₺</option><option value="USD" ${(s&&s.pb)==='USD'?'selected':''}>$</option></select></div>
     <div class="mini" id="ms-fiyat-info" style="margin-top:2px"></div>
@@ -1545,8 +1546,10 @@ function malSipForm(id){
     <input id="ms-beklenen" type="date" value="${bekVal}">
     <label>Not</label><input id="ms-not" value="${esc(s?s.not||'':'')}" placeholder="ör. 1. kalite, en 180cm">
     <button class="btn g" style="margin-top:12px" onclick="kaydetMalSip(${id||0})">${id?'Kaydet':'Siparişi Oluştur'}</button>`);
-  cizMsSatir();malSipFiyatCiz();
+  cizMsSatir();malSipFiyatCiz();msTedBorc();
 }
+function msTedBorc(){const el=$('ms-ted-borc');if(!el)return;const t=tedBorc($('ms-ted')?.value);
+  el.innerHTML=!t?'':(t.str==='0'?`✓ Kayıtlı tedarikçi · borç yok`:`💰 Bu tedarikçiye borcun: <b style="color:var(--bad)">${t.str}</b>`);}
 function msKatDegis(){const kat=$('ms-kat')?.value||'Kumaş';const bs=$('ms-birim');if(bs&&kat==='Kumaş'&&!['kg','metre','top'].includes(bs.value))bs.value='kg';if(bs&&kat!=='Kumaş'&&!['adet','koni','paket','koli'].includes(bs.value))bs.value='adet';if(kat!=='Kumaş')msSatir=[{renk:'',miktar:+(msSatir[0]?.miktar)||0}];else if(!msSatir.length)msSatir=[{renk:'',miktar:0}];cizMsSatir();}
 // Yazılan kumaş stoktaki bir renkli kumaşsa, renklerini otomatik getir
 function msAdDegis(){const kat=$('ms-kat')?.value||'Kumaş';if(kat!=='Kumaş')return;const ad=($('ms-ad')?.value||'').trim();const h=ad?db.hammadde.find(x=>x.kat==='Kumaş'&&(x.ad||'').toLowerCase()===ad.toLowerCase()):null;
@@ -1592,7 +1595,7 @@ function kaydetMalSip(id){
   else{o.id=nid('ms');o.durum='bekliyor';o.gelenMiktar=0;o.gelenTarih=0;o.gelenNot='';db.malSiparis.push(o);}
   save();closeM();envView='siparis';rEnvanter();
   // Tedarikçi carilerde yoksa — kayıt ekranını aç (kullanıcı kendi kaydetsin)
-  if(!tedC&&ted){toast('Sipariş oluşturuldu ✓ · tedarikçiyi kaydet');formCari('tedarikci',0,ted);return;}
+  if(!tedC&&ted){toast('Sipariş oluşturuldu ✓ · tedarikçiyi kaydet');setTimeout(()=>formCari('tedarikci',0,ted),150);return;}
   toast(id?'Sipariş güncellendi ✓':'Sipariş oluşturuldu ✓');
 }
 function malSipTeslim(id){
@@ -2112,14 +2115,20 @@ function formHammadde(id,presetKat){
     <div id="ham-renk-wrap" style="display:${renkli?'':'none'};margin-top:6px"><div id="ham-renk-box"></div></div>
     <div id="ham-tek-wrap" style="display:${renkli?'none':''}"><label>Stok</label><input id="h-stok" type="number" inputmode="numeric" value="${h.stok||0}"></div>
     <label>Kritik seviye (uyarı)</label><input id="h-kritik" type="number" inputmode="numeric" value="${h.kritik||0}">
-    <label>Aldığın yer (tedarikçi)</label><input id="h-ted" list="h-ted-dl" autocomplete="off" value="${esc(h.ted||'')}" placeholder="ör. Antep Kumaşçı">
+    <label>Aldığın yer (tedarikçi)</label><input id="h-ted" list="h-ted-dl" autocomplete="off" value="${esc(h.ted||'')}" placeholder="ör. Antep Kumaşçı" oninput="hamTedBorc()">
     <datalist id="h-ted-dl">${teds.map(c=>`<option value="${esc(c.ad)}">`).join('')}</datalist>
+    <div class="mini" id="h-ted-borc" style="margin-top:3px"></div>
     <label>Alış Fiyatı (birim başı)</label>
     <div style="display:flex;gap:6px"><input id="h-alis" type="number" inputmode="decimal" value="${h.alis||0}" style="flex:1;min-width:0;margin:0"><select id="h-pb" style="width:64px;flex:0 0 auto;margin:0"><option value="TL" ${(h.pb||'TL')==='TL'?'selected':''}>₺</option><option value="USD" ${h.pb==='USD'?'selected':''}>$</option></select></div>
     <button class="btn" onclick="kaydetHammadde(${id||0})">Kaydet</button>
     ${id?`<button class="btn danger" onclick="silHammadde(${id})">Sil</button>`:''}`);
   if(renkli){if(!fHamRenk.length)fHamRenk=[{ad:'',stok:0,top:0}];cizHamRenk();}
+  hamTedBorc();
 }
+// Tedarikçiye güncel borç metni
+function tedBorc(ad){const c=ad?db.cariler.find(x=>x.tip==='tedarikci'&&(x.ad||'').toLowerCase()===(ad||'').trim().toLowerCase()):null;if(!c)return null;const p=[];if(+c.bakiye)p.push(money(c.bakiye,'TL'));if(+c.bakiyeUSD)p.push(money(c.bakiyeUSD,'USD'));return {c,str:p.length?p.join(' + '):'0'};}
+function hamTedBorc(){const el=$('h-ted-borc');if(!el)return;const t=tedBorc($('h-ted')?.value);
+  el.innerHTML=!t?'':(t.str==='0'?`✓ Kayıtlı tedarikçi · borç yok`:`💰 Bu tedarikçiye borcun: <b style="color:var(--bad)">${t.str}</b>`);}
 function hamKatDegis(){const kat=$('h-kat')?.value||'Kumaş';const cfg=KAT_CFG[kat]||KAT_CFG.Kumaş;
   if($('h-ad'))$('h-ad').placeholder=cfg.adPh;
   if($('h-detay'))$('h-detay').placeholder=cfg.detayPh;
@@ -2157,7 +2166,7 @@ function kaydetHammadde(id){const ad=$('h-ad').value.trim();if(!ad)return toast(
   if(id){Object.assign(db.hammadde.find(x=>x.id===id),o)}else{o.id=nid('h');db.hammadde.push(o)}
   save();closeM();envStokTazele();
   // Tedarikçi yazılmış ama carilerde yoksa — kayıt ekranını aç (kullanıcı kendi kaydetsin)
-  if(ted&&!tedC){toast('Kaydedildi ✓ · tedarikçiyi kaydet');formCari('tedarikci',0,ted);return;}
+  if(ted&&!tedC){toast('Kaydedildi ✓ · tedarikçiyi kaydet');setTimeout(()=>formCari('tedarikci',0,ted),150);return;}
   toast('Kaydedildi ✓')}
 function hamFotoSec(input){const f=input.files&&input.files[0];if(!f)return;const b=$('h-foto-box');if(b)b.textContent='⏳';resimSecYukle(f,d=>{fHamFoto=d;const bx=$('h-foto-box');if(bx)bx.innerHTML=`<img src="${d}">`},900,0.75)}
 function silHammadde(id){askConfirm('Silinsin mi?',()=>{db.hammadde=db.hammadde.filter(x=>x.id!==id);save();closeM();envStokTazele();toast('Silindi')})}
