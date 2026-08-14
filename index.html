@@ -772,7 +772,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-47'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-48'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1272,7 +1272,8 @@ function rPanel(){
   if(para){ // patron/ortak
     db.bekleyenPortal.forEach(o=>bekleyen.push({ic:'📮',bg:'var(--thr-s)',t:o.mus+' · portal siparişi',s:o.kalemler.length+' kalem · '+TL(o.tutar),act:()=>portalOnay(o.id)}));
     db.isemirleri.filter(i=>i.durum==='devam').forEach(i=>{const gec=-gunFark(i.baslangic+i.gun*86400000);if(gec>0)bekleyen.push({ic:'⏱️',bg:'var(--bad-s)',t:'İş Emri #'+i.id+' gecikti',s:i.urun+' · '+gec+' gün geç',act:()=>uretimDetay(i.id)})});
-    db.malSiparis.filter(s=>s.durum==='bekliyor'&&s.beklenen&&gunFark(s.beklenen)<=3).forEach(s=>{const g=gunFark(s.beklenen);bekleyen.push({ic:'🚚',bg:g<0?'var(--bad-s)':'var(--thr-s)',t:s.ad+' siparişi'+(g<0?' · GECİKTİ '+Math.abs(g)+'g':g===0?' · bugün gelmeli':' · '+g+' gün kaldı'),s:(s.ted?s.ted+' · ':'')+(+s.miktar||0)+' '+(s.birim||''),act:()=>malSipDetay(s.id)})});
+    db.malSiparis.filter(s=>sipAcik(s)&&s.beklenen&&gunFark(s.beklenen)<=3).forEach(s=>{const g=gunFark(s.beklenen);bekleyen.push({ic:'🚚',bg:g<0?'var(--bad-s)':'var(--thr-s)',t:s.ad+' siparişi'+(g<0?' · GECİKTİ '+Math.abs(g)+'g':g===0?' · bugün gelmeli':' · '+g+' gün kaldı'),s:(s.ted?s.ted+' · ':'')+(s.durum==='kismi'?'kalan '+sipKalan(s):(+s.miktar||0))+' '+(s.birim||''),act:()=>malSipDetay(s.id)})});
+    db.hammadde.filter(h=>(+h.kritik||0)>0&&(+h.stok||0)<=(+h.kritik||0)).forEach(h=>{const gel=malGelecek(h);bekleyen.push({ic:'🧵',bg:'var(--bad-s)',t:h.ad+' azaldı',s:'stok '+(+h.stok||0).toLocaleString('tr-TR')+' '+(h.birim||'')+' (kritik '+(+h.kritik||0)+')'+(gel>0?' · 🚚 '+gel.toLocaleString('tr-TR')+' yolda':''),act:()=>{envView='stok';go('envanter')}})});
     db.cekler.filter(c=>c.durum==='portfoyde'&&gunFark(c.vade)<=7).forEach(c=>{const g=gunFark(c.vade),ov=g<0,al=c.tip==='alinan';
       bekleyen.push({ic:'🏷️',bg:ov?'var(--bad-s)':al?'var(--good-s)':'var(--warn-s)',t:(al?'Çek tahsilatı':'Çek ödemesi')+(ov?' · GECİKTİ '+Math.abs(g)+'g':g===0?' · BUGÜN':' · '+g+' gün'),s:c.cari+' · '+TL(c.tutar)+' · '+dstr(c.vade),act:()=>go('cek')})});
     const dgB=duzenliGiderBekleyen();if(dgB.length)bekleyen.push({ic:'💸',bg:'var(--warn-s)',t:dgB.length+' düzenli gider bekliyor',s:dgB.map(g=>g.ad).join(', ')+' · '+TL(dgB.reduce((a,g)=>a+(+g.tutar||0),0)),act:()=>go('kasa')});
@@ -1461,15 +1462,17 @@ function sipSatirlar(s){if(s.satirlar&&s.satirlar.length)return s.satirlar;retur
 function sipTopMik(s){return sipSatirlar(s).reduce((a,l)=>a+(+l.miktar||0),0);}
 function sipTopGelen(s){return sipSatirlar(s).reduce((a,l)=>a+(+l.gelen||0),0);}
 // Bir malzemeye "yolda" (bekleyen siparişlerden gelecek) miktar
-function malGelecek(h){let t=0;db.malSiparis.forEach(s=>{if(s.durum!=='bekliyor')return;const m=(s.hid&&s.hid===h.id)||(!s.hid&&s.kat===h.kat&&(s.ad||'').toLowerCase()===(h.ad||'').toLowerCase());if(m)sipSatirlar(s).forEach(l=>t+=Math.max(0,(+l.miktar||0)-(+l.gelen||0)));});return t;}
+function malGelecek(h){let t=0;db.malSiparis.forEach(s=>{if(s.durum!=='bekliyor'&&s.durum!=='kismi')return;const m=(s.hid&&s.hid===h.id)||(!s.hid&&s.kat===h.kat&&(s.ad||'').toLowerCase()===(h.ad||'').toLowerCase());if(m)sipSatirlar(s).forEach(l=>t+=Math.max(0,(+l.miktar||0)-(+l.gelen||0)));});return t;}
+function sipAcik(s){return s.durum==='bekliyor'||s.durum==='kismi';}
+function sipKalan(s){return sipSatirlar(s).reduce((a,l)=>a+Math.max(0,(+l.miktar||0)-(+l.gelen||0)),0);}
 // Stoğa renk bazlı ekle
 function malStoklaRenk(h,renk,mik){if(!mik)return;
   if(renk){if(!h.renkler)h.renkler=[];let r=h.renkler.find(x=>(x.ad||'').toLowerCase()===(renk||'').toLowerCase());if(!r){r={ad:renk,stok:0,top:0};h.renkler.push(r);}r.stok=(+r.stok||0)+mik;h.stok=h.renkler.reduce((a,x)=>a+(+x.stok||0),0);}
   else h.stok=(+h.stok||0)+mik;
 }
 function rEnvSiparisHTML(){
-  const bek=db.malSiparis.filter(s=>s.durum==='bekliyor').sort((a,b)=>(a.beklenen||9e15)-(b.beklenen||9e15));
-  const gecmis=db.malSiparis.filter(s=>s.durum!=='bekliyor').sort((a,b)=>(b.gelenTarih||b.siparisTarih||0)-(a.gelenTarih||a.siparisTarih||0));
+  const bek=db.malSiparis.filter(sipAcik).sort((a,b)=>(a.beklenen||9e15)-(b.beklenen||9e15));
+  const gecmis=db.malSiparis.filter(s=>!sipAcik(s)).sort((a,b)=>(b.gelenTarih||b.siparisTarih||0)-(a.gelenTarih||a.siparisTarih||0));
   let h=`<button class="btn g" style="margin-bottom:12px" onclick="malSipForm(0)">＋ Yeni Sipariş (kumaşçı / aksesuar)</button>`;
   h+=`<div class="sec">Bekleyenler · ${bek.length}</div>`;
   h+=bek.length?`<div class="card">`+bek.map(malSipRow).join('')+`</div>`:emp('🚚','Bekleyen sipariş yok — verdiğin kumaş/aksesuar siparişini "＋ Yeni Sipariş" ile gir, gelince teslim al.');
@@ -1481,7 +1484,8 @@ function malSipRow(s){
   const dur=gun==null?'tarih yok':(gun<0?`<span style="color:var(--bad)">⏰ ${Math.abs(gun)}g gecikti</span>`:gun===0?`<span style="color:var(--warn)">bugün</span>`:`${gun}g kaldı`);
   const fiy=s.fiyat>0?` · ${s.pb==='USD'?'$':'₺'}${(+s.fiyat).toLocaleString('tr-TR')}`:'';
   const tot=sipTopMik(s);const rn=sipSatirlar(s).filter(l=>l.renk).length;
-  return `<div class="row" onclick="malSipDetay(${s.id})"><div class="av gray">${envKatIc(s.kat)}</div><div class="mid"><div class="t">${esc(s.ad)} <span class="tag">${tot.toLocaleString('tr-TR')} ${esc(s.birim||'')}${rn?' · '+rn+' renk':''}</span></div><div class="s">${s.ted?'🚚 '+esc(s.ted)+' · ':''}📅 ${s.beklenen?dstr(s.beklenen):'—'} · ${dur}${fiy}</div></div><span style="color:var(--sub)">›</span></div>`;
+  const kismi=s.durum==='kismi';const kalan=sipKalan(s);
+  return `<div class="row" onclick="malSipDetay(${s.id})"><div class="av gray">${envKatIc(s.kat)}</div><div class="mid"><div class="t">${esc(s.ad)} <span class="tag">${tot.toLocaleString('tr-TR')} ${esc(s.birim||'')}${rn?' · '+rn+' renk':''}</span>${kismi?` <span class="tag" style="background:var(--thr-s);color:var(--thr)">kısmi</span>`:''}</div><div class="s">${s.ted?'🚚 '+esc(s.ted)+' · ':''}${kismi?`kalan <b>${kalan.toLocaleString('tr-TR')} ${esc(s.birim||'')}</b> · `:''}📅 ${s.beklenen?dstr(s.beklenen):'—'} · ${dur}${fiy}</div></div><span style="color:var(--sub)">›</span></div>`;
 }
 function malSipGecmisRow(s){
   if(s.durum==='iptal')return `<div class="row" onclick="malSipDetay(${s.id})"><div class="av gray">${envKatIc(s.kat)}</div><div class="mid"><div class="t">${esc(s.ad)} <span class="tag" style="background:var(--bad-s);color:var(--bad)">iptal</span></div><div class="s">${s.ted?esc(s.ted)+' · ':''}${sipTopMik(s)} ${esc(s.birim||'')}</div></div></div>`;
@@ -1494,13 +1498,13 @@ function malSipDetay(id){
   const lines=sipSatirlar(s);const renkli=lines.some(l=>l.renk);
   const to=sipTopMik(s),tg=sipTopGelen(s);
   const tlF=(+s.fiyat||0)*pbKur(s.pb||'TL');const toplam=tlF*to;
-  const geldi=s.durum==='geldi';
+  const geldi=s.durum==='geldi';const kismi=s.durum==='kismi';const gelmis=geldi||kismi;
   // renk satırları tablosu
   let tablo='';
   if(renkli||lines.length>1){
-    tablo=`<div class="card" style="padding:6px 12px;margin-top:8px"><div style="display:flex;font-size:10.5px;color:var(--sub);font-weight:800;padding:4px 0;border-bottom:1px solid var(--ln2)"><span style="flex:1">RENK</span><span style="width:64px;text-align:right">SİPARİŞ</span>${geldi?`<span style="width:64px;text-align:right">GELEN</span><span style="width:48px;text-align:right">FARK</span>`:''}</div>`+
-    lines.map(l=>{const f=(+l.gelen||0)-(+l.miktar||0);return `<div style="display:flex;align-items:center;padding:5px 0;border-bottom:1px solid var(--ln2);font-size:13px"><span style="flex:1;font-weight:700">${esc(l.renk||'—')}</span><span style="width:64px;text-align:right">${(+l.miktar||0).toLocaleString('tr-TR')}</span>${geldi?`<span style="width:64px;text-align:right;font-weight:700">${(+l.gelen||0).toLocaleString('tr-TR')}</span><span style="width:48px;text-align:right;font-weight:800;color:${Math.abs(f)<0.001?'var(--good)':'var(--bad)'}">${f>0?'+':''}${+f.toFixed(2)||0}</span>`:''}</div>`}).join('')+
-    `<div style="display:flex;align-items:center;padding:6px 0;font-size:13px;font-weight:800"><span style="flex:1">Toplam</span><span style="width:64px;text-align:right">${to.toLocaleString('tr-TR')}</span>${geldi?`<span style="width:64px;text-align:right">${tg.toLocaleString('tr-TR')}</span><span style="width:48px;text-align:right;color:${Math.abs(tg-to)<0.001?'var(--good)':'var(--bad)'}">${tg-to>0?'+':''}${+(tg-to).toFixed(2)||0}</span>`:''}</div></div>`;
+    tablo=`<div class="card" style="padding:6px 12px;margin-top:8px"><div style="display:flex;font-size:10.5px;color:var(--sub);font-weight:800;padding:4px 0;border-bottom:1px solid var(--ln2)"><span style="flex:1">RENK</span><span style="width:58px;text-align:right">SİPARİŞ</span>${gelmis?`<span style="width:56px;text-align:right">GELEN</span><span style="width:52px;text-align:right">KALAN</span>`:''}</div>`+
+    lines.map(l=>{const M=+l.miktar||0,G=+l.gelen||0,kalan=M-G;return `<div style="display:flex;align-items:center;padding:5px 0;border-bottom:1px solid var(--ln2);font-size:13px"><span style="flex:1;font-weight:700">${esc(l.renk||'—')}</span><span style="width:58px;text-align:right">${M.toLocaleString('tr-TR')}</span>${gelmis?`<span style="width:56px;text-align:right;font-weight:700">${G.toLocaleString('tr-TR')}</span><span style="width:52px;text-align:right;font-weight:800;color:${Math.abs(kalan)<0.001?'var(--good)':kalan>0?'var(--warn)':'var(--bad)'}">${Math.abs(kalan)<0.001?'✓':(+kalan.toFixed(2))}</span>`:''}</div>`}).join('')+
+    `<div style="display:flex;align-items:center;padding:6px 0;font-size:13px;font-weight:800"><span style="flex:1">Toplam</span><span style="width:58px;text-align:right">${to.toLocaleString('tr-TR')}</span>${gelmis?`<span style="width:56px;text-align:right">${tg.toLocaleString('tr-TR')}</span><span style="width:52px;text-align:right;color:${Math.abs(to-tg)<0.001?'var(--good)':'var(--warn)'}">${+(to-tg).toFixed(2)||0}</span>`:''}</div></div>`;
   }
   let h=`<div class="card" style="padding:13px 15px">
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px"><div class="av gray" style="width:44px;height:44px;font-size:22px">${envKatIc(s.kat)}</div><div><div style="font-weight:800;font-size:16px">${esc(s.ad)}</div><div class="mini">${esc(s.kat)}${s.ted?' · 🚚 '+esc(s.ted):''}</div></div></div>
@@ -1510,11 +1514,13 @@ function malSipDetay(id){
     <div class="kv"><span class="k">Beklenen teslim</span><span class="v">${s.beklenen?dstr(s.beklenen):'—'}</span></div>
     ${s.not?`<div class="kv"><span class="k">Not</span><span class="v">${esc(s.not)}</span></div>`:''}
   </div>${tablo}`;
-  if(geldi){h+=(Math.abs(tg-to)<0.001?`<div class="okbox" style="margin-top:8px">✓ Sipariş ile gelen aynı${s.gelenNot?' · '+esc(s.gelenNot):''}</div>`:`<div class="warnbox" style="margin-top:8px">⚠️ Sipariş ${to} · gelen ${tg} — <b>${tg-to>0?'fazla':'eksik'} ${Math.abs(+(tg-to).toFixed(2))} ${esc(s.birim||'')}</b>${s.gelenNot?' · '+esc(s.gelenNot):''}</div>`)+(s.borclandi?`<div class="kv" style="margin-top:6px"><span class="k">Borç yazıldı</span><span class="v">${money(+s.borcTutar||0,s.borcPB||'TL')} → ${esc(s.ted||'tedarikçi')}</span></div>`:'');}
-  if(s.durum==='bekliyor'){
-    if(s.ted&&s.fiyat>0)h+=`<div class="okbox" style="margin-top:10px">🚚 Teslim alınca gelen tutar <b>${esc(s.ted)}</b> bakiyesine <b>borç</b> yazılır.</div>`;
-    h+=`<button class="btn g" style="margin-top:12px" onclick="malSipTeslim(${id})">✓ Teslim Al (tartıp gir)</button>
-      <button class="btn ghost" style="margin-top:8px" onclick="malSipForm(${id})">✏️ Düzenle</button>
+  if(kismi)h+=`<div class="warnbox" style="margin-top:8px">📦 Kısmi teslim — <b>${tg.toLocaleString('tr-TR')}</b> geldi, <b>${(+(to-tg).toFixed(2)).toLocaleString('tr-TR')} ${esc(s.birim||'')}</b> yolda.</div>`;
+  if(geldi)h+=(Math.abs(tg-to)<0.001?`<div class="okbox" style="margin-top:8px">✓ Sipariş ile gelen aynı${s.gelenNot?' · '+esc(s.gelenNot):''}</div>`:`<div class="warnbox" style="margin-top:8px">⚠️ Sipariş ${to} · gelen ${tg} — <b>${tg-to>0?'fazla':'eksik'} ${Math.abs(+(tg-to).toFixed(2))} ${esc(s.birim||'')}</b>${s.gelenNot?' · '+esc(s.gelenNot):''}</div>`);
+  if(gelmis&&s.borclandi)h+=`<div class="kv" style="margin-top:6px"><span class="k">Yazılan borç</span><span class="v">${money(+s.borcTutar||0,s.borcPB||'TL')} → ${esc(s.ted||'tedarikçi')}</span></div>`;
+  if(sipAcik(s)){
+    if(s.durum==='bekliyor'&&s.ted&&s.fiyat>0)h+=`<div class="okbox" style="margin-top:10px">🚚 Teslim alınca gelen tutar <b>${esc(s.ted)}</b> bakiyesine <b>borç</b> yazılır.</div>`;
+    h+=`<button class="btn g" style="margin-top:12px" onclick="malSipTeslim(${id})">✓ Teslim Al (${kismi?'kalanı ':''}tartıp gir)</button>
+      ${s.durum==='bekliyor'?`<button class="btn ghost" style="margin-top:8px" onclick="malSipForm(${id})">✏️ Düzenle</button>`:''}
       <button class="btn ghost" style="margin-top:8px" onclick="malSipIptal(${id})">Siparişi İptal Et</button>`;
   }else{
     h+=`<button class="btn danger" style="margin-top:12px" onclick="malSipSil(${id})">Sil</button>`;
@@ -1602,49 +1608,51 @@ function kaydetMalSip(id){
   toast(id?'Sipariş güncellendi ✓':'Sipariş oluşturuldu ✓');
 }
 function malSipTeslim(id){
-  const s=db.malSiparis.find(x=>x.id===id);if(!s||s.durum!=='bekliyor')return;
+  const s=db.malSiparis.find(x=>x.id===id);if(!s||!sipAcik(s))return;
   const lines=sipSatirlar(s);const bir=esc(s.birim||'');
-  const rows=lines.map((l,i)=>`<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span style="width:20px;height:20px;flex:0 0 auto;border-radius:6px;background:${hexFromAd(l.renk)||'#8a8f98'};border:1px solid var(--ln)"></span><div style="flex:1;min-width:0"><b style="font-size:14px">${esc(l.renk||'—')}</b> <span class="mini">sipariş ${(+l.miktar||0).toLocaleString('tr-TR')}</span></div><input id="mt-g-${i}" type="number" inputmode="decimal" value="${+l.miktar||0}" oninput="malSipTesHesap(${id})" style="width:74px;margin:0;padding:8px" title="gelen ${bir}"><span id="mt-d-${i}" style="width:46px;text-align:right;font-weight:800;font-size:12px"></span></div>`).join('');
+  const rows=lines.map((l,i)=>{const M=+l.miktar||0,G=+l.gelen||0,kalan=Math.max(0,M-G);
+    return `<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span style="width:20px;height:20px;flex:0 0 auto;border-radius:6px;background:${hexFromAd(l.renk)||'#8a8f98'};border:1px solid var(--ln)"></span><div style="flex:1;min-width:0"><b style="font-size:14px">${esc(l.renk||'—')}</b> <span class="mini">sip ${M.toLocaleString('tr-TR')}${G?' · geldi '+G.toLocaleString('tr-TR'):''}</span></div><input id="mt-g-${i}" type="number" inputmode="decimal" value="${kalan||0}" oninput="malSipTesHesap(${id})" style="width:74px;margin:0;padding:8px" title="bu parti ${bir}"><span id="mt-d-${i}" style="width:52px;text-align:right;font-weight:800;font-size:11px"></span></div>`;}).join('');
   open_('✓ Teslim Al · '+esc(s.ad),`
-    <div class="infobox">Kesimhanede <b>tartılan gerçek ${bir}</b>'ı renk renk gir. Siparişle karşılaştıralım.${(s.ted&&s.fiyat>0&&!s.borclandi)?` Gelen tutar <b>${esc(s.ted)}</b> bakiyesine borç yazılır.`:''}</div>
-    <div style="display:flex;font-size:10px;color:var(--sub);font-weight:800;padding:0 0 4px;margin-left:27px"><span style="flex:1">RENK · SİPARİŞ</span><span style="width:74px;text-align:center">GELEN</span><span style="width:46px;text-align:right">FARK</span></div>
+    <div class="infobox">Bu parti kesimhanede <b>tartılan gerçek ${bir}</b>'ı gir. Hepsi gelmediyse eksik gir — <b>kalan yolda</b> kalır, sonra tekrar teslim alırsın.</div>
+    <div style="display:flex;font-size:10px;color:var(--sub);font-weight:800;padding:0 0 4px;margin-left:27px"><span style="flex:1">RENK · SİPARİŞ</span><span style="width:74px;text-align:center">BU PARTİ</span><span style="width:52px;text-align:right">KALAN</span></div>
     ${rows}
     <div id="mt-tot" style="margin-top:8px"></div>
     <label style="margin-top:8px">Teslim tarihi</label><input id="mt-tarih" type="date" value="${_isoTar(Date.now())}">
-    <label>Not (yanlış/eksik/renk farkı vb.)</label><input id="mt-not" value="${esc(s.gelenNot||'')}" placeholder="ör. lacivert 5 kg eksik">
-    <button class="btn g" style="margin-top:12px" onclick="kaydetMalSipTeslim(${id})">📦 Stoğa Ekle ve Kapat</button>`);
+    <label>Not</label><input id="mt-not" value="${esc(s.gelenNot||'')}" placeholder="ör. lacivert 5 kg eksik">
+    <button class="btn g" style="margin-top:12px" onclick="kaydetMalSipTeslim(${id})">📦 Bu Partiyi Stoğa Ekle</button>`);
   malSipTesHesap(id);
 }
-function malSipTesHesap(id){const s=db.malSiparis.find(x=>x.id===id);if(!s)return;const lines=sipSatirlar(s);let to=0,tg=0;
-  lines.forEach((l,i)=>{const g=+($('mt-g-'+i)?.value||0);const o=+l.miktar||0;to+=o;tg+=g;const f=g-o;const d=$('mt-d-'+i);if(d){d.textContent=(f>0?'+':'')+(+f.toFixed(2)||0);d.style.color=Math.abs(f)<0.001?'var(--good)':'var(--bad)';}});
-  const tot=$('mt-tot');if(!tot)return;const fark=tg-to;const bir=esc(s.birim||'');
-  const tut=s.fiyat>0?` · ${money(tg*(+s.fiyat||0),s.pb||'TL')}`:'';
-  tot.innerHTML=Math.abs(fark)<0.001?`<div class="okbox">✓ Toplam sipariş ile aynı — <b>${tg.toLocaleString('tr-TR')} ${bir}</b>${tut}</div>`:`<div class="warnbox">⚠️ Sipariş <b>${to.toLocaleString('tr-TR')}</b> · gelen <b>${tg.toLocaleString('tr-TR')}</b> — <b>${fark>0?'fazla':'eksik'} ${Math.abs(+fark.toFixed(2))} ${bir}</b>${tut}</div>`;
+function malSipTesHesap(id){const s=db.malSiparis.find(x=>x.id===id);if(!s)return;const lines=sipSatirlar(s);let buParti=0,kalanSonra=0;
+  lines.forEach((l,i)=>{const inp=+($('mt-g-'+i)?.value||0);const M=+l.miktar||0,G=+l.gelen||0;const kSonra=M-(G+inp);buParti+=inp;kalanSonra+=Math.max(0,kSonra);
+    const d=$('mt-d-'+i);if(d){d.textContent=Math.abs(kSonra)<0.001?'✓':(kSonra>0?(+kSonra.toFixed(2)):'+'+Math.abs(+kSonra.toFixed(2)));d.style.color=kSonra>0.001?'var(--warn)':(kSonra<-0.001?'var(--bad)':'var(--good)');}});
+  const tot=$('mt-tot');if(!tot)return;const bir=esc(s.birim||'');
+  const tut=s.fiyat>0?` · borç ${money(buParti*(+s.fiyat||0),s.pb||'TL')}`:'';
+  tot.innerHTML=kalanSonra>0.001?`<div class="warnbox">📦 Bu parti <b>${buParti.toLocaleString('tr-TR')} ${bir}</b>${tut} · sonra <b>${kalanSonra.toLocaleString('tr-TR')} ${bir}</b> yolda kalır (kısmi)</div>`:`<div class="okbox">✓ Bu partiyle sipariş tamamlanıyor — <b>${buParti.toLocaleString('tr-TR')} ${bir}</b>${tut}</div>`;
 }
 function kaydetMalSipTeslim(id){
   const s=db.malSiparis.find(x=>x.id===id);if(!s)return;
   const lines=sipSatirlar(s);
-  lines.forEach((l,i)=>{l.gelen=Math.max(0,+($('mt-g-'+i)?.value||0));});
-  s.satirlar=lines;const tg=sipTopGelen(s);
-  const tV=$('mt-tarih')?.value;const gelenTarih=tV?new Date(tV).getTime():Date.now();
-  s.durum='geldi';s.gelenMiktar=tg;s.gelenTarih=gelenTarih;s.gelenNot=($('mt-not')?.value||'').trim();
   // stoğa ekle (renk renk): bağlı malzemeyi bul, yoksa oluştur
   let h=s.hid?db.hammadde.find(x=>x.id===s.hid):null;
   if(!h)h=db.hammadde.find(x=>x.kat===s.kat&&(x.ad||'').toLowerCase()===(s.ad||'').toLowerCase());
   if(!h){h={id:nid('h'),ad:s.ad,kat:s.kat,birim:s.birim,detay:'',stok:0,renkler:[],kritik:0,alis:+s.fiyat||0,pb:s.pb||'TL',ted:s.ted||'',tedId:s.tedId||null};db.hammadde.push(h);}
   s.hid=h.id;if(s.fiyat>0){h.alis=+s.fiyat;h.pb=s.pb;}
-  lines.forEach(l=>malStoklaRenk(h,l.renk,+l.gelen||0));
-  // tedarikçiyi borçlandır (toplam gelen × fiyat) — sadece bir kez; tedId boşsa isimden bul
+  let buParti=0;
+  lines.forEach((l,i)=>{const inp=Math.max(0,+($('mt-g-'+i)?.value||0));if(inp>0){l.gelen=(+l.gelen||0)+inp;buParti+=inp;malStoklaRenk(h,l.renk,inp);}});
+  s.satirlar=lines;const tg=sipTopGelen(s),to=sipTopMik(s);
+  const tV=$('mt-tarih')?.value;const gelenTarih=tV?new Date(tV).getTime():Date.now();
+  s.gelenMiktar=tg;s.gelenTarih=gelenTarih;const nnot=($('mt-not')?.value||'').trim();if(nnot)s.gelenNot=nnot;
+  const tamam=sipKalan(s)<=0.001;s.durum=tamam?'geldi':'kismi';
+  // bu partinin borcu (kısmi teslimde her parti kendi borcunu yazar); tedId boşsa isimden bul
   let borcMsj='';
   let ted=s.tedId?cari(s.tedId):null;
   if(!ted&&s.ted)ted=db.cariler.find(c=>c.tip==='tedarikci'&&(c.ad||'').toLowerCase()===(s.ted||'').toLowerCase());
   if(ted)s.tedId=ted.id;
-  if(ted&&s.fiyat>0&&!s.borclandi){const tutar=tg*(+s.fiyat||0),pb=s.pb||'TL';
+  if(ted&&s.fiyat>0&&buParti>0){const tutar=buParti*(+s.fiyat||0),pb=s.pb||'TL';
     if(pb==='USD'){ted.doviz='USD';ted.bakiyeUSD=(+ted.bakiyeUSD||0)+tutar}else{ted.bakiye=(+ted.bakiye||0)+tutar}
-    s.borclandi=true;s.borcTutar=tutar;s.borcPB=pb;borcMsj=' · '+esc(ted.ad)+' bakiyesine '+money(tutar,pb)+' borç yazıldı';}
-  const to=sipTopMik(s);
+    s.borclandi=true;s.borcTutar=(+s.borcTutar||0)+tutar;s.borcPB=pb;borcMsj=' · '+esc(ted.ad)+' +'+money(tutar,pb)+' borç';}
   save();closeM();envView='siparis';rEnvanter();
-  toast((Math.abs(tg-to)<0.001?'✓ Teslim alındı, stoğa eklendi':'⚠️ Fark var — teslim alındı, stoğa eklendi')+borcMsj);
+  toast((tamam?'✓ Sipariş tamamlandı, stoğa eklendi':'📦 Kısmi teslim — kalan yolda')+borcMsj);
 }
 function malSipIptal(id){askConfirm('Sipariş iptal edilsin mi?',()=>{const s=db.malSiparis.find(x=>x.id===id);if(s)s.durum='iptal';save();closeM();envView='siparis';rEnvanter();toast('Sipariş iptal edildi');});}
 function malSipSil(id){askConfirm('Sipariş kaydı silinsin mi?',()=>{db.malSiparis=db.malSiparis.filter(x=>x.id!==id);save();closeM();envView='siparis';rEnvanter();toast('Silindi');});}
