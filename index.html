@@ -529,7 +529,7 @@ const CANLI_DOMEN={
   satis:['satislar','bekleyenPortal','islenenSiparis'],
   cek:['cekler'],
   uretim:['isemirleri'],
-  ayar:['firma','firmaSlogan','firmaAdres','firmaTel','firmaWp','firmaLogo','firmaSite','satici','kurUSD','kurEUR','seq','kademe','minSiparis','kampanya','kurTarih','portalFav','portalTaslak','duzenliGider','cldName','cldPreset']
+  ayar:['firma','firmaSlogan','firmaAdres','firmaTel','firmaWp','firmaTelegram','firmaLogo','firmaSite','satici','kurUSD','kurEUR','seq','kademe','minSiparis','kampanya','kurTarih','portalFav','portalTaslak','duzenliGider','cldName','cldPreset']
 };
 // Rol → hangi alanları OKUR / YAZAR (veri seviyesinde sınır; arayüz gizlemesiyle birlikte)
 const _CTUM=Object.keys(CANLI_DOMEN);
@@ -772,7 +772,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-50'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-51'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -2891,82 +2891,95 @@ window.addEventListener('afterprint',()=>{if(document.body.classList.contains('p
 /* ===== OTOMATİK YAZDIRMA — fişi resme çevir, buluttaki kuyruğa gönder =====
    Bilgisayardaki "yazıcı ajanı" bu kuyruğu dinler ve termal yazıcıya basar. */
 function fisResimData(s){
-  // 80mm termal ~576px — SİYAH VURGULU stil, büyük punto, 1-bit keskin
-  const W=576,P=16,dpr=2;
-  const money2=(v,pb)=>money(v,pb);
+  // 80mm termal — Satış Fişi (OSSY HOMER örneği: temiz, kesik çizgili, çok para birimli)
+  const W=576,P=20,dpr=2,R=W-P,CX=W/2;
+  const SYM={TL:'₺',USD:'$',EUR:'€'};
+  const pb=s.pb||'TL';
+  const num=v=>{let str=(+v||0).toFixed(2);if(str.endsWith('0'))str=str.slice(0,-1);return str;};
+  const fmt=(v,cur)=>num(v)+(SYM[cur||pb]||'₺');
   const m=cari(s.mid);
-  const d=new Date(s.tarih);const tarih=d.getFullYear()+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+String(d.getDate()).padStart(2,'0')+' '+d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
-  let toplamAdet=0;s.kalemler.forEach(k=>toplamAdet+=k.mik);
-  const div=pbKur(s.pb);const netTL=(s.tutar-s.odenen-(s.kesik||0))*div;
-  const sonBk=m?m.bakiye:null;const oncekiBk=sonBk!=null?sonBk-netTL:null;
-  const iskT=(s.araToplam||0)*(s.iskonto||0)/100;const kalan=Math.max(0,s.tutar-s.odenen-(s.kesik||0));
-  const not=(s.sevkiyat||'').trim();
-  const ara=[['Ara Toplam',money2(s.araToplam||s.tutar,s.pb)]];
-  if(s.iskonto)ara.push(['İndirim %'+s.iskonto,'−'+money2(iskT,s.pb)]);
-  if(s.tasima)ara.push(['Taşıma / Kargo','+'+money2(s.tasima,s.pb)]);
-  if(s.kesik)ara.push(['Kesik','−'+money2(s.kesik,s.pb)]);
-  if(s.kdv!=null)ara.push(['KDV %'+(s.kdv||0),'+'+money2(s.kdvTutar||0,s.pb)]);
-  const ode=[['Ödenen',money2(s.odenen,s.pb)],['KALAN',money2(kalan,s.pb)]];
-  if(oncekiBk!=null)ode.push(['Önceki Bakiye',money2(oncekiBk,'TL')]);
-  if(sonBk!=null)ode.push(['Son Bakiye',money2(sonBk,'TL')]);
-  const cnt=(db.firmaTel?1:0)+(db.firmaWp?1:0)+(db.firmaAdres?1:0);
-  let H=92 + 88 + cnt*28 + 58 + 44 + 40 + s.kalemler.length*56 + 62 + ara.length*30 + 80 + ode.length*30 + (not?34:0) + 42 + (window.qrcode?162:0) + 18;
-  const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const g=c.getContext('2d');g.scale(dpr,dpr);
-  g.fillStyle='#fff';g.fillRect(0,0,W,H);const CX=W/2,R=W-P;
+  const d=new Date(s.tarih);const tarih=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  let toplamAdet=0;s.kalemler.forEach(k=>toplamAdet+=(+k.mik||0));
+  const araToplam=(s.araToplam||s.tutar||0);const iskT=araToplam*(s.iskonto||0)/100;
+  const kdvHaric=araToplam-iskT;const kdvTutar=+s.kdvTutar||0;const toplamGoods=(s.tutar||0)-(s.tasima||0);
+  const satici=s.satici||db.satici||'';
+  const HMAX=5000;
+  const c=document.createElement('canvas');c.width=W*dpr;c.height=HMAX*dpr;const g=c.getContext('2d');g.scale(dpr,dpr);
+  g.fillStyle='#fff';g.fillRect(0,0,W,HMAX);g.fillStyle='#000';g.textBaseline='alphabetic';
   const clip=(t,f,mw)=>{g.font=f;t=''+t;if(g.measureText(t).width<=mw)return t;while(t.length>1&&g.measureText(t+'…').width>mw)t=t.slice(0,-1);return t+'…';};
-  const dash=(y)=>{g.save();g.strokeStyle='#000';g.lineWidth=2.4;g.setLineDash([5,3]);g.beginPath();g.moveTo(P,y);g.lineTo(R,y);g.stroke();g.restore();};
-  // ===== SİYAH BAŞLIK BANDI =====
-  g.fillStyle='#000';g.fillRect(0,0,W,92);g.fillStyle='#fff';g.textAlign='center';g.textBaseline='middle';
-  g.font='800 40px sans-serif';g.fillText(clip((db.firma||'IQ BASICS').toLocaleUpperCase('tr-TR'),'800 40px sans-serif',W-40),CX,db.firmaSlogan?38:48);
-  if(db.firmaSlogan){g.font='600 18px sans-serif';g.fillText(clip(db.firmaSlogan,'600 18px sans-serif',W-40),CX,72);}
-  g.textBaseline='alphabetic';g.fillStyle='#000';let y=128;
-  g.textAlign='center';g.font='800 28px sans-serif';g.fillText('SİPARİŞ FİŞİ',CX,y);
-  g.font='700 17px sans-serif';g.fillText('No: '+s.id+'   ·   '+tarih,CX,y+24);y+=54;
-  // iletişim (ikonlu)
+  const dash=(yy)=>{g.save();g.strokeStyle='#000';g.lineWidth=2.2;g.setLineDash([6,4]);g.beginPath();g.moveTo(P,yy);g.lineTo(R,yy);g.stroke();g.restore();};
+  const dbox=(x,yy,w,h)=>{g.save();g.strokeStyle='#000';g.lineWidth=1.6;g.setLineDash([4,3]);g.strokeRect(x,yy,w,h);g.restore();};
+  let y=P+6;
+  // ===== LOGO / FİRMA =====
+  fisResimLogoHazirla();const lg=fisResimData._logo;
+  if(lg&&lg.complete&&lg.naturalWidth>0){let iw=lg.naturalWidth,ih=lg.naturalHeight;const sc=Math.min(260/iw,120/ih);iw*=sc;ih*=sc;g.drawImage(lg,CX-iw/2,y,iw,ih);y+=ih+10;}
+  else{g.textAlign='center';g.font='800 44px sans-serif';g.fillText(clip((db.firma||'IQ BASICS').toLocaleUpperCase('tr-TR'),'800 44px sans-serif',W-40),CX,y+40);y+=58;}
+  // ===== BAŞLIK =====
+  dash(y);y+=8;g.textAlign='center';g.font='800 34px sans-serif';g.fillText('Satış Fişi',CX,y+28);y+=40;dash(y);y+=26;
+  // adres
+  if(db.firmaAdres){const parts=db.firmaAdres.split(/\n|\s\/\s|\//).map(x=>x.trim()).filter(Boolean);g.font='700 18px sans-serif';g.textAlign='center';parts.forEach(pt=>{g.fillText(clip(pt,'700 18px sans-serif',W-30),CX,y);y+=24;});}
+  y+=6;
+  // iletişim (ikonlu, sol)
   g.textAlign='left';g.font='700 19px sans-serif';
-  [['📞 ',db.firmaTel],['🟢 ',db.firmaWp],['📍 ',db.firmaAdres]].forEach(x=>{if(x[1]){g.fillText(clip(x[0]+x[1],'700 19px sans-serif',W-2*P),P,y);y+=28;}});
-  y+=6;dash(y);y+=26;
-  // müşteri
-  g.textAlign='left';g.font='700 16px sans-serif';g.fillText('MÜŞTERİ',P,y);g.textAlign='right';g.font='700 15px sans-serif';g.fillText(tarih,R,y);y+=30;
-  g.textAlign='left';g.font='800 28px sans-serif';g.fillText(clip(s.mus||'—','800 28px sans-serif',W-2*P),P,y);y+=22;
-  g.font='700 15px sans-serif';const loc=[m&&m.ulke,m&&(m.sehir||m.il),m&&m.tel].filter(Boolean).join(' · ');if(loc)g.fillText(clip(loc,'700 15px sans-serif',W-2*P),P,y);y+=18;
-  // ===== SİYAH TABLO BAŞLIĞI =====
-  y+=6;g.fillStyle='#000';g.fillRect(P,y,W-2*P,34);g.fillStyle='#fff';g.textBaseline='middle';
-  const cKat=P+128,cAd=W-190,cFi=W-104,cTo=R-8;
-  g.font='800 16px sans-serif';g.textAlign='left';g.fillText('KOD',P+8,y+18);g.fillText('KATEGORİ',cKat,y+18);g.textAlign='right';g.fillText('ADET',cAd,y+18);g.fillText('FİYAT',cFi,y+18);g.fillText('TOPLAM',cTo,y+18);
-  g.textBaseline='alphabetic';y+=34+26;g.fillStyle='#000';
-  s.kalemler.forEach(k=>{const u=urun(k.uid);const kod=(u&&u.kod)||'—';const kat=(u&&u.kat)?u.kat.toLocaleUpperCase('tr-TR'):(k.urun||'').toLocaleUpperCase('tr-TR');
-    g.textAlign='left';g.font='800 22px sans-serif';g.fillText(clip(kod,'800 22px sans-serif',cKat-P-8),P,y);g.fillText(clip(kat,'800 22px sans-serif',cAd-cKat-10),cKat,y);
-    g.textAlign='right';g.font='800 21px sans-serif';g.fillText(''+k.mik,cAd,y);g.fillText(money2(k.fiyat,s.pb),cFi,y);g.fillText(money2(k.mik*k.fiyat,s.pb),cTo,y);y+=26;
-    const cl=k.renkler&&k.renkler.length?k.renkler.map(r=>esc(r.ad)+'×'+r.mik).join(' '):'';
-    const alt=(k.urun&&k.urun.toLocaleUpperCase('tr-TR')!==kat?k.urun+(cl?' · ':''):'')+cl;
-    g.textAlign='left';g.font='600 16px sans-serif';if(alt)g.fillText(clip(alt,'600 16px sans-serif',W-2*P),P,y);y+=30;});
-  dash(y);y+=26;g.textAlign='left';g.font='800 22px sans-serif';g.fillText('Toplam Adet: '+toplamAdet,P,y);y+=32;
-  // ara satırlar
-  g.font='700 19px sans-serif';ara.forEach(r=>{g.textAlign='left';g.fillText(r[0],P,y);g.textAlign='right';g.fillText(r[1],R,y);y+=30;});y+=4;
-  // ===== TOPLAM SİYAH KUTU =====
-  g.fillStyle='#000';g.fillRect(P,y,W-2*P,52);g.fillStyle='#fff';g.textBaseline='middle';
-  g.textAlign='left';g.font='800 28px sans-serif';g.fillText('TOPLAM',P+16,y+27);g.textAlign='right';g.font='800 32px sans-serif';g.fillText(money2(s.tutar,s.pb),R-16,y+27);
-  g.textBaseline='alphabetic';y+=52+26;g.fillStyle='#000';
-  // ödeme
-  ode.forEach(r=>{const big=(r[0]==='KALAN');g.textAlign='left';g.font=(big?'800 22px':'700 19px')+' sans-serif';g.fillText(r[0],P,y);g.textAlign='right';g.fillText(r[1],R,y);y+=30;});
-  // not (varsa)
-  if(not){y+=4;g.textAlign='left';g.font='700 17px sans-serif';g.fillText(clip('Not: '+not,'700 17px sans-serif',W-2*P),P,y);y+=28;}
-  y+=10;g.textAlign='center';g.font='700 18px sans-serif';g.fillText('★   Bizi tercih ettiğiniz için teşekkürler   ★',CX,y);y+=14;
-  // QR KOD — fiş özeti
+  [['📞 ',db.firmaTel||db.firmaWp],['✈️ ',db.firmaTelegram],['🌐 ',db.firmaSite]].forEach(x=>{if(x[1]){g.fillText(clip(x[0]+x[1],'700 19px sans-serif',W-2*P),P,y+14);y+=30;}});
+  y+=8;
+  // ===== MÜŞTERİ KUTUSU =====
+  g.textAlign='left';g.font='700 16px sans-serif';g.fillText('Müşteri:',P,y+12);y+=22;
+  const cbTop=y;let cy=y+26;const curSym=(m&&m.paraTercih&&SYM[m.paraTercih])?(' '+SYM[m.paraTercih]):(pb!=='TL'?' '+SYM[pb]:'');
+  g.font='800 26px sans-serif';g.fillText(clip((s.mus||'—')+curSym,'800 26px sans-serif',W-2*P-16),P+8,cy);cy+=30;
+  g.font='700 17px sans-serif';
+  if(m&&m.adres){g.fillText(clip(m.adres,'700 17px sans-serif',W-2*P-16),P+8,cy);cy+=24;}
+  if(m&&(m.ulke||m.sehir)){g.fillText(clip((m.ulke||m.sehir||'').toLocaleUpperCase('tr-TR'),'700 17px sans-serif',W-2*P-16),P+8,cy);cy+=24;}
+  if(m&&m.tel){g.fillText(clip(m.tel,'700 17px sans-serif',W-2*P-16),P+8,cy);cy+=24;}
+  cy+=4;dbox(P,cbTop,W-2*P,cy-cbTop);y=cy+16;
+  // ===== TARİH / SATICI + No =====
+  g.font='600 16px sans-serif';g.textAlign='left';g.fillText('Tarihi: '+tarih,P,y+6);if(satici)g.fillText('Satıcı: '+satici,P,y+28);
+  g.textAlign='right';g.font='800 30px sans-serif';g.fillText('No. '+s.id,R,y+22);y+=46;
+  // ===== KALEM TABLOSU =====
+  const xTop=R,xFiyat=R-116,xAdet=R-222,xRenk=P+52;
+  g.font='800 17px sans-serif';g.textAlign='left';g.fillText('Kod',P,y+4);g.fillText('Renk',xRenk+2,y+4);
+  g.textAlign='right';g.fillText('Adet',xAdet,y+4);g.fillText('Fiyat',xFiyat,y+4);g.fillText('Toplam',xTop,y+4);
+  y+=12;g.save();g.strokeStyle='#000';g.lineWidth=2;g.beginPath();g.moveTo(P,y);g.lineTo(R,y);g.stroke();g.restore();y+=26;
+  s.kalemler.forEach(k=>{const u=urun(k.uid);const kod=(u&&u.kod)||k.urun||'—';
+    g.textAlign='left';g.font='800 22px sans-serif';g.fillText(clip(kod,'800 22px sans-serif',xAdet-P-60),P,y);
+    g.textAlign='right';g.font='800 21px sans-serif';g.fillText(''+(+k.mik||0),xAdet,y);g.fillText(fmt(k.fiyat),xFiyat,y);g.fillText(fmt((+k.mik||0)*(+k.fiyat||0)),xTop,y);y+=26;
+    (k.renkler||[]).forEach(r=>{g.textAlign='left';g.font='600 16px sans-serif';g.fillText(clip(r.ad||'—','600 16px sans-serif',xAdet-xRenk-6),xRenk,y);g.textAlign='right';g.fillText(''+(+r.mik||0),xAdet,y);y+=22;});
+    y+=8;});
+  // ===== TOPLAM ADET =====
+  const taTop=y-16;g.font='800 20px sans-serif';g.textAlign='left';g.fillText('Toplam Adet:',P+8,y);g.textAlign='right';g.fillText(''+toplamAdet,P+240,y);dbox(P,taTop,262,32);y+=32;
+  // ===== TOPLAMLAR =====
+  const totRow=(lbl,val,big)=>{dash(y);y+=(big?32:26);g.textAlign='left';g.font=(big?'800 28px':'700 20px')+' sans-serif';g.fillText(lbl,P,y);g.textAlign='right';g.font=(big?'800 30px':'700 22px')+' sans-serif';g.fillText(val,R,y);y+=(big?14:10);};
+  if(s.iskonto)totRow('İndirim %'+s.iskonto,'−'+fmt(iskT));
+  totRow('Toplam KDV hariç',fmt(kdvHaric));
+  if(s.kdv)totRow('KDV %'+s.kdv,fmt(kdvTutar));
+  totRow('TOPLAM',fmt(toplamGoods),true);dash(y);y+=18;
+  // ===== ÖDEME + KARGO =====
+  const odeme=(s.odemeler&&s.odemeler.length)?s.odemeler:(s.odenen>0?[{tur:'Nakit',tutar:s.odenen,pb}]:[]);
+  const colW=(W-2*P)/2;const boxTop=y;
+  let oy=y+40;g.textAlign='center';g.font='700 18px sans-serif';g.fillText('Ödeme',P+colW/2,y+22);
+  g.font='600 16px sans-serif';odeme.forEach(o=>{const opb=o.pb||pb;g.textAlign='left';g.fillText(clip((o.tur||'Nakit')+' '+(SYM[opb]||'₺'),'600 16px sans-serif',colW-90),P+8,oy);g.textAlign='right';g.fillText(num(o.tutar),P+colW-8,oy);oy+=22;});
+  const kx=P+colW;let ky=y+22;g.textAlign='center';g.font='700 18px sans-serif';g.fillText('Kargo',kx+colW/2,ky);ky+=26;
+  g.font='700 16px sans-serif';if(s.sevkiyat){g.fillText(clip(s.sevkiyat,'700 16px sans-serif',colW-16),kx+colW/2,ky);ky+=22;}
+  if(s.tasima){g.font='600 16px sans-serif';g.fillText(num(s.tasima),kx+colW/2,ky);ky+=22;}
+  const boxBot=Math.max(oy,ky)+8;dbox(P,boxTop,colW,boxBot-boxTop);dbox(kx,boxTop,colW,boxBot-boxTop);y=boxBot+14;
+  // ===== NOT =====
+  const notTxt=(s.not||'').trim();const nbTop=y;g.textAlign='left';g.font='700 16px sans-serif';g.fillText('Not:'+(notTxt?' '+clip(notTxt,'700 16px sans-serif',W-2*P-70):''),P+8,y+16);dbox(P,nbTop,W-2*P,notTxt?48:30);y+=(notTxt?48:30)+16;
+  // ===== QR =====
   if(window.qrcode){try{
-    const qr=window.qrcode(0,'M');
-    qr.addData((db.firma||'IQ Basics')+' · Fiş #'+s.id+' · '+money2(s.tutar,s.pb)+' · '+tarih+(m&&m.tel?' · '+m.tel:''));
-    qr.make();const n=qr.getModuleCount();const qs=Math.max(3,Math.floor(132/n));const qpx=n*qs;const qx=Math.round(CX-qpx/2),qy=y+10;
-    g.fillStyle='#fff';g.fillRect(qx-8,qy-8,qpx+16,qpx+16);g.fillStyle='#000';
+    const qtext=db.firmaTelegram?('https://t.me/'+String(db.firmaTelegram).replace(/^\//,'')):((db.firmaSite||'').trim()||((db.firma||'IQ Basics')+' · Fiş #'+s.id+' · '+fmt(s.tutar)));
+    const qr=window.qrcode(0,'M');qr.addData(qtext);qr.make();const n=qr.getModuleCount();const qs=Math.max(4,Math.floor(230/n));const qpx=n*qs;const qx=Math.round(CX-qpx/2),qy=y+8;
+    g.fillStyle='#fff';g.fillRect(qx-10,qy-10,qpx+20,qpx+20);g.fillStyle='#000';
     for(let r=0;r<n;r++)for(let cc=0;cc<n;cc++){if(qr.isDark(r,cc))g.fillRect(qx+cc*qs,qy+r*qs,qs,qs);}
-    y=qy+qpx+8;
+    y=qy+qpx+14;
   }catch(e){}}
-  // 🖨️ TERMAL NETLİK: 1-bit saf siyah-beyaz
-  try{const id=g.getImageData(0,0,c.width,c.height);const px=id.data;
+  // ---- kırp + 1-bit termal netlik ----
+  const endY=Math.min(HMAX,y+4);
+  const fc=document.createElement('canvas');fc.width=W*dpr;fc.height=Math.round(endY*dpr);const fg=fc.getContext('2d');
+  fg.drawImage(c,0,0,W*dpr,fc.height,0,0,W*dpr,fc.height);
+  try{const idata=fg.getImageData(0,0,fc.width,fc.height);const px=idata.data;
     for(let i=0;i<px.length;i+=4){const lum=0.299*px[i]+0.587*px[i+1]+0.114*px[i+2];const v=(px[i+3]<128||lum>176)?255:0;px[i]=px[i+1]=px[i+2]=v;px[i+3]=255;}
-    g.putImageData(id,0,0);}catch(e){}
-  return c.toDataURL('image/png');
+    fg.putImageData(idata,0,0);}catch(e){}
+  return fc.toDataURL('image/png');
 }
 // Firma logosu resimde çıksın diye önceden yükle
 function fisResimLogoHazirla(){if(db.firmaLogo&&(!fisResimData._logo||fisResimData._logo.src!==db.firmaLogo)){const im=new Image();im.src=db.firmaLogo;fisResimData._logo=im;}}
@@ -5802,10 +5815,11 @@ function formFirma(){open_('Firma Bilgileri',`<div class="mini">Bu bilgiler term
   <label>Adres</label><input id="f-adr" value="${esc(db.firmaAdres||'')}" placeholder="Ulubatlı Hasan Sk. No:53/A · Güngören / İstanbul">
   <label>Telefon</label><input id="f-tel" value="${esc(db.firmaTel||'')}" placeholder="0212 000 00 00">
   <label>WhatsApp</label><input id="f-wp" value="${esc(db.firmaWp||'')}" placeholder="0538 000 00 00">
+  <div class="g2"><div><label>Telegram</label><input id="f-tg" value="${esc(db.firmaTelegram||'')}" placeholder="/kullanici"></div><div><label>Web Sitesi</label><input id="f-site" value="${esc(db.firmaSite||'')}" placeholder="www.firma.com"></div></div>
   <label>Satıcı Adı (fişte görünür)</label><input id="f-sat" value="${esc(db.satici||'')}" placeholder="Örn. Ayşegül">
   <button class="btn" onclick="kaydetFirma()">Kaydet</button>`)}
 function firmaLogoSec(input){const f=input.files&&input.files[0];if(!f)return;resizeImg(f,d=>{db.firmaLogo=d;save();closeM();formFirma()},400,0.85)}
-function kaydetFirma(){db.firma=$('f-ad').value.trim()||db.firma;db.firmaSlogan=$('f-slo').value.trim();db.firmaAdres=$('f-adr').value.trim();db.firmaTel=$('f-tel').value.trim();db.firmaWp=$('f-wp').value.trim();db.satici=$('f-sat').value.trim();save();closeM();render();toast('Firma bilgileri kaydedildi ✓')}
+function kaydetFirma(){db.firma=$('f-ad').value.trim()||db.firma;db.firmaSlogan=$('f-slo').value.trim();db.firmaAdres=$('f-adr').value.trim();db.firmaTel=$('f-tel').value.trim();db.firmaWp=$('f-wp').value.trim();db.firmaTelegram=($('f-tg')?.value||'').trim();db.firmaSite=($('f-site')?.value||'').trim();db.satici=$('f-sat').value.trim();save();closeM();render();toast('Firma bilgileri kaydedildi ✓')}
 function formKur(){open_('Günün Kuru',`<button class="btn g" style="margin-top:0" onclick="kurGuncelle()">🔄 Otomatik Güncel Kuru Al</button>${db.kurTarih?`<div class="mini" style="text-align:center;margin-top:8px">Son güncelleme: ${kurYas()}</div>`:''}<div class="mini" style="text-align:center;margin:10px 0 4px">— veya elle gir —</div><div class="g2"><div><label>USD ($)</label><input id="k-usd" type="number" step="0.01" value="${db.kurUSD}"></div><div><label>EUR (€)</label><input id="k-eur" type="number" step="0.01" value="${db.kurEUR}"></div></div><div class="infobox">Dolar-endeksli ürünlerin TL fiyatı bu kura göre hesaplanır.</div><button class="btn" onclick="kaydetKur()">Elle Kaydet</button>`)}
 function kaydetKur(){db.kurUSD=+$('k-usd').value||db.kurUSD;db.kurEUR=+$('k-eur').value||db.kurEUR;db.kurTarih=Date.now();save();closeM();render();toast('Kur güncellendi ✓')}
 async function kurCek(){
