@@ -49,6 +49,36 @@ function dataUrlToPng(dataUrl, file) {
   fs.writeFileSync(file, Buffer.from(b64, 'base64'));
 }
 
+// Ham ESC/POS baytlarını yazıcıya DOĞRUDAN gönderir (Windows sürücüsünü baypas eder)
+// → yazıcının doğal çözünürlüğünde, nokta-nokta net baskı (eski sistem gibi).
+function printRaw(file, copies, printerName) {
+  return new Promise((resolve, reject) => {
+    copies = Math.max(1, Math.min(5, +copies || 1));
+    if (isWin) {
+      const ps = path.join(__dirname, 'print-raw.ps1');
+      const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps, '-file', file, '-copies', String(copies)];
+      if (printerName) args.push('-printer', printerName);
+      const child = spawn('powershell.exe', args, { windowsHide: true });
+      let err = '';
+      child.stderr.on('data', d => err += d);
+      child.on('error', reject);
+      child.on('close', code => code === 0 ? resolve() : reject(new Error('PowerShell (ham) çıkış kodu ' + code + (err ? ' — ' + err.trim() : ''))));
+    } else {
+      // macOS / Linux — CUPS ham geçiş
+      const args = [];
+      if (printerName) { args.push('-d', printerName); }
+      args.push('-o', 'raw');
+      for (let i = 0; i < copies; i++) { /* lp -n yerine kopya döngüsü, raw'da güvenli */ }
+      args.push('-n', String(copies), file);
+      const child = spawn('lp', args);
+      let err = '';
+      child.stderr.on('data', d => err += d);
+      child.on('error', reject);
+      child.on('close', code => code === 0 ? resolve() : reject(new Error('lp (ham) çıkış kodu ' + code + (err ? ' — ' + err.trim() : ''))));
+    }
+  });
+}
+
 function printImage(file, copies, printerName) {
   return new Promise((resolve, reject) => {
     copies = Math.max(1, Math.min(5, +copies || 1));
@@ -82,21 +112,32 @@ async function handleJob(db, snapDoc) {
   // fiş: tek görsel (data.resim) · barkod etiket: görsel dizisi (data.resimler)
   const imgs = (data && data.tur === 'etiket' && Array.isArray(data.resimler)) ? data.resimler
              : (data && data.resim ? [data.resim] : null);
-  if (!data || data.durum !== 'bekliyor' || !imgs || !imgs.length) return;
+  const etiket = data && data.tur === 'etiket';
+  // fiş için ham ESC/POS varsa onu kullan (sürücüyü baypas → net baskı)
+  const escpos = (!etiket && data && typeof data.escpos === 'string' && data.escpos.length > 32) ? data.escpos : null;
+  if (!data || data.durum !== 'bekliyor' || (!escpos && (!imgs || !imgs.length))) return;
   inFlight.add(id);
   const ref = doc(db, 'isletme', MAGAZA_ID, 'yazdirma', id);
   // hangi yazıcı? etiket → etiketYaziciAdi, fiş → yaziciAdi (biri boşsa diğerine/​varsayılana düşer)
-  const etiket = data.tur === 'etiket';
   const printer = etiket ? (cfg.etiketYaziciAdi || cfg.yaziciAdi || '') : (cfg.yaziciAdi || '');
+  // config ham baskıyı kapatmadıysa (hamBaski:false) ESC/POS kullan
+  const useRaw = escpos && cfg.hamBaski !== false;
   try {
     await updateDoc(ref, { durum: 'basiliyor' });
     log('🖨️  Basılıyor:', etiket ? (imgs.length + ' barkod etiketi → ' + (printer || 'varsayılan'))
-        : (data.tur === 'test' ? 'TEST' : ('Fiş #' + (data.satisId || '') + ' · ' + (data.mus || ''))));
-    for (let i = 0; i < imgs.length; i++) {
-      const tmp = path.join(os.tmpdir(), 'iq-' + (etiket ? 'etiket' : 'fis') + '-' + id + '-' + i + '.png');
-      dataUrlToPng(imgs[i], tmp);
-      await printImage(tmp, etiket ? 1 : (data.kopya || cfg.kopyaVarsayilan || 1), printer);
+        : (data.tur === 'test' ? 'TEST' : ('Fiş #' + (data.satisId || '') + ' · ' + (data.mus || '') + (useRaw ? ' · ham ESC/POS' : ''))));
+    if (useRaw) {
+      const tmp = path.join(os.tmpdir(), 'iq-fis-' + id + '.bin');
+      fs.writeFileSync(tmp, Buffer.from(escpos, 'base64'));
+      await printRaw(tmp, data.kopya || cfg.kopyaVarsayilan || 1, printer);
       try { fs.unlinkSync(tmp); } catch (e) {}
+    } else {
+      for (let i = 0; i < imgs.length; i++) {
+        const tmp = path.join(os.tmpdir(), 'iq-' + (etiket ? 'etiket' : 'fis') + '-' + id + '-' + i + '.png');
+        dataUrlToPng(imgs[i], tmp);
+        await printImage(tmp, etiket ? 1 : (data.kopya || cfg.kopyaVarsayilan || 1), printer);
+        try { fs.unlinkSync(tmp); } catch (e) {}
+      }
     }
     await deleteDoc(ref);
     log('✅ Basıldı ve kuyruktan silindi.');

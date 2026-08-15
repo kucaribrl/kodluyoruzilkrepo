@@ -772,7 +772,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-55'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-56'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -3062,15 +3062,47 @@ function fisResimData(s,termal){
 }
 // Firma logosu resimde çıksın diye önceden yükle
 function fisResimLogoHazirla(){if(db.firmaLogo&&(!fisResimData._logo||fisResimData._logo.src!==db.firmaLogo)){const im=new Image();im.src=db.firmaLogo;fisResimData._logo=im;}}
+// ===== HAM ESC/POS (termal yazıcıya doğrudan) =====
+// Windows sürücüsü resmi ölçekleyip bulanıklaştırıyordu. Bunun yerine fişi yazıcının
+// DOĞAL genişliğinde (576 nokta) 1-bit raster'a çevirip ESC/POS "GS v 0" komutuyla
+// doğrudan yazıcıya gönderiyoruz → nokta-nokta, eski sistem gibi net.
+async function fisEscPos(dataUrl){
+  const img=await new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=dataUrl;});
+  let w=img.naturalWidth||576, h=img.naturalHeight||0;
+  // güvenlik: genişlik 576'yı (yazıcı doğal genişliği) aşmasın — 8'in katına yuvarla
+  const cv=document.createElement('canvas');cv.width=w;cv.height=h;const cx=cv.getContext('2d');
+  cx.fillStyle='#fff';cx.fillRect(0,0,w,h);cx.drawImage(img,0,0);
+  const data=cx.getImageData(0,0,w,h).data;
+  const bpr=Math.ceil(w/8);              // satır başına bayt
+  const chunks=[];
+  const push=arr=>{for(let i=0;i<arr.length;i++)chunks.push(arr[i]&0xFF);};
+  push([0x1B,0x40]);                     // ESC @  → sıfırla
+  push([0x1B,0x33,0x00]);                // ESC 3 0 → satır aralığı 0 (bantlar arası boşluk olmasın)
+  // Bantlara böl (yazıcı bellek limitine takılmasın) — her bant GS v 0 ile
+  const BAND=128;
+  for(let y0=0;y0<h;y0+=BAND){
+    const bh=Math.min(BAND,h-y0);
+    const raster=new Uint8Array(bpr*bh);
+    for(let y=0;y<bh;y++){const sy=y0+y;for(let x=0;x<w;x++){const idx=(sy*w+x)*4;const lum=0.299*data[idx]+0.587*data[idx+1]+0.114*data[idx+2];if(data[idx+3]>=128&&lum<128){raster[y*bpr+(x>>3)]|=(0x80>>(x&7));}}}
+    push([0x1D,0x76,0x30,0x00, bpr&0xFF,(bpr>>8)&0xFF, bh&0xFF,(bh>>8)&0xFF]); // GS v 0 (normal) m=0
+    for(let i=0;i<raster.length;i++)chunks.push(raster[i]);
+  }
+  push([0x1B,0x64,0x03]);                // ESC d 3 → 3 satır ilerle
+  push([0x1D,0x56,0x42,0x00]);           // GS V 66 0 → tam olmayan kesme (partial cut)
+  // base64
+  let bin='';const N=chunks.length;for(let i=0;i<N;i+=8192){bin+=String.fromCharCode.apply(null,chunks.slice(i,i+8192));}
+  return btoa(bin);
+}
 async function yaziciyaGonder(id,sessiz){
   const s=db.satislar.find(x=>x.id===id);if(!s)return;
   if(!(bulutVar()&&bulutBaslat()&&_fb&&bulutGirisli&&bulutGirisli())){if(!sessiz)toast('☁️ Önce buluta giriş yap (otomatik baskı için gerekli)');return;}
   try{
     fisResimLogoHazirla();
-    const resim=fisResimData(s,true); // termal yazıcı → 1-bit keskin
+    const resim=fisResimData(s,true); // termal yazıcı → 1-bit keskin (yedek/eski ajan için)
+    let escpos='';try{escpos=await fisEscPos(resim);}catch(e){}
     await _fb.collection('isletme').doc(MAGAZA_ID).collection('yazdirma').add({
       tur:'fis',satisId:s.id,mus:s.mus||'',tutar:s.tutar||0,pb:s.pb||'TL',
-      resim,durum:'bekliyor',kopya:+db.yaziciKopya||1,olusturma:Date.now(),
+      resim,escpos,durum:'bekliyor',kopya:+db.yaziciKopya||1,olusturma:Date.now(),
       cihaz:(db.satici||'')||'telefon'
     });
     if(!sessiz)toast('🖨️ Yazıcıya gönderildi — bilgisayar basıyor');

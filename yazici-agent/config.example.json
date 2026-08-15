@@ -6,5 +6,6 @@
   "etiketYaziciAdi": "",
   "kopyaVarsayilan": 1,
   "_not_yaziciAdi": "TERMAL FIS yazicisinin Windows'taki tam adi (bos = varsayilan yazici).",
-  "_not_etiketYaziciAdi": "BARKOD ETIKET yazicisinin adi (or. XP-490B). Bos birakirsan fis yazicisina/varsayilana basar."
+  "_not_etiketYaziciAdi": "BARKOD ETIKET yazicisinin adi (or. XP-490B). Bos birakirsan fis yazicisina/varsayilana basar.",
+  "_not_hamBaski": "Fis, yaziciya HAM ESC/POS ile dogrudan gonderilir (net baski). Yaziciniz desteklemiyorsa 'hamBaski': false yazip eski resim baskisina donebilirsiniz."
 }
