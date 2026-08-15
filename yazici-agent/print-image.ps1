@@ -45,12 +45,23 @@ try {
     try { $pd.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0,0,0,0) } catch {}
     $pd.add_PrintPage({
       param($s, $e)
-      # Sayfa genişliğine (tam basılabilir alan) orantılı sığdır
-      $pw = $e.PageBounds.Width
-      $scale = $pw / $image.Width
-      $w = [int]($image.Width * $scale)
-      $h = [int]($image.Height * $scale)
-      $e.Graphics.DrawImage($image, 0, 0, $w, $h)
+      # DOT-FOR-DOT: 1 görsel piksel = 1 yazıcı noktası → keskin (bulanık değil).
+      # Görsel yazıcının doğal genişliğinde (~576 nokta) hazırlanır; ölçekleme yapılmaz.
+      $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
+      $e.Graphics.PixelOffsetMode   = [System.Drawing.Drawing2D.PixelOffsetMode]::Half
+      $e.Graphics.SmoothingMode     = [System.Drawing.Drawing2D.SmoothingMode]::None
+      $e.Graphics.PageUnit          = [System.Drawing.GraphicsUnit]::Pixel
+      $dpi = $e.Graphics.DpiX; if ($dpi -lt 50) { $dpi = 203 }
+      $pwDots = [int]([double]$e.PageBounds.Width / 100.0 * $dpi)   # sayfa genişliği (nokta)
+      if ($pwDots -lt 100) { $pwDots = 576 }
+      if ($image.Width -le $pwDots) {
+        # sığıyor → birebir (dot-for-dot), en keskin
+        $e.Graphics.DrawImage($image, 0, 0, $image.Width, $image.Height)
+      } else {
+        # taşıyorsa yalnızca genişliğe indir (NearestNeighbor ile keskin kalır)
+        $dw = $pwDots; $dh = [int]([double]$image.Height * $pwDots / $image.Width)
+        $e.Graphics.DrawImage($image, 0, 0, $dw, $dh)
+      }
       $e.HasMorePages = $false
     })
     $pd.Print()
