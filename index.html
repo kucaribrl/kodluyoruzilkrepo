@@ -772,7 +772,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-56'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-57'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -3093,13 +3093,91 @@ async function fisEscPos(dataUrl){
   let bin='';const N=chunks.length;for(let i=0;i<N;i+=8192){bin+=String.fromCharCode.apply(null,chunks.slice(i,i+8192));}
   return btoa(bin);
 }
+// ===== METİN MODU ESC/POS (yazıcının DONANIM FONTU → en net, eski sistem gibi) =====
+// Türkçe karakter kod tabloları: yazıcı bir bayt → bir glif olarak basar.
+const CP857={'Ç':0x80,'ü':0x81,'é':0x82,'â':0x83,'ä':0x84,'à':0x85,'å':0x86,'ç':0x87,'ê':0x88,'ë':0x89,'è':0x8A,'ï':0x8B,'î':0x8C,'ı':0x8D,'Ä':0x8E,'Å':0x8F,'É':0x90,'æ':0x91,'Æ':0x92,'ô':0x93,'ö':0x94,'ò':0x95,'û':0x96,'ù':0x97,'İ':0x98,'Ö':0x99,'Ü':0x9A,'ø':0x9B,'£':0x9C,'Ø':0x9D,'Ş':0x9E,'ş':0x9F,'á':0xA0,'í':0xA1,'ó':0xA2,'ú':0xA3,'ñ':0xA4,'Ñ':0xA5,'Ğ':0xA6,'ğ':0xA7};
+const CP1254={'€':0x80,'Ç':0xC7,'ç':0xE7,'Ğ':0xD0,'ğ':0xF0,'İ':0xDD,'ı':0xFD,'Ö':0xD6,'ö':0xF6,'Ş':0xDE,'ş':0xFE,'Ü':0xDC,'ü':0xFC,'â':0xE2,'Â':0xC2,'î':0xEE,'û':0xFB,'é':0xE9,'£':0xA3};
+const TR_FOLD={'ş':'s','Ş':'S','ı':'i','İ':'I','ğ':'g','Ğ':'G','ç':'c','Ç':'C','ö':'o','Ö':'O','ü':'u','Ü':'U','â':'a','î':'i','û':'u','₺':'TL','€':'EUR','’':"'",'‘':"'",'“':'"','”':'"','–':'-','—':'-','…':'...'};
+function fisEscPosText(s){
+  const pb=s.pb||'TL';const SYMT={TL:'TL',USD:'$',EUR:'€'};
+  const encAd=(db.yaziciEnc||'cp857');const MAP=encAd==='cp1254'?CP1254:(encAd==='ascii'?null:CP857);
+  const num=v=>{let str=(+v||0).toFixed(2);if(str.endsWith('0'))str=str.slice(0,-1);return str;};
+  const fmt=(v,cur)=>num(v)+(SYMT[cur||pb]||'TL');
+  const m=cari(s.mid);
+  const d=new Date(s.tarih);const tarih=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  let toplamAdet=0;s.kalemler.forEach(k=>toplamAdet+=(+k.mik||0));
+  const araToplam=(s.araToplam||s.tutar||0);const iskT=araToplam*(s.iskonto||0)/100;
+  const kdvHaric=araToplam-iskT;const kdvTutar=+s.kdvTutar||0;const toplamGoods=(s.tutar||0)-(s.tasima||0);
+  const satici=s.satici||db.satici||'';const LINE=48;
+  const out=[];const raw=(...b)=>b.forEach(x=>out.push(x&0xFF));
+  const enc=str=>{str=''+str;for(const ch of str){const c=ch.codePointAt(0);if(c<128){out.push(c);}else if(MAP&&MAP[ch]!=null){out.push(MAP[ch]);}else if(TR_FOLD[ch]!=null){for(const f of TR_FOLD[ch])out.push(f.charCodeAt(0));}else{out.push(0x3F);}}};
+  const nl=()=>out.push(0x0A);const line=str=>{enc(str);nl();};
+  const align=n=>raw(0x1B,0x61,n);const bold=on=>raw(0x1B,0x45,on?1:0);
+  const size=(w,h)=>raw(0x1D,0x21,((Math.max(1,w)-1)<<4)|(Math.max(1,h)-1));
+  const wlen=str=>{let n=0;for(const ch of(''+str)){n+=(TR_FOLD[ch]&&TR_FOLD[ch].length>1&&!(MAP&&MAP[ch]!=null))?TR_FOLD[ch].length:1;}return n;};
+  const cutx=(str,max)=>{str=''+str;if(wlen(str)<=max)return str;let r='',n=0;for(const ch of str){const w=(TR_FOLD[ch]&&TR_FOLD[ch].length>1&&!(MAP&&MAP[ch]!=null))?TR_FOLD[ch].length:1;if(n+w>max-1)break;r+=ch;n+=w;}return r+'.';};
+  const padR=(str,len)=>{str=cutx(str,len);return str+' '.repeat(Math.max(0,len-wlen(str)));};
+  const padL=(str,len)=>{str=cutx(str,len);return ' '.repeat(Math.max(0,len-wlen(str)))+str;};
+  const two=(l,r)=>{const rl=wlen(r);line(padR(l,Math.max(0,LINE-rl))+r);};
+  const div=()=>{align(0);line('-'.repeat(LINE));};
+  raw(0x1B,0x40);                              // ESC @ sıfırla
+  const cp=db.yaziciKodSayfa;if(cp!=null&&cp!==''&&!isNaN(+cp))raw(0x1B,0x74,(+cp)&0xFF); // ESC t (opsiyonel kod tablosu)
+  // FİRMA (çift boy, kalın, ortalı)
+  align(1);bold(1);size(2,2);line((db.firma||'IQ BASICS'));size(1,1);
+  size(1,2);line('Satış Fişi');size(1,1);bold(0);
+  if(db.firmaAdres){db.firmaAdres.split(/\n|\s\/\s|\//).map(x=>x.trim()).filter(Boolean).forEach(pt=>line(pt));}
+  align(0);
+  if(db.firmaTel||db.firmaWp)line('Tel : '+(db.firmaTel||db.firmaWp));
+  if(db.firmaTelegram)line('TG  : '+db.firmaTelegram);
+  if(db.firmaSite)line('Web : '+db.firmaSite);
+  div();
+  align(0);line('Müşteri:');bold(1);size(1,2);
+  const curSym=(m&&m.paraTercih&&SYMT[m.paraTercih])?(' '+SYMT[m.paraTercih]):(pb!=='TL'?' '+SYMT[pb]:'');
+  line((s.mus||'-')+curSym);size(1,1);bold(0);
+  if(m&&m.adres)line(m.adres);
+  if(m&&(m.ulke||m.sehir))line((m.ulke||m.sehir||'').toLocaleUpperCase('tr-TR'));
+  if(m&&m.tel)line(m.tel);
+  div();
+  two('Tarihi: '+tarih,'No. '+s.id);if(satici)line('Satıcı: '+satici);
+  div();
+  line(padR('Kod',20)+padL('Adet',6)+padL('Fiyat',10)+padL('Toplam',12));
+  align(0);line('-'.repeat(LINE));
+  s.kalemler.forEach(k=>{const u=urun(k.uid);const kod=(u&&u.kod)||k.urun||'-';
+    bold(1);line(padR(kod,20)+padL(''+(+k.mik||0),6)+padL(fmt(k.fiyat),10)+padL(fmt((+k.mik||0)*(+k.fiyat||0)),12));bold(0);
+    (k.renkler||[]).forEach(r=>{line('  '+padR(r.ad||'-',18)+padL(''+(+r.mik||0),4));});});
+  align(0);line('-'.repeat(LINE));
+  two('Toplam Adet:',''+toplamAdet);div();
+  if(s.iskonto)two('İndirim %'+s.iskonto,'-'+fmt(iskT));
+  two('Toplam KDV hariç',fmt(kdvHaric));
+  if(s.kdv)two('KDV %'+s.kdv,fmt(kdvTutar));
+  bold(1);size(1,2);const tr=fmt(toplamGoods);line(padR('TOPLAM',Math.max(0,LINE-wlen(tr)))+tr);size(1,1);bold(0);
+  div();
+  const odeme=(s.odemeler&&s.odemeler.length)?s.odemeler:(s.odenen>0?[{tur:'Nakit',tutar:s.odenen,pb}]:[]);
+  if(odeme.length){line('Ödeme:');odeme.forEach(o=>{const opb=o.pb||pb;two('  '+(o.tur||'Nakit')+' '+(SYMT[opb]||'TL'),num(o.tutar));});}
+  if(s.sevkiyat||s.tasima){line('Kargo:');if(s.sevkiyat)line('  '+s.sevkiyat);if(s.tasima)two('  Taşıma',num(s.tasima));}
+  const notTxt=(s.not||'').trim();if(notTxt){div();line('Not: '+notTxt);}
+  div();
+  // QR — yazıcının DONANIM QR komutu (GS ( k) → net
+  try{const qtext=db.firmaTelegram?('https://t.me/'+String(db.firmaTelegram).replace(/^\//,'')):((db.firmaSite||'').trim()||((db.firma||'IQ Basics')+' Fis #'+s.id));
+    align(1);
+    raw(0x1D,0x28,0x6B,0x04,0x00,0x31,0x41,0x32,0x00); // model 2
+    raw(0x1D,0x28,0x6B,0x03,0x00,0x31,0x43,0x06);       // modül boyutu 6
+    raw(0x1D,0x28,0x6B,0x03,0x00,0x31,0x45,0x31);       // hata düzeltme M
+    const qb=[];for(const ch of qtext){const c=ch.charCodeAt(0);qb.push(c<128?c:0x3F);}
+    const plen=qb.length+3;raw(0x1D,0x28,0x6B,plen&0xFF,(plen>>8)&0xFF,0x31,0x50,0x30);qb.forEach(x=>out.push(x));
+    raw(0x1D,0x28,0x6B,0x03,0x00,0x31,0x51,0x30);nl();}catch(e){}
+  align(0);raw(0x1B,0x64,0x03);raw(0x1D,0x56,0x42,0x00); // ilerle + kes
+  let bin='';for(let i=0;i<out.length;i+=8192){bin+=String.fromCharCode.apply(null,out.slice(i,i+8192));}
+  return btoa(bin);
+}
 async function yaziciyaGonder(id,sessiz){
   const s=db.satislar.find(x=>x.id===id);if(!s)return;
   if(!(bulutVar()&&bulutBaslat()&&_fb&&bulutGirisli&&bulutGirisli())){if(!sessiz)toast('☁️ Önce buluta giriş yap (otomatik baskı için gerekli)');return;}
   try{
     fisResimLogoHazirla();
     const resim=fisResimData(s,true); // termal yazıcı → 1-bit keskin (yedek/eski ajan için)
-    let escpos='';try{escpos=await fisEscPos(resim);}catch(e){}
+    let escpos='';
+    try{escpos=(db.yaziciMetin!==false)?fisEscPosText(s):await fisEscPos(resim);}catch(e){try{escpos=await fisEscPos(resim);}catch(_){}}
     await _fb.collection('isletme').doc(MAGAZA_ID).collection('yazdirma').add({
       tur:'fis',satisId:s.id,mus:s.mus||'',tutar:s.tutar||0,pb:s.pb||'TL',
       resim,escpos,durum:'bekliyor',kopya:+db.yaziciKopya||1,olusturma:Date.now(),
@@ -3113,9 +3191,22 @@ function yaziciAyar(){
     <div class="mini">Bilgisayara bağlı termal yazıcıdan <b>otomatik</b> fiş bassın. Bilgisayarda küçük bir "yazıcı ajanı" açık kalır; satış bitince fiş <b>kendiliğinden</b> çıkar — telefonda onay/dialog yok.</div>
     <label class="switch" style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Satış bitince otomatik yazıcıya gönder</span><input type="checkbox" ${db.otoYazdir?'checked':''} onchange="db.otoYazdir=this.checked;save();toast(this.checked?'Otomatik baskı açık ✓':'Kapalı')"></label>
     <label style="margin-top:10px">Kopya sayısı</label><input type="number" inputmode="numeric" value="${+db.yaziciKopya||1}" min="1" max="5" onchange="db.yaziciKopya=Math.max(1,Math.min(5,+this.value||1));save()" style="max-width:100px">
+    <hr style="margin:14px 0;border:none;border-top:1px solid #eee">
+    <div style="font-weight:700;margin-bottom:6px">🖨️ Baskı kalitesi</div>
+    <label class="switch" style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span><b>Net metin baskısı</b> (yazıcının donanım fontu — eski sistem gibi)</span><input type="checkbox" ${db.yaziciMetin!==false?'checked':''} onchange="db.yaziciMetin=this.checked;save();toast(this.checked?'Net metin baskısı açık ✓':'Resim baskısına geçildi')"></label>
+    <div class="mini" style="margin-top:4px">Açık: fiş, yazıcının kendi keskin fontuyla basılır (en net). Kapalı: fiş resim olarak basılır.</div>
+    <label style="margin-top:10px">Türkçe karakter kod tablosu</label>
+    <select onchange="db.yaziciEnc=this.value;save();toast('Kaydedildi — test fişiyle dene')" style="width:100%">
+      <option value="cp857" ${(db.yaziciEnc||'cp857')==='cp857'?'selected':''}>CP857 (Türkçe — yaygın)</option>
+      <option value="cp1254" ${db.yaziciEnc==='cp1254'?'selected':''}>Windows-1254 (Türkçe)</option>
+      <option value="ascii" ${db.yaziciEnc==='ascii'?'selected':''}>Sadece ASCII (Satis, Musteri — şıkız ama sorunsuz)</option>
+    </select>
+    <label style="margin-top:8px">Kod tablosu no — ESC t (gelişmiş, boş bırak)</label><input inputmode="numeric" value="${db.yaziciKodSayfa!=null?db.yaziciKodSayfa:''}" placeholder="boş = yazıcı varsayılanı" onchange="db.yaziciKodSayfa=(this.value.trim()===''?null:+this.value);save();toast('Kaydedildi')" style="max-width:220px">
+    <button class="btn ghost sm" style="margin-top:10px" onclick="yaziciMetinTest()">🧪 Net (metin) test fişi — Türkçe kontrol</button>
+    <div class="mini" style="margin-top:4px">Bu testi bas: yazı NET ve Türkçe harfler (ş ç ğ ı İ ü ö) DOĞRU çıkıyorsa hazırsın. Türkçe bozuksa üstteki kod tablosunu değiştirip tekrar dene.</div>
     <div class="okbox" style="margin-top:12px">⚙️ <b>Kurulum:</b> Bilgisayara ajanı bir kez kurman gerekir. Aşağıdaki adımları takip et (5 dk). Kurulduktan sonra bu düğmeyi aç, satış yaptıkça fiş otomatik çıkar.</div>
     <button class="btn ghost sm" style="margin-top:10px" onclick="yaziciKurulum()">📋 Kurulum Adımları (Windows)</button>
-    <button class="btn" style="margin-top:10px" onclick="yaziciTest()">🧪 Test Fişi Gönder</button>
+    <button class="btn" style="margin-top:10px" onclick="yaziciTest()">🧪 Test Fişi Gönder (resim)</button>
     <div class="mini" style="margin-top:8px">Test için: kuyruğa örnek bir fiş atar; ajan açıksa yazıcıdan çıkar.</div>`);
 }
 function yaziciKurulum(){
@@ -3129,6 +3220,17 @@ function yaziciKurulum(){
       <li>Bu ekrandaki <b>Otomatik baskı</b> düğmesini aç. Bitti — satış yaptıkça fiş çıkar.</li>
     </ol>
     <div class="okbox" style="margin-top:6px">Detaylı Türkçe rehber: repo içindeki <b>yazici-agent/BASLA-TR.md</b> dosyasında.</div>`);
+}
+async function yaziciMetinTest(){
+  if(!(bulutVar()&&bulutBaslat()&&_fb&&bulutGirisli&&bulutGirisli()))return toast('Önce buluta giriş yap');
+  const ornek={id:'TEST',tarih:Date.now(),mus:'Örnek Müşteri Şirketi',pb:'TL',mid:null,
+    kalemler:[{uid:null,urun:'KUMAŞ-01',kod:'KUMAŞ-01',mik:5,fiyat:120,renkler:[{ad:'Kırmızı',mik:3},{ad:'Yeşil',mik:2}]},
+              {uid:null,urun:'İPLİK-Ç',kod:'İPLİK-Ç',mik:2,fiyat:45,renkler:[]}],
+    araToplam:690,tutar:690,tasima:0,iskonto:0,kdv:0,odemeler:[{tur:'Nakit',tutar:690,pb:'TL'}],not:'Türkçe test: ğüşıöçİĞÜŞÖÇ'};
+  try{const escpos=fisEscPosText(ornek);
+    await _fb.collection('isletme').doc(MAGAZA_ID).collection('yazdirma').add({tur:'fis',satisId:'TEST',mus:'Türkçe Test',escpos,durum:'bekliyor',kopya:1,olusturma:Date.now(),cihaz:'metin-test'});
+    toast('🧪 Net metin test fişi kuyruğa atıldı — yazıdan/Türkçeden emin ol');
+  }catch(e){toast('Gönderilemedi: '+(e.message||e))}
 }
 async function yaziciTest(){
   if(!(bulutVar()&&bulutBaslat()&&_fb&&bulutGirisli&&bulutGirisli()))return toast('Önce buluta giriş yap');
