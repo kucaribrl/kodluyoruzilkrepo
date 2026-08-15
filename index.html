@@ -772,7 +772,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-51'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-52'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -2890,9 +2890,10 @@ function fisTermal(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;
 window.addEventListener('afterprint',()=>{if(document.body.classList.contains('printing'))fisPrintTemizle();});
 /* ===== OTOMATİK YAZDIRMA — fişi resme çevir, buluttaki kuyruğa gönder =====
    Bilgisayardaki "yazıcı ajanı" bu kuyruğu dinler ve termal yazıcıya basar. */
-function fisResimData(s){
+function fisResimData(s,termal){
   // 80mm termal — Satış Fişi (OSSY HOMER örneği: temiz, kesik çizgili, çok para birimli)
-  const W=576,P=20,dpr=2,R=W-P,CX=W/2;
+  // termal=true → 1-bit siyah-beyaz (yazıcı için); değilse pürüzsüz (ekran/PDF/paylaşım)
+  const W=576,P=20,dpr=3,R=W-P,CX=W/2;
   const SYM={TL:'₺',USD:'$',EUR:'€'};
   const pb=s.pb||'TL';
   const num=v=>{let str=(+v||0).toFixed(2);if(str.endsWith('0'))str=str.slice(0,-1);return str;};
@@ -2903,8 +2904,9 @@ function fisResimData(s){
   const araToplam=(s.araToplam||s.tutar||0);const iskT=araToplam*(s.iskonto||0)/100;
   const kdvHaric=araToplam-iskT;const kdvTutar=+s.kdvTutar||0;const toplamGoods=(s.tutar||0)-(s.tasima||0);
   const satici=s.satici||db.satici||'';
-  const HMAX=5000;
+  const HMAX=4000;
   const c=document.createElement('canvas');c.width=W*dpr;c.height=HMAX*dpr;const g=c.getContext('2d');g.scale(dpr,dpr);
+  g.textRendering='geometricPrecision';g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';
   g.fillStyle='#fff';g.fillRect(0,0,W,HMAX);g.fillStyle='#000';g.textBaseline='alphabetic';
   const clip=(t,f,mw)=>{g.font=f;t=''+t;if(g.measureText(t).width<=mw)return t;while(t.length>1&&g.measureText(t+'…').width>mw)t=t.slice(0,-1);return t+'…';};
   const dash=(yy)=>{g.save();g.strokeStyle='#000';g.lineWidth=2.2;g.setLineDash([6,4]);g.beginPath();g.moveTo(P,yy);g.lineTo(R,yy);g.stroke();g.restore();};
@@ -2975,10 +2977,12 @@ function fisResimData(s){
   // ---- kırp + 1-bit termal netlik ----
   const endY=Math.min(HMAX,y+4);
   const fc=document.createElement('canvas');fc.width=W*dpr;fc.height=Math.round(endY*dpr);const fg=fc.getContext('2d');
+  fg.imageSmoothingEnabled=true;fg.imageSmoothingQuality='high';
   fg.drawImage(c,0,0,W*dpr,fc.height,0,0,W*dpr,fc.height);
-  try{const idata=fg.getImageData(0,0,fc.width,fc.height);const px=idata.data;
-    for(let i=0;i<px.length;i+=4){const lum=0.299*px[i]+0.587*px[i+1]+0.114*px[i+2];const v=(px[i+3]<128||lum>176)?255:0;px[i]=px[i+1]=px[i+2]=v;px[i+3]=255;}
-    fg.putImageData(idata,0,0);}catch(e){}
+  // 1-bit sadece termal yazıcıya gönderirken (ekran/PDF pürüzsüz kalsın)
+  if(termal){try{const idata=fg.getImageData(0,0,fc.width,fc.height);const px=idata.data;
+    for(let i=0;i<px.length;i+=4){const lum=0.299*px[i]+0.587*px[i+1]+0.114*px[i+2];const v=(px[i+3]<128||lum>150)?255:0;px[i]=px[i+1]=px[i+2]=v;px[i+3]=255;}
+    fg.putImageData(idata,0,0);}catch(e){}}
   return fc.toDataURL('image/png');
 }
 // Firma logosu resimde çıksın diye önceden yükle
@@ -2988,7 +2992,7 @@ async function yaziciyaGonder(id,sessiz){
   if(!(bulutVar()&&bulutBaslat()&&_fb&&bulutGirisli&&bulutGirisli())){if(!sessiz)toast('☁️ Önce buluta giriş yap (otomatik baskı için gerekli)');return;}
   try{
     fisResimLogoHazirla();
-    const resim=fisResimData(s);
+    const resim=fisResimData(s,true); // termal yazıcı → 1-bit keskin
     await _fb.collection('isletme').doc(MAGAZA_ID).collection('yazdirma').add({
       tur:'fis',satisId:s.id,mus:s.mus||'',tutar:s.tutar||0,pb:s.pb||'TL',
       resim,durum:'bekliyor',kopya:+db.yaziciKopya||1,olusturma:Date.now(),
