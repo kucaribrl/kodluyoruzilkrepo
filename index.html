@@ -772,7 +772,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-53'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-54'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -2651,10 +2651,13 @@ function saleImages(s){const imgs=[],seen=new Set();
 }
 function waFisPreview(id){const s=db.satislar.find(x=>x.id===id);const m=cari(s.mid);
   open_('Müşteriye Fiş Gönder',`
-    <div class="mini">Müşteriye <b>resimli fiş</b> gider — aldığı ürünler <b>fotoğrafı, adedi ve fiyatıyla</b> tek görselde. WhatsApp'ta resim olarak görünür.</div>
+    <div class="okbox">📄 <b>En net (vektörel) fiş:</b> aşağıdaki <b>"Net Fiş — Yazdır/PDF"</b> ile aç, çıkan ekranda hedefi <b>"PDF olarak kaydet"</b> seç → PDF'i WhatsApp'tan paylaş. (Metin gerçek yazı, sınırsız net.)</div>
+    <button class="btn g" style="margin-top:10px" onclick="closeM();setTimeout(()=>fisTermal(${id}),160)">🖨️ Net Fiş — Yazdır / PDF olarak kaydet</button>
+    <div class="sec" style="margin-top:14px">Alternatif — Resimli fiş (fotoğraflı)</div>
+    <div class="mini">Aldığı ürünler <b>fotoğrafı, adedi, fiyatıyla</b> tek görselde. Fotoğraf içerdiği için resim kalitesindedir.</div>
     <div style="display:flex;justify-content:center;margin:12px 0"><div id="mfis-wrap" style="min-height:120px;display:flex;align-items:center;justify-content:center"><span class="mini">🧾 Fiş hazırlanıyor…</span></div></div>
-    <button class="btn g" onclick="musteriFisGonder(${id},'pdf')">📄 PDF Fiş Gönder</button>
-    <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="musteriFisGonder(${id},'jpg')">🖼️ Resim olarak</button><button class="btn ghost sm" onclick="fisWhatsapp(${id})">📝 Düz yazı</button></div>
+    <div class="g2"><button class="btn ghost sm" onclick="musteriFisGonder(${id},'pdf')">📄 PDF (resimli)</button><button class="btn ghost sm" onclick="musteriFisGonder(${id},'jpg')">🖼️ Resim</button></div>
+    <button class="btn ghost sm" style="margin-top:8px" onclick="fisWhatsapp(${id})">📝 Düz yazı olarak gönder</button>
     ${(!m||!m.tel)?'<div class="mini" style="margin-top:6px">Müşteri telefonu yok — paylaşımda kişi seçtirir.</div>':''}
   `);
   musteriFisResim(s,(blob)=>{const w=$('mfis-wrap');if(!w)return;if(!blob){w.innerHTML='<span class="mini">Önizleme oluşturulamadı</span>';return;}
