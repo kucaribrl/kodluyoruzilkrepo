@@ -772,7 +772,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-57'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-58'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -3119,43 +3119,67 @@ function fisEscPosText(s){
   const padR=(str,len)=>{str=cutx(str,len);return str+' '.repeat(Math.max(0,len-wlen(str)));};
   const padL=(str,len)=>{str=cutx(str,len);return ' '.repeat(Math.max(0,len-wlen(str)))+str;};
   const two=(l,r)=>{const rl=wlen(r);line(padR(l,Math.max(0,LINE-rl))+r);};
-  const div=()=>{align(0);line('-'.repeat(LINE));};
+  const centerIn=(str,w)=>{str=cutx(str,w);const t=Math.max(0,w-wlen(str));const l=Math.floor(t/2);return ' '.repeat(l)+str+' '.repeat(t-l);};
+  const div=()=>{align(0);line('- '.repeat(LINE/2));};   // kesik çizgi (PDF gibi)
+  const sline=()=>{align(0);line('-'.repeat(LINE));};    // düz çizgi (tablo altı)
   raw(0x1B,0x40);                              // ESC @ sıfırla
   const cp=db.yaziciKodSayfa;if(cp!=null&&cp!==''&&!isNaN(+cp))raw(0x1B,0x74,(+cp)&0xFF); // ESC t (opsiyonel kod tablosu)
   // FİRMA (çift boy, kalın, ortalı)
-  align(1);bold(1);size(2,2);line((db.firma||'IQ BASICS'));size(1,1);
-  size(1,2);line('Satış Fişi');size(1,1);bold(0);
-  if(db.firmaAdres){db.firmaAdres.split(/\n|\s\/\s|\//).map(x=>x.trim()).filter(Boolean).forEach(pt=>line(pt));}
-  align(0);
-  if(db.firmaTel||db.firmaWp)line('Tel : '+(db.firmaTel||db.firmaWp));
-  if(db.firmaTelegram)line('TG  : '+db.firmaTelegram);
-  if(db.firmaSite)line('Web : '+db.firmaSite);
+  // ===== BAŞLIK (firma + Satış Fişi) — PDF gibi =====
+  align(1);bold(1);size(2,2);line((db.firma||'IQ BASICS'));size(1,1);bold(0);
   div();
-  align(0);line('Müşteri:');bold(1);size(1,2);
+  bold(1);size(2,2);line('Satış Fişi');size(1,1);bold(0);
+  div();
+  if(db.firmaAdres){bold(1);db.firmaAdres.split(/\n|\s\/\s|\//).map(x=>x.trim()).filter(Boolean).forEach(pt=>line(pt));bold(0);}
+  // iletişim (sol) — termal donanım fontunda emoji yok, etiketle
+  align(0);
+  if(db.firmaTel||db.firmaWp)line('Tel: '+(db.firmaTel||db.firmaWp));
+  if(db.firmaTelegram)line('Telegram: '+db.firmaTelegram);
+  if(db.firmaSite)line('Web: '+db.firmaSite);
+  // ===== MÜŞTERİ KUTUSU =====
+  align(0);line('Müşteri:');div();
+  bold(1);size(1,2);
   const curSym=(m&&m.paraTercih&&SYMT[m.paraTercih])?(' '+SYMT[m.paraTercih]):(pb!=='TL'?' '+SYMT[pb]:'');
   line((s.mus||'-')+curSym);size(1,1);bold(0);
   if(m&&m.adres)line(m.adres);
   if(m&&(m.ulke||m.sehir))line((m.ulke||m.sehir||'').toLocaleUpperCase('tr-TR'));
   if(m&&m.tel)line(m.tel);
   div();
-  two('Tarihi: '+tarih,'No. '+s.id);if(satici)line('Satıcı: '+satici);
-  div();
-  line(padR('Kod',20)+padL('Adet',6)+padL('Fiyat',10)+padL('Toplam',12));
-  align(0);line('-'.repeat(LINE));
+  // ===== TARİH / SATICI + No =====
+  align(0);line('Tarihi: '+tarih);if(satici)line('Satıcı: '+satici);
+  align(2);bold(1);size(1,2);line('No. '+s.id);size(1,1);bold(0);align(0);
+  // ===== KALEM TABLOSU: Kod · Renk · Adet · Fiyat · Toplam =====
+  bold(1);line(padR('Kod',6)+padR('Renk',9)+padL('Adet',5)+padL('Fiyat',11)+padL('Toplam',16));bold(0);
+  sline();
   s.kalemler.forEach(k=>{const u=urun(k.uid);const kod=(u&&u.kod)||k.urun||'-';
-    bold(1);line(padR(kod,20)+padL(''+(+k.mik||0),6)+padL(fmt(k.fiyat),10)+padL(fmt((+k.mik||0)*(+k.fiyat||0)),12));bold(0);
-    (k.renkler||[]).forEach(r=>{line('  '+padR(r.ad||'-',18)+padL(''+(+r.mik||0),4));});});
-  align(0);line('-'.repeat(LINE));
+    const adet=''+(+k.mik||0),fi=fmt(k.fiyat),tp=fmt((+k.mik||0)*(+k.fiyat||0));
+    const nums=padL(adet,5)+padL(fi,11)+padL(tp,16); // 32 karakter
+    bold(1);
+    if(wlen(kod)>15){line(kod);line(padR('',15)+nums);}   // uzun kod → alt satır
+    else line(padR(kod,15)+nums);
+    bold(0);
+    (k.renkler||[]).forEach(r=>{line('   '+padR(r.ad||'-',12)+padL(''+(+r.mik||0),5));});});
+  sline();
   two('Toplam Adet:',''+toplamAdet);div();
-  if(s.iskonto)two('İndirim %'+s.iskonto,'-'+fmt(iskT));
-  two('Toplam KDV hariç',fmt(kdvHaric));
-  if(s.kdv)two('KDV %'+s.kdv,fmt(kdvTutar));
+  // ===== TOPLAMLAR (her biri kesik çizgiyle ayrık) =====
+  if(s.iskonto){bold(1);two('İndirim %'+s.iskonto,'-'+fmt(iskT));bold(0);div();}
+  bold(1);two('Toplam KDV hariç',fmt(kdvHaric));bold(0);div();
+  if(s.kdv){bold(1);two('KDV %'+s.kdv,fmt(kdvTutar));bold(0);div();}
   bold(1);size(1,2);const tr=fmt(toplamGoods);line(padR('TOPLAM',Math.max(0,LINE-wlen(tr)))+tr);size(1,1);bold(0);
   div();
+  // ===== ÖDEME | KARGO (yan yana) =====
   const odeme=(s.odemeler&&s.odemeler.length)?s.odemeler:(s.odenen>0?[{tur:'Nakit',tutar:s.odenen,pb}]:[]);
-  if(odeme.length){line('Ödeme:');odeme.forEach(o=>{const opb=o.pb||pb;two('  '+(o.tur||'Nakit')+' '+(SYMT[opb]||'TL'),num(o.tutar));});}
-  if(s.sevkiyat||s.tasima){line('Kargo:');if(s.sevkiyat)line('  '+s.sevkiyat);if(s.tasima)two('  Taşıma',num(s.tasima));}
-  const notTxt=(s.not||'').trim();if(notTxt){div();line('Not: '+notTxt);}
+  const LC=24;const colL=[],colR=[];
+  colL.push({t:'Ödeme',c:true});
+  odeme.forEach(o=>{const opb=o.pb||pb;colL.push({t:padR((o.tur||'Nakit')+' '+(SYMT[opb]||'TL'),13)+padL(num(o.tutar),11)});});
+  colR.push({t:'Kargo',c:true});
+  if(s.sevkiyat)colR.push({t:s.sevkiyat,c:true});
+  if(s.tasima)colR.push({t:num(s.tasima),c:true});
+  const rows=Math.max(colL.length,colR.length);
+  for(let i=0;i<rows;i++){const L=colL[i]?(colL[i].c?centerIn(colL[i].t,LC):padR(colL[i].t,LC)):' '.repeat(LC);const Rr=colR[i]?(colR[i].c?centerIn(colR[i].t,LC):padR(colR[i].t,LC)):'';line(L+Rr);}
+  div();
+  // ===== NOT =====
+  const notTxt=(s.not||'').trim();line('Not:'+(notTxt?' '+notTxt:''));
   div();
   // QR — yazıcının DONANIM QR komutu (GS ( k) → net
   try{const qtext=db.firmaTelegram?('https://t.me/'+String(db.firmaTelegram).replace(/^\//,'')):((db.firmaSite||'').trim()||((db.firma||'IQ Basics')+' Fis #'+s.id));
@@ -3203,7 +3227,9 @@ function yaziciAyar(){
     </select>
     <label style="margin-top:8px">Kod tablosu no — ESC t (gelişmiş, boş bırak)</label><input inputmode="numeric" value="${db.yaziciKodSayfa!=null?db.yaziciKodSayfa:''}" placeholder="boş = yazıcı varsayılanı" onchange="db.yaziciKodSayfa=(this.value.trim()===''?null:+this.value);save();toast('Kaydedildi')" style="max-width:220px">
     <button class="btn ghost sm" style="margin-top:10px" onclick="yaziciMetinTest()">🧪 Net (metin) test fişi — Türkçe kontrol</button>
-    <div class="mini" style="margin-top:4px">Bu testi bas: yazı NET ve Türkçe harfler (ş ç ğ ı İ ü ö) DOĞRU çıkıyorsa hazırsın. Türkçe bozuksa üstteki kod tablosunu değiştirip tekrar dene.</div>
+    <div class="mini" style="margin-top:4px">Bu testi bas: yazı NET ve Türkçe harfler (ş ç ğ ı İ ü ö) DOĞRU çıkıyorsa hazırsın. Türkçe bozuksa aşağıdaki taramayı çalıştır.</div>
+    <button class="btn ghost sm" style="margin-top:10px" onclick="yaziciKodTara()">🔎 Kod tablosu tara (Türkçe bozuksa)</button>
+    <div class="mini" style="margin-top:4px">Aynı Türkçe kelimeyi 12 farklı kod tablosuyla basar. <b>Doğru çıkan satırın köşeli parantez içindeki etiketini</b> (ör. <b>[1254 default]</b>) bana yaz — o tabloyu kilitleyeyim.</div>
     <div class="okbox" style="margin-top:12px">⚙️ <b>Kurulum:</b> Bilgisayara ajanı bir kez kurman gerekir. Aşağıdaki adımları takip et (5 dk). Kurulduktan sonra bu düğmeyi aç, satış yaptıkça fiş otomatik çıkar.</div>
     <button class="btn ghost sm" style="margin-top:10px" onclick="yaziciKurulum()">📋 Kurulum Adımları (Windows)</button>
     <button class="btn" style="margin-top:10px" onclick="yaziciTest()">🧪 Test Fişi Gönder (resim)</button>
@@ -3220,6 +3246,23 @@ function yaziciKurulum(){
       <li>Bu ekrandaki <b>Otomatik baskı</b> düğmesini aç. Bitti — satış yaptıkça fiş çıkar.</li>
     </ol>
     <div class="okbox" style="margin-top:6px">Detaylı Türkçe rehber: repo içindeki <b>yazici-agent/BASLA-TR.md</b> dosyasında.</div>`);
+}
+async function yaziciKodTara(){
+  if(!(bulutVar()&&bulutBaslat()&&_fb&&bulutGirisli&&bulutGirisli()))return toast('Önce buluta giriş yap');
+  const SAMPLE='GUSIOC/gusioc -> ĞÜŞİÖÇ ğüşıöç';
+  const L5={'Ç':0xC7,'ç':0xE7,'Ğ':0xD0,'ğ':0xF0,'İ':0xDD,'ı':0xFD,'Ö':0xD6,'ö':0xF6,'Ş':0xDE,'ş':0xFE,'Ü':0xDC,'ü':0xFC};
+  const out=[];const raw=(...b)=>b.forEach(x=>out.push(x&0xFF));const nl=()=>out.push(0x0A);
+  const encW=(str,map)=>{for(const ch of str){const c=ch.codePointAt(0);if(c<128)out.push(c);else if(map&&map[ch]!=null)out.push(map[ch]);else out.push(0x3F);}};
+  raw(0x1B,0x40);raw(0x1B,0x61,1);raw(0x1B,0x45,1);encW('== KOD TABLOSU TARAMA ==',{});nl();raw(0x1B,0x45,0);raw(0x1B,0x61,0);
+  encW('Dogru cikan satirin [etiketini]',{});nl();encW('bana yaz. Ustteki satir referans.',{});nl();nl();
+  const trials=[['1254 default',CP1254,null],['1254 t16',L5,16],['ISO t40',L5,40],['ISO t41',L5,41],['ISO t42',L5,42],['ISO t47',L5,47],
+    ['857 default',CP857,null],['857 t3',CP857,3],['857 t12',CP857,12],['857 t13',CP857,13],['857 t15',CP857,15],['857 t18',CP857,18]];
+  trials.forEach(([lab,map,t])=>{raw(0x1B,0x40);if(t!=null)raw(0x1B,0x74,t&0xFF);encW('['+lab+'] ',{});encW(SAMPLE,map);nl();});
+  raw(0x1B,0x64,0x03);raw(0x1D,0x56,0x42,0x00);
+  let bin='';for(let i=0;i<out.length;i+=8192)bin+=String.fromCharCode.apply(null,out.slice(i,i+8192));
+  try{await _fb.collection('isletme').doc(MAGAZA_ID).collection('yazdirma').add({tur:'fis',satisId:'KODTEST',mus:'Kod Tablosu',escpos:btoa(bin),durum:'bekliyor',kopya:1,olusturma:Date.now(),cihaz:'kodtest'});
+    toast('🔎 Kod tablosu tarama fişi gönderildi — doğru satırın [etiketini] bana yaz');
+  }catch(e){toast('Gönderilemedi: '+(e.message||e))}
 }
 async function yaziciMetinTest(){
   if(!(bulutVar()&&bulutBaslat()&&_fb&&bulutGirisli&&bulutGirisli()))return toast('Önce buluta giriş yap');
