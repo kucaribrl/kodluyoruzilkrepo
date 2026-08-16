@@ -103,6 +103,19 @@
   .mcell .mi{width:36px;height:36px;margin:0 auto;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px;background:var(--thr-s)}
   .mcell .mx{font-size:10px;font-weight:700;margin-top:6px;line-height:1.2}
   .mcell .bd{position:absolute;top:6px;right:9px;min-width:16px;height:16px;padding:0 4px;border-radius:9px;background:var(--bad);color:#fff;font-size:9.5px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  /* Çerçeveli, büyütülmüş Modüller kutusu */
+  .modbox{border:2px solid var(--ind2);background:linear-gradient(180deg,var(--thr-s),var(--card));border-radius:20px;padding:4px 12px 14px;margin:2px 0 16px;box-shadow:0 6px 20px rgba(20,40,70,.10)}
+  .modhead{font-size:16px;font-weight:800;color:var(--ind2);padding:12px 4px 12px;display:flex;align-items:baseline;gap:8px}
+  .modhead span{font-size:12px;font-weight:600;color:var(--sub)}
+  .modbox .mgrid{grid-template-columns:repeat(3,1fr);gap:12px}
+  .modbox .mcell{padding:18px 6px 14px;border-radius:18px;border:1.5px solid var(--ln)}
+  .modbox .mcell .mi{width:54px;height:54px;font-size:28px;border-radius:16px}
+  .modbox .mcell .mx{font-size:13px;font-weight:800;margin-top:9px}
+  .modbox .mcell .bd{top:8px;right:11px;min-width:19px;height:19px;font-size:11px}
+  /* Gizli mod (para tutarları) */
+  .gizli-para{filter:blur(9px);opacity:.6;pointer-events:none;user-select:none}
+  .gizmod{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#141d2b;color:#fff;border-radius:13px;padding:11px 14px;margin:2px 0 14px;font-weight:700;font-size:13px}
+  .gizmod button{background:rgba(255,255,255,.16);color:#fff;border:none;border-radius:9px;padding:8px 14px;font-weight:800;font-size:13px;cursor:pointer;flex:0 0 auto}
   .trend{padding:13px}
   .trend .th{display:flex;justify-content:space-between;align-items:baseline}
   .trend .th .a{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:var(--sub)}
@@ -772,7 +785,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-68'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-69'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1222,7 +1235,7 @@ function rolOnizle(){rolSec();}
 /* 🔒 Uygulama kilidi (PIN) + hareketsizlik otomatik kilit */
 function pinHash(s){let h=5381;for(let i=0;i<s.length;i++)h=((h*33)^s.charCodeAt(i))>>>0;return 'p'+h;}
 let _kilitT=null;
-function kilitGoster(){if(!db.pin)return;const el=$('kilit');if(!el)return;el.style.display='flex';const i=$('kilit-pin');if(i){i.value='';$('kilit-msg').textContent='Devam etmek için PIN girin';setTimeout(()=>i.focus(),60);}}
+function kilitGoster(){if(!db.pin)return;_paraGizli=true;const el=$('kilit');if(!el)return;el.style.display='flex';const i=$('kilit-pin');if(i){i.value='';$('kilit-msg').textContent='Devam etmek için PIN girin';setTimeout(()=>i.focus(),60);}}
 function kilitDene(){const v=$('kilit-pin')?.value||'';if(db.pin&&pinHash(v)===db.pin){$('kilit').style.display='none';kilitZamanla();}else{$('kilit-msg').textContent='❌ Yanlış PIN, tekrar deneyin';const i=$('kilit-pin');if(i){i.value='';i.focus();}}}
 function kilitZamanla(){clearTimeout(_kilitT);if(!db.pin)return;const dk=Math.max(1,+db.pinDk||3);_kilitT=setTimeout(kilitGoster,dk*60000);}
 function kilitAyar(){open_('🔒 Uygulama Kilidi (PIN)',`
@@ -1271,6 +1284,15 @@ function rolSec(){
 function setRol(k){db.rol=k;save();closeM();go('panel');toast(ROLLER[k].ad+' görünümü')}
 
 /* =================== RENDER =================== */
+// 💰 Gizli mod: uygulama her açılışta tutarlar GİZLİ; göstermek için PIN
+let _paraGizli=true;
+function tutarGoster(){
+  if(!db.pin){_paraGizli=false;render();toast('👁️ Tutarlar açık — güvenlik için Ayarlar → Uygulama Kilidi\'nden PIN koymanı öneririm');return;}
+  open_('🔒 PIN',`<div class="mini">Tutarları göstermek için PIN girin.</div><input id="pg-pin" type="password" inputmode="numeric" maxlength="8" placeholder="••••" style="margin-top:10px" onkeydown="if(event.key==='Enter')tutarGosterDene()"><div id="pg-msg" class="mini" style="color:var(--bad);margin-top:6px"></div><button class="btn g" style="margin-top:12px" onclick="tutarGosterDene()">👁️ Göster</button>`);
+  setTimeout(()=>{const i=$('pg-pin');if(i)i.focus();},90);
+}
+function tutarGosterDene(){const v=($('pg-pin')&&$('pg-pin').value)||'';if(pinHash(v)===db.pin){_paraGizli=false;closeM();render();toast('👁️ Tutarlar gösteriliyor');}else{const m=$('pg-msg');if(m)m.textContent='❌ Yanlış PIN, tekrar deneyin';const i=$('pg-pin');if(i){i.value='';i.focus();}}}
+function tutarGizle(){_paraGizli=true;render();toast('🙈 Tutarlar gizlendi');}
 function render(){
   const y=yetki();
   $('hTitle').textContent=db.firma;
@@ -1331,18 +1353,21 @@ function rPanel(){
 
   const mods=modulListe();
   const gorKur=para||db.rol==='magaza';
-  let html=`
-    <div class="greet"><div><div class="h">Merhaba, ${esc(y.ad)} 👋</div><div class="d">${new Date().toLocaleDateString('tr-TR',{weekday:'long',day:'numeric',month:'long'})}</div></div></div>`;
+  const gizliUygula=para||db.rol==='magaza'; // parası olan roller → gizli mod
+  const modBox=`<div class="modbox"><div class="modhead">⚡ Modüller <span>Hızlı Erişim</span></div><div class="mgrid">`+mods.map(m=>`<div class="mcell" onclick="${m.act}">${m.bd?`<span class="bd">${m.bd}</span>`:''}<div class="mi">${m.ic}</div><div class="mx">${m.ad}</div></div>`).join('')+`</div></div>`;
+  // SIRA: Karşılama → Kur → Modüller (çerçeveli) → [para (gizli)] → diğerleri
+  let html=`<div class="greet"><div><div class="h">Merhaba, ${esc(y.ad)} 👋</div><div class="d">${new Date().toLocaleDateString('tr-TR',{weekday:'long',day:'numeric',month:'long'})}</div></div></div>`;
   if(gorKur)html+=`<div class="kur">💵 $ ${db.kurUSD.toFixed(2)} <span style="color:var(--ln)">|</span> 💶 € ${db.kurEUR.toFixed(2)}${db.kurTarih?`<span style="font-size:10px;color:var(--sub);font-weight:600;margin-left:6px">${kurYas()}</span>`:''}<span class="up" onclick="kurGuncelle()">🔄 Güncelle</span></div>`;
-  html+=`<div class="tiles">${tiles}</div>`;
+  html+=modBox;
   if(bekleyen.length){
     html+=`<div class="sec">Bekleyen İşler</div><div class="card">`+bekleyen.slice(0,5).map((b,i)=>`<div class="todo" onclick="bekAct(${i})"><div class="ic" style="background:${b.bg}">${b.ic}</div><div class="m"><div class="t">${esc(b.t)}</div><div class="s">${esc(b.s)}</div></div><span style="color:var(--sub)">›</span></div>`).join('')+`</div>`;
     window._bek=bekleyen;
   }
-  html+=`<div class="sec">Modüller</div><div class="mgrid">`+mods.map(m=>`<div class="mcell" onclick="${m.act}">${m.bd?`<span class="bd">${m.bd}</span>`:''}<div class="mi">${m.ic}</div><div class="mx">${m.ad}</div></div>`).join('')+`</div>`;
+  // 💰 PARA GRUBU — gizli modda bulanık (yanında biri varken)
+  let paraHtml=`<div class="tiles">${tiles}</div>`;
   // 📊 GÜNÜN ÖZETİ — patron/ortak
   if(para){const g=panoGunOzet();
-    html+=`<div class="sec">📊 Bugünün Özeti</div><div class="card" style="padding:12px 14px">
+    paraHtml+=`<div class="sec">📊 Bugünün Özeti</div><div class="card" style="padding:12px 14px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div><div class="mini">🧾 Satış</div><div style="font-size:18px;font-weight:800">${g.adet}<span class="mini" style="font-weight:600"> adet · ${TL(g.ciro)}</span></div></div>
         <div><div class="mini">💰 Tahsilat</div><div style="font-size:18px;font-weight:800;color:var(--good)">${TL(g.tahsilat)}</div></div>
@@ -1354,13 +1379,19 @@ function rPanel(){
     const seri=ciroSeri(30);const mx=Math.max(1,...seri);const top=30;
     const path=seri.map((v,i)=>`${i*(300/(seri.length-1))},${(top-2)-(v/mx)*(top-4)}`).join(' ');
     const toplam=seri.reduce((a,v)=>a+v,0);
-    html+=`<div class="sec">Son 30 Gün Cirosu</div><div class="card trend"><div class="th"><span class="a">Gerçek ciro · ${TL(toplam)}</span><span class="v">bugün ${TL(seri[seri.length-1]||0)}</span></div><svg viewBox="0 0 300 ${top}" preserveAspectRatio="none"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d9534f" stop-opacity=".28"/><stop offset="1" stop-color="#d9534f" stop-opacity="0"/></linearGradient></defs><polygon points="${path} 300,${top} 0,${top}" fill="url(#g)"/><polyline points="${path}" fill="none" stroke="#d9534f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg></div>`;
+    paraHtml+=`<div class="sec">Son 30 Gün Cirosu</div><div class="card trend"><div class="th"><span class="a">Gerçek ciro · ${TL(toplam)}</span><span class="v">bugün ${TL(seri[seri.length-1]||0)}</span></div><svg viewBox="0 0 300 ${top}" preserveAspectRatio="none"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d9534f" stop-opacity=".28"/><stop offset="1" stop-color="#d9534f" stop-opacity="0"/></linearGradient></defs><polygon points="${path} 300,${top} 0,${top}" fill="url(#g)"/><polyline points="${path}" fill="none" stroke="#d9534f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg></div>`;
     // 🏆 EN ÇOK SATAN (son 30 gün)
     const top5=enCokSatan(30,5);
     if(top5.length){const maxA=Math.max(...top5.map(t=>t.adet));
-      html+=`<div class="sec">🏆 En Çok Satan (30 gün)</div><div class="card">`+top5.map((t,i)=>`<div class="row" onclick="go('stok');setTimeout(()=>urunDetay(${t.uid}),150)"><div class="av" style="background:${['#d9534f','#e0803a','#caa43a','#7a8a99','#8a94a0'][i]||'var(--ind)'}">${i+1}</div><div class="mid"><div class="t">${esc(t.ad)}</div><div class="s">${t.adet} adet · ${TL(t.ciro)}</div><div style="height:4px;background:var(--ln2);border-radius:3px;margin-top:5px;overflow:hidden"><i style="display:block;height:100%;width:${Math.round(t.adet/maxA*100)}%;background:var(--ind2)"></i></div></div></div>`).join('')+`</div>`;
+      paraHtml+=`<div class="sec">🏆 En Çok Satan (30 gün)</div><div class="card">`+top5.map((t,i)=>`<div class="row" onclick="go('stok');setTimeout(()=>urunDetay(${t.uid}),150)"><div class="av" style="background:${['#d9534f','#e0803a','#caa43a','#7a8a99','#8a94a0'][i]||'var(--ind)'}">${i+1}</div><div class="mid"><div class="t">${esc(t.ad)}</div><div class="s">${t.adet} adet · ${TL(t.ciro)}</div><div style="height:4px;background:var(--ln2);border-radius:3px;margin-top:5px;overflow:hidden"><i style="display:block;height:100%;width:${Math.round(t.adet/maxA*100)}%;background:var(--ind2)"></i></div></div></div>`).join('')+`</div>`;
     }
   }
+  // para grubunu yerleştir: gizli modda bulanık + "Göster" (PIN), açıkken "Gizle"
+  if(gizliUygula&&_paraGizli){
+    html+=`<div class="gizmod">🙈 Tutarlar gizli — yanında biri varken güvenli <button onclick="tutarGoster()">👁️ Göster</button></div><div class="paragrup gizli-para">${paraHtml}</div>`;
+  }else if(gizliUygula){
+    html+=`<div style="text-align:right;margin:0 3px 6px"><button class="btn ghost sm" style="width:auto;margin:0;padding:6px 12px" onclick="tutarGizle()">🙈 Gizle</button></div>`+paraHtml;
+  }else{ html+=paraHtml; }
   // 📦 HAZIRLADIKLARIM — depocu/mağaza/patron: hazırlanmış siparişler ekrandan kaybolmasın, geçmişe bakılabilsin
   if(db.rol==='depocu'||db.rol==='magaza'||para){
     const hg=depoHazirGecmis();
