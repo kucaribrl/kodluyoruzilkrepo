@@ -808,7 +808,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-71'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-72'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1338,6 +1338,7 @@ function rPanel(){
     db.isemirleri.filter(i=>i.durum==='devam').forEach(i=>{const gec=-gunFark(i.baslangic+i.gun*86400000);if(gec>0)bekleyen.push({ic:'⏱️',bg:'var(--bad-s)',t:'İş Emri #'+i.id+' gecikti',s:i.urun+' · '+gec+' gün geç',act:()=>uretimDetay(i.id)})});
     db.malSiparis.filter(s=>sipAcik(s)&&s.beklenen&&gunFark(s.beklenen)<=3).forEach(s=>{const g=gunFark(s.beklenen);bekleyen.push({ic:'🚚',bg:g<0?'var(--bad-s)':'var(--thr-s)',t:s.ad+' siparişi'+(g<0?' · GECİKTİ '+Math.abs(g)+'g':g===0?' · bugün gelmeli':' · '+g+' gün kaldı'),s:(s.ted?s.ted+' · ':'')+(s.durum==='kismi'?'kalan '+sipKalan(s):(+s.miktar||0))+' '+(s.birim||''),act:()=>malSipDetay(s.id)})});
     db.malSiparis.filter(s=>sipAcik(s)&&s.oto&&s.ieId&&!s.beklenen).forEach(s=>bekleyen.push({ic:'🛒',bg:'var(--warn-s)',t:s.ad+' alınacak',s:'İş Emri #'+s.ieId+(s.ieKod?' ('+s.ieKod+')':'')+' için · '+(+s.miktar||0)+' '+(s.birim||''),act:()=>malSipDetay(s.id)}));
+    db.isemirleri.filter(i=>i.durum==='devam'&&i.malzemeGeldiBildirim).forEach(i=>bekleyen.push({ic:'✅',bg:'var(--good-s)',t:'İş Emri #'+i.id+' — malzemeler geldi',s:(i.urun||'')+' · üretime devam edebilirsin',act:()=>uretimDetay(i.id)}));
     db.hammadde.filter(h=>(+h.kritik||0)>0&&(+h.stok||0)<=(+h.kritik||0)).forEach(h=>{const gel=malGelecek(h);bekleyen.push({ic:'🧵',bg:'var(--bad-s)',t:h.ad+' azaldı',s:'stok '+(+h.stok||0).toLocaleString('tr-TR')+' '+(h.birim||'')+' (kritik '+(+h.kritik||0)+')'+(gel>0?' · 🚚 '+gel.toLocaleString('tr-TR')+' yolda':''),act:()=>{envView='stok';go('envanter')}})});
     db.cekler.filter(c=>c.durum==='portfoyde'&&gunFark(c.vade)<=7).forEach(c=>{const g=gunFark(c.vade),ov=g<0,al=c.tip==='alinan';
       bekleyen.push({ic:'🏷️',bg:ov?'var(--bad-s)':al?'var(--good-s)':'var(--warn-s)',t:(al?'Çek tahsilatı':'Çek ödemesi')+(ov?' · GECİKTİ '+Math.abs(g)+'g':g===0?' · BUGÜN':' · '+g+' gün'),s:c.cari+' · '+TL(c.tutar)+' · '+dstr(c.vade),act:()=>go('cek')})});
@@ -1718,6 +1719,7 @@ function kaydetMalSipTeslim(id){
   const tV=$('mt-tarih')?.value;const gelenTarih=tV?new Date(tV).getTime():Date.now();
   s.gelenMiktar=tg;s.gelenTarih=gelenTarih;const nnot=($('mt-not')?.value||'').trim();if(nnot)s.gelenNot=nnot;
   const tamam=sipKalan(s)<=0.001;s.durum=tamam?'geldi':'kismi';
+  const ieMsj=tamam?aksesuarGeldiIsle(s):''; // otomatik aksesuar → bağlı iş emrine yansı
   // bu partinin borcu (kısmi teslimde her parti kendi borcunu yazar); tedId boşsa isimden bul
   let borcMsj='';
   let ted=s.tedId?cari(s.tedId):null;
@@ -1727,7 +1729,7 @@ function kaydetMalSipTeslim(id){
     if(pb==='USD'){ted.doviz='USD';ted.bakiyeUSD=(+ted.bakiyeUSD||0)+tutar}else{ted.bakiye=(+ted.bakiye||0)+tutar}
     s.borclandi=true;s.borcTutar=(+s.borcTutar||0)+tutar;s.borcPB=pb;borcMsj=' · '+esc(ted.ad)+' +'+money(tutar,pb)+' borç';}
   save();closeM();envView='siparis';rEnvanter();
-  toast((tamam?'✓ Sipariş tamamlandı, stoğa eklendi':'📦 Kısmi teslim — kalan yolda')+borcMsj);
+  toast((tamam?'✓ Sipariş tamamlandı, stoğa eklendi':'📦 Kısmi teslim — kalan yolda')+borcMsj+ieMsj);
 }
 // Siparişi tedarikçiye (kumaşçıya) WhatsApp'tan gönder
 function malSipGonder(id){const s=db.malSiparis.find(x=>x.id===id);if(!s)return;
@@ -4065,6 +4067,20 @@ function aksesuarAlimAc(ie){
   });
   return n;
 }
+// 📦 Otomatik aksesuar siparişi teslim alınınca → bağlı iş emrine yansı
+function aksesuarGeldiIsle(s){
+  if(!s||!s.oto||!s.ieId)return '';
+  const ie=db.isemirleri.find(x=>x.id===s.ieId);if(!ie||ie.durum==='tamam')return '';
+  (ie.malzeme||[]).forEach(m=>{if(m.alimId===s.id||(s.hid&&m.hid===s.hid)){m.durum='var';if(s.hid)m.hid=s.hid;}});
+  const kalan=(ie.malzeme||[]).filter(m=>m.durum==='alinacak').length;
+  if(kalan===0){
+    // tüm eksikler geldi → aksesuar/malzeme kontrol maddelerini otomatik tikle + panelde bildir
+    (ie.duraklar||[]).forEach(d=>{if(d.durum==='tamam')return;(d.kontrol||[]).forEach(k=>{if(!k.ok&&/aksesuar|malzeme/i.test(k.ad))k.ok=true;});});
+    ie.malzemeGeldiBildirim=true;
+    return ' · ✅ İş Emri #'+ie.id+' malzemeleri tamam';
+  }
+  return ' · İş Emri #'+ie.id+' için geldi ('+kalan+' kalem daha bekliyor)';
+}
 // Kontrol listesi: eksik maddeler + tikle
 function durakKontrolEksik(d){return (d&&d.kontrol||[]).filter(k=>!k.ok).map(k=>k.ad);}
 function durakKontrolTik(id,x,ki){const i=db.isemirleri.find(v=>v.id===id);if(!i)return;const d=i.duraklar[x];if(!d||!d.kontrol||!d.kontrol[ki])return;d.kontrol[ki].ok=!d.kontrol[ki].ok;save();uretimDetay(id);}
@@ -4577,6 +4593,7 @@ function ieUrunFoto(i){
 }
 function uretimDetay(id){
   const i=db.isemirleri.find(x=>x.id===id);if(!i)return;
+  if(i.malzemeGeldiBildirim){i.malzemeGeldiBildirim=false;save();} // açınca "malzeme geldi" nudge'ı düşür
   const foto=ieUrunFoto(i);
   const kar=karGoster();const saglam=ieSaglam(i);const birim=ieBirimMaliyet(i);
   const durIc={tamam:'✅',devam:'🔵',bekliyor:'⬜'};
