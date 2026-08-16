@@ -772,7 +772,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-63'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-64'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -5463,6 +5463,39 @@ function portalMusEslesme(){const el=$('p-eslesme');if(!el)return;const m=portal
   }else el.innerHTML='';}
 function portalEmoji(u){const k=((u.kat||'')+(u.ad||'')).toLowerCase();if(/mont|kaban|ceket|yağmur/.test(k))return '🧥';if(/kazak|triko|sweat|hırka/.test(k))return '🧶';if(/pantol|eşofman|jean|şort/.test(k))return '👖';if(/gömlek/.test(k))return '👔';if(/ayakkab|bot/.test(k))return '👟';return '👕'}
 function portalUrunAc(id){portalUrunId=id;portalFotoIx=0;portalView='urun';try{pazarBakisBasla(id)}catch(e){}window.scrollTo(0,0);portalCiz()}
+// Tek ürünü fotoğraf+fiyatlı GÖRSEL KART olarak üret (WhatsApp'ta paylaşmak için)
+function urunKartResim(u,cb){const W=720,H=910,dpr=2,gold='#d9534f',ink='#1a2230',mut='#8a8f98';
+  const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const g=c.getContext('2d');g.scale(dpr,dpr);
+  g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';
+  const clip=(t,f,mw)=>{g.font=f;t=''+t;if(g.measureText(t).width<=mw)return t;while(t.length>1&&g.measureText(t+'…').width>mw)t=t.slice(0,-1);return t+'…';};
+  const draw=(img)=>{
+    g.fillStyle='#fff';g.fillRect(0,0,W,H);
+    g.fillStyle=ink;g.textAlign='center';g.font='800 34px sans-serif';g.fillText(clip((db.firma||'IQ Basics'),'800 34px sans-serif',W-80),W/2,56);
+    const px=40,py=80,pw=W-80,ph=540;
+    g.fillStyle='#eef2f8';g.fillRect(px,py,pw,ph);
+    if(img){const s=Math.max(pw/img.width,ph/img.height),iw=img.width*s,ih=img.height*s;g.save();g.beginPath();g.rect(px,py,pw,ph);g.clip();g.drawImage(img,px+(pw-iw)/2,py+(ph-ih)/2,iw,ih);g.restore();}
+    else{g.fillStyle='#c2cad6';g.font='150px sans-serif';g.textAlign='center';g.fillText(portalEmoji(u),W/2,py+ph/2+55);}
+    const ind=portalIndirimYuzde(u);
+    if(ind>0){g.fillStyle=gold;g.fillRect(px,py,132,52);g.fillStyle='#fff';g.font='800 26px sans-serif';g.textAlign='center';g.fillText('%'+ind,px+66,py+35);}
+    let y=py+ph+58;g.fillStyle=ink;g.textAlign='center';g.font='800 42px sans-serif';g.fillText(clip(u.ad,'800 42px sans-serif',W-70),W/2,y);y+=34;
+    if(u.kod){g.fillStyle=mut;g.font='600 22px sans-serif';g.fillText(clip('Kod: '+u.kod,'600 22px sans-serif',W-70),W/2,y);y+=40;}else y+=8;
+    const esk=portalEskiFiyat(u);y+=14;g.textAlign='center';
+    if(esk){g.fillStyle=mut;g.font='600 26px sans-serif';const ew=g.measureText(TL(esk)).width;g.fillStyle=gold;g.font='800 48px sans-serif';const nw=g.measureText(TL(portalFiyat(u))).width;const gap=16;const tot=ew+gap+nw;let sx=W/2-tot/2;g.textAlign='left';g.fillStyle=mut;g.font='600 26px sans-serif';g.fillText(TL(esk),sx,y);g.strokeStyle=mut;g.lineWidth=2;g.beginPath();g.moveTo(sx,y-9);g.lineTo(sx+ew,y-9);g.stroke();g.fillStyle=gold;g.font='800 48px sans-serif';g.fillText(TL(portalFiyat(u)),sx+ew+gap,y+3);g.textAlign='center';}
+    else{g.fillStyle=gold;g.font='800 50px sans-serif';g.fillText(TL(portalFiyat(u)),W/2,y+4);}
+    g.fillStyle=mut;g.font='600 22px sans-serif';g.fillText('/ '+(u.birim||'adet'),W/2,y+38);
+    const wp=db.firmaWp||db.firmaTel||'';if(wp){g.fillStyle=ink;g.font='700 24px sans-serif';g.fillText('📞 Sipariş: '+wp,W/2,H-40);}
+    cb(c.toDataURL('image/png'));
+  };
+  const kap=urunKapak(u);
+  if(kap){const im=new Image();im.onload=()=>draw(im);im.onerror=()=>draw(null);im.src=kap;}else draw(null);
+}
+async function urunGorselPaylas(id){const u=urun(id);if(!u)return;
+  urunKartResim(u,async(url)=>{try{
+    const bl=await (await fetch(url)).blob();const f=new File([bl],'urun-'+id+'.png',{type:'image/png'});
+    const cap=`${u.ad}${u.kod?' ('+u.kod+')':''} — ${TL(portalFiyat(u))}/${u.birim||'adet'}`;
+    if(navigator.canShare&&navigator.canShare({files:[f]}))return navigator.share({files:[f],text:cap}).catch(()=>{});
+    const a=document.createElement('a');a.href=url;a.download='urun-'+id+'.png';a.click();toast('📥 Görsel indirildi');
+  }catch(e){toast('Paylaşılamadı')}});}
 function portalFoto(ix){portalFotoIx=ix;portalCiz()}
 function portalCokSatan(){const map={};db.satislar.forEach(s=>(s.kalemler||[]).forEach(k=>map[k.uid]=(map[k.uid]||0)+(+k.mik||0)));return new Set(Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,3).filter(e=>e[1]>0).map(e=>+e[0]))}
 // bu ürünü alanların birlikte aldığı diğer ürünler (market-basket)
@@ -5636,7 +5669,7 @@ function portalCiz(){
       <div onclick="portalView='katalog';portalCiz()" style="padding:12px 15px;color:var(--ind2);font-weight:700;font-size:13.5px;cursor:pointer">‹ Katalog</div>
       <div style="position:relative;width:100%;aspect-ratio:1;max-height:360px;background:linear-gradient(135deg,#eef2f8,#dde6f2);display:flex;align-items:center;justify-content:center;font-size:110px">${aktifFoto?`<img src="${aktifFoto}" style="width:100%;height:100%;object-fit:cover">`:portalEmoji(u)}${galeri.length>1?`<div style="position:absolute;bottom:9px;left:50%;transform:translateX(-50%);display:flex;gap:5px">${galeri.map((_,i)=>`<i style="width:7px;height:7px;border-radius:50%;background:${i===fix?'#fff':'rgba(255,255,255,.5)'};display:block"></i>`).join('')}</div>`:''}${galeri.length&&galeri[fix].ad?`<span style="position:absolute;bottom:10px;right:12px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;font-weight:700;padding:4px 9px;border-radius:9px">${esc(galeri[fix].ad)}</span>`:''}</div>
       ${galeri.length>1?`<div style="display:flex;gap:7px;overflow-x:auto;padding:9px 15px 2px">${galeri.map((g,i)=>`<div onclick="portalFoto(${i})" style="flex:0 0 56px;width:56px;height:56px;border-radius:10px;overflow:hidden;cursor:pointer;border:2px solid ${i===fix?'var(--ind2)':'transparent'}"><img src="${g.foto}" style="width:100%;height:100%;object-fit:cover"></div>`).join('')}</div>`:''}
-      <div style="padding:16px 16px 0"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div style="font-size:20px;font-weight:800">${esc(u.ad)}</div><button onclick="portalFavToggle(${u.id})" style="flex:0 0 auto;background:none;border:none;font-size:26px;cursor:pointer;line-height:1">${isFav(u.id)?'❤️':'🤍'}</button></div>
+      <div style="padding:16px 16px 0"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div style="font-size:20px;font-weight:800">${esc(u.ad)}</div><div style="flex:0 0 auto;display:flex;gap:6px;align-items:center"><button onclick="urunGorselPaylas(${u.id})" style="background:none;border:none;font-size:23px;cursor:pointer;line-height:1">📤</button><button onclick="portalFavToggle(${u.id})" style="background:none;border:none;font-size:26px;cursor:pointer;line-height:1">${isFav(u.id)?'❤️':'🤍'}</button></div></div>
       <div class="mini" style="margin-top:3px">${esc(u.kod||'')}${u.marka?' · '+esc(u.marka):''}${u.kat?' · '+esc(u.kat):''}</div>
       <div style="margin:10px 0;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">${portalEskiFiyat(u)?`<s style="font-size:18px;color:var(--sub);font-weight:600">${TL(portalEskiFiyat(u))}</s>`:''}<span style="font-size:26px;font-weight:800;color:${portalEskiFiyat(u)?'var(--bad)':'var(--ind)'}">${TL(portalFiyat(u))}</span><span class="mini" style="font-weight:600">/${esc(u.birim||'')}</span>${portalEskiFiyat(u)?`<span class="tag" style="background:var(--bad-s);color:var(--bad)">%${portalIndirimYuzde(u)} indirim</span>`:''}</div>
       ${(()=>{const cok=portalCokSatan();const msgs=[];if(st>0&&st<=Math.max(3,(+u.kritik||0)))msgs.push(`🔥 Son <b>${st}</b> ${esc(u.birim||'adet')} kaldı`);if(cok.has(u.id))msgs.push('⭐ Çok satan');return msgs.length?`<div style="font-size:13px;color:var(--bad);font-weight:800;margin:2px 0 10px">${msgs.join(' &nbsp;·&nbsp; ')}</div>`:''})()}
