@@ -668,7 +668,7 @@ function canliYazHemen(domenler){
     if(js!==_canliGolge[domen]){_canliGolge[domen]=js;ps.push(canliRef(domen).set(data).catch(e=>{console.warn('canlı-yaz-hemen',domen,e&&e.code);if(canliIzinHata(e)!=='permission-denied'&&(''+e).includes('longer than'))toast('⚠️ '+domen+' verisi 1MB sınırını aştı (fotoğraflar) — buluta yazılamadı. Fotoğrafları küçültün.');}));}});
   return Promise.all(ps);
 }
-function save(){localStorage.setItem(KEY,JSON.stringify(db));if(canliAcik&&!_canliUygulaniyor)canliYaz();if(db.otoYayin){try{otoYayinTetik()}catch(e){}}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){console.error('save failed',e);try{toast('⚠️ Depolama dolu — kayıt yapılamadı! Fotoğrafları küçült ya da Ayarlar\'dan Cloudinary aç.');}catch(_){}return;}if(canliAcik&&!_canliUygulaniyor)canliYaz();if(db.otoYayin){try{otoYayinTetik()}catch(e){}}}
 function canliBulutAyar(){
   if(!bulutVar())return toast('Önce bulut (Firebase) ayarlı olmalı');
   if(!bulutBaslat())return toast('Bulut başlatılamadı');
@@ -749,7 +749,7 @@ async function canliBulutKatil(){
 function otoYedekListe(){const y=JSON.parse(localStorage.getItem('iq_yedekler')||'[]');
   open_('🕑 Otomatik Yedekler',(y.length?y.map((b,i)=>`<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><b>${tstr(b.t)}</b><div class="mini">${esc(b.etiket||'')} · ${esc(b.ozet||'')}</div></div><button class="btn ghost sm" style="width:auto;margin:0;padding:8px 12px;flex:0 0 auto" onclick="otoYedekGeri(${i})">↩︎ Geri yükle</button></div></div>`).join(''):'<div class="mini">Henüz yedek yok. Riskli işlemlerden önce ve günde bir otomatik alınır.</div>')+'<div class="mini" style="margin-top:8px">Yedekler bu cihazda saklanır (son 10). Cihaz değişimi için "Yedek Al (indir)" ile dosya da al.</div>');}
 function otoYedekGeri(i){const y=JSON.parse(localStorage.getItem('iq_yedekler')||'[]');const b=y[i];if(!b)return;
-  askConfirm('Bu yedeğe dönülsün mü? Şu anki veri bununla değişir ve canlı senkron kapatılır (istersen sonra tekrar açarsın).',()=>{try{const d=JSON.parse(b.veri);if(canliAcik)canliDur();db=d;save();closeM();go('panel');toast('↩︎ Yedek geri yüklendi ✓');}catch(e){toast('Yedek okunamadı')}});}
+  askConfirm('Bu yedeğe dönülsün mü? Şu anki veri bununla değişir ve canlı senkron kapatılır (istersen sonra tekrar açarsın).',()=>{try{JSON.parse(b.veri);if(canliAcik)canliDur();localStorage.setItem(KEY,b.veri);db=load();closeM();go('panel');toast('↩︎ Yedek geri yüklendi ✓');}catch(e){toast('Yedek okunamadı')}});}
 function canliBulutKapat(){askConfirm('Canlı senkron kapatılsın mı? (Veri cihazda kalır ama artık senkronlanmaz)',()=>{canliDur();closeM();toast('Senkron kapatıldı');});}
 // 👤 Personel girişi: depocu/mağaza/ortak kendi hesabıyla girer → rolüne göre canlı veriye bağlanır
 function personelGiris(){
@@ -808,7 +808,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-72'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-73'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1183,7 +1183,7 @@ function toplamAlacak(){return db.cariler.filter(c=>c.tip==='musteri').reduce((a
 function stokDegeri(){return db.urunler.reduce((a,u)=>a+u.stok*u.alis*(u.birim==='seri'?u.seri:1),0)}
 // 1 satış biriminde kaç parça var (seri ürünlerde parça fiyatı × seri = seri fiyatı)
 function birimAdet(u){return (u&&u.birim==='seri')?(+u.seri||1):1}
-function bugunSatis(){const b=new Date().setHours(0,0,0,0);return db.satislar.filter(s=>s.tarih>=b).reduce((a,s)=>a+s.tutar,0)}
+function bugunSatis(){const b=new Date().setHours(0,0,0,0);return db.satislar.filter(s=>s.tarih>=b&&s.tip!=='iade').reduce((a,s)=>a+(+s.tutar||0)*satisDiv(s),0)}
 // 📊 PANO — günün özeti, en çok satan, gerçek ciro trendi
 function panoGunOzet(){const b=new Date().setHours(0,0,0,0);
   const sat=db.satislar.filter(s=>s.tarih>=b&&s.tip!=='iade');
@@ -1191,7 +1191,7 @@ function panoGunOzet(){const b=new Date().setHours(0,0,0,0);
   let tah=0;(db.hareketler||[]).filter(h=>h.tarih>=b&&h.tip==='tahsilat').forEach(h=>tah+=(+h.tutar||0));
   db.satislar.filter(s=>s.tarih>=b&&s.odenen>0).forEach(s=>tah+=s.odenen*satisDiv(s));
   const yeniSip=(db.bekleyenPortal||[]).filter(o=>(o.tarih||0)>=b).length;
-  return {adet:sat.length,ciro:sat.reduce((a,s)=>a+s.tutar,0),tahsilat:tah,iade:iade.length,yeniSip};}
+  return {adet:sat.length,ciro:sat.reduce((a,s)=>a+(+s.tutar||0)*satisDiv(s),0),tahsilat:tah,iade:iade.length,yeniSip};}
 function enCokSatan(gun,n){const since=Date.now()-gun*86400000;const map={};
   db.satislar.filter(s=>s.tarih>=since&&s.tip!=='iade').forEach(s=>(s.kalemler||[]).forEach(k=>{
     const m=map[k.uid]||(map[k.uid]={uid:k.uid,ad:k.urun,adet:0,ciro:0});
@@ -1199,7 +1199,7 @@ function enCokSatan(gun,n){const since=Date.now()-gun*86400000;const map={};
   return Object.values(map).sort((a,b)=>b.adet-a.adet).slice(0,n||5);}
 function ciroSeri(gun){const arr=[];const bugun=new Date().setHours(0,0,0,0);
   for(let i=gun-1;i>=0;i--){const g0=bugun-i*86400000,g1=g0+86400000;
-    arr.push(db.satislar.filter(s=>s.tarih>=g0&&s.tarih<g1&&s.tip!=='iade').reduce((a,s)=>a+s.tutar,0));}
+    arr.push(db.satislar.filter(s=>s.tarih>=g0&&s.tarih<g1&&s.tip!=='iade').reduce((a,s)=>a+(+s.tutar||0)*satisDiv(s),0));}
   return arr;}
 
 /* Roller ve yetki — merkezi model */
@@ -2648,19 +2648,26 @@ function iadeAl(satisId){const s=db.satislar.find(x=>x.id===satisId);if(!s||s.ti
   iadeCiz();
 }
 function iadeAdet(i,ad,d,max){iadeSel[i]=iadeSel[i]||{};const cur=iadeSel[i][ad]||0;const v=Math.max(0,Math.min(cur+d,max));if(v<=0)delete iadeSel[i][ad];else iadeSel[i][ad]=v;iadeCiz()}
-function iadeKalemler(s){const arr=[];s.kalemler.forEach((k,i)=>{const sel=iadeSel[i]||{};
-  if(k.renkler&&k.renkler.length){const rr=k.renkler.map(r=>({ad:r.ad,mik:sel[r.ad]||0})).filter(x=>x.mik>0);const tm=rr.reduce((a,x)=>a+x.mik,0);if(tm>0)arr.push({uid:k.uid,urun:k.urun,mik:tm,birim:k.birim,fiyat:k.fiyat,renkler:rr})}
-  else{const m=sel['_']||0;if(m>0)arr.push({uid:k.uid,urun:k.urun,mik:m,birim:k.birim,fiyat:k.fiyat})}});
+// Bu satışta şu ana kadar iade edilmiş miktarlar: {uid:{renkAd|'_':toplam}} — çift iadeyi önlemek için
+function iadeEdilmisMap(s){const map={};
+  db.satislar.filter(x=>x.tip==='iade'&&x.kaynakId===s.id).forEach(r=>{(r.kalemler||[]).forEach(k=>{const mm=map[k.uid]||(map[k.uid]={});
+    if(k.renkler&&k.renkler.length)k.renkler.forEach(rr=>{mm[rr.ad]=(mm[rr.ad]||0)+(+rr.mik||0);});
+    else mm['_']=(mm['_']||0)+(+k.mik||0);});});
+  return map;}
+function iadeKalemler(s){const done=iadeEdilmisMap(s);const arr=[];s.kalemler.forEach((k,i)=>{const sel=iadeSel[i]||{};const dd=done[k.uid]||{};
+  if(k.renkler&&k.renkler.length){const rr=k.renkler.map(r=>({ad:r.ad,mik:Math.min(sel[r.ad]||0,Math.max(0,(+r.mik||0)-(dd[r.ad]||0)))})).filter(x=>x.mik>0);const tm=rr.reduce((a,x)=>a+x.mik,0);if(tm>0)arr.push({uid:k.uid,urun:k.urun,mik:tm,birim:k.birim,fiyat:k.fiyat,renkler:rr})}
+  else{const m=Math.min(sel['_']||0,Math.max(0,(+k.mik||0)-(dd['_']||0)));if(m>0)arr.push({uid:k.uid,urun:k.urun,mik:m,birim:k.birim,fiyat:k.fiyat})}});
   return arr;}
 function iadeHesap(s){const kal=iadeKalemler(s);const ara=kal.reduce((a,k)=>a+k.mik*k.fiyat,0);const isk=+s.iskonto||0,kdv=+s.kdv||0;
   const net=ara*(1-isk/100)*(1+kdv/100);const kdvT=ara*(1-isk/100)*kdv/100;const div=satisDiv(s);return {kal,ara,net,kdvT,div,netTL:net*div};}
 function iadeCiz(){const s=db.satislar.find(x=>x.id===_iadeSid);const el=$('iade-list');if(!s||!el)return;
-  el.innerHTML=s.kalemler.map((k,i)=>{
+  const done=iadeEdilmisMap(s);
+  el.innerHTML=s.kalemler.map((k,i)=>{const dd=done[k.uid]||{};
     if(k.renkler&&k.renkler.length){
-      return `<div class="card" style="padding:9px 12px;margin-bottom:8px"><b style="font-size:13px">${esc(k.urun)}</b>`+k.renkler.map(r=>{const cur=((iadeSel[i]||{})[r.ad])||0;const rc=(''+r.ad).replace(/'/g,"\\'");return `<div class="exrow"><span>${esc(r.ad)} <small style="color:var(--sub)">(${r.mik} satıldı)</small></span><div class="pstep sm"><button onclick="iadeAdet(${i},'${rc}',-1,${r.mik})">−</button><b>${cur}</b><button onclick="iadeAdet(${i},'${rc}',1,${r.mik})">+</button></div></div>`}).join('')+`</div>`;
+      return `<div class="card" style="padding:9px 12px;margin-bottom:8px"><b style="font-size:13px">${esc(k.urun)}</b>`+k.renkler.map(r=>{const cur=((iadeSel[i]||{})[r.ad])||0;const rc=(''+r.ad).replace(/'/g,"\\'");const kalan=Math.max(0,(+r.mik||0)-(dd[r.ad]||0));return `<div class="exrow"><span>${esc(r.ad)} <small style="color:var(--sub)">(${r.mik} satıldı${dd[r.ad]?' · '+dd[r.ad]+' iade':''}${kalan<(+r.mik||0)?' · kalan '+kalan:''})</small></span><div class="pstep sm"><button onclick="iadeAdet(${i},'${rc}',-1,${kalan})">−</button><b>${cur}</b><button onclick="iadeAdet(${i},'${rc}',1,${kalan})">+</button></div></div>`}).join('')+`</div>`;
     }
-    const cur=((iadeSel[i]||{})['_'])||0;
-    return `<div class="card" style="padding:9px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center"><div><b style="font-size:13px">${esc(k.urun)}</b> <small style="color:var(--sub)">(${k.mik} ${esc(k.birim||'')} satıldı)</small></div><div class="pstep sm"><button onclick="iadeAdet(${i},'_',-1,${k.mik})">−</button><b>${cur}</b><button onclick="iadeAdet(${i},'_',1,${k.mik})">+</button></div></div>`;
+    const cur=((iadeSel[i]||{})['_'])||0;const kalan=Math.max(0,(+k.mik||0)-(dd['_']||0));
+    return `<div class="card" style="padding:9px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center"><div><b style="font-size:13px">${esc(k.urun)}</b> <small style="color:var(--sub)">(${k.mik} ${esc(k.birim||'')} satıldı${dd['_']?' · '+dd['_']+' iade':''}${kalan<(+k.mik||0)?' · kalan '+kalan:''})</small></div><div class="pstep sm"><button onclick="iadeAdet(${i},'_',-1,${kalan})">−</button><b>${cur}</b><button onclick="iadeAdet(${i},'_',1,${kalan})">+</button></div></div>`;
   }).join('');
   const h=iadeHesap(s);const nakit=$('iade-nakit')?.checked;
   $('iade-hesap').innerHTML=nakit?`<label>Hangi kasadan ödensin?</label><select id="iade-hs">${db.hesaplar.map(hs=>`<option value="${hs.id}">${esc(hs.ad)} · ${TL(hs.bakiye)}</option>`).join('')}</select>`:'';
@@ -4106,7 +4113,9 @@ function durakSablonSifirla(){askConfirm('Durak kontrol listeleri varsayılan ma
 const MECBURI=['Kesim','Dikim','Ütü / Paket'];
 function fasonlar(){return db.cariler.filter(c=>c.tip==='fason')}
 function fasonAd(d){return (d.fasonId&&cari(d.fasonId))?cari(d.fasonId).ad:(d.firma||'')}
-function ieMalMaliyet(i){return (i.malzeme||[]).reduce((a,m)=>a+(+m.tutar||0)*(m.pb==='USD'?db.kurUSD:m.pb==='EUR'?db.kurEUR:1),0)}
+function kurCevir(pb){return pb==='USD'?(+db.kurUSD||1):pb==='EUR'?(+db.kurEUR||1):1;} // kur 0/tanımsızsa 1'e düş (sessiz 0 yerine)
+function ieKumasMaliyet(i){return (+i.kumasTukToplam||0)*(+i.kumasFiyat||0)*kurCevir(i.kumasPB);}
+function ieMalMaliyet(i){return (i.malzeme||[]).reduce((a,m)=>a+(+m.tutar||0)*kurCevir(m.pb),0)+ieKumasMaliyet(i);}
 const MAL_BIRIM=['kg','metre','adet','top','paket','düzine'];
 function kumasStok(){const list=[...db.hammadde].sort((a,b)=>(a.kat==='Kumaş'?0:1)-(b.kat==='Kumaş'?0:1)||a.ad.localeCompare(b.ad,'tr'));
   $('sT').textContent='🧵 Hammadde / Kumaş Stoğum';
@@ -4249,17 +4258,24 @@ function maliyetAc(){
   else h+=`<div class="card" style="margin-top:10px">${emp('📚','Henüz maliyet kartı yok. ＋ ile ilk ürünü hesapla.')}</div>`;
   open_('💰 Maliyet & Koleksiyon',h);
 }
-let mkK=[],mkFoto='';
+let mkK=[],mkFoto='',mkMode='gram';
 function maliyetForm(id){
   const m=id?(db.maliyetler||[]).find(x=>x.id===id):null;
+  window._mkEdit=m||null;
+  mkMode=m?(m.kumasMod||(m.kumasKg?'kg':'gram')):'gram';
   mkK=m?(m.malzeme||[]).map(x=>({...x})):[{ad:'',mik:'',birim:'adet',fiyat:''}];if(!mkK.length)mkK=[{ad:'',mik:'',birim:'adet',fiyat:''}];
   mkFoto=m?m.foto||'':'';
   open_(id?'Maliyet Düzenle':'💰 Yeni Maliyet Hesabı',`
     <label>Ürün adı</label><input id="mk-ad" value="${esc(m?m.ad||'':'')}" placeholder="Polo Yaka Triko">
     <div class="g2"><div><label>Ürün kodu</label><input id="mk-kod" value="${esc(m?m.kod||'':'')}" placeholder="2026Y500"></div><div><label>📷 Foto</label><div id="mk-foto-box"></div></div></div>
     <div class="g2" style="margin-top:6px"><div><label>Adet</label><input id="mk-adet" type="number" inputmode="numeric" value="${m?m.adet:100}" oninput="mkHesap()"></div><div><label>Fire %</label><input id="mk-fire" type="number" inputmode="numeric" value="${m?m.fire:5}" oninput="mkHesap()"></div></div>
-    <div class="sec" style="margin-top:12px">🧵 Kumaş</div>
-    <div class="g2"><div><label>Kumaş (kg) — toplam</label><input id="mk-kumaskg" type="number" inputmode="decimal" value="${m&&m.kumasKg?m.kumasKg:''}" placeholder="ör. 180" oninput="mkHesap()"></div><div><label>Kumaş fiyatı /kg</label><div style="display:flex;gap:6px"><input id="mk-kumasfiyat" type="number" inputmode="decimal" value="${m&&m.kumasFiyat?m.kumasFiyat:''}" placeholder="ör. 120" oninput="mkHesap()" style="flex:1;min-width:0;margin:0"><select id="mk-kumaspb" onchange="mkHesap()" style="width:66px;flex:0 0 auto;margin:0">${['TL','USD'].map(pb=>`<option value="${pb}" ${((m&&m.kumasPB)||'TL')===pb?'selected':''}>${pb==='USD'?'$':'₺'}</option>`).join('')}</select></div></div></div>
+    <div class="sec" style="margin-top:12px">🧵 Kumaş <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub);font-size:11px">— pastaldan çıkan bilgiyi gir</span></div>
+    <div class="iechips" id="mk-kumas-mod" style="margin-bottom:8px">
+      <div class="c" data-m="gram" onclick="mkKumasMod('gram')">1 üründe gram</div>
+      <div class="c" data-m="adetkg" onclick="mkKumasMod('adetkg')">1 kg'dan adet</div>
+      <div class="c" data-m="kg" onclick="mkKumasMod('kg')">Toplam kg</div>
+    </div>
+    <div class="g2"><div id="mk-kumas-giris"></div><div><label>Kumaş fiyatı /kg</label><div style="display:flex;gap:6px"><input id="mk-kumasfiyat" type="number" inputmode="decimal" value="${m&&m.kumasFiyat?m.kumasFiyat:''}" placeholder="ör. 120" oninput="mkHesap()" style="flex:1;min-width:0;margin:0"><select id="mk-kumaspb" onchange="mkHesap()" style="width:66px;flex:0 0 auto;margin:0">${['TL','USD'].map(pb=>`<option value="${pb}" ${((m&&m.kumasPB)||'TL')===pb?'selected':''}>${pb==='USD'?'$':'₺'}</option>`).join('')}</select></div></div></div>
     <div class="mini" id="mk-kumas-info" style="margin-top:5px"></div>
     <div class="sec" style="margin-top:12px">➕ Diğer malzeme / aksesuar <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub)">(1 ürüne giren · opsiyonel)</span> <a onclick="mkK.push({ad:'',mik:'',birim:'adet',fiyat:''});cizMkK()">+ ekle</a></div>
     <div id="mk-list"></div>
@@ -4270,7 +4286,17 @@ function maliyetForm(id){
     <label>Hazır alım fiyatı (kıyas · ₺/ad)</label><input id="mk-hazir" type="number" inputmode="numeric" value="${m&&m.hazir?m.hazir:''}" placeholder="opsiyonel" oninput="mkHesap()">
     <div id="mk-sonuc" style="margin-top:12px"></div>
     <button class="btn" style="margin-top:12px" onclick="maliyetKaydet(${id||0})">💾 Kaydet</button>`);
-  cizMkFoto();cizMkK();mkHesap();
+  cizMkFoto();cizMkK();mkKumasMod(mkMode);
+}
+// Kumaş giriş modu: gram/adet-per-kg/toplam-kg (pastaldan çıkan bilgiye göre)
+function mkKumasMod(mode){mkMode=mode;
+  document.querySelectorAll('#mk-kumas-mod .c').forEach(c=>c.classList.toggle('on',c.getAttribute('data-m')===mode));
+  const g=$('mk-kumas-giris');if(g){const m=window._mkEdit;
+    if(mode==='gram')g.innerHTML=`<label>1 ürün gramajı (gr)</label><input id="mk-gram" type="number" inputmode="decimal" value="${(m&&m.kumasGram)||''}" placeholder="ör. 230" oninput="mkHesap()">`;
+    else if(mode==='adetkg')g.innerHTML=`<label>1 kg'dan kaç adet</label><input id="mk-adetkg" type="number" inputmode="decimal" value="${(m&&m.kumasAdetKg)||''}" placeholder="ör. 4" oninput="mkHesap()">`;
+    else g.innerHTML=`<label>Toplam kumaş (kg)</label><input id="mk-kumaskg" type="number" inputmode="decimal" value="${(m&&m.kumasKg)||''}" placeholder="ör. 180" oninput="mkHesap()">`;
+  }
+  mkHesap();
 }
 function cizMkK(){const box=$('mk-list');if(!box)return;
   box.innerHTML=mkK.map((x,i)=>`<div style="display:flex;gap:5px;align-items:center;margin-top:6px">
@@ -4282,17 +4308,29 @@ function cizMkK(){const box=$('mk-list');if(!box)return;
     <button class="del" onclick="mkK.splice(${i},1);if(!mkK.length)mkK=[{ad:'',mik:'',birim:'adet',fiyat:''}];cizMkK();mkHesap()" style="flex:0 0 auto">✕</button>
   </div>`).join('');
 }
-function mkTopla(){return {ad:($('mk-ad')?.value||'').trim(),kod:($('mk-kod')?.value||'').trim(),foto:mkFoto,
-  adet:+($('mk-adet')?.value||0),fire:+($('mk-fire')?.value||0),
-  kumasKg:+($('mk-kumaskg')?.value||0),kumasFiyat:+($('mk-kumasfiyat')?.value||0),kumasPB:$('mk-kumaspb')?.value||'TL',
+function mkTopla(){const adet=+($('mk-adet')?.value||0);
+  // kumaş kg'yi moda göre türet: gram (1 üründe) / adetkg (1 kg'dan kaç adet) / kg (toplam)
+  const kumasGram=+($('mk-gram')?.value||0),kumasAdetKg=+($('mk-adetkg')?.value||0);
+  let kumasKg=0;
+  if(mkMode==='gram')kumasKg=adet*kumasGram/1000;
+  else if(mkMode==='adetkg')kumasKg=kumasAdetKg>0?adet/kumasAdetKg:0;
+  else kumasKg=+($('mk-kumaskg')?.value||0);
+  return {ad:($('mk-ad')?.value||'').trim(),kod:($('mk-kod')?.value||'').trim(),foto:mkFoto,
+  adet,fire:+($('mk-fire')?.value||0),
+  kumasMod:mkMode,kumasGram,kumasAdetKg,
+  kumasKg,kumasFiyat:+($('mk-kumasfiyat')?.value||0),kumasPB:$('mk-kumaspb')?.value||'TL',
   malzeme:mkK.filter(x=>(x.ad||'').trim()||+x.mik||+x.fiyat).map(x=>({ad:(x.ad||'').trim(),mik:+x.mik||0,birim:(x.birim||'').trim(),fiyat:+x.fiyat||0})),
   kes:+($('mk-kes')?.value||0),nak:+($('mk-nak')?.value||0),dik:+($('mk-dik')?.value||0),utu:+($('mk-utu')?.value||0),
   gg:+($('mk-gg')?.value||0),kar:+($('mk-kar')?.value||0),hazir:+($('mk-hazir')?.value||0)};}
 function mkHesap(){const m=mkTopla();const r=maliyetHesapla(m);
   const _sym=r.kumasPB==='USD'?'$':r.kumasPB==='EUR'?'€':'₺';
+  const _kgS=(+r.kumasKg||0).toLocaleString('tr-TR',{maximumFractionDigits:1});
+  let _turet='';
+  if(m.kumasMod==='gram'&&m.kumasGram>0)_turet=`1 üründe <b>${m.kumasGram} gr</b> × ${m.adet} adet = <b>${_kgS} kg</b> · `;
+  else if(m.kumasMod==='adetkg'&&m.kumasAdetKg>0)_turet=`1 kg'dan <b>${m.kumasAdetKg} adet</b> → ${m.adet} adet = <b>${_kgS} kg</b> · `;
   const ki=$('mk-kumas-info');if(ki)ki.innerHTML=r.kumasToplam>0
-    ? `Kumaş: <b>${r.kumasKg} kg × ${_sym}${(+r.kumasFiyat).toLocaleString('tr-TR')}/kg = ${TL(r.kumasToplam)}</b> toplam · birim <b>${TL(r.kumasPU)}</b> (${Math.max(1,m.adet||0)} adete bölündü)${r.kumasPB!=='TL'?' · kur '+(+r.kumasKur).toFixed(2):''}`
-    : 'Kaç kilo kumaş gitti ve kilosu kaç? ₺ ya da $ seç — birim maliyet otomatik hesaplanır.';
+    ? `${_turet}Kumaş: <b>${_kgS} kg × ${_sym}${(+r.kumasFiyat).toLocaleString('tr-TR')}/kg = ${TL(r.kumasToplam)}</b> · adet başı <b>${TL(r.kumasPU)}</b>${r.kumasPB!=='TL'?' · kur '+(+r.kumasKur).toFixed(2):''}`
+    : (m.kumasMod==='gram'?'Pastaldan çıkan <b>1 ürün gramını</b> ve kumaş <b>₺/kg</b> fiyatını gir — kilo ve maliyet otomatik hesaplanır.':m.kumasMod==='adetkg'?'<b>1 kg\'dan kaç adet</b> çıktığını ve <b>₺/kg</b> fiyatını gir — kilo ve maliyet otomatik hesaplanır.':'Toplam kaç kilo kumaş gitti ve kilosu kaç? — birim maliyet otomatik hesaplanır.');
   const el=$('mk-sonuc');if(!el)return;
   let cmp='';if(m.hazir>0){const fark=m.hazir-r.birim;cmp=fark>=0?`<div class="okbox" style="margin-top:8px">✅ Üretim <b>${TL(fark)}/ad</b> daha ucuz — üretmek mantıklı.</div>`:`<div class="warnbox" style="margin-top:8px">⚠️ Hazır alım <b>${TL(-fark)}/ad</b> daha ucuz — almak mantıklı.</div>`;}
   el.innerHTML=`<div class="total"><div><div class="l">Net Birim Maliyet</div><div class="v">${TL(r.birim)}</div></div><div style="text-align:right"><div class="l">Önerilen Satış +%${m.kar}</div><div class="v pos">${TL(r.satis)}</div></div></div>
@@ -4343,8 +4381,13 @@ function formIsEmri(){
           <div style="display:flex;gap:6px"><input id="ie-kumas-fiyat" type="number" inputmode="decimal" placeholder="0" oninput="ieKumasFiyatCiz()" style="flex:1;min-width:0;margin:0"><select id="ie-kumas-pb" onchange="ieKumasFiyatCiz()" style="width:64px;flex:0 0 auto;margin:0"><option value="TL">₺</option><option value="USD">$</option></select></div>
           <div class="iekfi" id="ie-kumas-fiyat-info" style="margin-top:7px"></div>
           <div id="ie-kumas-yeni"></div>
-          <label style="margin-top:9px">1 parça için kumaş tüketimi <span style="font-weight:600;color:var(--sub);text-transform:none">— stoktan düşülür (opsiyonel)</span></label>
-          <input id="ie-kumas-tuk" type="number" inputmode="decimal" placeholder="ör. 0.3" oninput="ieTukCiz()">
+          <label style="margin-top:9px">Kumaş tüketimi <span style="font-weight:600;color:var(--sub);text-transform:none">— pastaldan; renk renk kg + stoktan düşülür (opsiyonel)</span></label>
+          <div class="iechips" id="ie-tuk-mod" style="margin:4px 0 6px">
+            <div class="c on" data-m="gram" onclick="ieTukMod('gram')">1 üründe gram</div>
+            <div class="c" data-m="adetkg" onclick="ieTukMod('adetkg')">1 kg'dan adet</div>
+            <div class="c" data-m="kg" onclick="ieTukMod('kg')">kg/parça</div>
+          </div>
+          <input id="ie-kumas-tuk" type="number" inputmode="decimal" placeholder="ör. 230" oninput="ieTukCiz()">
           <div class="mini" id="ie-kumas-tuk-info" style="margin-top:5px"></div>
         </div>
       </div>
@@ -4363,7 +4406,7 @@ function formIsEmri(){
     </div>
     <div id="ie-ozet"></div>
     <button class="btn g" style="margin-top:12px" onclick="kaydetIsEmri()">🏭 İş Emrini Aç</button>`);
-  cizIeFoto();cizIeRenk();ieToplamCiz();ieTerminHesap();ieOzetCiz();
+  ieTukMode='gram';cizIeFoto();cizIeRenk();ieToplamCiz();ieTerminHesap();ieOzetCiz();
 }
 function ieModSet(m){if(ieMod===m)return;ieMod=m;
   $('iem-kumas')&&$('iem-kumas').classList.toggle('on',m==='kumas');$('iem-elle')&&$('iem-elle').classList.toggle('on',m==='elle');
@@ -4410,11 +4453,26 @@ function ieKumasFiyatCiz(){ieKumasFiyat=+($('ie-kumas-fiyat')?.value||0);ieKumas
     info.innerHTML=`<b>${TL(f)}</b> /birim${usd?` · ≈ $${usd.toLocaleString('tr-TR',{maximumFractionDigits:2})}`:''}`;}
   ieOzetCiz();ieTukCiz();}
 // Kumaş tüketimi göster (1 parça × adet toplamı)
-function ieTukToplam(){const pu=+($('ie-kumas-tuk')?.value||0);if(!pu)return 0;const seri=$('ie-birim')?.value==='seri';const sa=Math.max(1,+($('ie-seriadet')?.value||1));return ieRenk.reduce((a,r)=>a+(+r.adet||0)*(seri?sa:1),0)*pu;}
-function ieTukCiz(){const el=$('ie-kumas-tuk-info');if(!el)return;const pu=+($('ie-kumas-tuk')?.value||0);
-  if(!pu||!ieKumasId){el.innerHTML='';return;}
-  const k=db.hammadde.find(h=>h.id===ieKumasId);const bir=esc(k?(k.birim||''):'');const t=ieTukToplam();
-  el.innerHTML=`🧵 Toplam gidecek kumaş: <b>${t.toLocaleString('tr-TR',{maximumFractionDigits:2})} ${bir}</b> · kaydedince stoktan <b>renk renk düşülür</b>`;}
+let ieTukMode='gram';
+// Girilen değeri (mod) → kg/parça'ya çevir: gram(gr)/1000, adetkg=1/adet, kg=doğrudan
+function ieTukKgParca(){const v=+($('ie-kumas-tuk')?.value||0);if(v<=0)return 0;
+  if(ieTukMode==='gram')return v/1000;
+  if(ieTukMode==='adetkg')return 1/v;
+  return v;}
+function ieTukMod(mode){ieTukMode=mode;
+  document.querySelectorAll('#ie-tuk-mod .c').forEach(c=>c.classList.toggle('on',c.getAttribute('data-m')===mode));
+  const inp=$('ie-kumas-tuk');if(inp)inp.placeholder=mode==='gram'?'ör. 230':mode==='adetkg'?'ör. 4':'ör. 0.3';
+  ieTukCiz();ieOzetCiz();}
+function ieTukToplam(){const pu=ieTukKgParca();if(!pu)return 0;const seri=$('ie-birim')?.value==='seri';const sa=Math.max(1,+($('ie-seriadet')?.value||1));return ieRenk.reduce((a,r)=>a+(+r.adet||0)*(seri?sa:1),0)*pu;}
+function ieTukCiz(){const el=$('ie-kumas-tuk-info');if(!el)return;const pu=ieTukKgParca();
+  if(!pu){el.innerHTML='';return;}
+  const k=ieKumasId?db.hammadde.find(h=>h.id===ieKumasId):null;const bir=esc(k?(k.birim||'kg'):'kg');
+  const seri=$('ie-birim')?.value==='seri';const sa=Math.max(1,+($('ie-seriadet')?.value||1));
+  const v=+($('ie-kumas-tuk')?.value||0);
+  const tur=ieTukMode==='gram'?`1 üründe <b>${v} gr</b> → `:ieTukMode==='adetkg'?`1 kg'dan <b>${v} adet</b> → `:'';
+  const rows=ieRenk.filter(r=>(r.ad||'').trim()&&+r.adet>0).map(r=>{const parca=(+r.adet||0)*(seri?sa:1);const kg=parca*pu;return esc(r.ad)+' <b>'+kg.toLocaleString('tr-TR',{maximumFractionDigits:1})+'</b> '+bir;});
+  const t=ieTukToplam();
+  el.innerHTML=`🧵 ${tur}${rows.length?rows.join(' · ')+' · ':''}toplam <b>${t.toLocaleString('tr-TR',{maximumFractionDigits:1})} ${bir}</b>${ieKumasId?' · kaydedince stoktan düşülür':' · (stokta yok — alınacak)'}`;}
 // Stok rozeti: birim + (top çevrimi varsa) top
 function ieStokStr(r){const bir=esc(r.birim||'');let s=(+r.stok||0)+' '+bir;
   if(+r.top>0)s+=' · '+(+r.top)+' top';
@@ -4573,8 +4631,12 @@ function kaydetIsEmri(){
   const _kad=_kk?_kk.ad:(ieKumasAd||'').trim();
   const _kfiyat=+($('ie-kumas-fiyat')?.value||ieKumasFiyat||0);const _kpb=$('ie-kumas-pb')?.value||ieKumasPB||'TL';
   // kumaş tüketimini renk renk stoktan düş (1 parça × adet × tüketim)
-  const _ktuk=+($('ie-kumas-tuk')?.value||0);let _ktukTop=0;
-  if(_kk&&_ktuk>0){renkDagilim.forEach(r=>{const parca=r.adet*(birim==='seri'?seriAdet:1);const kg=parca*_ktuk;_ktukTop+=kg;malStoklaRenk(_kk,r.ad,-kg);});}
+  const _ktuk=ieTukKgParca();let _ktukTop=0;
+  if(_kk&&_ktuk>0){
+    renkDagilim.forEach(r=>{const parca=r.adet*(birim==='seri'?seriAdet:1);_ktukTop+=parca*_ktuk;});
+    if(hamRenkli(_kk))renkDagilim.forEach(r=>{const parca=r.adet*(birim==='seri'?seriAdet:1);malStoklaRenk(_kk,r.ad,-(parca*_ktuk));}); // renk-renk stoklu kumaş
+    else _kk.stok=(+_kk.stok||0)-_ktukTop; // renksiz (toplu) kumaş → toplamdan düş, renk satırı açma
+  }
   const yeniIe={id:nid('ie'),urunId:ieUrunId||null,urun:ad,kod,foto:ieFoto,birim,seriAdet,hedef,renkDagilim,malzeme,duraklar,genelGiderBirim:+$('ie-gg').value||0,kumasId:ieKumasId||null,kumasAd:_kad,kumasFiyat:_kfiyat,kumasPB:_kpb,kumasYeni:(!ieKumasId&&!!_kad),kumasTukBirim:_ktuk,kumasTukToplam:_ktukTop,baslangic:Date.now(),gun,durum:'devam',stoklandi:false};
   db.isemirleri.push(yeniIe);
   const alimN=aksesuarAlimAc(yeniIe); // "alınacak" malzemeler için otomatik alım siparişi
@@ -6522,7 +6584,7 @@ function yedekAl(){
 function yedekYukle(inp){
   const f=inp.files&&inp.files[0];if(!f)return;
   const r=new FileReader();
-  r.onload=()=>{let d;try{d=JSON.parse(r.result);if(!d||!d.urunler)throw 0}catch(e){toast('Geçersiz yedek dosyası');inp.value='';return}inp.value='';askConfirm('Mevcut veriler bu yedekle değiştirilsin mi?',()=>{db=d;save();go('panel');toast('Yedek geri yüklendi ✓')},'Yükle')};
+  r.onload=()=>{let d;try{d=JSON.parse(r.result);if(!d||!d.urunler)throw 0}catch(e){toast('Geçersiz yedek dosyası');inp.value='';return}inp.value='';askConfirm('Mevcut veriler bu yedekle değiştirilsin mi? (Açıksa canlı senkron durdurulur.)',()=>{try{if(typeof canliAcik!=='undefined'&&canliAcik&&typeof canliDur==='function')canliDur();}catch(e){}localStorage.setItem(KEY,JSON.stringify(d));db=load();go('panel');toast('Yedek geri yüklendi ✓ · senkron durduruldu')},'Yükle')};
   r.readAsText(f);
 }
 

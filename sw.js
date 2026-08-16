@@ -1,5 +1,5 @@
 /* IQ Basics — Service Worker (çevrimdışı çalışma + kurulabilir PWA) */
-const CACHE = 'iqbasics-v72';
+const CACHE = 'iqbasics-v73';
 
 /* Uygulama kabuğu: internet olmasa da açılması gereken dosyalar */
 const SHELL = [
@@ -7,6 +7,7 @@ const SHELL = [
   './index.html',
   './qrcode.js',
   './manifest.webmanifest',
+  './favicon-32.png',
   './icon-192.png',
   './icon-512.png',
   './icon-maskable.png',
