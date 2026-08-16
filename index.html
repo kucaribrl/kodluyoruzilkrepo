@@ -632,7 +632,7 @@ function canliYazHemen(domenler){
     if(js!==_canliGolge[domen]){_canliGolge[domen]=js;ps.push(canliRef(domen).set(data).catch(e=>{console.warn('canlı-yaz-hemen',domen,e&&e.code);if(canliIzinHata(e)!=='permission-denied'&&(''+e).includes('longer than'))toast('⚠️ '+domen+' verisi 1MB sınırını aştı (fotoğraflar) — buluta yazılamadı. Fotoğrafları küçültün.');}));}});
   return Promise.all(ps);
 }
-function save(){localStorage.setItem(KEY,JSON.stringify(db));if(canliAcik&&!_canliUygulaniyor)canliYaz();}
+function save(){localStorage.setItem(KEY,JSON.stringify(db));if(canliAcik&&!_canliUygulaniyor)canliYaz();if(db.otoYayin){try{otoYayinTetik()}catch(e){}}}
 function canliBulutAyar(){
   if(!bulutVar())return toast('Önce bulut (Firebase) ayarlı olmalı');
   if(!bulutBaslat())return toast('Bulut başlatılamadı');
@@ -772,7 +772,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-66'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-67'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -801,13 +801,31 @@ async function bulutGirisYap(sonra){if(!bulutBaslat())return toast('Bulut ayarl�
     toast('☁️ Giriş yapıldı ✓');if(sonra==='yayin')bulutYayinla();else if(sonra==='cek')bulutSiparisleriCek();else if(sonra==='kullanici')bulutKullaniciYonet();else if(sonra==='fasonyayin')bulutFasonYayinla();else if(sonra==='fasoncek')bulutFasonDurumCek();else if(sonra==='canli')canliBulutAyar();else if(sonra==='personel')personelBaslat();}
   catch(e){toast('Giriş başarısız: '+(e.code||e.message))}}
 // Admin: katalog + kampanyayı buluta yayınla
+// Müşteriye yayınlanan katalog belgesi (ürünler + kupon + kampanya + firma)
+function _magazaDoc(){
+  const urunler=db.urunler.filter(u=>!u.pasif).map(u=>({id:u.id,ad:u.ad,kod:u.kod||'',kat:u.kat||'',marka:u.marka||'',birim:u.birim||'adet',seri:u.seri||1,satis:+u.satis||0,promosyon:+u.promosyon||0,kumas:u.kumas||'',sezon:u.sezon||'',yil:u.yil||'',agirlik:+u.agirlik||0,fiyatGizli:!!u.fiyatGizli,bedenler:u.bedenler||[],kritik:+u.kritik||0,renkler:renkObjs(u).map(r=>({ad:r.ad,hex:r.hex||'#ccc',stok:+r.stok||0,foto:r.foto||''}))}));
+  const kuponlar=(db.kuponlar||[]).filter(k=>k.aktif!==false&&(!k.bitis||k.bitis>=Date.now())).map(k=>({kod:k.kod,tip:k.tip,deger:+k.deger||0,minTutar:+k.minTutar||0,bitis:k.bitis||0,limit:+k.limit||0,kullanim:+k.kullanim||0}));
+  return {firma:db.firma||'',firmaLogo:db.firmaLogo||'',firmaWp:db.firmaWp||'',firmaTel:db.firmaTel||'',kademe:db.kademe||[],minSiparis:+db.minSiparis||0,kampanya:db.kampanya||null,kuponlar,urunler,guncelleme:Date.now()};
+}
+// OTOMATİK yayın: ürün/fiyat/stok/kupon değişince arka planda sessizce katalogu güncelle
+let _otoYayinT=null,_otoYayinBusy=false;
+function otoYayinTetik(){
+  if(!db.otoYayin||bulutMusteriMod)return;
+  if(_otoYayinT)clearTimeout(_otoYayinT);
+  _otoYayinT=setTimeout(async()=>{_otoYayinT=null;
+    if(!db.otoYayin||_otoYayinBusy||bulutMusteriMod)return;
+    if(!bulutBaslat()||!bulutGirisli())return;
+    _otoYayinBusy=true;
+    try{await _fb.collection('magaza').doc(MAGAZA_ID).set(_magazaDoc());db.yayinSon=Date.now();}
+    catch(e){console.warn('oto-yayın',e&&e.code);}finally{_otoYayinBusy=false;}
+  },20000); // son değişiklikten 20 sn sonra
+}
 async function bulutYayinla(){if(!bulutBaslat())return toast('☁️ Bulut ayarlı değil (FB_CONFIG boş)');
   if(!bulutGirisli())return bulutGirisIste('yayin');
   try{
-    const urunler=db.urunler.filter(u=>!u.pasif).map(u=>({id:u.id,ad:u.ad,kod:u.kod||'',kat:u.kat||'',marka:u.marka||'',birim:u.birim||'adet',seri:u.seri||1,satis:+u.satis||0,promosyon:+u.promosyon||0,kumas:u.kumas||'',sezon:u.sezon||'',yil:u.yil||'',agirlik:+u.agirlik||0,fiyatGizli:!!u.fiyatGizli,bedenler:u.bedenler||[],kritik:+u.kritik||0,renkler:renkObjs(u).map(r=>({ad:r.ad,hex:r.hex||'#ccc',stok:+r.stok||0,foto:r.foto||''}))}));
+    const doc0=_magazaDoc();const urunler=doc0.urunler;
     // Not: müşteri şifreleri GÜVENLİK için buluta yazılmaz — müşteri portalı misafir (ad+telefon) çalışır
-    const kuponlar=(db.kuponlar||[]).filter(k=>k.aktif!==false&&(!k.bitis||k.bitis>=Date.now())).map(k=>({kod:k.kod,tip:k.tip,deger:+k.deger||0,minTutar:+k.minTutar||0,bitis:k.bitis||0,limit:+k.limit||0,kullanim:+k.kullanim||0}));
-    await _fb.collection('magaza').doc(MAGAZA_ID).set({firma:db.firma||'',firmaLogo:db.firmaLogo||'',firmaWp:db.firmaWp||'',firmaTel:db.firmaTel||'',kademe:db.kademe||[],minSiparis:+db.minSiparis||0,kampanya:db.kampanya||null,kuponlar,urunler,guncelleme:Date.now()});
+    await _fb.collection('magaza').doc(MAGAZA_ID).set(doc0);db.yayinSon=Date.now();
     // Girişli müşterilere özel veri (bakiye + geçmiş) — yalnız o müşteri okuyabilir (kurallar)
     let mn=0;try{const users=await bulutTumKullanicilar();const jobs=[];
       users.filter(u=>u.rol==='musteri'&&u.onay&&u.cariId).forEach(u=>{const c=cari(u.cariId);if(!c)return;
@@ -4863,7 +4881,8 @@ function rPortal(){
   try{if(bulutVar()&&bulutGirisli())siparisDinle();}catch(e){} // portal açıkken siparişler otomatik gelsin
   let html=`<div class="g2"><button class="btn sm" onclick="portalOnizle()">👁️ Müşteri Sipariş Ekranı</button><button class="btn ghost sm" onclick="portalPaylas()">🔗 Linki Paylaş</button></div>
     <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="portalKullanicilar()">👤 Giriş Bilgileri</button><button class="btn ghost sm" onclick="fiyatListesiPaylas()">📗 Katalog Oluştur</button></div>
-    ${bulutVar()?`<div style="margin-top:8px"><button class="btn sm" onclick="bulutYayinla()">☁️ Buluta Yayınla (katalog)</button></div>
+    ${bulutVar()?`<div style="margin-top:8px"><button class="btn sm" onclick="bulutYayinla()">☁️ Buluta Yayınla (katalog)${db.yayinSon?' · <span style="font-weight:600;opacity:.85">son '+tstr(db.yayinSon)+'</span>':''}</button></div>
+    <label class="switch" style="margin-top:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--card);border:1px solid var(--ln);border-radius:12px;padding:11px 13px"><span>⚡ <b>Otomatik yayınla</b> — ürün/fiyat/stok/kupon değişince kendiliğinden güncellensin <span class="mini" style="text-transform:none">(elle basmana gerek kalmaz)</span></span><input type="checkbox" ${db.otoYayin?'checked':''} onchange="db.otoYayin=this.checked;save();toast(this.checked?'⚡ Otomatik yayın açık — değişiklikler kendiliğinden gider ✓':'Otomatik yayın kapalı');if(this.checked)bulutYayinla()"></label>
     <div class="okbox" style="margin-top:8px;display:flex;align-items:center;justify-content:space-between;gap:8px"><span>🔔 Siparişler otomatik geliyor${_sipUnsub?' <b style="color:var(--good)">✓ dinleniyor</b>':''}</span><button class="btn ghost sm" style="width:auto;margin:0;padding:6px 10px;flex:0 0 auto" onclick="bulutSiparisleriCek()">🔄 Yenile</button></div>
     <div style="margin-top:8px"><button class="btn ghost sm" onclick="bulutKullaniciYonet()">👥 Bulut Kullanıcıları <span id="bk-rozet"></span></button></div>
     <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="bulutFasonYayinla()">🧵 Fasona İş Gönder</button><button class="btn ghost sm" onclick="bulutFasonDurumCek()">📥 Fason Durumları</button></div>
