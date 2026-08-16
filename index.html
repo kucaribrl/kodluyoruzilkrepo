@@ -772,7 +772,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-59'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-60'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -5236,7 +5236,7 @@ function portalMinEksik(){const min=+db.minSiparis||0;if(min<=0)return 0;const e
 /* ===================== PAZAR ANALİTİĞİ — müşteri davranış takibi ===================== */
 // Müşteri katalogda gezerken sessizce olay biriktirir; oturum başına TEK belge (merge) yazar.
 // bulutMusteriMod → Firestore 'pazarOlay'; yerel/kiosk → db.pazarOlay. Mevcut senkrona dokunmaz.
-let _pzSes=null,_pzFlushT=null,_pzVisBound=false;
+let _pzSes=null,_pzFlushT=null,_pzVisBound=false,_pzTerk={};
 function pazarKimlik(){
   let g=null;try{g=(typeof portalMusteriGiris==='function')?portalMusteriGiris():null;}catch(e){}
   const mid=g?g.id:0;
@@ -5287,9 +5287,18 @@ function pazarAnalizCiz(sesler){
   const sicak=musL.filter(m=>!m.talep&&m.kez>=3).sort((a,b)=>b.sure-a.sure).slice(0,12);
   const terk=musL.filter(m=>!m.talep&&Object.keys(m.sepet).length).sort((a,b)=>b.son-a.son).slice(0,12);
   const nowN=Date.now();const uad=id=>{const u=urun(id);return u?u.ad:('#'+id)};
+  _pzTerk={};terk.forEach(m=>{if(m.mid)_pzTerk[m.mid]=Object.entries(m.sepet).map(([u,mik])=>uad(+u)+' ×'+mik).join(', ');});
+  // İNDİRİM ÖNERİLERİ: çok bakılan ama indirimsiz ürünler
+  const indOneri=topU.filter(p=>{const u=urun(p.uid);return u&&p.kez>=5&&portalIndirimYuzde(u)===0;}).slice(0,5);
   let h='';
   h+=`<div class="kv" style="margin-bottom:10px"><span class="k">Toplam oturum</span><span class="v">${sesler.length}</span></div>`;
   if(!sesler.length){h+=`<div class="okbox">Henüz veri yok. Müşteriler katalogda gezip ürünlere baktıkça buraya <b>kim neye ne kadar baktı</b>, kim sepete ekledi düşecek. (Kendin de "Müşteri Sipariş Ekranı" ile gezip test edebilirsin.)</div>`;open_('📊 Pazar Analitiği',h);return;}
+  // 💡 ÖNERİLER özeti
+  const oz=[];if(sicak.length)oz.push(`🔥 ${sicak.length} sıcak müşteri`);if(terk.length)oz.push(`🛒 ${terk.length} terk edilmiş sepet`);if(indOneri.length)oz.push(`🏷️ ${indOneri.length} indirim fırsatı`);
+  if(oz.length)h+=`<div class="okbox" style="margin-bottom:10px">💡 <b>Öneriler:</b> ${oz.join(' · ')} — aşağıdan aksiyon al.</div>`;
+  // 🏷️ İndirim önerileri (çok bakıldı, indirim yok)
+  if(indOneri.length){h+=`<div class="sec">🏷️ İndirim Fırsatları (çok bakıldı, indirim yok)</div>`;
+    h+=indOneri.map(p=>{const u=urun(p.uid);return `<div class="card" style="padding:12px 13px;margin-bottom:9px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><b>${esc(u.ad)}</b><div class="mini">${p.kez} bakış · ${p.kisi.size} müşteri · ${TL(portalFiyat(u))}</div></div><button class="btn g sm" style="width:auto;margin:0;padding:7px 11px;flex:0 0 auto" onclick="pazarUrunIndirim(${p.uid})">🏷️ İndirim ver</button></div></div>`}).join('');}
   // sıcak müşteri
   h+=`<div class="sec">🔥 Sıcak Müşteriler (çok gezen, sipariş vermeyen)</div>`;
   h+=sicak.length?sicak.map(m=>{const ust=Object.entries(m.urun).sort((a,b)=>b[1].kez-a[1].kez).slice(0,3).map(([u,v])=>esc(uad(+u))+' ('+v.kez+'×)').join(', ');const sepN=Object.keys(m.sepet).length;
@@ -5297,14 +5306,36 @@ function pazarAnalizCiz(sesler){
   // terk edilmiş sepet
   h+=`<div class="sec">🛒 Terk Edilmiş Sepetler</div>`;
   h+=terk.length?terk.map(m=>{const its=Object.entries(m.sepet).map(([u,mik])=>esc(uad(+u))+' ×'+mik).join(', ');
-    return `<div class="card" style="padding:12px 13px;margin-bottom:9px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><b>${esc(m.ad)}</b><div class="mini">${tstr(m.son)}</div></div>${m.mid?`<button class="btn ghost sm" style="width:auto;margin:0;padding:7px 11px;flex:0 0 auto" onclick="pazarMesaj(${m.mid})">📱 Hatırlat</button>`:''}</div><div class="mini" style="margin-top:7px;color:var(--ink)">🛒 ${its}</div></div>`}).join(''):`<div class="mini" style="margin:2px 3px 10px">Terk edilmiş sepet yok.</div>`;
+    return `<div class="card" style="padding:12px 13px;margin-bottom:9px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><b>${esc(m.ad)}</b><div class="mini">${tstr(m.son)}</div></div>${m.mid?`<button class="btn ghost sm" style="width:auto;margin:0;padding:7px 11px;flex:0 0 auto" onclick="pazarSepetHatirlat(${m.mid})">📱 Hatırlat</button>`:''}</div><div class="mini" style="margin-top:7px;color:var(--ink)">🛒 ${its}</div></div>`}).join(''):`<div class="mini" style="margin:2px 3px 10px">Terk edilmiş sepet yok.</div>`;
   // en çok bakılan ürünler
   h+=`<div class="sec">👀 En Çok Bakılan Ürünler</div>`;
-  h+=topU.length?`<div class="card">`+topU.map((p,i)=>`<div class="row"><div class="av" style="background:var(--ind2)">${i+1}</div><div class="mid"><div class="t">${esc(uad(p.uid))}</div><div class="s">${p.kez} bakış · ${pzSure(p.sure)} · ${p.kisi.size} müşteri</div></div></div>`).join('')+`</div>`:`<div class="mini">Veri yok.</div>`;
+  h+=topU.length?`<div class="card">`+topU.map((p,i)=>{const u=urun(p.uid);const ind=u?portalIndirimYuzde(u):0;
+    return `<div class="row"><div class="av" style="background:var(--ind2)">${i+1}</div><div class="mid"><div class="t">${esc(uad(p.uid))}</div><div class="s">${p.kez} bakış · ${pzSure(p.sure)} · ${p.kisi.size} müşteri</div></div>${u?`<button class="btn ${ind?'ghost':'g'} sm" style="width:auto;margin:0 0 0 8px;padding:6px 10px;flex:0 0 auto;align-self:center" onclick="pazarUrunIndirim(${p.uid})">${ind?('%'+ind+' ✓'):'🏷️'}</button>`:''}</div>`}).join('')+`</div>`:`<div class="mini">Veri yok.</div>`;
   // tüm müşteriler
   h+=`<div class="sec">👤 Müşteri Aktivitesi (${musL.length})</div>`;
   h+=musL.sort((a,b)=>b.son-a.son).slice(0,30).map(m=>`<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center"><div style="min-width:0"><b>${esc(m.ad)}</b> ${m.talep?'<span class="tag" style="background:var(--good-s);color:var(--good)">talep verdi</span>':'<span class="tag">gezindi</span>'}<div class="mini">${m.kez} bakış · ${pzSure(m.sure)} · ${tstr(m.son)}</div></div></div></div>`).join('');
   open_('📊 Pazar Analitiği',h);
+}
+// Analitikten ürüne indirim tanımla (u.promosyon = indirimli birim fiyat)
+function pazarUrunIndirim(uid){const u=urun(uid);if(!u)return;const s=+u.satis||0;const ba=(typeof birimAdet==='function')?birimAdet(u):1;const mevcut=portalIndirimYuzde(u);
+  open_('🏷️ Ürün İndirimi',`<div class="mini"><b>${esc(u.ad)}</b> — liste fiyatı <b>${TL(s*ba)}</b>. İndirim yüzdesi gir; müşteri katalogda üstü çizili eski fiyat + yeni fiyat + <b>%rozet</b> görür.</div>
+    <label style="margin-top:10px">İndirim %</label><input id="pi-y" type="number" inputmode="numeric" value="${mevcut||''}" placeholder="ör. 15" min="1" max="90">
+    <div id="pi-onizle" class="mini" style="margin-top:6px"></div>
+    <button class="btn g" style="margin-top:12px" onclick="pazarUrunIndirimKaydet(${uid})">Uygula</button>
+    ${mevcut?`<button class="btn danger" style="margin-top:8px" onclick="pazarUrunIndirimKaldir(${uid})">İndirimi Kaldır</button>`:''}`);
+  const inp=$('pi-y');const ciz=()=>{const y=+inp.value||0;const yeni=Math.round(s*(1-y/100));$('pi-onizle').innerHTML=(y>0&&y<100)?`Yeni fiyat: <b style="color:var(--good)">${TL(yeni*ba)}</b> <s style="color:var(--sub)">${TL(s*ba)}</s>`:'';};if(inp){inp.oninput=ciz;ciz();}
+}
+function pazarUrunIndirimKaydet(uid){const u=urun(uid);if(!u)return;const y=+($('pi-y')&&$('pi-y').value)||0;if(y<=0||y>=100)return toast('1–99 arası bir % gir');
+  u.promosyon=Math.max(1,Math.round((+u.satis||0)*(1-y/100)));save();try{canliYazHemen(['stok'])}catch(e){}closeM();toast('🏷️ %'+y+' indirim uygulandı — katalogda göründü ✓');pazarAnaliz();}
+function pazarUrunIndirimKaldir(uid){const u=urun(uid);if(!u)return;u.promosyon=0;save();try{canliYazHemen(['stok'])}catch(e){}closeM();toast('İndirim kaldırıldı');pazarAnaliz();}
+// Terk edilmiş sepete ürün-özel WhatsApp hatırlatma
+function pazarSepetHatirlat(mid){const m=cari(mid);if(!m)return toast('Müşteri bulunamadı');
+  const its=_pzTerk[mid]||'';const ind=kademeler();const indTxt=ind.length?`\n\n💰 Toptan indirim: ${ind.map(k=>k.min+'+ %'+k.ind).join(' · ')}`:'';
+  const txt=`Merhaba ${m.ad} 👋\n\nSepetinizde bıraktığınız ürünler:\n${its?its.split(', ').map(x=>'• '+x).join('\n'):'—'}\n\nStoklar tükenmeden siparişinizi tamamlamak ister misiniz? Beğendikleriniz için size özel fiyat da ayarlayabiliriz.${indTxt}\n\n📞 ${db.firmaWp||db.firmaTel||''}`;
+  let ph=((m.tel||'')).replace(/\D/g,'');if(ph){if(ph.length===10)ph='90'+ph;else if(ph[0]==='0')ph='9'+ph;}
+  if(navigator.share){navigator.share({text:txt}).catch(()=>{});return}
+  if(ph)window.open(`https://wa.me/${ph}?text=${encodeURIComponent(txt)}`,'_blank');
+  else if(navigator.clipboard)navigator.clipboard.writeText(txt).then(()=>toast('Mesaj kopyalandı ✓'));
 }
 function pazarMesaj(mid){const m=cari(mid);if(!m)return toast('Müşteri bulunamadı');
   const ind=kademeler();const indTxt=ind.length?`\n\n💰 Toptan indirim: ${ind.map(k=>k.min+'+ %'+k.ind).join(' · ')}`:'';
