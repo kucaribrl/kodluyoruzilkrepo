@@ -56,6 +56,14 @@ service cloud.firestore {
       allow update, delete: if adminMi();
     }
 
+    // PAZAR ANALİTİĞİ — müşteri KENDİ oturum belgesini yazar (kim neye baktı,
+    // sepete ekledi); yalnız yönetici okur. Oturum id'si belge id'sidir.
+    match /pazarOlay/{sid} {
+      allow create: if girisli() && request.resource.data.kul == request.auth.uid;
+      allow update: if girisli() && resource.data.kul == request.auth.uid;
+      allow read, delete: if adminMi();
+    }
+
     // MÜŞTERİ ÖZEL VERİ (fiyat/bakiye/geçmiş) — yalnız o müşteri + yönetici (Faz 2b)
     match /musteri_veri/{uid} {
       allow read:  if girisli() && (request.auth.uid == uid || adminMi());
