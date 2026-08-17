@@ -808,7 +808,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-73'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-74'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1988,7 +1988,12 @@ function kaydetUrun(id){
   if(satis<alis)askConfirm(`Satış fiyatı (${money(satis,uPB)}) maliyetin (${money(alis,uPB)}) altında — zararına satış.\nYine de kaydedilsin mi?`,kaydet2,'Kaydet');
   else kaydet2();
 }
-function silUrun(id){askConfirm('Ürün silinsin mi?',()=>{db.urunler=db.urunler.filter(x=>x.id!==id);save();closeM();render();toast('Silindi')})}
+function silUrun(id){const u=urun(id);
+  const satisVar=db.satislar.some(s=>(s.kalemler||[]).some(k=>k.uid===id));
+  const ieVar=db.isemirleri.some(i=>i.urunId===id);
+  if(satisVar||ieVar){const nrd=[satisVar?'satış':'',ieVar?'iş emri':''].filter(Boolean).join(' + ');
+    return askConfirm(`"${u?u.ad:'Ürün'}" ${nrd} kayıtlarında kullanılıyor. Silmek geçmişi bozar (stok/iade hesapları kırılır). Silmek yerine PASİF (arşiv) yapılsın mı? — geçmiş korunur, listede görünmez.`,()=>{if(u){u.pasif=true;save();}closeM();render();toast('Ürün pasife alındı 🗄️');},'Pasife Al');}
+  askConfirm('Ürün silinsin mi?',()=>{db.urunler=db.urunler.filter(x=>x.id!==id);save();closeM();render();toast('Silindi')});}
 /* ---- Ürün Çoğalt ---- */
 function cogaltUrun(id){const src=urun(id);if(!src)return;const c=JSON.parse(JSON.stringify(src));delete c.id;c.kod='';c.renkler=(c.renkler||[]).map(r=>({...r,barkod:genBarkod()}));closeM();setTimeout(()=>{formUrun(0,c);toast('Kopyalandı — yeni ürün kodu gir')},120)}
 /* ---- CODE128 barkod çizimi (okunabilir) ---- */
@@ -2526,7 +2531,7 @@ function applySatis(s){
   (s.odemeler||[]).forEach(l=>{const lTL=(+l.tutar||0)*pbKur(l.pb);l._tl=lTL;if(lTL<=0)return;
     if(l.tur==='Çek'){const c={id:nid('cek'),tur:'cek',tip:'alinan',cariId:s.mid,cari:s.mus,tutar:lTL,vade:l.vade||(Date.now()+30*86400000),banka:'—',durum:'portfoyde',foto:l.foto||''};db.cekler.push(c);l._cekId=c.id}
     else if(l.tur==='Kredi Kartı'){const c={id:nid('cek'),tur:'kk',tip:'alinan',cariId:s.mid,cari:s.mus,tutar:lTL,vade:l.vade||(Date.now()+34*86400000),banka:'Kredi Kartı POS',durum:'portfoyde'};db.cekler.push(c);l._cekId=c.id}
-    else{const h=l.tur==='Havale'?hesap(l.hesapId):(db.hesaplar.find(x=>/nakit|kasa/i.test(x.ad))||db.hesaplar[0]);if(h){h.bakiye+=lTL;l._hesapId=h.id}}
+    else{let h=l.tur==='Havale'?hesap(l.hesapId):null;if(!h)h=db.hesaplar.find(x=>/nakit|kasa/i.test(x.ad))||db.hesaplar[0];if(h){h.bakiye+=lTL;l._hesapId=h.id}} // hesap silinmişse para kaybolmasın → varsayılan kasaya
   });
 }
 function revertSatis(s){
@@ -2573,7 +2578,11 @@ function kaydetSatis(){
   const yeniBorc=m.bakiye-eskiBorc+(tutar-oden-kesik)*div;
   const doLimit=()=>{if(m.limit&&yeniBorc>m.limit)askConfirm(`${m.ad} kredi limitini aşıyor:\nYeni borç ${TL(yeniBorc)} / limit ${TL(m.limit)}\n\nYine de kaydedilsin mi?`,commit,'Kaydet');else commit()};
   // stok yeterlilik kontrolü (düzenlemede eski adet geri sayılır)
-  const stokAsim=[];sepet.forEach(k=>{const u=urun(k.uid);if(!u)return;let mevcut=stokTop(u);if(old){const ok=old.kalemler.find(z=>z.uid===k.uid);if(ok)mevcut+=ok.mik}if(k.mik>mevcut+0.001)stokAsim.push(`${u.ad}: elde ${mevcut}, satılan ${k.mik}`)});
+  const stokAsim=[];sepet.forEach(k=>{const u=urun(k.uid);if(!u)return;const oldK=old?old.kalemler.find(z=>z.uid===k.uid):null;
+    if(k.renkler&&k.renkler.length&&hasRenkStok(u)){ // renk renk kontrol (toplam yeterli olsa da bir renk eksiye düşebilir)
+      k.renkler.forEach(rr=>{const ro=renkObjs(u).find(x=>x.ad===rr.ad);let mevcut=ro?(+ro.stok||0):0;if(oldK&&oldK.renkler){const or=oldK.renkler.find(z=>z.ad===rr.ad);if(or)mevcut+=(+or.mik||0);}if((+rr.mik||0)>mevcut+0.001)stokAsim.push(`${u.ad} · ${rr.ad}: elde ${mevcut}, satılan ${rr.mik}`);});
+    }else{let mevcut=stokTop(u);if(oldK)mevcut+=(+oldK.mik||0);if(k.mik>mevcut+0.001)stokAsim.push(`${u.ad}: elde ${mevcut}, satılan ${k.mik}`);}
+  });
   if(stokAsim.length)askConfirm(`⚠️ Stok yetersiz — stok eksiye düşecek:\n${stokAsim.join('\n')}\n\nYine de satılsın mı?`,doLimit,'Yine de Sat');
   else doLimit();
 }
@@ -4863,7 +4872,10 @@ function isEmriStokla(id){
     u={id:nid('u'),ad:i.urun,kod:i.kod,kat:'',marka:'',cesit:'Markalı',kaynak:'uretim',birim:i.birim||'seri',seri:i.seriAdet||5,bedenler:[],renkler,stok:0,alis:(setMal&&birim)?Math.round(birim):0,satis:(setMal&&birim)?Math.round(birim*1.4):0,karYuzde:40,kritik:10,pb:'TL',raf:'',pasif:false,not:'İş emri #'+i.id+' ile üretildi'};
     db.urunler.push(u);i.urunId=u.id;
   }
-  if(renkObjs(u).length){rowsData.forEach(rd=>{let r=renkObjs(u).find(x=>x.ad===rd.ad);if(!r&&renkObjs(u).length===1)r=renkObjs(u)[0];if(r)r.stok=(+r.stok||0)+rd.adet});u.stok=stokTop(u)}
+  if(renkObjs(u).length){rowsData.forEach(rd=>{if(!rd.adet)return;let r=renkObjs(u).find(x=>x.ad===rd.ad);if(!r&&renkObjs(u).length===1)r=renkObjs(u)[0];
+      if(!r){ // çok renkli üründe eşleşmeyen üretim rengi → yeni renk satırı aç (adet kaybolmasın)
+        r={ad:rd.ad||'—',hex:hexFromAd(rd.ad)||PAL[renkObjs(u).length%PAL.length],foto:'',barkod:genBarkod(),stok:0,kirik:null};u.renkler.push(r);}
+      r.stok=(+r.stok||0)+rd.adet;});u.stok=stokTop(u)}
   else u.stok=(+u.stok||0)+toplam;
   if(setMal&&birim>0)u.alis=Math.round(birim);
   (i.duraklar||[]).forEach(d=>{ieBorcGuncelle(d,ieCarpan(i));d.durum='tamam'});
