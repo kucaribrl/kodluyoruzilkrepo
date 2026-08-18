@@ -808,7 +808,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-81'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-82'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -3223,6 +3223,23 @@ const YAZ_PROFIL={
   iso9_42:    {map:'CP1254',cp:42}      // ISO-8859-9 (Latin-5)
 };
 function yazProfil(){const p=YAZ_PROFIL[db.yaziciEnc||'cp857_28'];return p||YAZ_PROFIL.cp857_28;}
+// Kullanicinin elle girdigi duzeltme haritasi: "ç=87,ş=9F" gibi (16'lik ya da 10'luk)
+function yazOzelHarita(){
+  const s=(db.yaziciOzelMap||'').trim(); if(!s)return null;
+  const m={};
+  s.split(/[,;\n]+/).forEach(par=>{
+    const x=par.split('='); if(x.length!==2)return;
+    const ch=x[0].trim(); let v=x[1].trim(); if(!ch)return;
+    let n=/^0x/i.test(v)?parseInt(v,16):(/^[0-9]+$/.test(v)?parseInt(v,10):parseInt(v,16));
+    if(isNaN(n)||n<0||n>255)return;
+    m[ch]=n;
+    // buyuk/kucuk esini de otomatik kur (kullanici tek harf yazsa yeter)
+    const u=ch.toLocaleUpperCase('tr'), l=ch.toLocaleLowerCase('tr');
+    if(u!==ch&&m[u]==null&&n>=0x61)m[u]=n-0x20>=0x80?n-0x20:n;
+    if(l!==ch&&m[l]==null)m[l]=m[l];
+  });
+  return Object.keys(m).length?m:null;
+}
 function fisEscPosText(s){
   const pb=s.pb||'TL';const SYMT={TL:'TL',USD:'$',EUR:'€'};
   const _pr=yazProfil();const MAP=_pr.map==='CP1254'?CP1254:(_pr.map==='CP857'?CP857:null);
@@ -3235,7 +3252,8 @@ function fisEscPosText(s){
   const kdvHaric=araToplam-iskT;const kdvTutar=+s.kdvTutar||0;const toplamGoods=(s.tutar||0)-(s.tasima||0);
   const satici=s.satici||db.satici||'';const LINE=48;
   const out=[];const raw=(...b)=>b.forEach(x=>out.push(x&0xFF));
-  const enc=str=>{str=''+str;for(const ch of str){const c=ch.codePointAt(0);if(c<128){out.push(c);}else if(MAP&&MAP[ch]!=null){out.push(MAP[ch]);}else if(TR_FOLD[ch]!=null){for(const f of TR_FOLD[ch])out.push(f.charCodeAt(0));}else{out.push(0x3F);}}};
+  const OZEL=yazOzelHarita();
+  const enc=str=>{str=''+str;for(const ch of str){const c=ch.codePointAt(0);if(c<128){out.push(c);}else if(OZEL&&OZEL[ch]!=null){out.push(OZEL[ch]);}else if(MAP&&MAP[ch]!=null){out.push(MAP[ch]);}else if(TR_FOLD[ch]!=null){for(const f of TR_FOLD[ch])out.push(f.charCodeAt(0));}else{out.push(0x3F);}}};
   const nl=()=>out.push(0x0A);const line=str=>{enc(str);nl();};
   const align=n=>raw(0x1B,0x61,n);const bold=on=>raw(0x1B,0x45,on?1:0);
   const size=(w,h)=>raw(0x1D,0x21,((Math.max(1,w)-1)<<4)|(Math.max(1,h)-1));
@@ -3355,6 +3373,11 @@ function yaziciAyar(){
     <button class="btn ghost sm" style="margin-top:10px" onclick="yaziciMetinTest()">🧪 Net (metin) test fişi — Türkçe kontrol</button>
     <div class="mini" style="margin-top:4px">Bu testi bas: yazı NET ve Türkçe harfler (ş ç ğ ı İ ü ö) DOĞRU çıkıyorsa hazırsın. Türkçe bozuksa aşağıdaki taramayı çalıştır.</div>
     <button class="btn ghost sm" style="margin-top:10px" onclick="yaziciKodTara()">🔎 Kod tablosu tara (Türkçe bozuksa)</button>
+    <button class="btn ghost sm" style="margin-top:8px" onclick="yaziciHaritaBas()">🔠 Karakter haritası bas (ç/ş çıkmıyorsa)</button>
+    <div class="mini" style="margin-top:4px">Yazıcının aktif sayfasındaki tüm karakterleri numaralarıyla basar. Fişte <b>ç</b> ve <b>ş</b> harflerinin numarasını bul, bana yaz — tam haritayı kurayım.</div>
+    <label style="margin-top:10px">Harita düzeltmesi <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub)">— haritadan okuduğun numaraları yaz</span></label>
+    <input id="yz-ozelmap" value="${esc(db.yaziciOzelMap||'')}" placeholder="ör. ç=87,ş=9F,Ç=80,Ş=9E" onchange="db.yaziciOzelMap=this.value.trim();save();toast('Kaydedildi — test fişiyle dene')">
+    <div class="mini" style="margin-top:4px">Sadece bozuk çıkan harfleri yaz. Örnek: <b>ç=87,ş=9F</b> (16'lık numara). Bu ayar diğer her şeyi ezer.</div>
     <div class="mini" style="margin-top:4px">Aynı Türkçe kelimeyi 12 farklı kod tablosuyla basar. <b>Doğru çıkan satırın köşeli parantez içindeki etiketini</b> (ör. <b>[1254 default]</b>) bana yaz — o tabloyu kilitleyeyim.</div>
     <div class="okbox" style="margin-top:12px">⚙️ <b>Kurulum:</b> Bilgisayara ajanı bir kez kurman gerekir. Aşağıdaki adımları takip et (5 dk). Kurulduktan sonra bu düğmeyi aç, satış yaptıkça fiş otomatik çıkar.</div>
     <button class="btn ghost sm" style="margin-top:10px" onclick="yaziciKurulum()">📋 Kurulum Adımları (Windows)</button>
@@ -3386,6 +3409,30 @@ function yaziciKurulum(){
       <li>Bu ekrandaki <b>Otomatik baskı</b> düğmesini aç. Bitti — satış yaptıkça fiş çıkar.</li>
     </ol>
     <div class="okbox" style="margin-top:6px">Detaylı Türkçe rehber: repo içindeki <b>yazici-agent/BASLA-TR.md</b> dosyasında.</div>`);
+}
+// Yazicinin AKTIF kod sayfasindaki tum ust baytlari (0x80-0xFF) bastirir.
+// Fise bakip c ve s harflerinin numarasi soylenince tam harita kurulur.
+async function yaziciHaritaBas(){
+  if(!(bulutVar()&&bulutBaslat()&&_fb&&bulutGirisli&&bulutGirisli()))return toast('Önce buluta giriş yap');
+  const pr=yazProfil();
+  const out=[];const raw=(...b)=>b.forEach(x=>out.push(x&0xFF));const nl=()=>out.push(0x0A);
+  const asc=str=>{for(const ch of str)out.push(ch.charCodeAt(0)&0x7F);};
+  const hex=n=>n.toString(16).toUpperCase().padStart(2,'0');
+  raw(0x1B,0x40);
+  if(pr.cp!=null)raw(0x1B,0x74,pr.cp&0xFF);
+  raw(0x1B,0x61,1);raw(0x1B,0x45,1);asc('== KARAKTER HARITASI ==');nl();raw(0x1B,0x45,0);
+  asc('sayfa: '+(pr.cp==null?'varsayilan':'t'+pr.cp));nl();raw(0x1B,0x61,0);nl();
+  asc('c ve s harflerinin numarasini yaz');nl();
+  asc('(ornek: c=87  s=9F)');nl();nl();
+  for(let hi=0x80;hi<=0xF8;hi+=8){
+    for(let j=0;j<8;j++){const b=hi+j;asc(hex(b)+':');out.push(b);asc('  ');}
+    nl();
+  }
+  raw(0x1B,0x64,0x03);raw(0x1D,0x56,0x42,0x00);
+  let bin='';for(let i=0;i<out.length;i+=8192)bin+=String.fromCharCode.apply(null,out.slice(i,i+8192));
+  try{await _fb.collection('isletme').doc(MAGAZA_ID).collection('yazdirma').add({tur:'fis',satisId:'HARITA',mus:'Karakter Haritasi',escpos:btoa(bin),durum:'bekliyor',kopya:1,olusturma:Date.now(),cihaz:'harita'});
+    toast('🔠 Karakter haritası gönderildi — fişte ç ve ş numarasını bul');
+  }catch(e){toast('Gönderilemedi: '+(e.message||e))}
 }
 async function yaziciKodTara(){
   if(!(bulutVar()&&bulutBaslat()&&_fb&&bulutGirisli&&bulutGirisli()))return toast('Önce buluta giriş yap');
