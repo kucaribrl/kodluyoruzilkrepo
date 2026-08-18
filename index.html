@@ -550,7 +550,7 @@ function seqFix(d){ // id çakışmasını önle: her sıra numarasını mevcut 
     const hasStr=u.renkler.some(r=>typeof r==='string');
     if(hasStr&&!u.renkler.some(r=>r&&typeof r==='object')){
       const n=u.renkler.length,pay=Math.floor((u.stok||0)/n);
-      u.renkler=u.renkler.map((hex,i)=>({ad:NM[hex]||('Renk '+(i+1)),hex,foto:'',barkod:'869'+(100000000+((u.id||0)*100+i)%900000000),stok:i===0?((u.stok||0)-pay*(n-1)):pay,kirik:null}));
+      u.renkler=u.renkler.map((hex,i)=>({ad:NM[hex]||('Renk '+(i+1)),hex,foto:'',barkod:(b=>b+eanCheck(b))('869'+(100000000+((u.id||0)*100+i)%900000000)),stok:i===0?((u.stok||0)-pay*(n-1)):pay,kirik:null}));
     }
   });
 }
@@ -808,7 +808,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-75'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-76'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1856,7 +1856,8 @@ function cloudinaryAyar(){
 function cloudinaryKaydet(){db.cldName=($('cld-name').value||'').trim();db.cldPreset=($('cld-preset').value||'').trim();save();closeM();toast(db.cldName&&db.cldPreset?'✓ Kaydedildi — fotoğraflar artık Cloudinary\'ye yüklenecek':'Temizlendi — fotoğraflar cihazda tutulur');}
 function cloudinaryTest(){const c=document.createElement('canvas');c.width=c.height=220;const g=c.getContext('2d');g.fillStyle='#5b54d6';g.fillRect(0,0,220,220);g.fillStyle='#fff';g.font='bold 26px sans-serif';g.textAlign='center';g.fillText('IQ TEST',110,118);toast('🧪 Yükleniyor…');
   resimYukle(c.toDataURL('image/jpeg',0.8),url=>{if(/^https?:/.test(url))open_('✅ Cloudinary çalışıyor',`<div class="mini">Test fotoğrafı yüklendi:</div><img src="${url}" style="width:100%;border-radius:12px;margin-top:8px"><div class="mini" style="margin-top:8px;word-break:break-all">${esc(url)}</div>`);else toast('⚠️ Yüklenemedi — Cloud name / preset\'i (Unsigned mı?) kontrol et');});}
-function genBarkod(){let s='869';for(let i=0;i<10;i++)s+=Math.floor(Math.random()*10);return s}
+function eanCheck(d){let s=0;for(let i=0;i<12;i++)s+=(+d[i]||0)*(i%2===0?1:3);return String((10-(s%10))%10);} // EAN-13 kontrol hanesi
+function genBarkod(){let s='869';for(let i=0;i<9;i++)s+=Math.floor(Math.random()*10);return s+eanCheck(s);} // 12 hane + kontrol = geçerli EAN-13
 function formUrun(id,base){
   if(!canUrunYaz())return toast('Bu işlem için yetkiniz yok');
   const u=id?urun(id):(base||{birim:'seri',seri:5,renkler:[],kaynak:'uretim',cesit:'Markalı',karYuzde:40,pb:'TL'});
@@ -2518,10 +2519,12 @@ function cizSepet(){
 function satisDiv(s){return s.satisKur||(s.pb==='USD'?db.kurUSD:s.pb==='EUR'?db.kurEUR:1)}
 function stokUygula(k,mult){ // mult=-1 satış (düş), +1 iptal (geri)
   const u=urun(k.uid);if(!u)return;
-  if(k.renkler&&k.renkler.length&&Array.isArray(u.renkler)){
-    k.renkler.forEach(rr=>{const ro=u.renkler.find(x=>x&&typeof x==='object'&&x.ad===rr.ad);if(ro)ro.stok=(+ro.stok||0)+mult*rr.mik});
+  if(k.renkler&&k.renkler.length&&hasRenkStok(u)){
+    k.renkler.forEach(rr=>{let ro=renkObjs(u).find(x=>x.ad===rr.ad);
+      if(!ro){ro={ad:rr.ad,hex:hexFromAd(rr.ad)||'#ccc',stok:0};u.renkler.push(ro);} // renk yeniden adlandırılmış/eksik → satır aç, stok kaybolmasın
+      ro.stok=(+ro.stok||0)+mult*rr.mik;});
     syncStok(u);
-  }else{u.stok+=mult*k.mik}
+  }else{u.stok=(+u.stok||0)+mult*k.mik} // renksiz veya eski string-format renk → toplamdan düş
 }
 function applySatis(s){
   const m=cari(s.mid),div=satisDiv(s);
@@ -2943,6 +2946,7 @@ function faturaYazdir(id,irsaliye){const s=db.satislar.find(x=>x.id===id);if(!s)
       ${m?`<tr><td class="lb">Cari Bakiye</td><td class="r">${TL(Math.abs(m.bakiye||0))} ${m.bakiye>0?'B':m.bakiye<0?'A':''}</td></tr>`:''}
     </table>`;
   const toplamAdet=s.kalemler.reduce((a,k)=>a+(+k.mik||0),0);
+  const _birimSet=[...new Set(s.kalemler.map(k=>k.birim||''))];const toplamBirim=_birimSet.length===1?_birimSet[0]:''; // karışık birimde etiket koyma
   $('printarea').innerHTML=`<div class="ieA4">
     <div class="ieh"><div><div class="ien">${esc(db.firma||'ÖZ TEKSTİL')}</div>${db.firmaSlogan?`<div class="ies">${esc(db.firmaSlogan)}</div>`:''}${db.firmaAdres?`<div class="ies">${esc(db.firmaAdres)}</div>`:''}${db.firmaTel?`<div class="ies">Tel: ${esc(db.firmaTel)}${db.firmaWp?' · WP: '+esc(db.firmaWp):''}</div>`:''}</div><div class="iet">${irsaliye?'İRSALİYE':'SATIŞ FATURASI'}<br>#${s.id}</div></div>
     <div class="ieline"></div>
@@ -2950,7 +2954,7 @@ function faturaYazdir(id,irsaliye){const s=db.satislar.find(x=>x.id===id);if(!s)
       ${musSat.map((r,i)=>i%2===0?`<tr><td class="lb">${esc(r[0])}</td><td>${esc(r[1])}</td>${musSat[i+1]?`<td class="lb">${esc(musSat[i+1][0])}</td><td>${esc(musSat[i+1][1])}</td>`:'<td></td><td></td>'}</tr>`:'').join('')}</table>
     <div class="iesec">ÜRÜNLER</div>
     <table class="ietbl"><tr><th class="r">#</th><th>Kod</th><th>Ürün</th><th class="r">Miktar</th>${irsaliye?'':'<th class="r">Birim Fiyat</th><th class="r">Tutar</th>'}</tr>${rows}
-      <tr><td colspan="3" style="font-weight:700">Toplam</td><td class="r" style="font-weight:700">${toplamAdet} ${esc(s.kalemler[0]&&s.kalemler[0].birim||'')}</td>${irsaliye?'':`<td></td><td class="r" style="font-weight:800">${pf(s.tutar)}</td>`}</tr></table>
+      <tr><td colspan="3" style="font-weight:700">Toplam</td><td class="r" style="font-weight:700">${toplamAdet}${toplamBirim?' '+esc(toplamBirim):''}</td>${irsaliye?'':`<td></td><td class="r" style="font-weight:800">${pf(s.tutar)}</td>`}</tr></table>
     ${totRows}
     ${s.sevkiyat?`<div style="margin-top:10px"><b>Sevkiyat / Not:</b> ${esc(s.sevkiyat)}</div>`:''}
     <div class="iesign"><div>Teslim eden: ______________</div><div>Teslim alan: ______________</div></div>
@@ -3387,7 +3391,12 @@ function fisResimTest(){const W=576,dpr=2,H=220;const c=document.createElement('
   g.fillText('Otomatik baskı hazır',W/2,158);
   g.font='600 13px sans-serif';g.fillText(new Date().toLocaleString('tr-TR'),W/2,192);
   return c.toDataURL('image/png');}
-function satisDurum(id){const s=db.satislar.find(x=>x.id===id);s.teslimDurum=s.teslimDurum==='ayrildi'?'teslim':'ayrildi';save();closeM();go('satis');toast(s.teslimDurum==='ayrildi'?'Mal ayrıldı (rezerve) 🔖':'Teslim edildi ✓')}
+function satisDurum(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;s.teslimDurum=s.teslimDurum==='ayrildi'?'teslim':'ayrildi';
+  if(s.kaynak==='portal'){ // portal sipariş takip aşamasıyla hizala (çelişki olmasın)
+    if(s.teslimDurum==='teslim'){s.sipDurum='teslim';s.sipGecmis=s.sipGecmis||[];if(!s.sipGecmis.some(g=>g.k==='teslim'))s.sipGecmis.push({k:'teslim',t:Date.now()});}
+    else if(s.sipDurum==='teslim')s.sipDurum='kargoda';
+  }
+  save();closeM();go('satis');toast(s.teslimDurum==='ayrildi'?'Mal ayrıldı (rezerve) 🔖':'Teslim edildi ✓')}
 /* ---- Depo toplama/ayırma emri ---- */
 function depoBekleyen(){return db.satislar.filter(s=>s.depo==='bekliyor').sort((a,b)=>a.tarih-b.tarih)}
 // Hazırlanmış (toplanmış) siparişlerin geçmişi — kim/ne zaman hazırladı
@@ -3754,7 +3763,7 @@ function kaydetKasaHareket(){const tut=+$('kh-t').value||0;if(tut<=0)return toas
 }
 /* --- Düzenli (sabit) giderler: kira, maaş, aidat... --- */
 function ayKodu(t){const d=t?new Date(t):new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
-function duzenliGiderBekleyen(){const bugun=new Date().getDate(),ay=ayKodu();return (db.duzenliGider||[]).filter(g=>g.aktif!==false&&bugun>=(+g.gun||1)&&g.sonAy!==ay)}
+function duzenliGiderBekleyen(){const now=new Date(),bugun=now.getDate(),ay=ayKodu();const sonGun=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();return (db.duzenliGider||[]).filter(g=>g.aktif!==false&&bugun>=Math.min(+g.gun||1,sonGun)&&g.sonAy!==ay)}
 function duzenliGiderIsle(id){const g=(db.duzenliGider||[]).find(x=>x.id===id);if(!g)return;const h=hesap(g.hesapId)||db.hesaplar[0];if(!h)return toast('Hesap yok');
   if(!kasaHareket(h.id,'out',+g.tutar||0,'Gider',(g.ad||'Düzenli gider')+' · düzenli'))return; // bakiye yetersizse işaretleme/gizleme
   g.sonAy=ayKodu();save();rKasa();toast('İşlendi: '+esc(g.ad)+' −'+TL(g.tutar));}
@@ -4024,7 +4033,7 @@ function cekErken(id){const c=db.cekler.find(x=>x.id===id);if(!c)return;const g=
   askConfirm(`Bu çekin vadesine ${g} gün var.\n${al?'Bankaya erken bozdurup (kırdırıp) nakde mi çeviriyorsun?':'Vadesinden önce mi ödüyorsun?'}`,()=>cekTahsil(id),al?'Erken Boz':'Erken Öde');
 }
 function cekTahsil(id){
-  const c=db.cekler.find(x=>x.id===id);let msg;
+  const c=db.cekler.find(x=>x.id===id);if(!c)return;let msg;
   if(c.tip==='alinan'){const h=db.hesaplar.find(x=>x.tur==='nakit')||db.hesaplar.find(x=>/nakit|kasa/i.test(x.ad))||db.hesaplar[0];
     if(!h)return toast('⚠️ Tahsilat için bir kasa/hesap tanımlı değil');
     c.durum='tahsil';c.islemTarih=Date.now();h.bakiye+=c.tutar;msg='Tahsil edildi ✓ '+TL(c.tutar)}
@@ -4050,12 +4059,12 @@ function cekCiro(id){const c=db.cekler.find(x=>x.id===id);if(!c)return;
     <label>Kime ciro edilecek?</label><select id="ci-cari">${opts.map(o=>`<option value="${o.id}">${esc(o.ad)}${o.bakiye>0?' · borç '+TL(o.bakiye):o.bakiyeUSD>0?' · $'+Math.round(o.bakiyeUSD):''}</option>`).join('')}</select>
     <button class="btn" onclick="cekCiroKaydet(${id})">Ciro Et</button>`);
 }
-function cekCiroKaydet(id){const c=db.cekler.find(x=>x.id===id);const cid=+$('ci-cari').value;const cc=cari(cid);if(!cc)return toast('Seç');
+function cekCiroKaydet(id){const c=db.cekler.find(x=>x.id===id);if(!c)return;const cid=+$('ci-cari').value;const cc=cari(cid);if(!cc)return toast('Seç');
   c.durum='ciro';c.ciroCariId=cid;c.ciroCari=cc.ad;c.ciroTarih=Date.now();
   if(cc.doviz==='USD')cc.bakiyeUSD=(cc.bakiyeUSD||0)-c.tutar/(+db.kurUSD||1);else cc.bakiye-=c.tutar;
   save();closeM();rCek();toast('Çek ciro edildi → '+cc.ad+' ('+TL(c.tutar)+')');
 }
-function cekKarsiliksiz(id){const c=db.cekler.find(x=>x.id===id);
+function cekKarsiliksiz(id){const c=db.cekler.find(x=>x.id===id);if(!c)return;
   askConfirm(`"${c.cari}" çeki (${TL(c.tutar)}) karşılıksız mı çıktı?${c.cariIsle?'\nCariye borç geri eklenecek.':''}`,()=>{
     c.durum='karsiliksiz';c.islemTarih=Date.now();const cc=cari(c.cariId);
     if(c.cariIsle&&cc){if(cc.doviz==='USD')cc.bakiyeUSD=(cc.bakiyeUSD||0)+c.tutar/(+db.kurUSD||1);else cc.bakiye+=c.tutar}
@@ -5150,7 +5159,12 @@ function portalOnay(id,override,force){
   const baseT=o.kalemler.reduce((a,k)=>a+k.mik*(+k.fiyat||0),0)||o.tutar||1;
   const oran=(override&&baseT>0)?override/baseT:1;
   const kalemler=o.kalemler.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:oran===1?k.fiyat:Math.round((+k.fiyat||0)*oran),renkler:k.renkler?k.renkler.map(r=>({...r})):undefined}));
-  const tutar=override||o.tutar;
+  let tutar=override||o.tutar;
+  if(oran!==1&&kalemler.length){ // yuvarlama artığını son kaleme yedir → fatura satır toplamı = genel toplam
+    const son=kalemler[kalemler.length-1];const dig=kalemler.slice(0,-1).reduce((a,k)=>a+(+k.fiyat||0)*k.mik,0);
+    if(son.mik>0)son.fiyat=Math.max(0,Math.round((tutar-dig)/son.mik));
+    tutar=kalemler.reduce((a,k)=>a+(+k.fiyat||0)*k.mik,0);
+  }
   const sat={id:nid('s'),tip:'satis',mid:m.id,mus:m.ad,tarih:Date.now(),kalemler,araToplam:tutar,iskonto:0,tutar,odenen:0,kesik:0,pb:'TL',satisKur:1,durum:'tamam',teslimDurum:'ayrildi',odemeler:[],kaynak:'portal',bulutId:o.bulutId||null,portalId:o.id,sipDurum:'onaylandi',sipGecmis:[{k:'onaylandi',t:Date.now()}]};
   db.satislar.push(sat);applySatis(sat);
   if(o.bulutId)bulutSiparisDurum(o.bulutId,'onaylandi');
