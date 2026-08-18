@@ -1,0 +1,8 @@
+# Windows betikleri: git ASLA satir sonlarina dokunmasin (-text = donusum yok).
+# LF olurlarsa cmd.exe komutlarin ilk harfini yiyor
+# ('d' is not recognized / 'cho' is not recognized). Bu yuzden CRLF baytlari
+# depoda oldugu gibi saklanir ve ZIP indirmede de CRLF gelir.
+*.bat -text
+*.cmd -text
+*.vbs -text
+*.ps1 -text
