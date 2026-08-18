@@ -808,7 +808,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-76'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-77'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1244,6 +1244,10 @@ function hesapMenu(){
   const rol=ROL_AD[db.rol]||ROLLER[db.rol]?.ad||db.rol;
   let h=`<div class="card" style="padding:13px 15px"><div style="font-weight:800;font-size:15px">${(ROLLER[db.rol]||{}).ic||'👤'} ${esc(rol)}</div><div class="mini">${db.personelMod?'Personel oturumu · canlı bağlı':(bg?'Yönetici · bulut girişli':'Yönetici · bu cihaz')}</div></div>`;
   if(db.personelMod){h+=`<button class="btn danger" style="margin-top:12px" onclick="personelCik()">🚪 Çıkış Yap (cihazı temizle)</button>`;}
+  else if(!paraGoster()){ // kısıtlı rol (mağaza/depocu/fason): yıkıcı/yükseltme seçenekleri yok
+    h+=`<button class="btn ghost" style="margin-top:12px" onclick="closeM();go('ayarlar')">⚙️ Ayarlar</button>`;
+    h+=`<button class="btn" style="margin-top:8px" onclick="closeM();yoneticiDon()">🔓 Yönetici (Patron) moduna dön</button>`;
+  }
   else{
     h+=`<button class="btn danger" style="margin-top:12px" onclick="guvenliCikis()">🧹 Güvenli Çıkış — bu cihazdaki verileri sil</button>`;
     h+=`<div class="mini" style="margin-top:6px;line-height:1.5">Başka/ödünç cihazdan girdiysen bunu kullan: çıkışta bu cihazdaki her şey silinir (verilerin bulutta durur).</div>`;
@@ -1302,9 +1306,17 @@ async function oturumKilitGiris(){
 async function oturumKilitSifre(){const m=$('ok-msg');if(!bulutBaslat())return;const mail=($('ok-mail')?.value||'').trim();if(!mail){if(m)m.textContent='Önce e-posta adresini yaz';return;}try{await firebase.auth().sendPasswordResetEmail(mail);if(m)m.textContent='📧 Sıfırlama bağlantısı e-postana gönderildi';}catch(e){if(m)m.textContent='Gönderilemedi: '+(e.code||e.message);}}
 function rolSec(){
   if(db.personelMod)return toast('👤 Personel modundasın ('+(ROL_AD[db.rol]||db.rol)+') — rol değiştirilemez. Çıkış: sağ üst 👤 menüsü.');
+  if(!paraGoster())return yoneticiDon(); // kısıtlı rol kendini yükseltemesin → PIN'li dönüş
   open_('Rol Önizleme (deneme)',Object.keys(ROLLER).map(k=>`<div class="row" onclick="setRol('${k}')"><div class="av" style="background:${rolRenk(k)}">${ROLLER[k].ic}</div><div class="mid"><div class="t">${ROLLER[k].ad}</div><div class="s">${ROLLER[k].kar?'kâr görür':'kâr gizli'}</div></div>${db.rol===k?'<span class="pill ok">aktif</span>':''}</div>`).join('')+'<div class="mini" style="text-align:center;margin-top:14px">Sadece farklı rollerin ne gördüğünü denemen için. Gerçekte personel kendi şifresiyle girer (Ayarlar → Bulut → Personel Girişi).</div>');
 }
 function setRol(k){db.rol=k;save();closeM();go('panel');toast(ROLLER[k].ad+' görünümü')}
+// Kısıtlı roldeyken Patron'a dönüş — PIN korumalı (personel kendini yükseltemesin)
+function yoneticiDon(){
+  if(!db.pin)return askConfirm('Güvenlik için önce Ayarlar → Uygulama Kilidi\'nden PIN koymanı öneririm. Yine de Patron moduna dönülsün mü?',()=>setRol('patron'),'Patron\'a Dön');
+  open_('🔒 Yönetici PIN',`<div class="mini">Patron (yönetici) moduna dönmek için uygulama PIN'ini gir.</div><input id="yd-pin" type="password" inputmode="numeric" maxlength="8" placeholder="••••" style="margin-top:10px" onkeydown="if(event.key==='Enter')yoneticiDonDene()"><div id="yd-msg" class="mini" style="color:var(--bad);margin-top:6px"></div><button class="btn g" style="margin-top:12px" onclick="yoneticiDonDene()">🔓 Patron'a Dön</button>`);
+  setTimeout(()=>{const i=$('yd-pin');if(i)i.focus();},90);
+}
+function yoneticiDonDene(){const v=($('yd-pin')&&$('yd-pin').value)||'';if(pinHash(v)===db.pin){closeM();setRol('patron');}else{const m=$('yd-msg');if(m)m.textContent='❌ Yanlış PIN, tekrar deneyin';const i=$('yd-pin');if(i){i.value='';i.focus();}}}
 
 /* =================== RENDER =================== */
 // 💰 Gizli mod: uygulama her açılışta tutarlar GİZLİ; göstermek için PIN
@@ -1463,7 +1475,7 @@ function rDaha(){
     {ic:'⚙️',ad:'Ayarlar',s:'kur · rol · hesap',v:'ayarlar'},
   ].filter(i=>canSee(i.v));
   $('app').innerHTML=`<div class="sec">Daha Fazlası</div><div class="card">`+items.map(i=>`<div class="row" onclick="go('${i.v}')"><div class="av" style="background:var(--ind)">${i.ic}</div><div class="mid"><div class="t">${i.ad}</div><div class="s">${i.s}</div></div><span style="color:var(--sub)">›</span></div>`).join('')+`</div>
-    <div class="sec">Uygulama</div><div class="card"><div class="row" onclick="sifirla()"><div class="av r">🔄</div><div class="mid"><div class="t">Örnek verilere sıfırla</div><div class="s">test için</div></div></div></div>
+    ${paraGoster()?`<div class="sec">Uygulama</div><div class="card"><div class="row" onclick="sifirla()"><div class="av r">🔄</div><div class="mid"><div class="t">Örnek verilere sıfırla</div><div class="s">test için</div></div></div></div>`:''}
     <div class="mini" style="text-align:center;margin-top:20px">${esc(db.firma||'IQ Basics')} · Toptan Yönetim 🧵</div>`;
 }
 
@@ -6549,12 +6561,13 @@ function rRapor(){
 /* ---------- AYARLAR ---------- */
 function rAyarlar(){
   const y=yetki();
+  const kisitli=!paraGoster(); // kâr/para görmeyen roller (mağaza/depocu/fason) → hassas bölümler gizli
   let html=`<div class="sec">Firma</div><div class="card"><div class="row" onclick="formFirma()"><div class="av" style="background:var(--ind)">🏢</div><div class="mid"><div class="t">${esc(db.firma)}</div><div class="s">${esc(db.firmaSlogan||'firma bilgileri · fişte görünür')}</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="formKur()"><div class="av o">💱</div><div class="mid"><div class="t">Kur</div><div class="s">$ ${db.kurUSD.toFixed(2)} · € ${db.kurEUR.toFixed(2)}</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="yaziciAyar()"><div class="av" style="background:${db.otoYazdir?'var(--good)':'var(--ind2)'}">🖨️</div><div class="mid"><div class="t">Otomatik Yazıcı ${db.otoYazdir?'<span class="pill ok">açık</span>':''}</div><div class="s">bilgisayara bağlı termal yazıcıdan otomatik fiş</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="cloudinaryAyar()"><div class="av" style="background:${db.cldName?'var(--good)':'var(--ind2)'}">🖼️</div><div class="mid"><div class="t">Fotoğraf Depolama ${db.cldName?'<span class="pill ok">açık</span>':''}</div><div class="s">çok fotoğraf için Cloudinary (ücretsiz) — ${db.cldName?esc(db.cldName):'kurulu değil'}</div></div><span style="color:var(--sub)">›</span></div></div>`;
-  html+=`<div class="sec">Kullanıcılar & Roller</div><div class="card">`+Object.keys(ROLLER).map(k=>`<div class="row" onclick="setRol('${k}')"><div class="av" style="background:${rolRenk(k)}">${ROLLER[k].ic}</div><div class="mid"><div class="t">${ROLLER[k].ad}</div><div class="s">${ROLLER[k].kar?'kâr görür':'kâr gizli'}</div></div>${db.rol===k?'<span class="pill ok">aktif</span>':''}</div>`).join('')+`</div>`;
-  if(bulutVar())html+=`<div class="sec">Bulut</div><div class="card">
+  if(!kisitli)html+=`<div class="sec">Kullanıcılar & Roller</div><div class="card">`+Object.keys(ROLLER).map(k=>`<div class="row" onclick="setRol('${k}')"><div class="av" style="background:${rolRenk(k)}">${ROLLER[k].ic}</div><div class="mid"><div class="t">${ROLLER[k].ad}</div><div class="s">${ROLLER[k].kar?'kâr görür':'kâr gizli'}</div></div>${db.rol===k?'<span class="pill ok">aktif</span>':''}</div>`).join('')+`</div>`;
+  if(bulutVar()&&(db.personelMod||!kisitli))html+=`<div class="sec">Bulut</div><div class="card">
     ${db.personelMod?`<div class="row" onclick="personelCik()"><div class="av" style="background:${rolRenk(db.rol)}">${(ROLLER[db.rol]||{}).ic||'👤'}</div><div class="mid"><div class="t">Personel: ${ROL_AD[db.rol]||db.rol} <span class="pill ok">bağlı</span></div><div class="s">çıkış yapmak için dokun</div></div><span style="color:var(--sub)">›</span></div>`:`
     <div class="row" onclick="canliBulutAyar()"><div class="av" style="background:${canliAcik?'var(--good)':'var(--ind2)'}">☁️</div><div class="mid"><div class="t">Canlı Bulut Senkronu <span class="pill ok">${canliAcik?'açık · otomatik':'otomatik'}</span></div><div class="s">giriş yapılınca kendiliğinden açılır — tüm cihazlar canlı aynı</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="personelGiris()"><div class="av" style="background:var(--pur)">👤</div><div class="mid"><div class="t">Personel Girişi</div><div class="s">depocu / mağaza / ortak — kendi hesabıyla bağlan</div></div><span style="color:var(--sub)">›</span></div>`}
@@ -6562,10 +6575,11 @@ function rAyarlar(){
   html+=`<div class="sec">Üretim</div><div class="card">
     <div class="row" onclick="durakSablonAyar()"><div class="av" style="background:var(--pur)">🧾</div><div class="mid"><div class="t">Durak Kontrol Listeleri</div><div class="s">dikim/nakış/kesim/ütü duraklarına gidecek kontrol maddeleri</div></div><span style="color:var(--sub)">›</span></div>
   </div>`;
-  html+=`<div class="sec">Güvenlik</div><div class="card">
-    <div class="row" onclick="kilitAyar()"><div class="av" style="background:${db.pin?'var(--good)':'var(--ind)'}">🔒</div><div class="mid"><div class="t">Uygulama Kilidi (PIN) ${db.pin?'<span class="pill ok">açık</span>':''}</div><div class="s">${db.pin?('cihaz '+(+db.pinDk||3)+' dk hareketsizlikte kilitlenir'):'cihazını başkası açamasın diye PIN koy'}</div></div><span style="color:var(--sub)">›</span></div>
-  </div>`;
-  html+=`<div class="sec">Veri Güvenliği</div><div class="card">
+  {let guv='';
+   if(!kisitli)guv+=`<div class="row" onclick="kilitAyar()"><div class="av" style="background:${db.pin?'var(--good)':'var(--ind)'}">🔒</div><div class="mid"><div class="t">Uygulama Kilidi (PIN) ${db.pin?'<span class="pill ok">açık</span>':''}</div><div class="s">${db.pin?('cihaz '+(+db.pinDk||3)+' dk hareketsizlikte kilitlenir'):'cihazını başkası açamasın diye PIN koy'}</div></div><span style="color:var(--sub)">›</span></div>`;
+   if(kisitli&&!db.personelMod)guv+=`<div class="row" onclick="yoneticiDon()"><div class="av" style="background:var(--ind)">🔓</div><div class="mid"><div class="t">Yönetici (Patron) moduna dön</div><div class="s">${db.pin?'PIN gerekir':'güvenlik için PIN koymanı öneririm'}</div></div><span style="color:var(--sub)">›</span></div>`;
+   if(guv)html+=`<div class="sec">Güvenlik</div><div class="card">${guv}</div>`;}
+  if(!kisitli)html+=`<div class="sec">Veri Güvenliği</div><div class="card">
     <div class="row" onclick="otoYedekListe()"><div class="av" style="background:var(--good)">🕑</div><div class="mid"><div class="t">Otomatik Yedekler</div><div class="s">riskli işlemlerden önce alınır · geri yükle</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="yedekAl()"><div class="av g">💾</div><div class="mid"><div class="t">Yedek Al (indir)</div><div class="s">tüm verini dosya olarak kaydet</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="$('yedekFile').click()"><div class="av" style="background:var(--ind2)">📂</div><div class="mid"><div class="t">Yedekten Yükle</div><div class="s">daha önce aldığın yedeği geri yükle</div></div><span style="color:var(--sub)">›</span></div>
