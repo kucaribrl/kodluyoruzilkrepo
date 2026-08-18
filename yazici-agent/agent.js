@@ -166,8 +166,10 @@ async function main() {
   }
   // 💓 "Hayattayım" sinyali — uygulama "Ajan bağlı ✓" göstersin diye buluta yaz (20 sn'de bir)
   const heartbeat = async () => {
-    try { await setDoc(doc(db, 'isletme', MAGAZA_ID, 'durum', 'yazici'),
-      { online: true, ts: Date.now(), cihaz: os.hostname(), yazici: cfg.yaziciAdi || 'varsayılan', etiket: cfg.etiketYaziciAdi || '' }); }
+    // Not: mevcut kurallarla izinli olan yazdirma koleksiyonuna yazilir
+    // (durum:"ajan" oldugu icin is kuyrugu sorgusuna takilmaz).
+    try { await setDoc(doc(db, 'isletme', MAGAZA_ID, 'yazdirma', '_ajan_durum'),
+      { durum: 'ajan', online: true, ts: Date.now(), cihaz: os.hostname(), yazici: cfg.yaziciAdi || 'varsayılan', etiket: cfg.etiketYaziciAdi || '' }); }
     catch (e) { /* sessiz */ }
   };
   await heartbeat();
