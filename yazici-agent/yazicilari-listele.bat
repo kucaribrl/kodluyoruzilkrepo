@@ -1,5 +1,4 @@
 @echo off
-chcp 65001 >nul
 title IQ Basics - Kurulu Yazicilar
 echo.
 echo === Bu bilgisayarda KURULU yazicilar (tam adlariyla) ===

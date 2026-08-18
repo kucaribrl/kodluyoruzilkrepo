@@ -1,5 +1,4 @@
 @echo off
-chcp 65001 >nul
 title IQ Basics - Yazici Ajanini Durdur
 cd /d "%~dp0"
 echo.

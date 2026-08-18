@@ -1,4 +1,4 @@
-' IQ Basics — Yazici Ajanini GIZLI (penceresiz) baslatir.
+' IQ Basics - Yazici Ajanini GIZLI (penceresiz) baslatir.
 ' Otomatik baslatma bunu kullanir: acilista hicbir pencere gorunmez,
 ' ajan arka planda calisir. Durum icin: uygulamada Ayarlar > Otomatik Yazici.
 Dim sh, fso, dir
