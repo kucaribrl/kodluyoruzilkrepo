@@ -4,10 +4,10 @@ title IQ Basics - Otomatik Baslatma Kurulumu
 cd /d "%~dp0"
 
 echo.
-echo === IQ Basics · Otomatik Baslatma Kurulumu ===
+echo === IQ Basics - Otomatik Baslatma Kurulumu ===
 echo.
 echo Bu islem, bilgisayar her acildiginda yazici ajaninin
-echo KENDILIGINDEN baslamasini saglar. (Kucuk bir pencere olarak acilir.)
+echo KENDILIGINDEN ve GIZLI (hicbir pencere gorunmeden) baslamasini saglar.
 echo.
 
 rem --- config.json var mi? ---
@@ -20,23 +20,36 @@ if not exist "config.json" (
   exit /b
 )
 
-set "TARGET=%~dp0baslat.bat"
-set "WORKDIR=%~dp0"
+rem --- Gerekli paketler bir kez kurulsun (GORUNUR) ki gizli calisirken takilmasin ---
+if not exist "node_modules" (
+  echo Ilk kurulum: gerekli paketler indiriliyor... ^(bir defalik, biraz surebilir^)
+  call npm install
+  if errorlevel 1 (
+    echo.
+    echo [!] npm install basarisiz. Node.js kurulu mu? nodejs.org - LTS surumunu kur.
+    pause
+    exit /b
+  )
+)
+
+set "TARGET=%~dp0gizli-baslat.vbs"
 set "STARTUP=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
 set "LNK=%STARTUP%\IQ Basics Yazici.lnk"
 
-rem --- Baslangic klasorune kisayol olustur (kucultulmus calisir: WindowStyle=7) ---
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$s=New-Object -ComObject WScript.Shell; $l=$s.CreateShortcut($env:LNK); $l.TargetPath=$env:TARGET; $l.WorkingDirectory=$env:WORKDIR; $l.WindowStyle=7; $l.Description='IQ Basics Yazici Ajani'; $l.Save()"
+rem --- Baslangic klasorune, GIZLI baslaticiya kisayol olustur ---
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$s=New-Object -ComObject WScript.Shell; $l=$s.CreateShortcut($env:LNK); $l.TargetPath=$env:TARGET; $l.WorkingDirectory=(Split-Path $env:TARGET); $l.Description='IQ Basics Yazici Ajani (gizli)'; $l.Save()"
 
 if exist "%LNK%" (
-  echo [OK] Kuruldu! Artik bilgisayar her acildiginda yazici ajani otomatik baslayacak.
+  echo [OK] Kuruldu! Artik bilgisayar her acildiginda yazici ajani
+  echo      GIZLI olarak ^(pencere gorunmeden^) otomatik baslayacak.
   echo.
-  echo      Geri almak istersen: "otomatik-baslat-kaldir.bat" dosyasina cift tikla.
+  echo      Calisiyor mu diye bakmak icin: uygulama - Ayarlar - Otomatik Yazici.
+  echo      Geri almak icin: "otomatik-baslat-kaldir.bat" dosyasina cift tikla.
   echo.
-  choice /c EH /n /m "Ajani simdi de baslatayim mi? (E=Evet / H=Hayir): "
+  choice /c EH /n /m "Ajani simdi de ^(gizli^) baslatayim mi? (E=Evet / H=Hayir): "
   if errorlevel 2 goto son
-  start "" /min "%TARGET%"
-  echo Ajan baslatildi ^(gorev cubugunda kucuk pencere^).
+  start "" wscript.exe "%TARGET%"
+  echo Ajan gizli olarak baslatildi ^(pencere yok^). Uygulamadan "Ajan BAGLI" oldugunu gorebilirsin.
 ) else (
   echo [!] Kisayol olusturulamadi. Yonetici olarak deneyebilir ya da
   echo     BASLA-TR.md dosyasindaki elle yontemi kullanabilirsin.

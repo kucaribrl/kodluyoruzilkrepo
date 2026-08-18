@@ -11,7 +11,8 @@ telefonda "yazdır" onayı, dialog, bilgisayara elle basma yok.
 3. Fiş çıkar. ✅
 
 Telefon ile bilgisayar aynı ağda olmak zorunda değil (ikisi de buluta bağlanır).
-Bilgisayar **açık ve bu pencere çalışır** olduğu sürece basar.
+Bilgisayar **açık ve ajan çalışır** olduğu sürece basar. (Ajanı görünür `baslat.bat`
+ile ya da penceresiz/otomatik — aşağıdaki "GİZLİ başlasın" bölümü — çalıştırabilirsin.)
 
 ---
 
@@ -65,19 +66,23 @@ satış fişini aç → **🖨️ Bilgisayardaki Yazıcıya Gönder**.
 
 ---
 
-## Bilgisayar her açıldığında kendi başlasın (önerilir)
+## Bilgisayar her açıldığında GİZLİ (penceresiz) başlasın — önerilen
 
-Ajanın, bilgisayar her açıldığında **kendiliğinden** çalışmasını istersen:
+O siyah terminal penceresini hiç görmek istemiyorsan, ajanın **arka planda, hiçbir pencere açılmadan** çalışmasını istiyorsun demektir. Şöyle yap:
 
 - Klasördeki **`otomatik-baslat-kur.bat`** dosyasına **çift tıkla**. Bitti! ✅
-  - Artık bilgisayar her açıldığında ajan **küçültülmüş bir pencere** olarak otomatik başlar.
-  - Kurulum sırasında "şimdi de başlatayım mı?" diye sorar; **E** dersen hemen çalışır.
+  - İlk sefer gerekli paketleri (bir defalık) kurar, sonra otomatik başlatmayı ayarlar.
+  - Artık bilgisayar her açıldığında ajan **hiçbir pencere görünmeden**, tamamen arka planda başlar — o terminal ekranı bir daha **çıkmaz**.
+  - "Şimdi de (gizli) başlatayım mı?" diye sorar; **E** dersen hemen sessizce çalışır.
+- **Çalışıyor mu?** Uygulamada **Ayarlar → Otomatik Yazıcı** ekranının üstündeki durum satırına bak: **🖨️ Ajan BAĞLI ✓** yazmalı.
 
-Geri almak (otomatik başlatmayı kapatmak) istersen:
-- **`otomatik-baslat-kaldir.bat`** dosyasına çift tıkla. (Ajanı yine `baslat.bat` ile elle açabilirsin.)
+Durdurmak / geri almak:
+- **`durdur.bat`** → arka planda çalışan ajanı durdurur.
+- **`otomatik-baslat-kaldir.bat`** → hem otomatik başlatmayı iptal eder hem çalışan ajanı durdurur.
 
-> Elle yapmak istersen: `Win + R` → `shell:startup` → Enter (Başlangıç klasörü açılır);
-> `baslat.bat`'a sağ tık → **Kısayol oluştur** → kısayolu bu klasöre taşı.
+> Nasıl çalışıyor? `otomatik-baslat-kur.bat`, Windows **Başlangıç** klasörüne, ajanı gizli başlatan **`gizli-baslat.vbs`**'ye bir kısayol koyar. VBScript pencereyi gizli açtığı için hiçbir şey görünmez. (İlk paket kurulumunun görünür olması normaldir; bir defalıktır.)
+
+> Not: Gizli ajanın penceresi olmadığı için **kapatmak** istediğinde `durdur.bat` kullan (ya da bilgisayarı yeniden başlatıp otomatik-baslat-kaldir ile iptal et).
 
 ---
 

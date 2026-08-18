@@ -808,7 +808,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-78'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-79'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -3370,7 +3370,8 @@ function yaziciKurulum(){
       <li>Depodaki <b>yazici-agent</b> klasörünü bilgisayara indir (GitHub → Code → Download ZIP → içinden bu klasör).</li>
       <li>Klasördeki <b>config.json</b>'u aç; <b>yaziciAdi</b> kısmına Windows'taki yazıcının tam adını yaz (Denetim Masası → Aygıtlar ve Yazıcılar'da görünen ad), <b>email</b> / <b>sifre</b> kısmına buluta girdiğin patron hesabını yaz.</li>
       <li>Klasörde <b>baslat.bat</b> dosyasına çift tıkla. "Yazıcı ajanı çalışıyor" yazınca hazır. (Pencereyi kapatma; bilgisayar açık kaldıkça basar.)</li>
-      <li><b>Bilgisayar her açıldığında otomatik başlasın:</b> klasördeki <b>otomatik-baslat-kur.bat</b>'a çift tıkla. Artık her açılışta ajan kendiliğinden (küçültülmüş pencerede) başlar. (Kapatmak için: <b>otomatik-baslat-kaldir.bat</b>.)</li>
+      <li><b>Açılışta otomatik + GİZLİ başlasın (istediğin bu):</b> klasördeki <b>otomatik-baslat-kur.bat</b>'a çift tıkla. Artık her açılışta ajan <b>hiçbir pencere görünmeden</b>, arka planda kendiliğinden başlar — o siyah terminal ekranı bir daha çıkmaz. (Durdurmak için: <b>durdur.bat</b> · otomatik başlatmayı iptal için: <b>otomatik-baslat-kaldir.bat</b>.)</li>
+      <li>Çalışıyor mu? Bu ekranın en üstündeki <b>durum satırına</b> bak: "🖨️ Ajan BAĞLI ✓" yazmalı.</li>
       <li>Bu ekrandaki <b>Otomatik baskı</b> düğmesini aç. Bitti — satış yaptıkça fiş çıkar.</li>
     </ol>
     <div class="okbox" style="margin-top:6px">Detaylı Türkçe rehber: repo içindeki <b>yazici-agent/BASLA-TR.md</b> dosyasında.</div>`);

@@ -10,9 +10,20 @@ echo.
 if exist "%LNK%" (
   del "%LNK%"
   echo [OK] Otomatik baslatma kaldirildi. Artik bilgisayar acildiginda kendiliginden calismayacak.
-  echo      ^(Istedigin zaman "baslat.bat" ile elle acabilirsin.^)
 ) else (
-  echo [i] Zaten kurulu degil ^(otomatik baslatma kisayolu bulunamadi^).
+  echo [i] Otomatik baslatma zaten kurulu degil.
 )
+
+rem --- Su an arka planda calisan gizli ajani da durdur ---
+echo.
+echo Arka planda calisan yazici ajani durduruluyor...
+taskkill /IM node.exe /F >nul 2>&1
+if errorlevel 1 (
+  echo [i] Calisan ajan bulunamadi ^(zaten kapaliydi^).
+) else (
+  echo [OK] Gizli ajan durduruldu.
+)
+echo.
+echo Tekrar baslatmak icin: "baslat.bat" ^(gorunur^) ya da "otomatik-baslat-kur.bat" ^(gizli/otomatik^).
 echo.
 pause
