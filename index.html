@@ -808,7 +808,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-80'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-81'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -3211,9 +3211,21 @@ async function fisEscPos(dataUrl){
 const CP857={'Ç':0x80,'ü':0x81,'é':0x82,'â':0x83,'ä':0x84,'à':0x85,'å':0x86,'ç':0x87,'ê':0x88,'ë':0x89,'è':0x8A,'ï':0x8B,'î':0x8C,'ı':0x8D,'Ä':0x8E,'Å':0x8F,'É':0x90,'æ':0x91,'Æ':0x92,'ô':0x93,'ö':0x94,'ò':0x95,'û':0x96,'ù':0x97,'İ':0x98,'Ö':0x99,'Ü':0x9A,'ø':0x9B,'£':0x9C,'Ø':0x9D,'Ş':0x9E,'ş':0x9F,'á':0xA0,'í':0xA1,'ó':0xA2,'ú':0xA3,'ñ':0xA4,'Ñ':0xA5,'Ğ':0xA6,'ğ':0xA7};
 const CP1254={'€':0x80,'Ç':0xC7,'ç':0xE7,'Ğ':0xD0,'ğ':0xF0,'İ':0xDD,'ı':0xFD,'Ö':0xD6,'ö':0xF6,'Ş':0xDE,'ş':0xFE,'Ü':0xDC,'ü':0xFC,'â':0xE2,'Â':0xC2,'î':0xEE,'û':0xFB,'é':0xE9,'£':0xA3};
 const TR_FOLD={'ş':'s','Ş':'S','ı':'i','İ':'I','ğ':'g','Ğ':'G','ç':'c','Ç':'C','ö':'o','Ö':'O','ü':'u','Ü':'U','â':'a','î':'i','û':'u','₺':'TL','€':'EUR','’':"'",'‘':"'",'“':'"','”':'"','–':'-','—':'-','…':'...'};
+// Yazici Turkce profilleri: harita + ESC t kod sayfasi BIRLIKTE (eskiden sayfa hic gonderilmiyordu → bozuk Turkce)
+const YAZ_PROFIL={
+  ascii:      {map:null,   cp:null},
+  cp857:      {map:'CP857', cp:null},   // sayfayi degistirme (yazici zaten 857 ise)
+  cp857_13:   {map:'CP857', cp:13},     // Epson tipi
+  cp857_28:   {map:'CP857', cp:28},     // Xprinter / cin POS tipi
+  cp1254:     {map:'CP1254',cp:null},
+  cp1254_16:  {map:'CP1254',cp:16},
+  cp1254_31:  {map:'CP1254',cp:31},     // Xprinter WPC1254
+  iso9_42:    {map:'CP1254',cp:42}      // ISO-8859-9 (Latin-5)
+};
+function yazProfil(){const p=YAZ_PROFIL[db.yaziciEnc||'cp857_28'];return p||YAZ_PROFIL.cp857_28;}
 function fisEscPosText(s){
   const pb=s.pb||'TL';const SYMT={TL:'TL',USD:'$',EUR:'€'};
-  const encAd=(db.yaziciEnc||'cp857');const MAP=encAd==='cp1254'?CP1254:(encAd==='ascii'?null:CP857);
+  const _pr=yazProfil();const MAP=_pr.map==='CP1254'?CP1254:(_pr.map==='CP857'?CP857:null);
   const num=v=>{let str=(+v||0).toFixed(2);if(str.endsWith('0'))str=str.slice(0,-1);return str;};
   const fmt=(v,cur)=>num(v)+(SYMT[cur||pb]||'TL');
   const m=cari(s.mid);
@@ -3236,7 +3248,8 @@ function fisEscPosText(s){
   const div=()=>{align(0);line('- '.repeat(LINE/2));};   // kesik çizgi (PDF gibi)
   const sline=()=>{align(0);line('-'.repeat(LINE));};    // düz çizgi (tablo altı)
   raw(0x1B,0x40);                              // ESC @ sıfırla
-  const cp=db.yaziciKodSayfa;if(cp!=null&&cp!==''&&!isNaN(+cp))raw(0x1B,0x74,(+cp)&0xFF); // ESC t (opsiyonel kod tablosu)
+  let cp=db.yaziciKodSayfa;if(cp==null||cp===''||isNaN(+cp))cp=_pr.cp;                    // elle giris > profil
+  if(cp!=null&&cp!==''&&!isNaN(+cp))raw(0x1B,0x74,(+cp)&0xFF); // ESC t — kod sayfasini ARTIK gonderiyoruz
   // FİRMA (çift boy, kalın, ortalı)
   // ===== BAŞLIK (firma + Satış Fişi) — PDF gibi =====
   align(1);bold(1);size(2,2);line((db.firma||'IQ BASICS'));size(1,1);bold(0);
@@ -3336,9 +3349,7 @@ function yaziciAyar(){
     <div class="mini" style="margin-top:4px">Açık: fiş, yazıcının kendi keskin fontuyla basılır (en net). Kapalı: fiş resim olarak basılır.</div>
     <label style="margin-top:10px">Türkçe karakter kod tablosu</label>
     <select onchange="db.yaziciEnc=this.value;save();toast('Kaydedildi — test fişiyle dene')" style="width:100%">
-      <option value="cp857" ${(db.yaziciEnc||'cp857')==='cp857'?'selected':''}>CP857 (Türkçe — yaygın)</option>
-      <option value="cp1254" ${db.yaziciEnc==='cp1254'?'selected':''}>Windows-1254 (Türkçe)</option>
-      <option value="ascii" ${db.yaziciEnc==='ascii'?'selected':''}>Sadece ASCII (Satis, Musteri — şıkız ama sorunsuz)</option>
+      ${[["cp857_28","✅ Türkçe · CP857 (t28) — Xprinter/çoğu POS"],["cp857_13","Türkçe · CP857 (t13) — Epson tipi"],["cp1254_31","Türkçe · Windows-1254 (t31)"],["iso9_42","Türkçe · ISO-8859-9 (t42)"],["cp1254_16","Türkçe · Windows-1254 (t16)"],["cp857","CP857 — sayfa gönderme (yazıcı zaten 857 ise)"],["cp1254","Windows-1254 — sayfa gönderme"],["ascii","🛟 Sadece ASCII (Satis, Musteri) — her yazıcıda okunur"]].map(([v,ad])=>`<option value="${v}" ${(db.yaziciEnc||'cp857_28')===v?'selected':''}>${ad}</option>`).join('')}
     </select>
     <label style="margin-top:8px">Kod tablosu no — ESC t (gelişmiş, boş bırak)</label><input inputmode="numeric" value="${db.yaziciKodSayfa!=null?db.yaziciKodSayfa:''}" placeholder="boş = yazıcı varsayılanı" onchange="db.yaziciKodSayfa=(this.value.trim()===''?null:+this.value);save();toast('Kaydedildi')" style="max-width:220px">
     <button class="btn ghost sm" style="margin-top:10px" onclick="yaziciMetinTest()">🧪 Net (metin) test fişi — Türkçe kontrol</button>
@@ -3384,8 +3395,8 @@ async function yaziciKodTara(){
   const encW=(str,map)=>{for(const ch of str){const c=ch.codePointAt(0);if(c<128)out.push(c);else if(map&&map[ch]!=null)out.push(map[ch]);else out.push(0x3F);}};
   raw(0x1B,0x40);raw(0x1B,0x61,1);raw(0x1B,0x45,1);encW('== KOD TABLOSU TARAMA ==',{});nl();raw(0x1B,0x45,0);raw(0x1B,0x61,0);
   encW('Dogru cikan satirin [etiketini]',{});nl();encW('bana yaz. Ustteki satir referans.',{});nl();nl();
-  const trials=[['1254 default',CP1254,null],['1254 t16',L5,16],['ISO t40',L5,40],['ISO t41',L5,41],['ISO t42',L5,42],['ISO t47',L5,47],
-    ['857 default',CP857,null],['857 t3',CP857,3],['857 t12',CP857,12],['857 t13',CP857,13],['857 t15',CP857,15],['857 t18',CP857,18]];
+  const trials=[['1254 default',CP1254,null],['1254 t16',L5,16],['1254 t31',L5,31],['ISO t40',L5,40],['ISO t41',L5,41],['ISO t42',L5,42],['ISO t43',L5,43],['ISO t47',L5,47],
+    ['857 default',CP857,null],['857 t3',CP857,3],['857 t12',CP857,12],['857 t13',CP857,13],['857 t15',CP857,15],['857 t18',CP857,18],['857 t28',CP857,28],['857 t36',CP857,36]];
   trials.forEach(([lab,map,t])=>{raw(0x1B,0x40);if(t!=null)raw(0x1B,0x74,t&0xFF);encW('['+lab+'] ',{});encW(SAMPLE,map);nl();});
   raw(0x1B,0x64,0x03);raw(0x1D,0x56,0x42,0x00);
   let bin='';for(let i=0;i<out.length;i+=8192)bin+=String.fromCharCode.apply(null,out.slice(i,i+8192));
