@@ -808,7 +808,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-77'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-78'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -3326,6 +3326,8 @@ async function yaziciyaGonder(id,sessiz){
 function yaziciAyar(){
   open_('🖨️ Otomatik Yazıcı (Bilgisayar)',`
     <div class="mini">Bilgisayara bağlı termal yazıcıdan <b>otomatik</b> fiş bassın. Bilgisayarda küçük bir "yazıcı ajanı" açık kalır; satış bitince fiş <b>kendiliğinden</b> çıkar — telefonda onay/dialog yok.</div>
+    <div id="yz-durum" class="mini" style="margin-top:10px;padding:10px 12px;background:var(--ln2);border-radius:10px">⏳ Ajan durumu kontrol ediliyor…</div>
+    <div style="text-align:right;margin-top:4px"><a onclick="yaziciDurumOku()" style="font-size:12px;color:var(--ind2);font-weight:800;cursor:pointer">🔄 Durumu yenile</a></div>
     <label class="switch" style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Satış bitince otomatik yazıcıya gönder</span><input type="checkbox" ${db.otoYazdir?'checked':''} onchange="db.otoYazdir=this.checked;save();toast(this.checked?'Otomatik baskı açık ✓':'Kapalı')"></label>
     <label style="margin-top:10px">Kopya sayısı</label><input type="number" inputmode="numeric" value="${+db.yaziciKopya||1}" min="1" max="5" onchange="db.yaziciKopya=Math.max(1,Math.min(5,+this.value||1));save()" style="max-width:100px">
     <hr style="margin:14px 0;border:none;border-top:1px solid #eee">
@@ -3347,6 +3349,19 @@ function yaziciAyar(){
     <button class="btn ghost sm" style="margin-top:10px" onclick="yaziciKurulum()">📋 Kurulum Adımları (Windows)</button>
     <button class="btn" style="margin-top:10px" onclick="yaziciTest()">🧪 Test Fişi Gönder (resim)</button>
     <div class="mini" style="margin-top:8px">Test için: kuyruğa örnek bir fiş atar; ajan açıksa yazıcıdan çıkar.</div>`);
+  yaziciDurumOku();
+}
+// Yazıcı ajanı bağlı mı? — ajanın buluta yazdığı "hayattayım" sinyalini oku
+function yaziciDurumOku(){
+  const el=$('yz-durum');if(!el)return;
+  if(!(bulutVar()&&bulutBaslat()&&_fb&&bulutGirisli&&bulutGirisli())){el.innerHTML='☁️ <b>Bulut girişi yok.</b> Otomatik baskı için önce patron hesabıyla buluta giriş yap (Ayarlar → Bulut).';return;}
+  el.innerHTML='⏳ Ajan durumu kontrol ediliyor…';
+  _fb.collection('isletme').doc(MAGAZA_ID).collection('durum').doc('yazici').get().then(d=>{
+    if(!d||!d.exists){el.innerHTML='❌ <b>Bilgisayar ajanı hiç bağlanmamış.</b> Bilgisayarda <b>baslat.bat</b> çalışıyor mu? Aşağıdaki kurulum adımlarını izle.';return;}
+    const x=d.data()||{};const yas=Math.round((Date.now()-(+x.ts||0))/1000);
+    if(x.online&&yas<70){el.innerHTML=`🖨️ <b style="color:var(--good)">Ajan BAĞLI ✓</b><br><span class="mini">${esc(x.cihaz||'bilgisayar')} · fiş yazıcısı: <b>${esc(x.yazici||'varsayılan')}</b>${x.etiket?' · etiket: '+esc(x.etiket):''} · ${yas} sn önce sinyal</span>`;}
+    else{const nekadar=yas>3600?Math.round(yas/3600)+' saat':yas>60?Math.round(yas/60)+' dk':yas+' sn';el.innerHTML=`❌ <b style="color:var(--bad)">Ajan ÇEVRİMDIŞI</b> — son sinyal <b>${nekadar}</b> önce.<br><span class="mini">Bilgisayarda <b>baslat.bat</b> penceresi kapanmış olabilir; tekrar aç ya da bilgisayarı yeniden başlat (otomatik başlatma kuruluysa kendi açılır).</span>`;}
+  }).catch(e=>{el.innerHTML='⚠️ Durum okunamadı: '+esc((e&&e.message)||''+e);});
 }
 function yaziciKurulum(){
   open_('📋 Yazıcı Ajanı Kurulumu (Windows)',`<div class="mini">Bir kez yapılır. Yazıcının bağlı olduğu bilgisayarda uygula.</div>

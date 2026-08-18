@@ -11,7 +11,7 @@ const { spawn } = require('child_process');
 const { initializeApp } = require('firebase/app');
 const { getAuth, signInWithEmailAndPassword } = require('firebase/auth');
 const { getFirestore, collection, query, where, onSnapshot,
-        doc, updateDoc, deleteDoc } = require('firebase/firestore');
+        doc, updateDoc, deleteDoc, setDoc } = require('firebase/firestore');
 
 // --- Uygulamayla aynı (herkese açık) bulut ayarı ---
 const FB_CONFIG = {
@@ -164,6 +164,14 @@ async function main() {
     console.error('   config.json içindeki e-posta/şifreyi kontrol et.\n');
     process.exit(1);
   }
+  // 💓 "Hayattayım" sinyali — uygulama "Ajan bağlı ✓" göstersin diye buluta yaz (20 sn'de bir)
+  const heartbeat = async () => {
+    try { await setDoc(doc(db, 'isletme', MAGAZA_ID, 'durum', 'yazici'),
+      { online: true, ts: Date.now(), cihaz: os.hostname(), yazici: cfg.yaziciAdi || 'varsayılan', etiket: cfg.etiketYaziciAdi || '' }); }
+    catch (e) { /* sessiz */ }
+  };
+  await heartbeat();
+  setInterval(heartbeat, 20000);
   const q = query(collection(db, 'isletme', MAGAZA_ID, 'yazdirma'), where('durum', '==', 'bekliyor'));
   console.log('\n✅ Yazıcı ajanı çalışıyor — yeni fişler bekleniyor. (Bu pencereyi kapatma.)\n');
   onSnapshot(q, snap => {
