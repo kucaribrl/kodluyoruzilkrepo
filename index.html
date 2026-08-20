@@ -808,7 +808,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-83'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-84'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1459,6 +1459,7 @@ function modulListe(){
   ];
   const list=all.filter(m=>canSee(m.v)&&!navVs.includes(m.v)).map(m=>({ic:m.ic,ad:m.ad,bd:m.bd,act:`go('${m.v}')`}));
   if(db.rol==='depocu')list.unshift({ic:'📋',ad:'Sayım',act:'depoSayim()'});
+  if(db.rol==='magaza'){list.unshift({ic:'📷',ad:'Barkod Tara',act:'kameraTara()'});list.unshift({ic:'➕',ad:'Yeni Satış',act:'formSatis()'});}
   if(canHammadde())list.unshift({ic:'🗂️',ad:'Envanter',act:'envanterAc()'}); // sadece malzemeler (kumaş/aksesuar...)
   if(paraGoster())list.push({ic:'💰',ad:'Maliyet',act:'maliyetAc()'}); // koleksiyon maliyetleri — üretim dışında da erişim
   return list;
@@ -1752,7 +1753,9 @@ function malSipGonder(id){const s=db.malSiparis.find(x=>x.id===id);if(!s)return;
   if(s.beklenen)t+=`\nİstenen teslim: ${dstr(s.beklenen)}`;
   if(s.not)t+=`\nNot: ${s.not}`;
   const ir=(db.firmaWp||db.firmaTel||'');if(ir)t+=`\n\n📞 ${firma}: ${ir}`;
-  const ted=s.tedId?cari(s.tedId):null;waAc(ted?ted.tel:'',t);
+  let ted=s.tedId?cari(s.tedId):null;
+  if(!ted&&s.ted)ted=db.cariler.find(c=>(c.tip==='tedarikci'||c.tip==='fason')&&(c.ad||'').toLowerCase()===(s.ted||'').toLowerCase()); // isimle kayıtlıysa numarasını kullan
+  waAc(ted?ted.tel:'',t);
 }
 function malSipIptal(id){askConfirm('Sipariş iptal edilsin mi?',()=>{const s=db.malSiparis.find(x=>x.id===id);if(s)s.durum='iptal';save();closeM();envView='siparis';rEnvanter();toast('Sipariş iptal edildi');});}
 function malSipSil(id){askConfirm('Sipariş kaydı silinsin mi?',()=>{db.malSiparis=db.malSiparis.filter(x=>x.id!==id);save();closeM();envView='siparis';rEnvanter();toast('Silindi');});}
@@ -2945,7 +2948,7 @@ async function fisWhatsapp(id){const s=db.satislar.find(x=>x.id===id);const m=ca
   if(imgs.length&&navigator.share){try{const files=imgs.map((im,i)=>dataURLtoFile(im.src,'urun-'+id+'-'+i+'.jpg'));
     if(!navigator.canShare||navigator.canShare({files})){await navigator.share({files,text:txt});return}
   }catch(e){if(e&&e.name==='AbortError')return}}
-  window.open(`https://wa.me/${ph}?text=${encodeURIComponent(txt)}`,'_blank');
+  waLink(ph,txt);
 }
 function fisYazdir(id){faturaYazdir(id,false)}
 // Profesyonel A4 Fatura (fiyatlı) / İrsaliye (fiyatsız)
@@ -3733,7 +3736,14 @@ function cekFotoGoster(cekId){const k=db.cekler.find(x=>x.id===cekId);if(!k||!k.
 function sonTahsilat(id){let t=0;(db.hareketler||[]).filter(h=>h.cariId===id&&h.tip==='tahsilat'&&h.tutar>0).forEach(h=>{if(h.tarih>t)t=h.tarih});db.satislar.filter(s=>s.mid===id&&s.odenen>0).forEach(s=>{if(s.tarih>t)t=s.tarih});return t}
 function gecikmeGun(id){const t=sonTahsilat(id);if(t)return Math.floor((Date.now()-t)/86400000);const ilk=db.satislar.filter(s=>s.mid===id).map(s=>s.tarih).sort((a,b)=>a-b)[0];return ilk?Math.floor((Date.now()-ilk)/86400000):0}
 function waTel(t){let ph=((t)||'').replace(/\D/g,'');if(!ph)return '';if(ph.length===10)ph='90'+ph;else if(ph[0]==='0')ph='9'+ph;return ph}
-function waAc(tel,txt){const ph=waTel(tel);const u=`https://wa.me/${ph}?text=${encodeURIComponent(txt)}`;if(!ph&&navigator.share){navigator.share({text:txt}).catch(()=>{});return;}window.open(u,'_blank');}
+function waLink(ph,txt){const u='https://wa.me/'+(ph||'')+'?text='+encodeURIComponent(txt);const w=window.open(u,'_blank');if(!w)location.href=u;} // popup engellenirse aynı sekmede aç
+function waAc(tel,txt){const ph=waTel(tel);
+  if(ph){waLink(ph,txt);return;}
+  // numara yok → kullanıcıya SÖYLE, sonra paylaş/kopyala yedeği
+  toast('📵 Bu kişinin telefonu kayıtlı değil — kişiyi WhatsApp\'ta kendin seçeceksin (cari kartına numara eklersen direkt açılır)');
+  if(navigator.share){navigator.share({text:txt}).catch(()=>{});return;}
+  try{if(navigator.clipboard)navigator.clipboard.writeText(txt).then(()=>toast('📋 Mesaj kopyalandı — WhatsApp\'ta yapıştır')).catch(()=>{});}catch(e){}
+  waLink('',txt);}
 function waHatirlat(id){const m=cari(id);if(!m)return;
   const b=Math.max(0,+m.bakiye||0);const firma=db.firma||'IQ Basics';
   const msg=`Merhaba ${m.ad} 👋\n*${firma}*\n\n💳 Güncel bakiyeniz: *${TL(b)}*${b>0?' (borç)':''}\nUygun olduğunuzda ödeme yapabilirseniz seviniriz. Teşekkürler 🙏`;
@@ -4309,7 +4319,7 @@ function fasonHatirlat(id,x){const i=db.isemirleri.find(v=>v.id===id);if(!i)retu
   const kalan=durakYolda(d);const gec=ieGecikme(i);
   const txt=`🏭 *${db.firma||'IQ Basics'}* — Hatırlatma\nİş Emri #${i.id} · ${i.urun}${i.kod?' ('+i.kod+')':''}\n${d.ad} işlemi${gec>0?' · *'+gec+' gün gecikti*':''}\nBekleyen: *${kalan} ${i.birim||'adet'}*\nMüsait olunca teslim rica ederiz 🙏\n— ${db.firma||'IQ Basics'}${db.firmaTel?' · '+db.firmaTel:''}`;
   let ph=((f&&f.tel)||'').replace(/\D/g,'');if(ph){if(ph.length===10)ph='90'+ph;else if(ph[0]==='0')ph='9'+ph}
-  window.open(`https://wa.me/${ph}?text=${encodeURIComponent(txt)}`,'_blank');
+  waLink(ph,txt);
 }
 
 function rUretim(){
@@ -5082,7 +5092,7 @@ async function isEmriWa(id,x){
   let ph=((f&&f.tel)||'').replace(/\D/g,'');if(ph){if(ph.length===10)ph='90'+ph;else if(ph[0]==='0')ph='9'+ph}
   const _wfoto=ieUrunFoto(i);
   if(_wfoto&&navigator.share){try{const file=dataURLtoFile(_wfoto,'isemri-'+id+'.jpg');if(!navigator.canShare||navigator.canShare({files:[file]})){await navigator.share({files:[file],text:txt});return}}catch(e){if(e&&e.name==='AbortError')return}}
-  window.open(`https://wa.me/${ph}?text=${encodeURIComponent(txt)}`,'_blank');
+  waLink(ph,txt);
 }
 // 📄 İş emrini RAPOR/BELGE olarak çiz — künye kartı + renk + aşama tablosu + imza
 function isEmriResimYap(id,x,cb){
@@ -5260,9 +5270,7 @@ function sipBildir(sid){const s=db.satislar.find(x=>x.id===sid);if(!s)return;con
   const durum={onaylandi:'onaylandı, hazırlığa alınıyor ✅',hazirlaniyor:'hazırlanıyor 📦',kargoda:'kargoya verildi, yolda 🚚',teslim:'teslim edildi 🎉 teşekkürler'}[a.k]||a.t;
   const kal=(s.kalemler||[]).map(k=>'• '+k.urun+' ×'+k.mik).join('\n');
   const txt=`Merhaba${m?' '+m.ad:''} 👋\n\n*${db.firma||'IQ Basics'}* siparişiniz *${durum}*\n\n🛍️ *Sipariş #${s.id}*\n${kal}\n\n💵 *Toplam: ${TL(s.tutar)}*`;
-  let ph=(((m&&m.tel)||s.tel||'')).replace(/\D/g,'');if(ph){if(ph.length===10)ph='90'+ph;else if(ph[0]==='0')ph='9'+ph}
-  if(navigator.share){navigator.share({text:txt}).catch(()=>{});return}
-  window.open(`https://wa.me/${ph}?text=${encodeURIComponent(txt)}`,'_blank');}
+  waAc(((m&&m.tel)||s.tel||''),txt);}
 function portalOnay(id,override,force){
   const o=db.bekleyenPortal.find(x=>x.id===id);if(!o)return;
   // stok yeterlilik kontrolü — eksiye düşürecekse admin'e sor
@@ -5463,10 +5471,7 @@ function cariKulUret(id){const c=cari(id);if(!c)return;const tr={'ç':'c','ğ':'
 function cariKulSil(id){const c=cari(id);if(!c)return;askConfirm(esc(c.ad)+' portal girişini silmek istiyor musun?',()=>{c.kullanici='';c.sifre='';save();cizPortalKul(($('pk-ara')||{}).value||'');toast('Giriş bilgisi silindi')},'Sil')}
 function cariKulPaylas(id){const c=cari(id);if(!c||!c.kullanici)return;const url=location.href.split('#')[0]+'#siparis';
   const t=`${db.firma||'IQ Basics'} toptan sipariş portalı giriş bilgileriniz:\n\n🔗 ${url}\n👤 Kullanıcı adı: ${c.kullanici}\n🔑 Şifre: ${c.sifre}\n\nGiriş yapıp katalogdan sipariş verebilirsiniz.`;
-  let ph=((c.tel||'').replace(/\D/g,''));if(ph){if(ph.length===10)ph='90'+ph;else if(ph[0]==='0')ph='9'+ph}
-  if(navigator.share){navigator.share({text:t}).catch(()=>{});return}
-  if(ph)window.open(`https://wa.me/${ph}?text=${encodeURIComponent(t)}`,'_blank');
-  else if(navigator.clipboard)navigator.clipboard.writeText(t).then(()=>toast('Bilgiler kopyalandı ✓')).catch(()=>{});}
+  waAc(c.tel||'',t);}
 // 🔗 Davet linki & QR — rol (+cari) seç, hazır link/QR üret
 let davetGenRol='musteri';
 function bulutDavetLinki(){davetGenRol='musteri';open_('🔗 Davet Linki & QR',`
@@ -5789,18 +5794,12 @@ function pazarUrunIndirimKaldir(uid){const u=urun(uid);if(!u)return;u.promosyon=
 function pazarSepetHatirlat(mid){const m=cari(mid);if(!m)return toast('Müşteri bulunamadı');
   const its=_pzTerk[mid]||'';const ind=kademeler();const indTxt=ind.length?`\n\n💰 Toptan indirim: ${ind.map(k=>k.min+'+ %'+k.ind).join(' · ')}`:'';
   const txt=`Merhaba ${m.ad} 👋\n\nSepetinizde bıraktığınız ürünler:\n${its?its.split(', ').map(x=>'• '+x).join('\n'):'—'}\n\nStoklar tükenmeden siparişinizi tamamlamak ister misiniz? Beğendikleriniz için size özel fiyat da ayarlayabiliriz.${indTxt}\n\n📞 ${db.firmaWp||db.firmaTel||''}`;
-  let ph=((m.tel||'')).replace(/\D/g,'');if(ph){if(ph.length===10)ph='90'+ph;else if(ph[0]==='0')ph='9'+ph;}
-  if(navigator.share){navigator.share({text:txt}).catch(()=>{});return}
-  if(ph)window.open(`https://wa.me/${ph}?text=${encodeURIComponent(txt)}`,'_blank');
-  else if(navigator.clipboard)navigator.clipboard.writeText(txt).then(()=>toast('Mesaj kopyalandı ✓'));
+  waAc(m.tel||'',txt);
 }
 function pazarMesaj(mid){const m=cari(mid);if(!m)return toast('Müşteri bulunamadı');
   const ind=kademeler();const indTxt=ind.length?`\n\n💰 Toptan indirim: ${ind.map(k=>k.min+'+ %'+k.ind).join(' · ')}`:'';
   const txt=`Merhaba ${m.ad} 👋\n\n*${db.firma||'IQ Basics'}* kataloğumuza göz attığınızı gördük. Beğendiğiniz ürünler için size özel fiyat/indirim ayarlayabiliriz — yardımcı olalım mı?${indTxt}`;
-  let ph=((m.tel||'')).replace(/\D/g,'');if(ph){if(ph.length===10)ph='90'+ph;else if(ph[0]==='0')ph='9'+ph;}
-  if(navigator.share){navigator.share({text:txt}).catch(()=>{});return}
-  if(ph)window.open(`https://wa.me/${ph}?text=${encodeURIComponent(txt)}`,'_blank');
-  else if(navigator.clipboard)navigator.clipboard.writeText(txt).then(()=>toast('Mesaj kopyalandı ✓'));
+  waAc(m.tel||'',txt);
 }
 function portalGonder(){
   const ad=(portalMusAd||'').trim();if(!ad)return toast('Adınızı / firma adınızı yazın');
