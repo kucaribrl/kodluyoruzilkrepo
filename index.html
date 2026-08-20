@@ -495,6 +495,7 @@ function seed(){return{
   malSiparis:[],
   malKat:[],
   durakSablon:JSON.parse(JSON.stringify(DURAK_SABLON_VARSAYILAN)),
+  rolAyar:{},
 };}
 // 🧾 Durak kontrol listesi — durak türüne göre varsayılan maddeler (Ayarlar'dan düzenlenebilir)
 const DURAK_SABLON_VARSAYILAN={
@@ -514,7 +515,7 @@ function durakKategori(ad){const s=(ad||'').toLowerCase();
 function durakSablonListe(ad){const k=durakKategori(ad);const t=(typeof db!=='undefined'&&db&&db.durakSablon)||DURAK_SABLON_VARSAYILAN;return (t[k]||[]).slice();}
 function sablonKopya(ad){return durakSablonListe(ad).map(x=>({ad:x,ok:false}));}
 let db=load();
-function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(!d||!d.urunler)return seed();seqFix(d);if(!d.kademe)d.kademe=[{min:20,ind:3},{min:50,ind:6},{min:100,ind:10}];if(!d.portalFav)d.portalFav=[];if(d.minSiparis==null)d.minSiparis=0;if(!d.portalTaslak)d.portalTaslak=[];if(d.kampanya===undefined)d.kampanya=null;if(!d.duzenliGider)d.duzenliGider=[];if(!d.maliyetler)d.maliyetler=[];if(!d.islenenSiparis)d.islenenSiparis=[];if(!d.malSiparis)d.malSiparis=[];if(!d.malKat)d.malKat=[];if(!d.durakSablon)d.durakSablon=JSON.parse(JSON.stringify(DURAK_SABLON_VARSAYILAN));return d}catch(e){return seed()}}
+function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(!d||!d.urunler)return seed();seqFix(d);if(!d.kademe)d.kademe=[{min:20,ind:3},{min:50,ind:6},{min:100,ind:10}];if(!d.portalFav)d.portalFav=[];if(d.minSiparis==null)d.minSiparis=0;if(!d.portalTaslak)d.portalTaslak=[];if(d.kampanya===undefined)d.kampanya=null;if(!d.duzenliGider)d.duzenliGider=[];if(!d.maliyetler)d.maliyetler=[];if(!d.islenenSiparis)d.islenenSiparis=[];if(!d.malSiparis)d.malSiparis=[];if(!d.malKat)d.malKat=[];if(!d.durakSablon)d.durakSablon=JSON.parse(JSON.stringify(DURAK_SABLON_VARSAYILAN));if(!d.rolAyar)d.rolAyar={};return d}catch(e){return seed()}}
 function kademeler(){return (db.kademe&&db.kademe.length)?db.kademe.slice().filter(k=>+k.min>0).sort((a,b)=>a.min-b.min):[]}
 function kademeIsk(mik){let ind=0;kademeler().forEach(k=>{if((+mik||0)>=(+k.min||0))ind=+k.ind||0});return ind}
 function portalKalemFiyat(k){const u=urun(k.uid);if(u&&u.fiyatGizli)return {base:0,ind:0,net:0,gizli:true};const base=u?portalFiyat(u):(+k.fiyat||0);
@@ -565,7 +566,7 @@ const CANLI_DOMEN={
   satis:['satislar','bekleyenPortal','islenenSiparis'],
   cek:['cekler'],
   uretim:['isemirleri'],
-  ayar:['firma','firmaSlogan','firmaAdres','firmaTel','firmaWp','firmaTelegram','firmaLogo','firmaSite','satici','kurUSD','kurEUR','seq','kademe','minSiparis','kampanya','kurTarih','portalFav','portalTaslak','duzenliGider','cldName','cldPreset']
+  ayar:['firma','firmaSlogan','firmaAdres','firmaTel','firmaWp','firmaTelegram','firmaLogo','firmaSite','satici','kurUSD','kurEUR','seq','kademe','minSiparis','kampanya','kurTarih','portalFav','portalTaslak','duzenliGider','cldName','cldPreset','rolAyar']
 };
 // Rol → hangi alanları OKUR / YAZAR (veri seviyesinde sınır; arayüz gizlemesiyle birlikte)
 const _CTUM=Object.keys(CANLI_DOMEN);
@@ -808,7 +809,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-84'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-85'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1211,7 +1212,21 @@ const ROLLER={
   fason:{ad:'Fasoncu (Üretim)',ic:'🧵',kar:false,para:false,urunYaz:false,hammadde:true,views:'panel,uretim,stok,cari,ayarlar,daha'},
   fasontakip:{ad:'Fason Takipçi',ic:'🧵',kar:false,para:false,urunYaz:false,hammadde:true,views:'panel,uretim,stok,ayarlar,daha'},
 };
-function yetki(){return ROLLER[db.rol]||ROLLER.patron}
+// Rolün EFEKTİF yetkisi: koddaki varsayılan + patronun Ayarlar'dan yaptığı değişiklik (db.rolAyar)
+function rolYetki(rol){
+  const base=ROLLER[rol]||ROLLER.patron;
+  if(rol==='patron')return base; // patron kilitlenemez, hep tam yetki
+  const ov=(db.rolAyar||{})[rol];
+  if(!ov)return base;
+  const y={...base};
+  ['kar','para','urunYaz','hammadde'].forEach(k=>{if(ov[k]!=null)y[k]=!!ov[k];});
+  const set=new Set(base.views.split(','));
+  if(ov.views)Object.keys(ov.views).forEach(v=>{if(ov.views[v])set.add(v);else set.delete(v);});
+  ['panel','ayarlar','daha'].forEach(v=>set.add(v)); // bu üçü kapatılamaz
+  y.views=[...set].join(',');
+  return y;
+}
+function yetki(){return rolYetki(db.rol)}
 function karGoster(){return !!yetki().kar}
 function paraGoster(){return !!yetki().para}
 function canUrunYaz(){return !!yetki().urunYaz}
@@ -1220,9 +1235,11 @@ function canSee(v){if(v==='envanter')return canHammadde();return yetki().views.s
 function rolRenk(k){return {patron:'#b5820a',ortak:'#24487a',magaza:'#0f9d63',depocu:'#2d6cdf',fason:'#7a4fd0'}[k]||'#24487a'}
 function navFor(){
   const r=db.rol;
-  if(r==='depocu')return [['panel','📊','Panel'],['stok','📦','Stok']];
-  if(r==='fason')return [['panel','📊','Panel'],['uretim','🏭','Üretim'],['stok','📦','Stok']];
-  return [['panel','📊','Panel'],['satis','🧾','Satış'],['stok','📦','Stok'],['cari','👥','Cari']];
+  let list;
+  if(r==='depocu')list=[['panel','📊','Panel'],['stok','📦','Stok']];
+  else if(r==='fason')list=[['panel','📊','Panel'],['uretim','🏭','Üretim'],['stok','📦','Stok']];
+  else list=[['panel','📊','Panel'],['satis','🧾','Satış'],['stok','📦','Stok'],['cari','👥','Cari']];
+  return list.filter(x=>x[0]==='panel'||canSee(x[0])); // izin kapatıldıysa alt menüden de düşer
 }
 
 /* =================== ROUTER =================== */
@@ -1310,6 +1327,47 @@ function rolSec(){
   open_('Rol Önizleme (deneme)',Object.keys(ROLLER).map(k=>`<div class="row" onclick="setRol('${k}')"><div class="av" style="background:${rolRenk(k)}">${ROLLER[k].ic}</div><div class="mid"><div class="t">${ROLLER[k].ad}</div><div class="s">${ROLLER[k].kar?'kâr görür':'kâr gizli'}</div></div>${db.rol===k?'<span class="pill ok">aktif</span>':''}</div>`).join('')+'<div class="mini" style="text-align:center;margin-top:14px">Sadece farklı rollerin ne gördüğünü denemen için. Gerçekte personel kendi şifresiyle girer (Ayarlar → Bulut → Personel Girişi).</div>');
 }
 function setRol(k){db.rol=k;save();closeM();go('panel');toast(ROLLER[k].ad+' görünümü')}
+/* ===== 🔐 ROL İZİNLERİ — patron her rolün ekran/yetkilerini buradan yönetir ===== */
+const RI_EKRAN=[['satis','🧾 Satış'],['stok','📦 Stok'],['cari','👥 Cari'],['kasa','🏦 Kasa'],['cek','🏷️ Çek'],['uretim','🏭 Üretim'],['portal','🛍️ Portal'],['rapor','📊 Rapor']];
+const RI_YETKI=[['kar','💰 Kâr & maliyet görür','alış fiyatı, kâr, birim maliyet'],['para','🏦 Para/finans görür','bakiyeler, kasa özetleri, ciro kutuları'],['urunYaz','✏️ Ürün ekler/düzenler','ürün kartı açma, fiyat/stok düzeltme, sayım'],['hammadde','🗂️ Envanter erişimi','kumaş/aksesuar stoğu ve malzeme siparişleri']];
+let _riRol='magaza';
+function rolIzinAyar(){
+  if(!paraGoster())return toast('Yetkiniz yok');
+  open_('🔐 Rol İzinleri',`<div class="mini">Rol seç, izinlerini aç/kapat — anında kaydedilir ve senkronla tüm cihazlara gider. <b>Patron her zaman tam yetkilidir</b> (kilitlenme olmaz).</div>
+    <div class="iechips" id="ri-roller" style="margin:10px 0 4px"></div>
+    <div id="ri-body"></div>
+    <button class="btn ghost sm" style="margin-top:12px" onclick="rolIzinSifirla()">↩︎ Bu rolü varsayılana döndür</button>`);
+  cizRolIzin();
+}
+function rolIzinSec(r){_riRol=r;cizRolIzin();}
+function cizRolIzin(){
+  const ch=$('ri-roller');if(!ch)return;
+  const roller=Object.keys(ROLLER).filter(r=>r!=='patron');
+  ch.innerHTML=roller.map(r=>`<div class="c ${_riRol===r?'on':''}" onclick="rolIzinSec('${r}')">${ROLLER[r].ic} ${ROLLER[r].ad}${(db.rolAyar||{})[r]?' •':''}</div>`).join('');
+  const y=rolYetki(_riRol);const vs=new Set(y.views.split(','));
+  const b=$('ri-body');if(!b)return;
+  b.innerHTML=
+    `<div class="sec" style="margin-top:8px">Ekranlar</div><div class="card" style="padding:4px 13px">`+
+    RI_EKRAN.map(([v,ad])=>`<label class="ckrow" style="margin:8px 0"><input type="checkbox" ${vs.has(v)?'checked':''} onchange="rolIzinSet('${_riRol}','v','${v}',this.checked)"><span>${ad}</span></label>`).join('')+
+    `</div><div class="sec">Yetkiler</div><div class="card" style="padding:4px 13px">`+
+    RI_YETKI.map(([k,ad,sub])=>`<label class="ckrow" style="margin:8px 0"><input type="checkbox" ${y[k]?'checked':''} onchange="rolIzinSet('${_riRol}','y','${k}',this.checked)"><span>${ad}<br><small style="color:var(--sub);font-weight:600">${sub}</small></span></label>`).join('')+
+    `</div>${_riRol==='ortak'?'<div class="mini" style="margin-top:8px;color:var(--warn)">⚠️ Ortak\'tan para/kâr yetkisini kısarsan o hesap kısıtlı görünüme düşer (PIN ile Patron\'a dönüş her zaman açık).</div>':''}`;
+}
+function rolIzinSet(rol,tur,k,val){
+  db.rolAyar=db.rolAyar||{};const o=db.rolAyar[rol]=db.rolAyar[rol]||{};
+  if(tur==='v'){o.views=o.views||{};o.views[k]=!!val;}
+  else o[k]=!!val;
+  save();cizRolIzin();
+  if(db.rol===rol){try{render()}catch(e){}}
+  toast('Kaydedildi ✓'+(val?' — açıldı':' — kapatıldı'));
+}
+function rolIzinSifirla(){
+  askConfirm(ROLLER[_riRol].ad+' rolü varsayılan izinlere döndürülsün mü?',()=>{
+    if(db.rolAyar)delete db.rolAyar[_riRol];
+    save();cizRolIzin();if(db.rol===_riRol){try{render()}catch(e){}}
+    toast('↩︎ '+ROLLER[_riRol].ad+' varsayılana döndü');
+  },'Sıfırla');
+}
 // Kısıtlı roldeyken Patron'a dönüş — PIN korumalı (personel kendini yükseltemesin)
 function yoneticiDon(){
   if(!db.pin)return askConfirm('Güvenlik için önce Ayarlar → Uygulama Kilidi\'nden PIN koymanı öneririm. Yine de Patron moduna dönülsün mü?',()=>setRol('patron'),'Patron\'a Dön');
@@ -1763,6 +1821,29 @@ function malSipSil(id){askConfirm('Sipariş kaydı silinsin mi?',()=>{db.malSipa
 function urunKapak(u){const r=(u.renkler||[]).find(x=>x&&typeof x==='object'&&x.foto);return r?r.foto:''}
 // ürünün tüm görselleri (renk fotoğrafları + genel fotolar) — galeri için
 function urunGaleri(u){if(!u)return [];const g=[];(u.fotolar||[]).forEach(f=>{if(f)g.push({foto:f,ad:''})});(u.renkler||[]).forEach(r=>{if(r&&typeof r==='object'&&r.foto)g.push({foto:r.foto,ad:r.ad||''})});return g}
+/* ===== 📷 ÜRÜN FOTOĞRAF YÖNETİCİSİ — renk başına + genel fotolar (belirgin giriş) ===== */
+function urunFotoYonet(id){const u=urun(id);if(!u)return;
+  open_('📷 Fotoğraflar · '+esc(u.ad),`<div class="mini">Her rengin KENDİ fotoğrafı olur — portalda, fişte ve barkod etiketinde o görünür. Kutuya dokun → galeri/kamera açılır.</div>
+    <div id="uf-body"></div>
+    <button class="btn ghost sm" style="margin-top:12px" onclick="$('uf-genel').click()">＋ Genel fotoğraf ekle</button>
+    <input type="file" accept="image/*" id="uf-genel" style="display:none" onchange="urunFotoGenel(${id},this)">`);
+  cizUrunFotoY(id);}
+function cizUrunFotoY(id){const u=urun(id);const b=$('uf-body');if(!u||!b)return;
+  const rs=renkObjs(u);
+  b.innerHTML=(rs.length?rs.map((r,i)=>`<div style="display:flex;align-items:center;gap:12px;margin-top:12px">
+    <div onclick="$('ufr-${i}').click()" style="width:68px;height:68px;flex:0 0 auto;border-radius:14px;overflow:hidden;background:${r.hex||hexFromAd(r.ad)||'#c9ccd0'};display:flex;align-items:center;justify-content:center;cursor:pointer;border:1.5px solid var(--ln);font-size:24px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.45)">${r.foto?`<img src="${r.foto}" style="width:100%;height:100%;object-fit:cover">`:'📷'}</div>
+    <div style="flex:1;min-width:0"><b>${esc(r.ad||'—')}</b><div class="mini">${r.foto?'dokun → değiştir':'foto yok — kutuya dokun'}</div></div>
+    ${r.foto?`<a onclick="urunFotoSilY(${id},${i})" style="color:var(--bad);font-weight:700;font-size:12.5px;cursor:pointer;flex:0 0 auto">kaldır</a>`:''}
+    <input type="file" accept="image/*" id="ufr-${i}" style="display:none" onchange="urunFotoRenkY(${id},${i},this)">
+  </div>`).join(''):'<div class="mini" style="margin-top:10px">Bu üründe renk tanımlı değil — "＋ Genel fotoğraf ekle" ile foto koyabilirsin.</div>')
+  +(((u.fotolar||[]).length)?`<div class="sec" style="margin-top:14px">Genel Fotolar</div><div style="display:flex;gap:10px;flex-wrap:wrap">`+(u.fotolar||[]).map((f,i)=>`<div style="position:relative"><img src="${f}" style="width:68px;height:68px;border-radius:14px;object-fit:cover;border:1.5px solid var(--ln)"><a onclick="urunFotoGenelSilY(${id},${i})" style="position:absolute;top:-7px;right:-7px;background:var(--bad);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:12px;cursor:pointer">✕</a></div>`).join('')+`</div>`:'');
+}
+function urunFotoRenkY(id,i,inp){const f=inp.files&&inp.files[0];if(!f)return;toast('⏳ Yükleniyor...');
+  resimSecYukle(f,d=>{const u=urun(id);const rs=renkObjs(u);if(rs[i]){rs[i].foto=d;save();cizUrunFotoY(id);toast('📷 Fotoğraf eklendi ✓');}},1000,0.75);}
+function urunFotoSilY(id,i){const u=urun(id);const rs=renkObjs(u);if(rs[i]){rs[i].foto='';save();cizUrunFotoY(id);toast('Kaldırıldı');}}
+function urunFotoGenel(id,inp){const f=inp.files&&inp.files[0];if(!f)return;toast('⏳ Yükleniyor...');
+  resimSecYukle(f,d=>{const u=urun(id);u.fotolar=u.fotolar||[];u.fotolar.push(d);save();cizUrunFotoY(id);toast('📷 Fotoğraf eklendi ✓');},1000,0.75);}
+function urunFotoGenelSilY(id,i){const u=urun(id);if(u.fotolar){u.fotolar.splice(i,1);save();cizUrunFotoY(id);toast('Kaldırıldı');}}
 function urunDetay(id){
   const u=urun(id);const pb=u.pb||'TL';const kar=u.satis-u.alis, karY=u.alis?Math.round((kar/u.alis)*100):0;
   const kapak=urunKapak(u);
@@ -1786,6 +1867,7 @@ function urunDetay(id){
     ${u.islemler&&u.islemler.length?`<div class="sec" style="margin-top:14px">🧵 İşlem Takibi</div><div class="dbox">${u.islemler.map(it=>`<div class="dline"><span>${esc(it.islem)}</span><b>${esc((cari(it.fasonId)||{}).ad||'—')}</b></div>`).join('')}</div>`:''}
     ${u.not?`<div class="infobox" style="margin-top:12px">📝 ${esc(u.not)}</div>`:''}
     ${(canUrunYaz()||canSee('satis'))?`<div class="g2" style="margin-top:16px">${canUrunYaz()?`<button class="btn ghost sm" onclick="formUrun(${id})">✏️ Düzenle</button>`:''}${canSee('satis')?`<button class="btn sm" onclick="closeM();go('satis');setTimeout(()=>formSatis(${id}),150)">🧾 Satışa Ekle</button>`:''}</div>`:''}
+    ${canUrunYaz()?`<button class="btn ghost sm" style="margin-top:8px" onclick="urunFotoYonet(${id})">📷 Fotoğraflar — ekle / değiştir</button>`:''}
     ${canSayim()?`<button class="btn ghost sm" style="margin-top:10px" onclick="closeM();setTimeout(()=>formSayim(${id}),120)">📋 Sayım / Raf Gir</button>`:''}
     ${canUrunYaz()?`<div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="cogaltUrun(${id})">📄 Çoğalt</button>${hasRenkStok(u)?`<button class="btn ghost sm" onclick="barkodYazdir(${id})">🏷️ Barkod Yazdır</button>`:''}</div>
     <button class="btn ghost sm" style="margin-top:10px;color:${u.pasif?'var(--good)':'var(--bad)'}" onclick="urunAktifToggle(${id});closeM()">${u.pasif?'✅ Aktif Et':'🗄️ Pasife Al (arşivle)'}</button>`:''}
@@ -6670,7 +6752,8 @@ function rAyarlar(){
     <div class="row" onclick="formKur()"><div class="av o">💱</div><div class="mid"><div class="t">Kur</div><div class="s">$ ${db.kurUSD.toFixed(2)} · € ${db.kurEUR.toFixed(2)}</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="yaziciAyar()"><div class="av" style="background:${db.otoYazdir?'var(--good)':'var(--ind2)'}">🖨️</div><div class="mid"><div class="t">Otomatik Yazıcı ${db.otoYazdir?'<span class="pill ok">açık</span>':''}</div><div class="s">bilgisayara bağlı termal yazıcıdan otomatik fiş</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="cloudinaryAyar()"><div class="av" style="background:${db.cldName?'var(--good)':'var(--ind2)'}">🖼️</div><div class="mid"><div class="t">Fotoğraf Depolama ${db.cldName?'<span class="pill ok">açık</span>':''}</div><div class="s">çok fotoğraf için Cloudinary (ücretsiz) — ${db.cldName?esc(db.cldName):'kurulu değil'}</div></div><span style="color:var(--sub)">›</span></div></div>`;
-  if(!kisitli)html+=`<div class="sec">Kullanıcılar & Roller</div><div class="card">`+Object.keys(ROLLER).map(k=>`<div class="row" onclick="setRol('${k}')"><div class="av" style="background:${rolRenk(k)}">${ROLLER[k].ic}</div><div class="mid"><div class="t">${ROLLER[k].ad}</div><div class="s">${ROLLER[k].kar?'kâr görür':'kâr gizli'}</div></div>${db.rol===k?'<span class="pill ok">aktif</span>':''}</div>`).join('')+`</div>`;
+  if(!kisitli)html+=`<div class="sec">Kullanıcılar & Roller</div><div class="card">
+    <div class="row" onclick="rolIzinAyar()"><div class="av" style="background:var(--pur)">🔐</div><div class="mid"><div class="t">Rol İzinleri${Object.keys(db.rolAyar||{}).length?' <span class="pill ok">özelleştirildi</span>':''}</div><div class="s">her rolün görebileceği ekranlar ve yetkiler — sen belirle</div></div><span style="color:var(--sub)">›</span></div>`+Object.keys(ROLLER).map(k=>{const y=rolYetki(k);return `<div class="row" onclick="setRol('${k}')"><div class="av" style="background:${rolRenk(k)}">${ROLLER[k].ic}</div><div class="mid"><div class="t">${ROLLER[k].ad}${(db.rolAyar||{})[k]?' <span class="tag" style="background:var(--thr-s);color:var(--thr)">özel</span>':''}</div><div class="s">${y.kar?'kâr görür':'kâr gizli'}</div></div>${db.rol===k?'<span class="pill ok">aktif</span>':''}</div>`}).join('')+`</div>`;
   if(bulutVar()&&(db.personelMod||!kisitli))html+=`<div class="sec">Bulut</div><div class="card">
     ${db.personelMod?`<div class="row" onclick="personelCik()"><div class="av" style="background:${rolRenk(db.rol)}">${(ROLLER[db.rol]||{}).ic||'👤'}</div><div class="mid"><div class="t">Personel: ${ROL_AD[db.rol]||db.rol} <span class="pill ok">bağlı</span></div><div class="s">çıkış yapmak için dokun</div></div><span style="color:var(--sub)">›</span></div>`:`
     <div class="row" onclick="canliBulutAyar()"><div class="av" style="background:${canliAcik?'var(--good)':'var(--ind2)'}">☁️</div><div class="mid"><div class="t">Canlı Bulut Senkronu <span class="pill ok">${canliAcik?'açık · otomatik':'otomatik'}</span></div><div class="s">giriş yapılınca kendiliğinden açılır — tüm cihazlar canlı aynı</div></div><span style="color:var(--sub)">›</span></div>
