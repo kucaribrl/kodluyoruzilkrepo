@@ -809,7 +809,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-86'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-87'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1669,7 +1669,7 @@ function malSipDetay(id){
   let tablo='';
   if(renkli||lines.length>1){
     tablo=`<div class="card" style="padding:6px 12px;margin-top:8px"><div style="display:flex;font-size:10.5px;color:var(--sub);font-weight:800;padding:4px 0;border-bottom:1px solid var(--ln2)"><span style="flex:1">RENK</span><span style="width:58px;text-align:right">SİPARİŞ</span>${gelmis?`<span style="width:56px;text-align:right">GELEN</span><span style="width:52px;text-align:right">KALAN</span>`:''}</div>`+
-    lines.map(l=>{const M=+l.miktar||0,G=+l.gelen||0,kalan=M-G;return `<div style="display:flex;align-items:center;padding:5px 0;border-bottom:1px solid var(--ln2);font-size:13px"><span style="flex:1;font-weight:700">${esc(l.renk||'—')}${l.parti?`<div class="mini" style="font-weight:600">🧾 ${esc(l.parti)}</div>`:''}</span><span style="width:58px;text-align:right">${M.toLocaleString('tr-TR')}</span>${gelmis?`<span style="width:56px;text-align:right;font-weight:700">${G.toLocaleString('tr-TR')}</span><span style="width:52px;text-align:right;font-weight:800;color:${Math.abs(kalan)<0.001?'var(--good)':kalan>0?'var(--warn)':'var(--bad)'}">${Math.abs(kalan)<0.001?'✓':(+kalan.toFixed(2))}</span>`:''}</div>`}).join('')+
+    lines.map(l=>{const M=+l.miktar||0,G=+l.gelen||0,kalan=M-G;return `<div style="display:flex;align-items:center;padding:5px 0;border-bottom:1px solid var(--ln2);font-size:13px"><span style="flex:1;font-weight:700">${esc(l.renk||'—')}${(l.partiGelen||l.parti)?`<div class="mini" style="font-weight:600">🧾 ${esc(l.partiGelen||l.parti)}</div>`:''}</span><span style="width:58px;text-align:right">${M.toLocaleString('tr-TR')}</span>${gelmis?`<span style="width:56px;text-align:right;font-weight:700">${G.toLocaleString('tr-TR')}</span><span style="width:52px;text-align:right;font-weight:800;color:${Math.abs(kalan)<0.001?'var(--good)':kalan>0?'var(--warn)':'var(--bad)'}">${Math.abs(kalan)<0.001?'✓':(+kalan.toFixed(2))}</span>`:''}</div>`}).join('')+
     `<div style="display:flex;align-items:center;padding:6px 0;font-size:13px;font-weight:800"><span style="flex:1">Toplam</span><span style="width:58px;text-align:right">${to.toLocaleString('tr-TR')}</span>${gelmis?`<span style="width:56px;text-align:right">${tg.toLocaleString('tr-TR')}</span><span style="width:52px;text-align:right;color:${Math.abs(to-tg)<0.001?'var(--good)':'var(--warn)'}">${+(to-tg).toFixed(2)||0}</span>`:''}</div></div>`;
   }
   let h=`<div class="card" style="padding:13px 15px">
@@ -1701,7 +1701,7 @@ function malSipForm(id){
   const teds=db.cariler.filter(c=>c.tip==='tedarikci');
   const bekVal=s&&s.beklenen?_isoTar(s.beklenen):_isoTar(Date.now()+30*86400000);
   const sipVal=s&&s.siparisTarih?_isoTar(s.siparisTarih):_isoTar(Date.now());
-  msSatir=s?sipSatirlar(s).map(l=>({renk:l.renk||'',miktar:+l.miktar||0})):[{renk:'',miktar:0}];
+  msSatir=s?sipSatirlar(s).map(l=>({renk:l.renk||'',miktar:+l.miktar||0,parti:l.parti||''})):[{renk:'',miktar:0,parti:''}];
   open_(id?'Siparişi Düzenle':'🚚 Yeni Malzeme Siparişi',`
     <div class="g2"><div><label>Tür</label><select id="ms-kat" onchange="msKatDegis()">${malKategoriler().map(k=>`<option ${kat===k?'selected':''}>${esc(k)}</option>`).join('')}</select></div><div><label>Birim</label><select id="ms-birim" onchange="cizMsSatir()">${HAM_BIRIMLER.map(x=>`<option ${((s&&s.birim)||'kg')===x?'selected':''}>${x}</option>`).join('')}</select></div></div>
     <label>Ne sipariş ettin?</label><input id="ms-ad" list="ms-ad-dl" autocomplete="off" value="${esc(s?s.ad:'')}" placeholder="Süprem Kumaş / Sedef Düğme / Fermuar..." oninput="msAdDegis()">
@@ -1727,18 +1727,18 @@ function msTedBorc(){const el=$('ms-ted-borc');if(!el)return;const t=tedBorc($('
 function msKatDegis(){const kat=$('ms-kat')?.value||'Kumaş';const bs=$('ms-birim');if(bs&&kat==='Kumaş'&&!['kg','metre','top'].includes(bs.value))bs.value='kg';if(bs&&kat!=='Kumaş'&&!['adet','koni','paket','koli'].includes(bs.value))bs.value='adet';if(kat!=='Kumaş')msSatir=[{renk:'',miktar:+(msSatir[0]?.miktar)||0}];else if(!msSatir.length)msSatir=[{renk:'',miktar:0}];cizMsSatir();}
 // Yazılan kumaş stoktaki bir renkli kumaşsa, renklerini otomatik getir
 function msAdDegis(){const kat=$('ms-kat')?.value||'Kumaş';if(kat!=='Kumaş')return;const ad=($('ms-ad')?.value||'').trim();const h=ad?db.hammadde.find(x=>x.kat==='Kumaş'&&(x.ad||'').toLowerCase()===ad.toLowerCase()):null;
-  if(h&&h.renkler&&h.renkler.length&&(msSatir.length<=1&&!(msSatir[0]&&msSatir[0].renk))){msSatir=h.renkler.map(r=>({renk:r.ad,miktar:0}));cizMsSatir();}}
+  if(h&&h.renkler&&h.renkler.length&&(msSatir.length<=1&&!(msSatir[0]&&msSatir[0].renk))){msSatir=h.renkler.map(r=>({renk:r.ad,miktar:0,parti:''}));cizMsSatir();}}
 function cizMsSatir(){const w=$('ms-satir-wrap');if(!w)return;const kat=$('ms-kat')?.value||'Kumaş';const bir=$('ms-birim')?.value||'kg';
   if(kat!=='Kumaş'){if(!msSatir.length)msSatir=[{renk:'',miktar:0}];w.innerHTML=`<label>Sipariş miktarı (${esc(bir)})</label><input type="number" inputmode="decimal" value="${msSatir[0].miktar||''}" oninput="msSatir[0]={renk:'',miktar:Math.max(0,+this.value||0)}" placeholder="ör. 1000">`;return;}
   const tot=msSatir.reduce((a,l)=>a+(+l.miktar||0),0);
   w.innerHTML=`<label>Renkler ve miktarları (${esc(bir)})</label>
     <div style="display:flex;gap:6px;margin-bottom:7px;align-items:center"><input id="ms-herkg" type="number" inputmode="decimal" placeholder="${esc(bir)}" style="width:84px;margin:0"><button type="button" class="btn ghost sm" style="margin:0;width:auto;padding:0 12px" onclick="msHerRenge()">↧ her renge uygula</button></div>
-    <div id="ms-satir-box">`+msSatir.map((l,i)=>`<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span style="width:20px;height:20px;flex:0 0 auto;border-radius:6px;background:${hexFromAd(l.renk)||'#8a8f98'};border:1px solid var(--ln)"></span><input list="ms-renk-dl" value="${esc(l.renk||'')}" placeholder="renk" oninput="msSatir[${i}].renk=this.value;msSwatch(this)" style="flex:1;min-width:0;margin:0;padding:8px 9px"><input type="number" inputmode="decimal" min="0" value="${l.miktar||''}" oninput="msSatir[${i}].miktar=Math.max(0,+this.value||0);msSatirTot()" placeholder="0" style="width:66px;margin:0;padding:8px" title="${esc(bir)}"><button type="button" class="del" onclick="msSatirDel(${i})" style="flex:0 0 auto">✕</button></div>`).join('')+`</div>
+    <div id="ms-satir-box">`+msSatir.map((l,i)=>`<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span style="width:20px;height:20px;flex:0 0 auto;border-radius:6px;background:${hexFromAd(l.renk)||'#8a8f98'};border:1px solid var(--ln)"></span><input list="ms-renk-dl" value="${esc(l.renk||'')}" placeholder="renk" oninput="msSatir[${i}].renk=this.value;msSwatch(this)" style="flex:1;min-width:0;margin:0;padding:8px 9px"><input value="${esc(l.parti||'')}" placeholder="parti" oninput="msSatir[${i}].parti=this.value" style="width:62px;margin:0;padding:8px 6px;font-size:12px" title="parti / lot kodu"><input type="number" inputmode="decimal" min="0" value="${l.miktar||''}" oninput="msSatir[${i}].miktar=Math.max(0,+this.value||0);msSatirTot()" placeholder="0" style="width:60px;margin:0;padding:8px" title="${esc(bir)}"><button type="button" class="del" onclick="msSatirDel(${i})" style="flex:0 0 auto">✕</button></div>`).join('')+`</div>
     <button type="button" class="btn ghost sm" onclick="msSatirAdd()" style="margin-top:2px">＋ Renk ekle</button>
     <div class="mini" id="ms-satir-tot" style="margin-top:6px;font-weight:700">📦 Toplam: ${tot.toLocaleString('tr-TR')} ${esc(bir)}</div>`;
 }
 function msSwatch(inp){const sw=inp&&inp.previousElementSibling;if(sw)sw.style.background=hexFromAd(inp.value)||'#8a8f98';}
-function msSatirAdd(){msSatir.push({renk:'',miktar:0});cizMsSatir();}
+function msSatirAdd(){msSatir.push({renk:'',miktar:0,parti:''});cizMsSatir();}
 function msSatirDel(i){msSatir.splice(i,1);if(!msSatir.length)msSatir=[{renk:'',miktar:0}];cizMsSatir();}
 function msHerRenge(){const v=Math.max(0,+($('ms-herkg')?.value||0));if(!v)return;msSatir.forEach(l=>l.miktar=v);cizMsSatir();}
 function msSatirTot(){const t=$('ms-satir-tot');if(!t)return;const bir=$('ms-birim')?.value||'kg';const s=msSatir.reduce((a,l)=>a+(+l.miktar||0),0);t.textContent=`📦 Toplam: ${s.toLocaleString('tr-TR')} ${bir}`;}
@@ -1751,7 +1751,7 @@ function malSipFiyatCiz(){const f=+($('ms-fiyat')?.value||0),pb=$('ms-pb')?.valu
 function kaydetMalSip(id){
   const ad=($('ms-ad')?.value||'').trim();if(!ad)return toast('Ne sipariş ettiğini yaz');
   const kat=$('ms-kat').value,birim=$('ms-birim').value,ted=($('ms-ted')?.value||'').trim();
-  const satirlar=msSatir.filter(l=>(+l.miktar||0)>0).map(l=>({renk:(l.renk||'').trim(),miktar:+l.miktar||0,gelen:0}));
+  const satirlar=msSatir.filter(l=>(+l.miktar||0)>0).map(l=>({renk:(l.renk||'').trim(),miktar:+l.miktar||0,gelen:0,parti:(l.parti||'').trim()}));
   if(!satirlar.length)return toast(kat==='Kumaş'?'En az bir renk ve miktar gir':'Sipariş miktarı gir');
   const miktar=satirlar.reduce((a,l)=>a+l.miktar,0);
   const fiyat=+($('ms-fiyat')?.value||0),pb=$('ms-pb')?.value||'TL';
@@ -1778,7 +1778,7 @@ function malSipTeslim(id){
   const s=db.malSiparis.find(x=>x.id===id);if(!s||!sipAcik(s))return;
   const lines=sipSatirlar(s);const bir=esc(s.birim||'');
   const rows=lines.map((l,i)=>{const M=+l.miktar||0,G=+l.gelen||0,kalan=Math.max(0,M-G);
-    return `<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span style="width:20px;height:20px;flex:0 0 auto;border-radius:6px;background:${hexFromAd(l.renk)||'#8a8f98'};border:1px solid var(--ln)"></span><div style="flex:1;min-width:0"><b style="font-size:14px">${esc(l.renk||'—')}</b> <span class="mini">sip ${M.toLocaleString('tr-TR')}${G?' · geldi '+G.toLocaleString('tr-TR'):''}</span></div>${s.kat==='Kumaş'?`<input id="mt-p-${i}" placeholder="parti no" style="width:62px;margin:0;padding:8px;font-size:11px" title="kumaş parti/lot kodu">`:''}<input id="mt-g-${i}" type="number" inputmode="decimal" value="${kalan||0}" oninput="malSipTesHesap(${id})" style="width:66px;margin:0;padding:8px" title="bu teslimat ${bir}"><span id="mt-d-${i}" style="width:52px;text-align:right;font-weight:800;font-size:11px"></span></div>`;}).join('');
+    return `<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span style="width:20px;height:20px;flex:0 0 auto;border-radius:6px;background:${hexFromAd(l.renk)||'#8a8f98'};border:1px solid var(--ln)"></span><div style="flex:1;min-width:0"><b style="font-size:14px">${esc(l.renk||'—')}</b> <span class="mini">sip ${M.toLocaleString('tr-TR')}${G?' · geldi '+G.toLocaleString('tr-TR'):''}</span></div>${s.kat==='Kumaş'?`<input id="mt-p-${i}" value="${esc(l.parti||'')}" placeholder="parti no" style="width:62px;margin:0;padding:8px;font-size:11px" title="kumaş parti/lot kodu — siparişten geldi, gerekirse düzelt">`:''}<input id="mt-g-${i}" type="number" inputmode="decimal" value="${kalan||0}" oninput="malSipTesHesap(${id})" style="width:66px;margin:0;padding:8px" title="bu teslimat ${bir}"><span id="mt-d-${i}" style="width:52px;text-align:right;font-weight:800;font-size:11px"></span></div>`;}).join('');
   open_('✓ Teslim Al · '+esc(s.ad),`
     <div class="infobox">Bu parti kesimhanede <b>tartılan gerçek ${bir}</b>'ı gir. Hepsi gelmediyse eksik gir — <b>kalan yolda</b> kalır, sonra tekrar teslim alırsın.</div>
     <div style="display:flex;font-size:10px;color:var(--sub);font-weight:800;padding:0 0 4px;margin-left:27px"><span style="flex:1">RENK · SİPARİŞ</span>${s.kat==='Kumaş'?'<span style="width:62px;text-align:center">PARTİ</span>':''}<span style="width:66px;text-align:center">MİKTAR</span><span style="width:52px;text-align:right">KALAN</span></div>
@@ -1807,7 +1807,7 @@ function kaydetMalSipTeslim(id){
   let buParti=0;
   lines.forEach((l,i)=>{const inp=Math.max(0,+($('mt-g-'+i)?.value||0));if(inp>0){l.gelen=(+l.gelen||0)+inp;buParti+=inp;
     const pk=((($('mt-p-'+i)||{}).value)||'').trim();
-    if(pk)l.parti=(l.parti?l.parti+' · ':'')+pk+' '+inp;              // teslim geçmişi: hangi parti kaç geldi
+    if(pk){l.partiGelen=(l.partiGelen?l.partiGelen+' · ':'')+pk+' '+inp;l.parti=pk;} // gelen geçmişi + son kod
     if(l.renk||pk)malStoklaRenk(h,l.renk||'—',inp,pk);else malStoklaRenk(h,'',inp);}});
   s.satirlar=lines;const tg=sipTopGelen(s),to=sipTopMik(s);
   const tV=$('mt-tarih')?.value;const gelenTarih=tV?new Date(tV+'T12:00:00').getTime():Date.now();
@@ -1829,7 +1829,7 @@ function kaydetMalSipTeslim(id){
 function malSipGonder(id){const s=db.malSiparis.find(x=>x.id===id);if(!s)return;
   const firma=db.firma||'IQ Basics';const lines=sipSatirlar(s);const bir=s.birim||'';const renkli=lines.some(l=>l.renk);
   let t=`🧵 *${firma}* — Malzeme Siparişi\n${new Date().toLocaleDateString('tr-TR')}\n\n*${s.ad}*`;
-  if(renkli)t+='\n'+lines.map(l=>`• ${l.renk||'—'} — *${(+l.miktar||0).toLocaleString('tr-TR')} ${bir}*`).join('\n');
+  if(renkli)t+='\n'+lines.map(l=>`• ${l.renk||'—'}${l.parti?' (parti '+l.parti+')':''} — *${(+l.miktar||0).toLocaleString('tr-TR')} ${bir}*`).join('\n');
   t+=`\n\nToplam: *${sipTopMik(s).toLocaleString('tr-TR')} ${bir}*`;
   if(s.beklenen)t+=`\nİstenen teslim: ${dstr(s.beklenen)}`;
   if(s.not)t+=`\nNot: ${s.not}`;
