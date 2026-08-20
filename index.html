@@ -809,7 +809,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-85'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-86'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1560,7 +1560,7 @@ function rStok(){
     $('app').innerHTML=html; rStokList();
   }else{
     const kats=['Tümü','Kumaş','Aksesuar','Etiket','Ambalaj'];
-    html+=`<div class="card">`+db.hammadde.map(h=>{const rk=(h.renkler&&h.renkler.length)?h.renkler.map(r=>esc(r.ad)+' '+r.stok).join(' · '):'';return `<div class="row" onclick="formHammadde(${h.id})"><div class="av gray">🧵</div><div class="mid"><div class="t">${esc(h.ad)}</div><div class="s">${rk?'🎨 '+rk:esc(h.detay||'')}</div></div><div class="end"><div class="n ${(+h.stok||0)<=(+h.kritik||0)?'warnc':''}">${(+h.stok||0).toLocaleString('tr-TR')}</div><div class="u">${esc(h.birim||'')}</div>${(+h.stok||0)<=(+h.kritik||0)?'<span class="pill low">Az</span>':'<span class="pill ok">Var</span>'}</div></div>`}).join('')+`</div><div class="infobox">🏭 İş emri açınca bu malzemeler otomatik düşer.</div>`;
+    html+=`<div class="card">`+db.hammadde.map(h=>{const rk=(h.renkler&&h.renkler.length)?h.renkler.map(r=>esc(r.ad)+' '+r.stok+((r.partiler&&r.partiler.length>1)?' ('+r.partiler.length+' parti)':'')).join(' · '):'';return `<div class="row" onclick="formHammadde(${h.id})"><div class="av gray">🧵</div><div class="mid"><div class="t">${esc(h.ad)}</div><div class="s">${rk?'🎨 '+rk:esc(h.detay||'')}</div></div><div class="end"><div class="n ${(+h.stok||0)<=(+h.kritik||0)?'warnc':''}">${(+h.stok||0).toLocaleString('tr-TR')}</div><div class="u">${esc(h.birim||'')}</div>${(+h.stok||0)<=(+h.kritik||0)?'<span class="pill low">Az</span>':'<span class="pill ok">Var</span>'}</div></div>`}).join('')+`</div><div class="infobox">🏭 İş emri açınca bu malzemeler otomatik düşer.</div>`;
     $('app').innerHTML=html;
   }
 }
@@ -1598,7 +1598,7 @@ function rEnvList(){
   const q=($('ara-env')?.value||'').toLowerCase();
   const arr=db.hammadde.filter(h=>(envMalKat==='Tümü'||h.kat===envMalKat)&&((h.ad||'').toLowerCase().includes(q)||(h.detay||'').toLowerCase().includes(q)||(h.kod||'').toLowerCase().includes(q)||(h.raf||'').toLowerCase().includes(q)||(h.barkod||'').toLowerCase().includes(q)));
   const el=$('env-list');if(!el)return;
-  el.innerHTML=arr.length?arr.map(h=>{const rk=(h.renkler&&h.renkler.length)?h.renkler.map(r=>esc(r.ad)+' '+r.stok).join(' · '):'';const az=(+h.stok||0)<=(+h.kritik||0);const fyt=h.alis>0?` · ${h.pb==='USD'?'$':'₺'}${(+h.alis).toLocaleString('tr-TR')}`:'';const gel=malGelecek(h);const meta=[h.raf?'📍'+esc(h.raf):'',h.kod?'#'+esc(h.kod):'',h.gramaj?esc(''+h.gramaj)+' gr':'',h.en?esc(''+h.en)+' cm':'',(+h.top>0)?(+h.top)+' top':''].filter(Boolean).join(' · ');const alt=rk?'🎨 '+rk:esc(h.detay||'');const sub=[meta,alt,h.ted?'🚚 '+esc(h.ted):'',gel>0?'<span style="color:var(--ind2);font-weight:800">🚚 +'+gel.toLocaleString('tr-TR')+' yolda</span>':''].filter(Boolean).join(' · ')||'—';return `<div class="row" onclick="formHammadde(${h.id})"><div class="av gray" style="overflow:hidden;padding:0">${h.foto?`<img src="${h.foto}" style="width:100%;height:100%;object-fit:cover">`:envKatIc(h.kat)}</div><div class="mid"><div class="t">${esc(h.ad)}${h.gramaj?` <span class="tag">${esc(''+h.gramaj)} gr</span>`:''}</div><div class="s">${sub}${fyt}</div></div><div class="end"><div class="n ${az?'warnc':''}">${(+h.stok||0).toLocaleString('tr-TR')}</div><div class="u">${esc(h.birim||'')}</div>${az?'<span class="pill low">Az</span>':'<span class="pill ok">Var</span>'}</div></div>`}).join(''):emp('🧵',(envMalKat==='Tümü'?'Malzeme':envMalKat)+' yok — "＋ ekle" ile gir');
+  el.innerHTML=arr.length?arr.map(h=>{const rk=(h.renkler&&h.renkler.length)?h.renkler.map(r=>esc(r.ad)+' '+r.stok+((r.partiler&&r.partiler.length>1)?' ('+r.partiler.length+' parti)':'')).join(' · '):'';const az=(+h.stok||0)<=(+h.kritik||0);const fyt=h.alis>0?` · ${h.pb==='USD'?'$':'₺'}${(+h.alis).toLocaleString('tr-TR')}`:'';const gel=malGelecek(h);const meta=[h.raf?'📍'+esc(h.raf):'',h.kod?'#'+esc(h.kod):'',h.gramaj?esc(''+h.gramaj)+' gr':'',h.en?esc(''+h.en)+' cm':'',(+h.top>0)?(+h.top)+' top':''].filter(Boolean).join(' · ');const alt=rk?'🎨 '+rk:esc(h.detay||'');const sub=[meta,alt,h.ted?'🚚 '+esc(h.ted):'',gel>0?'<span style="color:var(--ind2);font-weight:800">🚚 +'+gel.toLocaleString('tr-TR')+' yolda</span>':''].filter(Boolean).join(' · ')||'—';return `<div class="row" onclick="formHammadde(${h.id})"><div class="av gray" style="overflow:hidden;padding:0">${h.foto?`<img src="${h.foto}" style="width:100%;height:100%;object-fit:cover">`:envKatIc(h.kat)}</div><div class="mid"><div class="t">${esc(h.ad)}${h.gramaj?` <span class="tag">${esc(''+h.gramaj)} gr</span>`:''}</div><div class="s">${sub}${fyt}</div></div><div class="end"><div class="n ${az?'warnc':''}">${(+h.stok||0).toLocaleString('tr-TR')}</div><div class="u">${esc(h.birim||'')}</div>${az?'<span class="pill low">Az</span>':'<span class="pill ok">Var</span>'}</div></div>`}).join(''):emp('🧵',(envMalKat==='Tümü'?'Malzeme':envMalKat)+' yok — "＋ ekle" ile gir');
 }
 /* ===== MALZEME SİPARİŞLERİ (kumaşçı/aksesuar alım takibi) ===== */
 function _isoTar(ts){try{const d=new Date(ts);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)}catch(e){return ''}}
@@ -1612,9 +1612,29 @@ function malGelecek(h){let t=0;db.malSiparis.forEach(s=>{if(s.durum!=='bekliyor'
 function sipAcik(s){return s.durum==='bekliyor'||s.durum==='kismi';}
 function sipKalan(s){return sipSatirlar(s).reduce((a,l)=>a+Math.max(0,(+l.miktar||0)-(+l.gelen||0)),0);}
 // Stoğa renk bazlı ekle
-function malStoklaRenk(h,renk,mik){if(!mik)return;
-  if(renk){if(!h.renkler)h.renkler=[];let r=h.renkler.find(x=>(x.ad||'').toLowerCase()===(renk||'').toLowerCase());if(!r){r={ad:renk,stok:0,top:0};h.renkler.push(r);}r.stok=(+r.stok||0)+mik;h.stok=h.renkler.reduce((a,x)=>a+(+x.stok||0),0);}
-  else h.stok=(+h.stok||0)+mik;
+// 🧵 Kumaş PARTİ (lot) takibi: aynı rengin birden fazla partisi olabilir; partiler arası ton farkı riskine karşı
+// giriş parti koduyla yapılır, düşüm FIFO'dur ve birden fazla partiye taşarsa uyarı verilir.
+function malStoklaRenk(h,renk,mik,parti){if(!mik)return;
+  if(renk){if(!h.renkler)h.renkler=[];let r=h.renkler.find(x=>(x.ad||'').toLowerCase()===(renk||'').toLowerCase());if(!r){r={ad:renk,stok:0,top:0};h.renkler.push(r);}
+    const partili=(parti&&(''+parti).trim())||((r.partiler||[]).length>0);
+    if(partili){
+      r.partiler=r.partiler||[];
+      // eski partisiz stok varsa önce '—' partisine taşı (kayıp olmasın)
+      const pSum=()=>r.partiler.reduce((a,x)=>a+(+x.mik||0),0);
+      if((+r.stok||0)>pSum()+0.0001)r.partiler.push({kod:'—',mik:+((+r.stok||0)-pSum()).toFixed(3)});
+      if(mik>0){const pk=((parti||'')+'').trim()||'—';let pp=r.partiler.find(x=>x.kod===pk);
+        if(!pp){pp={kod:pk,mik:0};r.partiler.push(pp);}pp.mik=+((+pp.mik||0)+mik).toFixed(3);}
+      else{let kalan=-mik,kullanilan=0;
+        for(const pp of r.partiler){if(kalan<=0.0001)break;const al=Math.min(+pp.mik||0,kalan);if(al>0){pp.mik=+((+pp.mik||0)-al).toFixed(3);kalan-=al;kullanilan++;}}
+        r.partiler=r.partiler.filter(x=>(+x.mik||0)>0.0001);
+        if(kullanilan>1){try{toast('⚠️ '+renk+': '+kullanilan+' farklı PARTİDEN düşüldü — ton farkı riskine dikkat!');}catch(e){}}
+        if(kalan>0.0001){/* parti stoğu yetmedi → kalan renk toplamından eksilir (negatif olabilir) */}
+      }
+      r.stok=+(( r.partiler.reduce((a,x)=>a+(+x.mik||0),0) )+ (mik<0?Math.min(0,(+r.stok||0)+mik- r.partiler.reduce((a,x)=>a+(+x.mik||0),0)):0)).toFixed(3);
+    }else{r.stok=+(((+r.stok||0)+mik)).toFixed(3);}
+    h.stok=+(h.renkler.reduce((a,x)=>a+(+x.stok||0),0)).toFixed(3);
+  }
+  else h.stok=+(((+h.stok||0)+mik)).toFixed(3);
 }
 function rEnvSiparisHTML(){
   const bek=db.malSiparis.filter(sipAcik).sort((a,b)=>(a.beklenen||9e15)-(b.beklenen||9e15));
@@ -1649,7 +1669,7 @@ function malSipDetay(id){
   let tablo='';
   if(renkli||lines.length>1){
     tablo=`<div class="card" style="padding:6px 12px;margin-top:8px"><div style="display:flex;font-size:10.5px;color:var(--sub);font-weight:800;padding:4px 0;border-bottom:1px solid var(--ln2)"><span style="flex:1">RENK</span><span style="width:58px;text-align:right">SİPARİŞ</span>${gelmis?`<span style="width:56px;text-align:right">GELEN</span><span style="width:52px;text-align:right">KALAN</span>`:''}</div>`+
-    lines.map(l=>{const M=+l.miktar||0,G=+l.gelen||0,kalan=M-G;return `<div style="display:flex;align-items:center;padding:5px 0;border-bottom:1px solid var(--ln2);font-size:13px"><span style="flex:1;font-weight:700">${esc(l.renk||'—')}</span><span style="width:58px;text-align:right">${M.toLocaleString('tr-TR')}</span>${gelmis?`<span style="width:56px;text-align:right;font-weight:700">${G.toLocaleString('tr-TR')}</span><span style="width:52px;text-align:right;font-weight:800;color:${Math.abs(kalan)<0.001?'var(--good)':kalan>0?'var(--warn)':'var(--bad)'}">${Math.abs(kalan)<0.001?'✓':(+kalan.toFixed(2))}</span>`:''}</div>`}).join('')+
+    lines.map(l=>{const M=+l.miktar||0,G=+l.gelen||0,kalan=M-G;return `<div style="display:flex;align-items:center;padding:5px 0;border-bottom:1px solid var(--ln2);font-size:13px"><span style="flex:1;font-weight:700">${esc(l.renk||'—')}${l.parti?`<div class="mini" style="font-weight:600">🧾 ${esc(l.parti)}</div>`:''}</span><span style="width:58px;text-align:right">${M.toLocaleString('tr-TR')}</span>${gelmis?`<span style="width:56px;text-align:right;font-weight:700">${G.toLocaleString('tr-TR')}</span><span style="width:52px;text-align:right;font-weight:800;color:${Math.abs(kalan)<0.001?'var(--good)':kalan>0?'var(--warn)':'var(--bad)'}">${Math.abs(kalan)<0.001?'✓':(+kalan.toFixed(2))}</span>`:''}</div>`}).join('')+
     `<div style="display:flex;align-items:center;padding:6px 0;font-size:13px;font-weight:800"><span style="flex:1">Toplam</span><span style="width:58px;text-align:right">${to.toLocaleString('tr-TR')}</span>${gelmis?`<span style="width:56px;text-align:right">${tg.toLocaleString('tr-TR')}</span><span style="width:52px;text-align:right;color:${Math.abs(to-tg)<0.001?'var(--good)':'var(--warn)'}">${+(to-tg).toFixed(2)||0}</span>`:''}</div></div>`;
   }
   let h=`<div class="card" style="padding:13px 15px">
@@ -1758,10 +1778,10 @@ function malSipTeslim(id){
   const s=db.malSiparis.find(x=>x.id===id);if(!s||!sipAcik(s))return;
   const lines=sipSatirlar(s);const bir=esc(s.birim||'');
   const rows=lines.map((l,i)=>{const M=+l.miktar||0,G=+l.gelen||0,kalan=Math.max(0,M-G);
-    return `<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span style="width:20px;height:20px;flex:0 0 auto;border-radius:6px;background:${hexFromAd(l.renk)||'#8a8f98'};border:1px solid var(--ln)"></span><div style="flex:1;min-width:0"><b style="font-size:14px">${esc(l.renk||'—')}</b> <span class="mini">sip ${M.toLocaleString('tr-TR')}${G?' · geldi '+G.toLocaleString('tr-TR'):''}</span></div><input id="mt-g-${i}" type="number" inputmode="decimal" value="${kalan||0}" oninput="malSipTesHesap(${id})" style="width:74px;margin:0;padding:8px" title="bu parti ${bir}"><span id="mt-d-${i}" style="width:52px;text-align:right;font-weight:800;font-size:11px"></span></div>`;}).join('');
+    return `<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span style="width:20px;height:20px;flex:0 0 auto;border-radius:6px;background:${hexFromAd(l.renk)||'#8a8f98'};border:1px solid var(--ln)"></span><div style="flex:1;min-width:0"><b style="font-size:14px">${esc(l.renk||'—')}</b> <span class="mini">sip ${M.toLocaleString('tr-TR')}${G?' · geldi '+G.toLocaleString('tr-TR'):''}</span></div>${s.kat==='Kumaş'?`<input id="mt-p-${i}" placeholder="parti no" style="width:62px;margin:0;padding:8px;font-size:11px" title="kumaş parti/lot kodu">`:''}<input id="mt-g-${i}" type="number" inputmode="decimal" value="${kalan||0}" oninput="malSipTesHesap(${id})" style="width:66px;margin:0;padding:8px" title="bu teslimat ${bir}"><span id="mt-d-${i}" style="width:52px;text-align:right;font-weight:800;font-size:11px"></span></div>`;}).join('');
   open_('✓ Teslim Al · '+esc(s.ad),`
     <div class="infobox">Bu parti kesimhanede <b>tartılan gerçek ${bir}</b>'ı gir. Hepsi gelmediyse eksik gir — <b>kalan yolda</b> kalır, sonra tekrar teslim alırsın.</div>
-    <div style="display:flex;font-size:10px;color:var(--sub);font-weight:800;padding:0 0 4px;margin-left:27px"><span style="flex:1">RENK · SİPARİŞ</span><span style="width:74px;text-align:center">BU PARTİ</span><span style="width:52px;text-align:right">KALAN</span></div>
+    <div style="display:flex;font-size:10px;color:var(--sub);font-weight:800;padding:0 0 4px;margin-left:27px"><span style="flex:1">RENK · SİPARİŞ</span>${s.kat==='Kumaş'?'<span style="width:62px;text-align:center">PARTİ</span>':''}<span style="width:66px;text-align:center">MİKTAR</span><span style="width:52px;text-align:right">KALAN</span></div>
     ${rows}
     <div id="mt-tot" style="margin-top:8px"></div>
     <label style="margin-top:8px">Teslim tarihi</label><input id="mt-tarih" type="date" value="${_isoTar(Date.now())}">
@@ -1785,7 +1805,10 @@ function kaydetMalSipTeslim(id){
   if(!h){h={id:nid('h'),ad:s.ad,kat:s.kat,birim:s.birim,detay:'',stok:0,renkler:[],kritik:0,alis:+s.fiyat||0,pb:s.pb||'TL',ted:s.ted||'',tedId:s.tedId||null};db.hammadde.push(h);}
   s.hid=h.id;if(s.fiyat>0){h.alis=+s.fiyat;h.pb=s.pb;}
   let buParti=0;
-  lines.forEach((l,i)=>{const inp=Math.max(0,+($('mt-g-'+i)?.value||0));if(inp>0){l.gelen=(+l.gelen||0)+inp;buParti+=inp;malStoklaRenk(h,l.renk,inp);}});
+  lines.forEach((l,i)=>{const inp=Math.max(0,+($('mt-g-'+i)?.value||0));if(inp>0){l.gelen=(+l.gelen||0)+inp;buParti+=inp;
+    const pk=((($('mt-p-'+i)||{}).value)||'').trim();
+    if(pk)l.parti=(l.parti?l.parti+' · ':'')+pk+' '+inp;              // teslim geçmişi: hangi parti kaç geldi
+    if(l.renk||pk)malStoklaRenk(h,l.renk||'—',inp,pk);else malStoklaRenk(h,'',inp);}});
   s.satirlar=lines;const tg=sipTopGelen(s),to=sipTopMik(s);
   const tV=$('mt-tarih')?.value;const gelenTarih=tV?new Date(tV+'T12:00:00').getTime():Date.now();
   s.gelenMiktar=tg;s.gelenTarih=gelenTarih;const nnot=($('mt-not')?.value||'').trim();if(nnot)s.gelenNot=nnot;
@@ -2308,7 +2331,7 @@ function formHammadde(id,presetKat){
   const h=id?db.hammadde.find(x=>x.id===id):{kat:presetKat||'Kumaş'};
   const kat=h.kat||'Kumaş';const cfg=katCfg(kat);
   const birim=h.birim||cfg.birimler[0];
-  fHamRenk=(h.renkler||[]).map(r=>({ad:r.ad||'',stok:+r.stok||0,top:+r.top||0}));
+  fHamRenk=(h.renkler||[]).map(r=>({ad:r.ad||'',stok:+r.stok||0,top:+r.top||0,partiler:(r.partiler||[]).map(x=>({...x}))}));
   fHamFoto=h.foto||'';
   const teds=db.cariler.filter(c=>c.tip==='tedarikci');
   const renkli=fHamRenk.length>0||(!id&&kat==='Kumaş');
@@ -2364,7 +2387,7 @@ function cizHamRenk(){const box=$('ham-renk-box');if(!box)return;const bir=$('h-
       <input type="number" inputmode="decimal" min="0" value="${r.stok||0}" oninput="fHamRenk[${i}].stok=Math.max(0,+this.value||0);hamRenkTot()" placeholder="0" style="width:60px;margin:0;padding:8px" title="${esc(bir)}">
       ${kumas?`<input type="number" inputmode="numeric" min="0" value="${r.top||''}" oninput="fHamRenk[${i}].top=Math.max(0,+this.value||0);hamRenkTot()" placeholder="top" style="width:52px;margin:0;padding:8px" title="top sayısı">`:''}
       <button type="button" class="del" onclick="fHamRenk.splice(${i},1);if(!fHamRenk.length)fHamRenk=[{ad:'',stok:0,top:0}];cizHamRenk()" style="flex:0 0 auto">✕</button>
-    </div>`;}).join('')+`<datalist id="renkList">${['Beyaz','Siyah','Lacivert','Gri','Antrasit','Bej','Bordo','Yeşil','Haki','Ekru','Mavi','Kırmızı','Kahverengi','Vizon','Füme'].map(c=>`<option value="${c}">`).join('')}</datalist>
+    </div>${(r.partiler&&r.partiler.length)?`<div class="mini" style="margin:-2px 0 6px 29px">🧾 Parti: ${r.partiler.map(x=>esc(x.kod)+' '+(+x.mik||0)).join(' · ')} <span style="color:var(--sub)">(teslim alırken girilir)</span></div>`:''}`;}).join('')+`<datalist id="renkList">${['Beyaz','Siyah','Lacivert','Gri','Antrasit','Bej','Bordo','Yeşil','Haki','Ekru','Mavi','Kırmızı','Kahverengi','Vizon','Füme'].map(c=>`<option value="${c}">`).join('')}</datalist>
     <button type="button" class="btn ghost sm" onclick="fHamRenk.push({ad:'',stok:0,top:0});cizHamRenk()" style="margin-top:2px">+ Renk Ekle</button>
     <div class="mini" id="ham-renk-tot" style="margin-top:6px;font-weight:700"></div>`;
   hamRenkTot();}
@@ -2374,7 +2397,12 @@ function hamRenkSwatch(inp){const sw=inp&&inp.previousElementSibling;if(sw)sw.st
 function kaydetHammadde(id){const ad=$('h-ad').value.trim();if(!ad)return toast('Ad gerekli');
   const renkli=$('h-renkli')?.checked;
   let renkler=[],stok=0;
-  if(renkli){renkler=fHamRenk.filter(r=>(r.ad||'').trim()||+r.stok>0||+r.top>0).map(r=>({ad:(r.ad||'').trim()||'—',stok:+r.stok||0,top:+r.top||0}));stok=renkler.reduce((a,r)=>a+r.stok,0);}
+  if(renkli){renkler=fHamRenk.filter(r=>(r.ad||'').trim()||+r.stok>0||+r.top>0).map(r=>({ad:(r.ad||'').trim()||'—',stok:+r.stok||0,top:+r.top||0}));stok=renkler.reduce((a,r)=>a+r.stok,0);
+    if(id){const eskiH=db.hammadde.find(x=>x.id===id); // parti bilgisi formda düzenlenmez — koru
+      if(eskiH)renkler.forEach(r=>{const er=(eskiH.renkler||[]).find(x=>x&&typeof x==='object'&&(x.ad||'').toLowerCase()===r.ad.toLowerCase());
+        if(er&&er.partiler&&er.partiler.length){const ps=er.partiler.reduce((a,x)=>a+(+x.mik||0),0);
+          r.partiler=Math.abs(ps-r.stok)<0.001?er.partiler.map(x=>({...x})):[{kod:'—',mik:r.stok}];}});}
+  }
   else stok=+($('h-stok')?.value||0);
   const ted=($('h-ted')?.value||'').trim();const tedC=ted?db.cariler.find(c=>c.tip==='tedarikci'&&c.ad.toLowerCase()===ted.toLowerCase()):null;
   const topSay=renkli?fHamRenk.reduce((a,r)=>a+(+r.top||0),0):0;
@@ -4711,6 +4739,7 @@ function ieTukCiz(){const el=$('ie-kumas-tuk-info');if(!el)return;const pu=ieTuk
 // Stok rozeti: birim + (top çevrimi varsa) top
 function ieStokStr(r){const bir=esc(r.birim||'');let s=(+r.stok||0)+' '+bir;
   if(+r.top>0)s+=' · '+(+r.top)+' top';
+  if(r.partiler&&r.partiler.length>1)s+=' · '+r.partiler.length+' parti';
   return s;}
 function ieRenkArt(i,d){const r=ieRenk[i];if(!r)return;r.adet=Math.max(0,(+r.adet||0)+d);const el=$('ierk-'+i);if(el)el.value=r.adet;ieToplamCiz();}
 function ieTerminSet(g,el){if($('ie-gun'))$('ie-gun').value=g;document.querySelectorAll('#ie-termin .c').forEach(c=>c.classList.remove('on'));if(el)el.classList.add('on');ieTerminHesap();ieOzetCiz();}
@@ -5121,7 +5150,7 @@ function ieMalDuzenle(id){const i=db.isemirleri.find(v=>v.id===id);if(!i||i.duru
 }
 // Malzemeyi stoğa uygula: renkli kumaşta + m.renk varsa O RENGİN kilosundan düş; yoksa toplamdan
 function malStokUygula(h,m,isaret){const mik=(+m.mik||0)*isaret;if(!mik)return;
-  if(hamRenkli(h)&&m.renk){const r=h.renkler.find(x=>x.ad===m.renk);if(r){r.stok=(+r.stok||0)+mik;h.stok=h.renkler.reduce((a,x)=>a+(+x.stok||0),0);return;}}
+  if(hamRenkli(h)&&m.renk){malStoklaRenk(h,m.renk,mik);return;} // parti FIFO + renk yoksa oluşturur
   h.stok=(+h.stok||0)+mik;}
 function ieMalKaydet(id){const i=db.isemirleri.find(v=>v.id===id);
   const yeni=ieMal.filter(m=>(m.ad||'').trim()).map(m=>{const h=db.hammadde.find(x=>x.ad.toLowerCase()===m.ad.trim().toLowerCase());return {ad:m.ad.trim(),mik:+m.mik||0,birim:m.birim||(h?h.birim:''),renk:(m.renk||''),tutar:+m.tutar||0,pb:m.pb||'TL',durum:m.durum||'var',fis:m.fis||'',hid:h?h.id:null}});
