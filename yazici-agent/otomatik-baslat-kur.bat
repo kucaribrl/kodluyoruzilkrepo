@@ -32,13 +32,16 @@ pause
 exit /b
 
 :pkgok
+rem --- Internetten inen dosyalardaki guvenlik engelini kaldir ---
+rem --- (kaldirilmazsa Windows her acilista "Calistir?" kutusu gosterir, ajan baslamaz) ---
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -Path '%~dp0*' -File | Unblock-File -ErrorAction SilentlyContinue" >nul 2>&1
 set "TARGET=%~dp0gizli-baslat.vbs"
 set "WORKDIR=%~dp0"
 set "STARTUP=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
 set "LNK=%STARTUP%\IQ Basics Yazici.lnk"
 
 rem --- Baslangic klasorune, GIZLI baslaticiya kisayol olustur ---
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$s=New-Object -ComObject WScript.Shell; $l=$s.CreateShortcut($env:LNK); $l.TargetPath=$env:TARGET; $l.WorkingDirectory=$env:WORKDIR; $l.Description='IQ Basics Yazici Ajani (gizli)'; $l.Save()"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$s=New-Object -ComObject WScript.Shell; $l=$s.CreateShortcut($env:LNK); $l.TargetPath='wscript.exe'; $l.Arguments='\"'+$env:TARGET+'\"'; $l.WorkingDirectory=$env:WORKDIR; $l.Description='IQ Basics Yazici Ajani (gizli)'; $l.Save()"
 
 if not exist "%LNK%" goto kisayolhata
 

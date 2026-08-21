@@ -2,6 +2,8 @@
 # Kullanim: yazici-agent klasorunde adres cubugua powershell yazip Enter,
 # sonra:  .\kur-gizli.ps1     (ya da tum satirlari kopyalayip yapistir)
 $d = (Get-Location).Path
+# Internetten inen dosyalarin guvenlik engelini kaldir (acilista 'Calistir?' kutusunu onler)
+Get-ChildItem -Path (Join-Path $d '*') -File | Unblock-File -ErrorAction SilentlyContinue
 $vbsPath = Join-Path $d 'gizli-baslat.vbs'
 $vbs = @'
 Dim sh, fso, dir

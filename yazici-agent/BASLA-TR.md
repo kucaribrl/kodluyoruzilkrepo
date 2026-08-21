@@ -90,6 +90,7 @@ Durdurmak / geri almak:
 
 | Sorun | Çözüm |
 |------|-------|
+| Bilgisayar açılışında **"Çalıştır?" güvenlik kutusu** çıkıyor (onaylamayınca fiş basmıyor) | Dosyalar internetten indiği için Windows engel işareti koyuyor. `otomatik-baslat-kur.bat`'a **bir kez daha** çift tıkla — yeni sürüm engeli kaldırır, kutu bir daha çıkmaz ve ajan sessizce başlar. |
 | "config.json bulunamadı" | 3. adımı yap: `config.example.json` → `config.json` kopyala, doldur. |
 | "Bulut girişi başarısız" | e-posta/şifre yanlış. Uygulamada girdiğin hesabın aynısı olmalı. |
 | Test fişi kuyruğa gitti ama çıkmadı | `yaziciAdi` yanlış olabilir. Windows'taki yazıcı adını birebir yaz. Ya da yazıcıyı **varsayılan** yapıp `yaziciAdi`'nı boş bırak. |
