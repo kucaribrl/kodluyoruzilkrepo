@@ -809,7 +809,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-89'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-90'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1473,6 +1473,13 @@ function rPanel(){
         <div><div class="mini">↩️ İade</div><div style="font-size:18px;font-weight:800;color:${g.iade?'var(--bad)':'var(--sub)'}">${g.iade}</div></div>
       </div></div>`;
   }
+  if(para&&new Date().getDate()<=3){const ge=gecenAyOzet();
+    if(ge.adet>0)paraHtml+=`<div class="sec">🗓️ Geçen Ay Özeti · ${esc(ge.ad)}</div><div class="card" style="padding:12px 14px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div><div class="mini">Ciro</div><div style="font-size:18px;font-weight:800">${TL(ge.ciro)}</div></div>
+      <div><div class="mini">Satış</div><div style="font-size:18px;font-weight:800">${ge.adet}<span class="mini" style="font-weight:600"> adet · ${ge.islem} işlem</span></div></div>
+      <div><div class="mini">İade</div><div style="font-size:18px;font-weight:800;color:${ge.iade?'var(--bad)':'var(--sub)'}">${ge.iade}</div></div>
+      <div><div class="mini">🏆 En çok satan</div><div style="font-size:13.5px;font-weight:800;line-height:1.25">${esc(ge.top||'—')}</div></div>
+    </div></div>`;}
   if(y.kar){
     const seri=ciroSeri(30);const mx=Math.max(1,...seri);const top=30;
     const path=seri.map((v,i)=>`${i*(300/(seri.length-1))},${(top-2)-(v/mx)*(top-4)}`).join(' ');
@@ -1504,6 +1511,16 @@ function rPanel(){
   $('app').innerHTML=html;
 }
 function bekAct(i){if(window._bek&&window._bek[i])window._bek[i].act()}
+// 🗓️ Geçen ayın özet rakamları (ay başında panelde gösterilir)
+function gecenAyOzet(){const n=new Date();const b0=new Date(n.getFullYear(),n.getMonth()-1,1).getTime();const b1=new Date(n.getFullYear(),n.getMonth(),1).getTime();
+  const ss=db.satislar.filter(s=>s.tarih>=b0&&s.tarih<b1);
+  const sat=ss.filter(s=>s.tip!=='iade'),iad=ss.filter(s=>s.tip==='iade');
+  const ciro=sat.reduce((a,s)=>a+(+s.tutar||0)*satisDiv(s),0)-iad.reduce((a,s)=>a+(+s.tutar||0)*satisDiv(s),0);
+  const adet=sat.reduce((a,s)=>a+s.kalemler.reduce((x,k)=>x+(+k.mik||0),0),0);
+  const map={};sat.forEach(s=>s.kalemler.forEach(k=>map[k.urun]=(map[k.urun]||0)+(+k.mik||0)));
+  const top=Object.entries(map).sort((a,b)=>b[1]-a[1])[0];
+  const ad=new Date(b0).toLocaleDateString('tr-TR',{month:'long',year:'numeric'});
+  return {ad,ciro,adet,islem:sat.length,iade:iad.length,top:top?top[0]:''};}
 function modulListe(){
   const onay=db.bekleyenPortal.length;
   const navVs=navFor().map(x=>x[0]);
@@ -1559,7 +1576,7 @@ function rStok(){
   let html=canHammadde()?`<div class="tabs"><div class="tb ${stokTab==='mamul'?'on':''}" onclick="stokTab='mamul';rStok()">👕 Mamül</div><div class="tb ${stokTab==='hammadde'?'on':''}" onclick="stokTab='hammadde';rStok()">🧵 Hammadde</div></div>`:'';
   if(stokTab==='mamul'){
     const kats=['Tümü',...new Set(db.urunler.map(u=>u.kat).filter(Boolean))];
-    html+=`<div style="display:flex;gap:8px;align-items:stretch"><input class="search" id="ara-stok" placeholder="🔍 Ürün, kod, marka ara..." oninput="rStokList()" style="flex:1;margin-bottom:10px"><button class="btn ghost" style="width:auto;flex:0 0 auto;padding:0 15px;margin:0 0 10px;font-size:19px" onclick="barkodOkutAra()" title="Kamerayla barkod okut">📷</button></div><div class="segs">`+kats.map(k=>`<div class="seg ${k===stokKat?'on':''}" onclick="stokKat='${esc(jsq(k))}';rStok()">${esc(k)}</div>`).join('')+`</div>${canSayim()?`<button class="btn ghost sm" style="margin-bottom:10px" onclick="depoSayim()">📋 Depo Sayımı Yap</button>`:''}<div class="card" id="stok-list"></div>`;
+    html+=`<div style="display:flex;gap:8px;align-items:stretch"><input class="search" id="ara-stok" placeholder="🔍 Ürün, kod, marka ara..." oninput="rStokList()" style="flex:1;margin-bottom:10px"><button class="btn ghost" style="width:auto;flex:0 0 auto;padding:0 15px;margin:0 0 10px;font-size:19px" onclick="barkodOkutAra()" title="Kamerayla barkod okut">📷</button></div><div class="segs">`+kats.map(k=>`<div class="seg ${k===stokKat?'on':''}" onclick="stokKat='${esc(jsq(k))}';rStok()">${esc(k)}</div>`).join('')+`</div>${canSayim()?`<button class="btn ghost sm" style="margin-bottom:10px" onclick="depoSayim()">📋 Depo Sayımı Yap</button>`:''}${paraGoster()?`<button class="btn ghost sm" style="margin-bottom:10px" onclick="topluZam()">💹 Toplu Fiyat Güncelle (% zam / indirim)</button>`:''}<div class="card" id="stok-list"></div>`;
     $('app').innerHTML=html; rStokList();
   }else{
     const kats=['Tümü','Kumaş','Aksesuar','Etiket','Ambalaj'];
@@ -2436,6 +2453,24 @@ function hamFotoSec(input){const f=input.files&&input.files[0];if(!f)return;cons
 function silHammadde(id){askConfirm('Silinsin mi?',()=>{db.hammadde=db.hammadde.filter(x=>x.id!==id);save();closeM();envStokTazele();toast('Silindi')})}
 // Malzeme kaydı sonrası: hangi ekrandan geldiyse oraya dön (Envanter ya da Stok)
 function envStokTazele(){if(cur==='envanter')rEnvanter();else rStok();}
+
+// 💹 Toplu fiyat güncelleme — kategoriye ya da tüm ürünlere yüzde zam/indirim
+function topluZam(){const kats=['Tümü',...new Set(db.urunler.map(u=>u.kat).filter(Boolean))];
+  open_('💹 Toplu Fiyat Güncelle',`
+    <div class="infobox">Seçtiğin kategorideki ürünlerin fiyatına yüzde uygulanır. Eksi yazarsan indirim olur (ör. -5).</div>
+    <label>Kategori</label><select id="tz-kat">${kats.map(k=>`<option>${esc(k)}</option>`).join('')}</select>
+    <label>Yüzde</label><input id="tz-oran" type="number" inputmode="decimal" placeholder="ör. 10">
+    <label>Hangi fiyat?</label><select id="tz-alan"><option value="satis">Satış fiyatı</option><option value="alis">Alış fiyatı</option><option value="ikisi">İkisi de</option></select>
+    <button class="btn g" style="margin-top:12px" onclick="topluZamUygula()">Uygula</button>`);}
+function topluZamUygula(){const kat=$('tz-kat').value,oran=+($('tz-oran').value||0),alan=$('tz-alan').value;
+  if(!oran)return toast('Yüzde gir (eksi = indirim)');
+  const list=db.urunler.filter(u=>kat==='Tümü'||u.kat===kat);if(!list.length)return toast('Bu kategoride ürün yok');
+  askConfirm(`${list.length} ürünün ${alan==='ikisi'?'alış + satış':alan==='alis'?'alış':'satış'} fiyatına %${oran} uygulanacak.\nEmin misin? (Gerekirse Ayarlar > Yedek ile geri dönebilirsin)`,()=>{
+    try{autoYedek('toplu fiyat öncesi')}catch(e){}
+    const f=v=>{const y=(+v||0)*(1+oran/100);return y>=100?Math.round(y):+y.toFixed(2)};
+    list.forEach(u=>{if(alan!=='alis')u.satis=f(u.satis);if(alan!=='satis')u.alis=f(u.alis);if(alan!=='alis'&&+u.promosyon>0)u.promosyon=f(u.promosyon);});
+    save();try{canliYazHemen(['stok'])}catch(e){}closeM();rStok();toast('✓ '+list.length+' ürünün fiyatı güncellendi (%'+oran+')');
+  },'Uygula');}
 
 /* ---------- SATIŞ ---------- */
 let satisFilt='tum';
@@ -3939,7 +3974,11 @@ function kaydetOdeme(id){
   }
   const hitHesap=(tur!=='Çek'&&(isMus?tur!=='Kredi Kartı':true))&&h&&t>0;
   db.hareketler.push({id:nid('hr'),cariId:id,tip:isMus?'tahsilat':'odeme',tutar:t,kesik,tur,tarih:Date.now(),hesapId:hitHesap?h.id:null,yon:hitHesap?(isMus?'in':'out'):null});
-  save();closeM();rCari();toast((isMus?'Tahsilat':'Ödeme')+' kaydedildi ✓ '+TL(t)+(isMus&&kesik>0?' + kesik '+TL(kesik):''))}
+  save();closeM();rCari();toast((isMus?'Tahsilat':'Ödeme')+' kaydedildi ✓ '+TL(t)+(isMus&&kesik>0?' + kesik '+TL(kesik):''));
+  if(isMus&&t>0&&(c.tel||'').trim())setTimeout(()=>askConfirm('🧾 Tahsilat makbuzu WhatsApp ile gönderilsin mi?',()=>waAc(c.tel,makbuzText(c,t,kesik,tur)),'Gönder'),350);}
+// 🧾 Tahsilat makbuzu metni (WhatsApp)
+function makbuzText(c,t,kesik,tur){const ciz='━━━━━━━━━━━━━━';const n=new Date();
+  return `🧾 *${(db.firma||'IQ Basics').toLocaleUpperCase('tr-TR')}* — Tahsilat Makbuzu\n${ciz}\n📅 ${n.toLocaleDateString('tr-TR')} ${n.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'})}\n👤 ${c.ad}\n${ciz}\nAlınan: *${TL(t)}* (${tur})${kesik>0?`\nKesik: ${TL(kesik)}`:''}\nKalan bakiye: *${TL(Math.max(0,+c.bakiye||0))}*\n${ciz}\nBizi tercih ettiğiniz için teşekkürler 🙏`;}
 function formAlim(id){
   const c=cari(id);
   open_('Alım · '+c.ad,`
@@ -6495,6 +6534,16 @@ function rapOzet(R){let h='';
       ${kzRow('= NET KÂR',TL(R.netKar),R.netKar>=0?'var(--good)':'var(--bad)',true)}
       <div class="mini" style="margin-top:8px">Maliyet = ürün alış×seri (COGS). İşletme gideri kira/maaş vb. — tedarik/fason ödemesi maliyete zaten dahil, tekrar sayılmaz.</div></div>`;
   }
+  // 💎 ÜRÜN KÂRLILIĞI (dönem) — hangi modelden ne kazanıyorsun
+  if(R.kar){const km={};R.sat.forEach(s=>s.kalemler.forEach(k=>{const u=urun(k.uid);const c=km[k.uid]||(km[k.uid]={ad:k.urun,adet:0,net:0,mal:0});c.adet+=(+k.mik||0);c.net+=(+k.mik||0)*(+k.fiyat||0);c.mal+=u?urunAlisTL(u)*(+k.mik||0)*(k.birim==='seri'?(u.seri||1):1):0;}));
+    const kliste=Object.values(km).map(x=>({...x,kar:x.net-x.mal,marj:x.net?Math.round((x.net-x.mal)/x.net*100):0})).sort((a,b)=>b.kar-a.kar);
+    if(kliste.length)h+=`<div class="sec">💎 Ürün Kârlılığı · ${R.donemAd}</div><div class="card" style="padding:6px 12px">`+kliste.slice(0,6).map(x=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--ln2);font-size:12.5px"><div style="min-width:0"><b>${esc(x.ad)}</b><div class="mini">${x.adet} adet · marj %${x.marj}</div></div><b style="flex:0 0 auto;color:${x.kar>=0?'var(--good)':'var(--bad)'}">${TL(x.kar)}</b></div>`).join('')+`</div>`;}
+  // 🧊 ÖLÜ STOK — 60+ gündür satılmayan, stokta para bağlayan ürünler
+  if(R.kar){const son={};db.satislar.filter(s=>s.tip!=='iade').forEach(s=>s.kalemler.forEach(k=>{if(!son[k.uid]||s.tarih>son[k.uid])son[k.uid]=s.tarih}));
+    const esik=Date.now()-60*86400000;
+    const olu=db.urunler.filter(u=>!u.pasif&&stokTop(u)>0&&(son[u.id]||0)<esik).map(u=>({u,g:son[u.id]?Math.floor((Date.now()-son[u.id])/86400000):null,deger:stokTop(u)*urunAlisTL(u)})).sort((a,b)=>b.deger-a.deger);
+    if(olu.length){const topD=olu.reduce((a,x)=>a+x.deger,0);
+      h+=`<div class="sec">🧊 Ölü Stok <span class="mini" style="text-transform:none;font-weight:600">60+ gündür satılmıyor · ${TL(topD)} bağlı</span></div><div class="card" style="padding:6px 12px">`+olu.slice(0,6).map(x=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--ln2);font-size:12.5px"><div style="min-width:0"><b>${esc(x.u.ad)}</b><div class="mini">${stokTop(x.u)} ${esc(x.u.birim||'')} stokta · ${x.g==null?'hiç satılmadı':x.g+' gündür satılmıyor'}</div></div><b style="flex:0 0 auto">${TL(x.deger)}</b></div>`).join('')+(olu.length>6?`<div class="mini" style="text-align:center;padding:7px">+${olu.length-6} ürün daha</div>`:'')+`</div>`;}}
   // hedef takibi (ay/yıl)
   if(rapDonem==='ay'||rapDonem==='yil'){
     const hedef=(+db.hedef||0)*(rapDonem==='yil'?12:1),per=rapDonem==='yil'?'Yıllık':'Aylık';
