@@ -563,7 +563,7 @@ const CANLI_DOMEN={
   stok:['urunler','hammadde','malSiparis','malKat'],
   cari:['cariler'],
   kasa:['hesaplar','hareketler'],
-  satis:['satislar','bekleyenPortal','islenenSiparis'],
+  satis:['satislar','bekleyenPortal','islenenSiparis','kuponlar','stokBildirim'],
   cek:['cekler'],
   uretim:['isemirleri'],
   ayar:['firma','firmaSlogan','firmaAdres','firmaTel','firmaWp','firmaTelegram','firmaLogo','firmaSite','satici','kurUSD','kurEUR','seq','kademe','minSiparis','kampanya','kurTarih','portalFav','portalTaslak','duzenliGider','cldName','cldPreset','rolAyar']
@@ -607,7 +607,7 @@ function canliBaslat(sessiz){
       CANLI_DOMEN[domen].forEach(k=>{if(d[k]!==undefined)db[k]=d[k];});
       if(domen==='satis')canliSatisUzlas(yIslenen,ySatis);
       db.ornek=false; // buluttan gerçek veri geldi → artık demo değil
-      _canliGolge[domen]=js; localStorage.setItem(KEY,JSON.stringify(db));
+      _canliGolge[domen]=js; try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){console.warn('yerel kayıt başarısız (depolama dolu olabilir)',e)}
       _canliUygulaniyor=false;
       try{if(typeof render==='function'&&typeof cur!=='undefined')render()}catch(e){}
     },err=>{console.warn('canlı-dinle',domen,err&&err.code);canliIzinHata(err);});
@@ -617,7 +617,7 @@ function canliBaslat(sessiz){
   if(!sessiz)toast('☁️ Canlı senkron açık');
   return true;
 }
-function canliDur(){_canliUnsub.forEach(u=>{try{u()}catch(e){}});_canliUnsub=[];canliAcik=false;db.canliBulut=false;localStorage.setItem(KEY,JSON.stringify(db));}
+function canliDur(){_canliUnsub.forEach(u=>{try{u()}catch(e){}});_canliUnsub=[];_canliGolge={};canliAcik=false;db.canliBulut=false;localStorage.setItem(KEY,JSON.stringify(db));}
 // OTOMATİK SENKRON — giriş varsa kendiliğinden bağlanır; kullanıcı hiçbir şey açmaz.
 // Bulut boşsa (ilk cihaz) yereli yükler; doluysa buluttakini alıp canlı dinler.
 let _otoSenkronCalisti=false;
@@ -809,7 +809,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-88'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-89'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -899,7 +899,8 @@ async function bulutSiparisleriCek(){if(!bulutBaslat())return toast('☁️ Bulu
   if(!bulutGirisli())return bulutGirisIste('cek');
   try{const snap=await _fb.collection('siparisler').where('magaza','==',MAGAZA_ID).where('durum','==','yeni').get();
     let n=0;snap.forEach(doc=>{const o=doc.data();if(siparisIslendiMi(doc.id))return;
-      db.bekleyenPortal.push({id:nid('bp'),bulutId:doc.id,mus:o.mus,mid:o.mid||0,tarih:o.tarih||o.olusturma||Date.now(),kalemler:o.kalemler||[],tutar:o.tutar||0,not:o.not||'',tel:o.tel||'',adres:o.adres||'',sehir:o.sehir||'',kupon:o.kupon||null,calisan:o.calisan||''});n++;});
+      if(o.tip==='istek'){db.stokBildirim=db.stokBildirim||[];if(!db.stokBildirim.some(x=>x.bulutId===doc.id))db.stokBildirim.push({uid:o.istekUid||0,mus:o.mus||'',tel:o.tel||'',tarih:o.tarih||Date.now(),bulutId:doc.id});n++;return;}
+        db.bekleyenPortal.push({id:nid('bp'),bulutId:doc.id,mus:o.mus,mid:o.mid||0,tarih:o.tarih||o.olusturma||Date.now(),kalemler:o.kalemler||[],tutar:o.tutar||0,not:o.not||'',tel:o.tel||'',adres:o.adres||'',sehir:o.sehir||'',kupon:o.kupon||null,calisan:o.calisan||''});n++;});
     if(n){save();rPortal();}toast(n?('☁️ '+n+' yeni sipariş alındı ✓'):'Yeni sipariş yok');
   }catch(e){toast('Sipariş çekme hatası: '+(e.message||e))}
 }
@@ -1110,6 +1111,7 @@ function siparisDinle(){
   try{
     _sipUnsub=_fb.collection('siparisler').where('magaza','==',MAGAZA_ID).where('durum','==','yeni').onSnapshot(snap=>{
       let n=0;snap.forEach(doc=>{const o=doc.data();if(siparisIslendiMi(doc.id))return;
+        if(o.tip==='istek'){db.stokBildirim=db.stokBildirim||[];if(!db.stokBildirim.some(x=>x.bulutId===doc.id))db.stokBildirim.push({uid:o.istekUid||0,mus:o.mus||'',tel:o.tel||'',tarih:o.tarih||Date.now(),bulutId:doc.id});n++;return;}
         db.bekleyenPortal.push({id:nid('bp'),bulutId:doc.id,mus:o.mus,mid:o.mid||0,tarih:o.tarih||o.olusturma||Date.now(),kalemler:o.kalemler||[],tutar:o.tutar||0,not:o.not||'',tel:o.tel||'',adres:o.adres||'',sehir:o.sehir||'',kupon:o.kupon||null,calisan:o.calisan||''});n++;});
       if(n){save();try{if(typeof render==='function'&&typeof cur!=='undefined')render()}catch(e){}
         toast('🔔 '+n+' yeni sipariş geldi!');
@@ -1133,13 +1135,13 @@ function siparisDinleMusteri(){
 }
 function siparisMusDur(){if(_sipMusUnsub){try{_sipMusUnsub()}catch(e){}_sipMusUnsub=null;}}
 
-function sifirla(){askConfirm('Tüm veriler örnek verilere sıfırlansın mı?',()=>{db=seed();save();go('panel');toast('Sıfırlandı')})}
+function sifirla(){askConfirm('Tüm veriler örnek verilere sıfırlansın mı?'+(typeof canliAcik!=='undefined'&&canliAcik?'\n\n⚠️ Canlı senkron açık: önce yedek alınır ve senkron durdurulur — buluttaki gerçek veri EZİLMEZ.':''),()=>{try{autoYedek('sıfırlamadan önce')}catch(e){}try{if(typeof canliAcik!=='undefined'&&canliAcik)canliDur()}catch(e){}db=seed();db.canliBulut=false;save();go('panel');toast('Sıfırlandı — örnek veriye dönüldü')})}
 // 🧹 Test/örnek verileri temizle — sıfırdan boş başla (firma bilgisi + kur + roller + PIN korunur)
 function bosBaslat(){
   const canli=canliAcik;
   askConfirm('🧹 Sıfırdan başla?\n\nTÜM örnek/test verileri silinecek: ürünler, cariler, satışlar, kasa hareketleri, çekler, iş emirleri, bekleyen siparişler.\n\nKORUNUR: firma bilgilerin, döviz kuru, indirim kademeleri, roller, PIN.\n'+(canli?'\n⚠️ Canlı senkron AÇIK — bu temizlik BULUTA ve tüm cihazlara da yansır.\n':'')+'\nÖnce otomatik yedek alınır (geri dönebilirsin). Devam?',()=>{
     autoYedek('sıfırdan başlamadan önce');
-    db.urunler=[];db.cariler=[];db.satislar=[];db.cekler=[];db.isemirleri=[];db.bekleyenPortal=[];db.hareketler=[];db.portalTaslak=[];db.stokBildirim=[];db.duzenliGider=[];db.hammadde=[];db.malSiparis=[];db.malKat=[];db.kampanya=null;
+    db.urunler=[];db.cariler=[];db.satislar=[];db.cekler=[];db.isemirleri=[];db.bekleyenPortal=[];db.hareketler=[];db.portalTaslak=[];db.stokBildirim=[];db.duzenliGider=[];db.hammadde=[];db.malSiparis=[];db.malKat=[];db.ortakHarcama=[];db.kuponlar=[];db.kampanya=null;
     db.seq={}; db.hesaplar=[{id:nid('h'),ad:'Nakit Kasa',tur:'nakit',bakiye:0}];
     save();closeM();go('panel');toast('🧹 Temizlendi — sıfırdan başlayabilirsin ✓');
   },'Evet, temizle');
@@ -1152,6 +1154,7 @@ const USD=n=>'$'+Math.round(Number(n||0)).toLocaleString('tr-TR');
 const money=(n,pb)=>pb==='USD'?USD(n):pb==='EUR'?'€'+Math.round(Number(n||0)).toLocaleString('tr-TR'):TL(n);
 const ii=s=>(s||'?').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const jsq=s=>(s==null?'':String(s)).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); // onclick içi tek-tırnak güvenliği
 function toast(t){const e=$('toast');e.textContent=t;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),1900)}
 let _cYes=null;
 function askConfirm(msg,onYes,yesLabel){$('cMsg').textContent=msg;$('cYes').textContent=yesLabel||'Evet';_cYes=onYes;$('cov').classList.add('show')}
@@ -1189,14 +1192,14 @@ function bugunSatis(){const b=new Date().setHours(0,0,0,0);return db.satislar.fi
 function panoGunOzet(){const b=new Date().setHours(0,0,0,0);
   const sat=db.satislar.filter(s=>s.tarih>=b&&s.tip!=='iade');
   const iade=db.satislar.filter(s=>s.tarih>=b&&s.tip==='iade');
-  let tah=0;(db.hareketler||[]).filter(h=>h.tarih>=b&&h.tip==='tahsilat').forEach(h=>tah+=(+h.tutar||0));
+  let tah=0;(db.hareketler||[]).filter(h=>h.tarih>=b&&h.tip==='tahsilat'&&h.tur!=='Taksit').forEach(h=>tah+=(+h.tutar||0));
   db.satislar.filter(s=>s.tarih>=b&&s.odenen>0).forEach(s=>tah+=s.odenen*satisDiv(s));
   const yeniSip=(db.bekleyenPortal||[]).filter(o=>(o.tarih||0)>=b).length;
   return {adet:sat.length,ciro:sat.reduce((a,s)=>a+(+s.tutar||0)*satisDiv(s),0),tahsilat:tah,iade:iade.length,yeniSip};}
 function enCokSatan(gun,n){const since=Date.now()-gun*86400000;const map={};
   db.satislar.filter(s=>s.tarih>=since&&s.tip!=='iade').forEach(s=>(s.kalemler||[]).forEach(k=>{
     const m=map[k.uid]||(map[k.uid]={uid:k.uid,ad:k.urun,adet:0,ciro:0});
-    m.adet+=(+k.mik||0);m.ciro+=(+k.mik||0)*(+k.fiyat||0)*satisDiv(s);}));
+    m.adet+=(+k.mik||0);m.ciro+=(+k.mik||0)*(+k.fiyat||0);}));
   return Object.values(map).sort((a,b)=>b.adet-a.adet).slice(0,n||5);}
 function ciroSeri(gun){const arr=[];const bugun=new Date().setHours(0,0,0,0);
   for(let i=gun-1;i>=0;i--){const g0=bugun-i*86400000,g1=g0+86400000;
@@ -1556,7 +1559,7 @@ function rStok(){
   let html=canHammadde()?`<div class="tabs"><div class="tb ${stokTab==='mamul'?'on':''}" onclick="stokTab='mamul';rStok()">👕 Mamül</div><div class="tb ${stokTab==='hammadde'?'on':''}" onclick="stokTab='hammadde';rStok()">🧵 Hammadde</div></div>`:'';
   if(stokTab==='mamul'){
     const kats=['Tümü',...new Set(db.urunler.map(u=>u.kat).filter(Boolean))];
-    html+=`<div style="display:flex;gap:8px;align-items:stretch"><input class="search" id="ara-stok" placeholder="🔍 Ürün, kod, marka ara..." oninput="rStokList()" style="flex:1;margin-bottom:10px"><button class="btn ghost" style="width:auto;flex:0 0 auto;padding:0 15px;margin:0 0 10px;font-size:19px" onclick="barkodOkutAra()" title="Kamerayla barkod okut">📷</button></div><div class="segs">`+kats.map(k=>`<div class="seg ${k===stokKat?'on':''}" onclick="stokKat='${esc(k)}';rStok()">${esc(k)}</div>`).join('')+`</div>${canSayim()?`<button class="btn ghost sm" style="margin-bottom:10px" onclick="depoSayim()">📋 Depo Sayımı Yap</button>`:''}<div class="card" id="stok-list"></div>`;
+    html+=`<div style="display:flex;gap:8px;align-items:stretch"><input class="search" id="ara-stok" placeholder="🔍 Ürün, kod, marka ara..." oninput="rStokList()" style="flex:1;margin-bottom:10px"><button class="btn ghost" style="width:auto;flex:0 0 auto;padding:0 15px;margin:0 0 10px;font-size:19px" onclick="barkodOkutAra()" title="Kamerayla barkod okut">📷</button></div><div class="segs">`+kats.map(k=>`<div class="seg ${k===stokKat?'on':''}" onclick="stokKat='${esc(jsq(k))}';rStok()">${esc(k)}</div>`).join('')+`</div>${canSayim()?`<button class="btn ghost sm" style="margin-bottom:10px" onclick="depoSayim()">📋 Depo Sayımı Yap</button>`:''}<div class="card" id="stok-list"></div>`;
     $('app').innerHTML=html; rStokList();
   }else{
     const kats=['Tümü','Kumaş','Aksesuar','Etiket','Ambalaj'];
@@ -1588,7 +1591,7 @@ function rEnvanter(){
   const azSay=arr.filter(h=>(+h.stok||0)<=(+h.kritik||0)).length;
   html+=`<div class="envtot"><span>🧵 ${arr.length} çeşit${envMalKat!=='Tümü'?' · '+envMalKat:''}${azSay?` · <span style="color:#ffd7d0">${azSay} az</span>`:''}</span>${gizli?'':`<b>${TL(deger)}</b>`}</div>`;
   html+=`<input class="search" id="ara-env" placeholder="🔍 Malzeme ara..." oninput="rEnvList()" style="margin-bottom:10px">`;
-  html+=`<div class="segs">`+mkats.map(k=>`<div class="seg ${k===envMalKat?'on':''}" onclick="envMalKat='${k}';rEnvanter()">${k==='Tümü'?'Tümü':envKatIc(k)+' '+k}</div>`).join('')+`</div>`;
+  html+=`<div class="segs">`+mkats.map(k=>`<div class="seg ${k===envMalKat?'on':''}" onclick="envMalKat='${esc(jsq(k))}';rEnvanter()">${k==='Tümü'?'Tümü':envKatIc(k)+' '+esc(k)}</div>`).join('')+`</div>`;
   const yeniKat=envMalKat==='Tümü'?'Kumaş':envMalKat;
   html+=`<button class="btn g" style="margin-bottom:10px" onclick="formHammadde(0,'${yeniKat}')">＋ ${envMalKat==='Tümü'?'Malzeme':yeniKat} Alımı / Ekle</button>`;
   html+=`<div class="card" id="env-list"></div>`;
@@ -1630,7 +1633,7 @@ function malStoklaRenk(h,renk,mik,parti){if(!mik)return;
         if(kullanilan>1){try{toast('⚠️ '+renk+': '+kullanilan+' farklı PARTİDEN düşüldü — ton farkı riskine dikkat!');}catch(e){}}
         if(kalan>0.0001){/* parti stoğu yetmedi → kalan renk toplamından eksilir (negatif olabilir) */}
       }
-      r.stok=+(( r.partiler.reduce((a,x)=>a+(+x.mik||0),0) )+ (mik<0?Math.min(0,(+r.stok||0)+mik- r.partiler.reduce((a,x)=>a+(+x.mik||0),0)):0)).toFixed(3);
+      r.stok=+(((+r.stok||0)+mik).toFixed(3)); // gerçek bakiye: eksiye düşmüş stok yeni parti gelince silinmez
     }else{r.stok=+(((+r.stok||0)+mik)).toFixed(3);}
     h.stok=+(h.renkler.reduce((a,x)=>a+(+x.stok||0),0)).toFixed(3);
   }
@@ -2064,7 +2067,7 @@ function cizRenkSwatch(i,inp){if(!fRenk[i])return;const hx=hexFromAd(inp.value);
 function renkTot(){const t=$('renk-tot');if(!t)return;if(!fRenk.length){t.textContent='';return}const s=fRenk.reduce((a,r)=>a+(+r.stok||0),0);const k=fRenk.reduce((a,r)=>a+(r.kirik?Object.values(r.kirik).reduce((b,x)=>b+(+x||0),0):0),0);t.innerHTML=`📦 Toplam: <b>${s}</b> seri${k?` + ${k} tek (kırık)`:''}`}
 function renkEkle(){fRenk.push({ad:'',hex:'#8a8f98',foto:'',barkod:genBarkod(),stok:0,kirik:null});cizRenk()}
 function renkFotoSec(i){const el=$('rf-'+i);if(el)el.click()}
-function renkFoto(i,input){const f=input.files&&input.files[0];if(!f)return;const el=$('rfp-'+i);if(el)el.textContent='⏳';resimSecYukle(f,d=>{if(fRenk[i])fRenk[i].foto=d;cizRenk()},1000,0.75)}
+function renkFoto(i,input){const f=input.files&&input.files[0];if(!f)return;resimSecYukle(f,d=>{if(fRenk[i])fRenk[i].foto=d;cizRenk()},1000,0.75)}
 function renkKirik(i){if(!fBeden.length){urunTab('genel');return toast('Önce seri içeriği (beden) ekle')}fRenk[i]._kirikOpen=!fRenk[i]._kirikOpen;if(fRenk[i]._kirikOpen&&!fRenk[i].kirik)fRenk[i].kirik={};cizRenk()}
 function setKirik(i,bd,v){if(!fRenk[i].kirik)fRenk[i].kirik={};const n=+v||0;if(n>0)fRenk[i].kirik[bd]=n;else delete fRenk[i].kirik[bd];renkTot()}
 function setBirim(b){$('sb-seri').classList.toggle('on',b==='seri');$('sb-adet').classList.toggle('on',b==='adet');const bw=$('beden-wrap');if(bw)bw.style.display=b==='seri'?'':'none';renkTot()}
@@ -2462,7 +2465,7 @@ function formSatis(pre,editId){
   if(!db.urunler.length)return toast('Önce ürün ekle (Stok)');
   let eIsk=0,eKdv=10,eTasima=0,eSevk='',eKesik=0;
   if(editId){const s=db.satislar.find(x=>x.id===editId);if(s){sMusId=s.mid;sPB=s.pb;sDurum=s.teslimDurum||'teslim';eIsk=s.iskonto||0;eKdv=s.kdv||0;eTasima=s.tasima||0;eSevk=s.sevkiyat||'';eKesik=s.kesik||0;sDepo=!!s.depo;sFoto=s.foto||'';sOdemeler=(s.odemeler||(s.odenen>0?[{tur:s.odemeTur||'Nakit',tutar:s.odenen,pb:s.pb,hesapId:s.odemeHesapId||0,vade:s.cekVade||0,foto:s.cekFoto||''}]:[])).map(l=>({...l}));sepet=s.kalemler.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:k.fiyat,renkler:k.renkler?k.renkler.map(r=>({...r})):undefined}));sEkstra=(s.ekstralar||[]).map(x=>({...x}))}}
-  else if(pre){const u=urun(pre);if(u){sMusId=0;sepet.push({uid:u.id,urun:u.ad,mik:1,birim:u.birim,fiyat:u.satis*birimAdet(u)})}}
+  else if(pre){const u=urun(pre);if(u){sMusId=0;sepet.push({uid:u.id,urun:u.ad,mik:1,birim:u.birim,fiyat:urunSatisTL(u)})}}
   if(!sOdemeler.length)sOdemeler=[{tur:'Nakit',tutar:0,pb:sPB,hesapId:(db.hesaplar[0]&&db.hesaplar[0].id)||0,vade:0,foto:''}];
   const musName=sMusId?(cari(sMusId)?.ad||''):'';
   open_(editId?'Satışı Düzenle':'Yeni Satış',`
@@ -2479,6 +2482,7 @@ function formSatis(pre,editId){
     <div id="s-sepet" style="margin-top:12px"></div>
     <div style="display:flex;gap:8px;margin-top:12px"><div class="seg2" style="flex:1"><div class="o on" id="pb-TL" onclick="setPB('TL')">₺</div><div class="o" id="pb-USD" onclick="setPB('USD')">$</div><div class="o" id="pb-EUR" onclick="setPB('EUR')">€</div></div></div>
     <label>İskonto (%)</label><input id="s-isk" type="number" value="${eIsk}" oninput="cizSepet()">
+    <label>Vade (vade farkı için)</label><div class="iechips" style="margin-bottom:4px">${[[0,'Peşin'],[30,'30 gün'],[60,'60 gün'],[90,'90 gün']].map(v=>`<div class="c ${sVade===v[0]?'on':''}" id="sv-${v[0]}" onclick="setVade(${v[0]})">${v[1]}</div>`).join('')}</div><div class="mini" id="s-vade-info" style="margin-bottom:6px"></div>
     <div class="g2"><div><label>KDV (%)</label><input id="s-kdv" type="number" inputmode="numeric" value="${eKdv}" oninput="cizSepet()" placeholder="0"></div><div><label>Taşıma / Kargo</label><input id="s-tasima" type="number" inputmode="numeric" value="${eTasima}" oninput="cizSepet()" placeholder="0"></div></div>
     <div id="s-ekstra"></div>
     <button type="button" class="btn ghost sm" onclick="ekstraEkle()" style="margin-top:6px">+ Ek ücret (nakış, işleme, fason...)</button>
@@ -2594,10 +2598,12 @@ function satisHesap(){
   return {ara,isk,vf,kdv,tasima,ekstra,div,malPB,kdvPB,tutar};
 }
 function sonFiyat(mid,uid){if(!mid)return 0;const ss=db.satislar.filter(s=>s.mid===mid).sort((a,b)=>b.tarih-a.tarih);for(const s of ss){const k=(s.kalemler||[]).find(x=>x.uid===uid);if(k)return k.fiyat}return 0}
-function musUrunFiyat(uid){const u=urun(uid);if(!u)return 0;return sonFiyat(sMusId,uid)||(u.satis*birimAdet(u))}
+function urunSatisTL(u){return (+u.satis||0)*birimAdet(u)*((u.pb&&u.pb!=='TL')?(pbKur(u.pb)||1):1)}
+function urunAlisTL(u){return (+u.alis||0)*((u.pb&&u.pb!=='TL')?(pbKur(u.pb)||1):1)}
+function musUrunFiyat(uid){const u=urun(uid);if(!u)return 0;return sonFiyat(sMusId,uid)||urunSatisTL(u)}
 function urnBilgi(){const u=sUrunId?urun(sUrunId):null;const info=$('s-urninfo'),rb=$('s-renkler'),box=$('s-mikbox');if(!rb)return;
   if(!u){if(box)box.style.display='none';rb.innerHTML='';if(info)info.textContent='';return}
-  const objs=renkObjs(u);const eski=sonFiyat(sMusId,u.id);const fy=eski||(u.satis*birimAdet(u));const pb=u.pb||'TL';
+  const objs=renkObjs(u);const eski=sonFiyat(sMusId,u.id);const fy=eski||urunSatisTL(u);const pb=u.pb||'TL';
   const seriNot=(u.birim==='seri'&&birimAdet(u)>1)?` · ${money(u.satis,pb)}/parça × ${u.seri}`:'';
   const fiyatRow=`<div style="margin:8px 0 2px"><div style="display:flex;gap:8px;align-items:center"><label style="margin:0;flex:0 0 auto">Bu satış fiyatı</label><input id="s-fiyat" type="number" inputmode="numeric" min="0" value="${fy}" style="width:120px;margin:0;padding:9px" oninput="fiyatBilgi()"><span class="mini">/${u.birim} (${pb})${seriNot}</span></div><div class="mini" id="s-fiyat-info" style="margin-top:5px"></div></div>`;
   if(objs.length){
@@ -2619,7 +2625,7 @@ function rq(i,d,stok){const el=$('rq-'+i);if(!el)return;let v=Math.max(0,(+el.va
 function rqCheck(i,stok){const el=$('rq-'+i);if(!el)return;if(+el.value<0)el.value=0;if((+el.value||0)>stok)toast('⚠️ Stokta '+stok+' var, fazlasını giriyorsun')}
 function mik(d){const i=$('s-mik');i.value=Math.max(1,(+i.value||1)+d)}
 function setPB(pb){sPB=pb;['TL','USD','EUR'].forEach(x=>$('pb-'+x).classList.toggle('on',x===pb));cizSepet()}
-function setVade(g){sVade=+g;cizSepet()}
+function setVade(g){sVade=+g;[0,30,60,90].forEach(x=>{const el=$('sv-'+x);if(el)el.classList.toggle('on',x===+g)});const inf=$('s-vade-info');if(inf)inf.textContent=+g?(g+' gün vade → +%'+vadeFarkiYuzde()+' vade farkı eklenir'):'';cizSepet()}
 function satisReset(){sUrunId=0;if($('s-urun-in'))$('s-urun-in').value='';if($('s-renkler'))$('s-renkler').innerHTML='';if($('s-mikbox'))$('s-mikbox').style.display='none';if($('s-urninfo'))$('s-urninfo').textContent='';if($('s-mik'))$('s-mik').value=1}
 function sepEkle(){const u=sUrunId?urun(sUrunId):null;if(!u)return toast('Önce ürün seç');
   const fy=($('s-fiyat')&&$('s-fiyat').value!=='')?Math.max(0,+$('s-fiyat').value||0):musUrunFiyat(u.id);
@@ -2671,8 +2677,8 @@ function applySatis(s){
   if(m)m.bakiye+=(s.tutar-s.odenen-(s.kesik||0))*div;
   if(m&&s.kesik)m.kesikToplam=(m.kesikToplam||0)+s.kesik*div;
   (s.odemeler||[]).forEach(l=>{const lTL=(+l.tutar||0)*pbKur(l.pb);l._tl=lTL;if(lTL<=0)return;
-    if(l.tur==='Çek'){const c={id:nid('cek'),tur:'cek',tip:'alinan',cariId:s.mid,cari:s.mus,tutar:lTL,vade:l.vade||(Date.now()+30*86400000),banka:'—',durum:'portfoyde',foto:l.foto||''};db.cekler.push(c);l._cekId=c.id}
-    else if(l.tur==='Kredi Kartı'){const c={id:nid('cek'),tur:'kk',tip:'alinan',cariId:s.mid,cari:s.mus,tutar:lTL,vade:l.vade||(Date.now()+34*86400000),banka:'Kredi Kartı POS',durum:'portfoyde'};db.cekler.push(c);l._cekId=c.id}
+    if(l.tur==='Çek'){const c={id:nid('cek'),tur:'cek',tip:'alinan',cariId:s.mid,cari:s.mus,tutar:lTL,vade:l.vade||(Date.now()+30*86400000),banka:'—',durum:'portfoyde',foto:l.foto||'',cariIsle:true};db.cekler.push(c);l._cekId=c.id}
+    else if(l.tur==='Kredi Kartı'){const c={id:nid('cek'),tur:'kk',tip:'alinan',cariId:s.mid,cari:s.mus,tutar:lTL,vade:l.vade||(Date.now()+34*86400000),banka:'Kredi Kartı POS',durum:'portfoyde',cariIsle:true};db.cekler.push(c);l._cekId=c.id}
     else{let h=l.tur==='Havale'?hesap(l.hesapId):null;if(!h)h=db.hesaplar.find(x=>/nakit|kasa/i.test(x.ad))||db.hesaplar[0];if(h){h.bakiye+=lTL;l._hesapId=h.id}} // hesap silinmişse para kaybolmasın → varsayılan kasaya
   });
 }
@@ -2691,6 +2697,7 @@ function revertSatis(s){
     else{const h=hesap(s.odemeHesapId);if(h)h.bakiye-=s.odenen*div}
   }
 }
+function satisKilitliCek(s){return !!(s&&(s.odemeler||[]).find(l=>{if(!l._cekId)return false;const c=db.cekler.find(x=>x.id===l._cekId);return c&&c.durum!=='portfoyde';}));}
 function kaydetSatis(){
   if(!sepet.length)return toast('Sepet boş');
   const typed=($('s-mus-in')?.value||'').trim();
@@ -2713,6 +2720,7 @@ function kaydetSatis(){
   const old=sEdit?db.satislar.find(x=>x.id===sEdit):null;
   const data={tip:'satis',mid:m.id,mus:m.ad,kalemler:sepet.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:k.fiyat,renkler:k.renkler?k.renkler.map(r=>({...r})):undefined})),araToplam:h.ara,iskonto:h.isk,vadeFarki:h.vf,kdv:h.kdv,kdvTutar:h.kdvPB,tasima:h.tasima,sevkiyat:($('s-sevk')?.value||'').trim(),tutar,odenen:oden,kesik,pb:sPB,satisKur:div,durum:'tamam',teslimDurum:sDurum,ekstralar:sEkstra.filter(x=>(x.ad||'').trim()&&+x.tutar>0).map(x=>({ad:x.ad.trim(),tutar:+x.tutar})),depo:$('s-depo')?.checked?((old&&old.depo==='hazir')?'hazir':'bekliyor'):null,foto:sFoto||'',odemeler,odemeTur:odetur};
   const commit=()=>{
+    if(old&&satisKilitliCek(old))return toast('⚠️ Bu satışın çeki tahsil/ciro edilmiş — düzenlemek için önce Çekler ekranından işlemi geri al');
     if(old)revertSatis(old);
     if(sEdit&&old){data.id=old.id;data.tarih=old.tarih;Object.assign(old,data);applySatis(old);save();closeM();go('satis');toast('Satış güncellendi ✓')}
     else{data.id=nid('s');data.tarih=Date.now();db.satislar.push(data);applySatis(data);save();closeM();go('satis');toast('Satış kaydedildi ✓ '+money(tutar,sPB));
@@ -2813,7 +2821,7 @@ function iadeKalemler(s){const done=iadeEdilmisMap(s);const arr=[];s.kalemler.fo
   else{const m=Math.min(sel['_']||0,Math.max(0,(+k.mik||0)-(dd['_']||0)));if(m>0)arr.push({uid:k.uid,urun:k.urun,mik:m,birim:k.birim,fiyat:k.fiyat})}});
   return arr;}
 function iadeHesap(s){const kal=iadeKalemler(s);const ara=kal.reduce((a,k)=>a+k.mik*k.fiyat,0);const isk=+s.iskonto||0,kdv=+s.kdv||0;
-  const net=ara*(1-isk/100)*(1+kdv/100);const kdvT=ara*(1-isk/100)*kdv/100;const div=satisDiv(s);return {kal,ara,net,kdvT,div,netTL:net*div};}
+  const net=ara*(1-isk/100)*(1+kdv/100);const kdvT=ara*(1-isk/100)*kdv/100;const div=satisDiv(s)||1;return {kal,ara,net,kdvT,div,netTL:net,araPB:ara/div,netPB:net/div,kdvPB:kdvT/div};}
 function iadeCiz(){const s=db.satislar.find(x=>x.id===_iadeSid);const el=$('iade-list');if(!s||!el)return;
   const done=iadeEdilmisMap(s);
   el.innerHTML=s.kalemler.map((k,i)=>{const dd=done[k.uid]||{};
@@ -2825,7 +2833,7 @@ function iadeCiz(){const s=db.satislar.find(x=>x.id===_iadeSid);const el=$('iade
   }).join('');
   const h=iadeHesap(s);const nakit=$('iade-nakit')?.checked;
   $('iade-hesap').innerHTML=nakit?`<label>Hangi kasadan ödensin?</label><select id="iade-hs">${db.hesaplar.map(hs=>`<option value="${hs.id}">${esc(hs.ad)} · ${TL(hs.bakiye)}</option>`).join('')}</select>`:'';
-  $('iade-ozet').innerHTML=`<div><div class="l">İade Tutarı</div><div class="v" style="color:var(--bad)">${money(h.net,s.pb)}</div></div>`;
+  $('iade-ozet').innerHTML=`<div><div class="l">İade Tutarı</div><div class="v" style="color:var(--bad)">${money(h.netPB,s.pb)}</div></div>`;
 }
 function iadeKaydet(){const s=db.satislar.find(x=>x.id===_iadeSid);if(!s)return;const h=iadeHesap(s);
   if(!h.kal.length)return toast('İade edilecek ürün/miktar seç');
@@ -2835,12 +2843,14 @@ function iadeKaydet(){const s=db.satislar.find(x=>x.id===_iadeSid);if(!s)return;
   h.kal.forEach(k=>stokUygula(k,1)); // mal stoğa geri
   const m=cari(s.mid);
   if(!nakit){if(m)m.bakiye-=h.netTL}
-  db.satislar.push({id:nid('s'),tip:'iade',mid:s.mid,mus:s.mus,tarih:Date.now(),kaynakId:s.id,pb:s.pb,satisKur:h.div,kalemler:h.kal,araToplam:h.ara,iskonto:s.iskonto||0,kdv:s.kdv||0,kdvTutar:h.kdvT,tutar:h.net,nakit:!!nakit,hesapId:hid});
-  save();closeM();go('satis');toast('İade alındı ✓ '+money(h.net,s.pb)+(nakit?' · 💵 nakit ödendi':' · cariye alacak'));
+  db.satislar.push({id:nid('s'),tip:'iade',mid:s.mid,mus:s.mus,tarih:Date.now(),kaynakId:s.id,pb:s.pb,satisKur:h.div,kalemler:h.kal,araToplam:h.araPB,iskonto:s.iskonto||0,kdv:s.kdv||0,kdvTutar:h.kdvPB,tutar:h.netPB,nakit:!!nakit,hesapId:hid});
+  save();closeM();go('satis');toast('İade alındı ✓ '+money(h.netPB,s.pb)+(nakit?' · 💵 nakit ödendi':' · cariye alacak'));
 }
 function iadeFis(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;const kaynak=s.kaynakId?db.satislar.find(x=>x.id===s.kaynakId):null;
   open_('↩️ İade Fişi',`<div class="mini">${esc(s.mus)} · ${tstr(s.tarih)}${kaynak?' · kaynak satış #'+kaynak.id:''}</div>
-    <div style="margin-top:10px">${s.kalemler.map(k=>{const sub=k.renkler&&k.renkler.length?k.renkler.map(r=>esc(r.ad)+'×'+r.mik).join(' · '):k.mik+' '+esc(k.birim||'');return `<div class="li"><div class="lt">${esc(k.urun)}<small>${sub}</small></div><b>−${money(k.mik*k.fiyat,s.pb)}</b></div>`}).join('')}</div>
+    <div style="margin-top:10px">${s.kalemler.map(k=>{const sub=k.renkler&&k.renkler.length?k.renkler.map(r=>esc(r.ad)+'×'+r.mik).join(' · '):k.mik+' '+esc(k.birim||'');return `<div class="li"><div class="lt">${esc(k.urun)}<small>${sub}</small></div><b>−${money(k.mik*k.fiyat/(s.satisKur||1),s.pb)}</b></div>`}).join('')}</div>
+    ${s.iskonto?`<div class="kv"><span class="k">İskonto</span><span class="v">−%${s.iskonto}</span></div>`:''}
+    ${s.kdv?`<div class="kv"><span class="k">KDV %${s.kdv}</span><span class="v">+${money(+s.kdvTutar||0,s.pb)}</span></div>`:''}
     <div class="total" style="margin-top:10px"><div class="l">İADE TOPLAM</div><div class="v" style="color:var(--bad)">−${money(s.tutar,s.pb)}</div></div>
     <div class="kv"><span class="k">Ödeme</span><span class="v">${s.nakit?'💵 Nakit iade edildi':'Cariye alacak yazıldı'}</span></div>
     <button class="btn danger" style="margin-top:12px" onclick="iadeSil(${id})">İadeyi Geri Al</button>`);
@@ -2854,6 +2864,7 @@ function iadeSil(id){const s=db.satislar.find(x=>x.id===id);if(!s||s.tip!=='iade
   },'Geri Al');
 }
 function fisText(s){
+  const _dv=satisDiv(s)||1;
   const ciz='━━━━━━━━━━━━━━';
   const d=new Date(s.tarih);const tarih=d.toLocaleDateString('tr-TR',{day:'2-digit',month:'long',year:'numeric'})+' · '+d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
   let t=`🧾 *${(db.firma||'ÖZ TEKSTİL').toLocaleUpperCase('tr-TR')}*\n`;
@@ -2861,13 +2872,13 @@ function fisText(s){
   t+=`${ciz}\n📅 ${tarih}\n🧾 İrsaliye No: *${s.id}*\n👤 ${s.mus}\n${ciz}\n\n🛍️ *Ürünler*\n`;
   s.kalemler.forEach(k=>{
     const sub=k.renkler&&k.renkler.length?k.renkler.map(r=>r.ad+' ×'+r.mik).join(' · '):k.mik+' '+k.birim;
-    t+=`▪️ *${k.urun}*\n   ${sub} · ${k.mik}×${money(k.fiyat,s.pb)} = ${money(k.mik*k.fiyat,s.pb)}\n`;
+    t+=`▪️ *${k.urun}*\n   ${sub} · ${k.mik}×${money(k.fiyat/_dv,s.pb)} = ${money(k.mik*k.fiyat/_dv,s.pb)}\n`;
   });
   t+=`\n${ciz}\n`;
   const hasAdj=s.iskonto||s.kdv||s.tasima||s.vadeFarki||(s.ekstralar&&s.ekstralar.length);
-  if(hasAdj)t+=`Ara Toplam: ${money(s.araToplam||s.tutar,s.pb)}\n`;
-  if(s.iskonto)t+=`İskonto %${s.iskonto}: −${money((s.araToplam||0)*s.iskonto/100,s.pb)}\n`;
-  if(s.vadeFarki)t+=`Vade Farkı %${s.vadeFarki}: +${money((s.araToplam||0)*(1-(s.iskonto||0)/100)*s.vadeFarki/100,s.pb)}\n`;
+  if(hasAdj)t+=`Ara Toplam: ${money(s.araToplam!=null?s.araToplam/_dv:s.tutar,s.pb)}\n`;
+  if(s.iskonto)t+=`İskonto %${s.iskonto}: −${money((s.araToplam||0)/_dv*s.iskonto/100,s.pb)}\n`;
+  if(s.vadeFarki)t+=`Vade Farkı %${s.vadeFarki}: +${money((s.araToplam||0)/_dv*(1-(s.iskonto||0)/100)*s.vadeFarki/100,s.pb)}\n`;
   if(s.kdv)t+=`KDV %${s.kdv}: +${money(s.kdvTutar||0,s.pb)}\n`;
   if(s.tasima)t+=`Taşıma: +${money(s.tasima,s.pb)}\n`;
   (s.ekstralar||[]).forEach(x=>{t+=`${x.ad}: +${money(x.tutar,s.pb)}\n`;});
@@ -3148,14 +3159,14 @@ function fisHTML(s){
   const m=cari(s.mid);
   const d=new Date(s.tarih);const tarih=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   let toplamAdet=0;s.kalemler.forEach(k=>toplamAdet+=(+k.mik||0));
-  const araToplam=(s.araToplam||s.tutar||0);const iskT=araToplam*(s.iskonto||0)/100;
-  const kdvHaric=araToplam-iskT;const kdvTutar=+s.kdvTutar||0;const toplamGoods=(s.tutar||0)-(s.tasima||0);
+  const _dv=satisDiv(s)||1;const araToplam=(s.araToplam!=null?(+s.araToplam||0)/_dv:(+s.tutar||0));const iskT=araToplam*(s.iskonto||0)/100;
+  const kdvHaric=(araToplam-iskT)*(1+(+s.vadeFarki||0)/100);const kdvTutar=+s.kdvTutar||0;const toplamGoods=(s.tutar||0)-(s.tasima||0);
   const satici=s.satici||db.satici||'';
   const curSym=(m&&m.paraTercih&&SYM[m.paraTercih])?(' '+SYM[m.paraTercih]):(pb!=='TL'?' '+SYM[pb]:'');
   const adres=(db.firmaAdres||'').split(/\n|\s\/\s|\//).map(x=>x.trim()).filter(Boolean);
   const DB='1px dashed #000';
   const rows=s.kalemler.map(k=>{const u=urun(k.uid);const kod=(u&&u.kod)||k.urun||'—';
-    let r=`<tr style="font-weight:800"><td style="padding-top:.25em">${esc(kod)}</td><td></td><td style="text-align:right">${+k.mik||0}</td><td style="text-align:right;white-space:nowrap">${fmt(k.fiyat)}</td><td style="text-align:right;white-space:nowrap">${fmt((+k.mik||0)*(+k.fiyat||0))}</td></tr>`;
+    let r=`<tr style="font-weight:800"><td style="padding-top:.25em">${esc(kod)}</td><td></td><td style="text-align:right">${+k.mik||0}</td><td style="text-align:right;white-space:nowrap">${fmt(k.fiyat/_dv)}</td><td style="text-align:right;white-space:nowrap">${fmt((+k.mik||0)*(+k.fiyat||0)/_dv)}</td></tr>`;
     (k.renkler||[]).forEach(rr=>{r+=`<tr style="font-weight:600;font-size:.78em"><td></td><td style="padding-left:.6em">${esc(rr.ad||'—')}</td><td style="text-align:right">${+rr.mik||0}</td><td></td><td></td></tr>`;});
     return r;}).join('');
   const odeme=(s.odemeler&&s.odemeler.length)?s.odemeler:(s.odenen>0?[{tur:'Nakit',tutar:s.odenen,pb}]:[]);
@@ -3191,9 +3202,12 @@ function fisHTML(s){
     <div style="display:inline-block;border:${DB};padding:.25em .8em;margin-top:.6em;font-weight:800;font-size:1.02em">Toplam Adet: ${toplamAdet}</div>
     <div style="margin-top:.4em">
       ${s.iskonto?_fisTot('İndirim %'+s.iskonto,'−'+fmt(iskT)):''}
+      ${s.vadeFarki?_fisTot('Vade farkı %'+s.vadeFarki,'+'+fmt((araToplam-iskT)*s.vadeFarki/100)):''}
       ${_fisTot('Toplam KDV hariç',fmt(kdvHaric))}
       ${s.kdv?_fisTot('KDV %'+s.kdv,fmt(kdvTutar)):''}
-      ${_fisTot('TOPLAM',fmt(toplamGoods),true)}
+      ${s.tasima?_fisTot('Taşıma / Kargo','+'+fmt(s.tasima)):''}
+      ${(s.ekstralar||[]).map(x=>_fisTot(esc(x.ad),'+'+fmt(x.tutar))).join('')}
+      ${_fisTot('TOPLAM',fmt(s.tutar),true)}
       <div style="border-top:${DB};margin-top:.3em"></div>
     </div>
     <div style="display:flex;margin-top:.7em">
@@ -3218,8 +3232,8 @@ function fisResimData(s,termal){
   const m=cari(s.mid);
   const d=new Date(s.tarih);const tarih=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   let toplamAdet=0;s.kalemler.forEach(k=>toplamAdet+=(+k.mik||0));
-  const araToplam=(s.araToplam||s.tutar||0);const iskT=araToplam*(s.iskonto||0)/100;
-  const kdvHaric=araToplam-iskT;const kdvTutar=+s.kdvTutar||0;const toplamGoods=(s.tutar||0)-(s.tasima||0);
+  const _dv=satisDiv(s)||1;const araToplam=(s.araToplam!=null?(+s.araToplam||0)/_dv:(+s.tutar||0));const iskT=araToplam*(s.iskonto||0)/100;
+  const kdvHaric=(araToplam-iskT)*(1+(+s.vadeFarki||0)/100);const kdvTutar=+s.kdvTutar||0;const toplamGoods=(s.tutar||0)-(s.tasima||0);
   const satici=s.satici||db.satici||'';
   const HMAX=4000;
   const c=document.createElement('canvas');c.width=W*dpr;c.height=HMAX*dpr;const g=c.getContext('2d');g.scale(dpr,dpr);
@@ -3261,14 +3275,15 @@ function fisResimData(s,termal){
   y+=12;g.save();g.strokeStyle='#000';g.lineWidth=2;g.beginPath();g.moveTo(P,y);g.lineTo(R,y);g.stroke();g.restore();y+=26;
   s.kalemler.forEach(k=>{const u=urun(k.uid);const kod=(u&&u.kod)||k.urun||'—';
     g.textAlign='left';g.font='800 22px sans-serif';g.fillText(clip(kod,'800 22px sans-serif',xAdet-P-60),P,y);
-    g.textAlign='right';g.font='800 21px sans-serif';g.fillText(''+(+k.mik||0),xAdet,y);g.fillText(fmt(k.fiyat),xFiyat,y);g.fillText(fmt((+k.mik||0)*(+k.fiyat||0)),xTop,y);y+=26;
-    (k.renkler||[]).forEach(r=>{g.textAlign='left';g.font='600 16px sans-serif';g.fillText(clip(r.ad||'—','600 16px sans-serif',xAdet-xRenk-6),xRenk,y);g.textAlign='right';g.fillText(''+(+r.mik||0),xAdet,y);g.fillText(fmt(k.fiyat),xFiyat,y);g.fillText(fmt((+r.mik||0)*(+k.fiyat||0)),xTop,y);y+=22;});
+    g.textAlign='right';g.font='800 21px sans-serif';g.fillText(''+(+k.mik||0),xAdet,y);g.fillText(fmt(k.fiyat/_dv),xFiyat,y);g.fillText(fmt((+k.mik||0)*(+k.fiyat||0)/_dv),xTop,y);y+=26;
+    (k.renkler||[]).forEach(r=>{g.textAlign='left';g.font='600 16px sans-serif';g.fillText(clip(r.ad||'—','600 16px sans-serif',xAdet-xRenk-6),xRenk,y);g.textAlign='right';g.fillText(''+(+r.mik||0),xAdet,y);g.fillText(fmt(k.fiyat/_dv),xFiyat,y);g.fillText(fmt((+r.mik||0)*(+k.fiyat||0)/_dv),xTop,y);y+=22;});
     y+=8;});
   // ===== TOPLAM ADET =====
   const taTop=y-16;g.font='800 20px sans-serif';g.textAlign='left';g.fillText('Toplam Adet:',P+8,y);g.textAlign='right';g.fillText(''+toplamAdet,P+240,y);dbox(P,taTop,262,32);y+=32;
   // ===== TOPLAMLAR =====
   const totRow=(lbl,val,big)=>{dash(y);y+=(big?32:26);g.textAlign='left';g.font=(big?'800 28px':'700 20px')+' sans-serif';g.fillText(lbl,P,y);g.textAlign='right';g.font=(big?'800 30px':'700 22px')+' sans-serif';g.fillText(val,R,y);y+=(big?14:10);};
   if(s.iskonto)totRow('İndirim %'+s.iskonto,'−'+fmt(iskT));
+  if(s.vadeFarki)totRow('Vade farkı %'+s.vadeFarki,'+'+fmt((araToplam-iskT)*s.vadeFarki/100));
   totRow('Toplam KDV hariç',fmt(kdvHaric));
   if(s.kdv)totRow('KDV %'+s.kdv,fmt(kdvTutar));
   if(s.tasima)totRow('Taşıma / Kargo','+'+fmt(s.tasima));
@@ -3381,8 +3396,8 @@ function fisEscPosText(s){
   const m=cari(s.mid);
   const d=new Date(s.tarih);const tarih=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   let toplamAdet=0;s.kalemler.forEach(k=>toplamAdet+=(+k.mik||0));
-  const araToplam=(s.araToplam||s.tutar||0);const iskT=araToplam*(s.iskonto||0)/100;
-  const kdvHaric=araToplam-iskT;const kdvTutar=+s.kdvTutar||0;const toplamGoods=(s.tutar||0)-(s.tasima||0);
+  const _dv=satisDiv(s)||1;const araToplam=(s.araToplam!=null?(+s.araToplam||0)/_dv:(+s.tutar||0));const iskT=araToplam*(s.iskonto||0)/100;
+  const kdvHaric=(araToplam-iskT)*(1+(+s.vadeFarki||0)/100);const kdvTutar=+s.kdvTutar||0;const toplamGoods=(s.tutar||0)-(s.tasima||0);
   const satici=s.satici||db.satici||'';const LINE=48;
   const out=[];const raw=(...b)=>b.forEach(x=>out.push(x&0xFF));
   const OZEL=yazOzelHarita();
@@ -3433,16 +3448,16 @@ function fisEscPosText(s){
   // ===== SATICI | No =====
   two(satici?('Satıcı: '+satici):'','No. '+s.id);
   // ===== TABLO: Kod · Kategori · Adet · Fiyat · Toplam =====
-  bold(1);line(padR('Kod',10)+padR('Kategori',9)+padL('Adet',5)+padL('Fiyat',10)+padL('Toplam',14));bold(0);
+  bold(1);line(padR('Kod',10)+padR('Kategori',8)+padL('Adet',5)+padL('Fiyat',11)+padL('Toplam',14));bold(0);
   sline();
   s.kalemler.forEach(k=>{const u=urun(k.uid);const kod=(u&&u.kod)||k.urun||'-';const kat=(u&&u.kat)||'';
     bold(1);line(cutx(kod+(kat?'  '+kat:''),LINE));bold(0);
-    const rowVals=(ad,adet,fi,tp)=>line('  '+padR(ad,17)+padL(''+adet,5)+padL(fi,10)+padL(tp,14));
+    const rowVals=(ad,adet,fi,tp)=>line('  '+padR(ad,16)+padL(''+adet,5)+padL(fi,11)+padL(tp,14));
     const rr=(k.renkler||[]).filter(r=>r&&(+r.mik||0)>0);
     if(rr.length){
-      rr.forEach(r=>rowVals(r.ad||'-',+r.mik||0,fmt(k.fiyat),fmt((+r.mik||0)*(+k.fiyat||0))));
-      if(rr.length>1){bold(1);rowVals('Ürün toplamı',+k.mik||0,'',fmt((+k.mik||0)*(+k.fiyat||0)));bold(0);}
-    }else rowVals('',+k.mik||0,fmt(k.fiyat),fmt((+k.mik||0)*(+k.fiyat||0)));
+      rr.forEach(r=>rowVals(r.ad||'-',+r.mik||0,fmt(k.fiyat/_dv),fmt((+r.mik||0)*(+k.fiyat||0)/_dv)));
+      if(rr.length>1){bold(1);rowVals('Ürün toplamı',+k.mik||0,'',fmt((+k.mik||0)*(+k.fiyat||0)/_dv));bold(0);}
+    }else rowVals('',+k.mik||0,fmt(k.fiyat/_dv),fmt((+k.mik||0)*(+k.fiyat||0)/_dv));
     sline();
   });
   bold(1);line('Toplam Adet:  '+toplamAdet);bold(0);
@@ -3450,7 +3465,7 @@ function fisEscPosText(s){
   btop();
   bmid('Sipariş Tutarı',fmt(araToplam));
   if(s.iskonto)bmid('Fark / İndirim %'+s.iskonto,'-'+fmt(iskT));
-  if(s.vadeFarki)bmid('Vade Farkı %'+s.vadeFarki,'+'+fmt(araToplam*(1-(s.iskonto||0)/100)*s.vadeFarki/100));
+  if(s.vadeFarki)bmid('Vade Farkı %'+s.vadeFarki,'+'+fmt((araToplam-iskT)*s.vadeFarki/100));
   if(s.kdv)bmid('KDV %'+s.kdv,'+'+fmt(kdvTutar));
   if(s.tasima)bmid('Taşıma / Kargo','+'+fmt(s.tasima));
   (s.ekstralar||[]).forEach(x=>bmid(x.ad,'+'+fmt(x.tutar)));
@@ -3669,7 +3684,9 @@ function depoHazirla(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;
   if(eksik.length)askConfirm(`${eksik.length} kalem henüz işaretlenmedi (toplam ${lines.length}).\nYine de "hazırlandı" olarak kapatılsın mı?`,bitir,'Yine de kapat');
   else bitir();
 }
-function silSatis(id){askConfirm('Satış iptal edilsin mi? Stok, bakiye, ödeme ve çek geri alınır.',()=>{
+function silSatis(id){const s0=db.satislar.find(x=>x.id===id);
+  if(satisKilitliCek(s0))return toast('⚠️ Çeki tahsil/ciro edilmiş satış iptal edilemez — önce Çekler ekranından işlemi geri al');
+  askConfirm('Satış iptal edilsin mi? Stok, bakiye, ödeme ve çek geri alınır.',()=>{
   const s=db.satislar.find(x=>x.id===id);revertSatis(s);
   db.satislar=db.satislar.filter(x=>x.id!==id);save();closeM();go('satis');toast('İptal edildi')})}
 
@@ -3731,7 +3748,7 @@ function formCari(tip,id,preAd){
     <div class="g2">${ISTASYON.map(s=>`<div><label style="margin-top:4px">${s}</label><input id="c-fy-${s.replace(/[^a-zA-Z]/g,'')}" type="number" inputmode="numeric" placeholder="0" value="${(c.fiyatlar&&c.fiyatlar[s])||''}"></div>`).join('')}</div>`:''}
     ${isGid?`<div class="g2"><div><label>Kategori</label><select id="c-gidkat">${optList(GID_KAT,c.gidKat)}</select></div><div><label>Aylık Sabit Tutar (₺)</label><input id="c-aylik" type="number" placeholder="0" value="${c.aylik||''}"></div></div>
     <label class="ckrow"><input type="checkbox" id="c-tekrarli" ${c.tekrarli?'checked':''}><span>Tekrarlı gider (her ay sabit)</span></label>`:''}
-    ${(isTed||isFas)?`<div class="g2"><div><label>Para Birimi</label>${dvzSel('c-doviz',c.doviz)}</div><div><label>IBAN / Banka</label><input id="c-iban" value="${esc(c.iban||'')}"></div></div>`:''}
+    ${(isTed||isFas)?`<div class="g2"><div><label>Para Birimi</label><select id="c-doviz"><option ${(!c.doviz||c.doviz==='TL')?'selected':''}>TL</option><option ${c.doviz==='USD'?'selected':''}>USD</option></select></div><div><label>IBAN / Banka</label><input id="c-iban" value="${esc(c.iban||'')}"></div></div>`:''}
     <label>Açılış Bakiyesi (${isMus?'müşteri borcu +':isGid?'ödenmemiş +':'senin ona borcun +'})</label><input id="c-bak" type="number" value="${c.bakiye||0}">
     <label>Not</label><textarea id="c-not" rows="2" placeholder="İsteğe bağlı">${esc(c.not||'')}</textarea>
     <button class="btn" onclick="kaydetCari('${t}',${id||0})">Kaydet</button>
@@ -3752,7 +3769,7 @@ function kaydetCari(tip,id){const ad=$('c-ad').value.trim();if(!ad)return toast(
   if(tip==='fason'){const fy={};ISTASYON.forEach(s=>{const v=+($('c-fy-'+s.replace(/[^a-zA-Z]/g,''))?.value||0);if(v>0)fy[s]=v});o.fiyatlar=fy;}
   if($('c-gidkat'))o.gidKat=V('c-gidkat'); if($('c-aylik'))o.aylik=VN('c-aylik'); if($('c-tekrarli'))o.tekrarli=$('c-tekrarli').checked;
   if($('c-doviz'))o.doviz=V('c-doviz'); if($('c-iban'))o.iban=VT('c-iban'); if($('c-not'))o.not=VT('c-not');
-  if(o.doviz&&o.doviz!=='TL'&&!id){o.bakiyeUSD=o.bakiye;o.bakiye=0}
+  if(o.doviz==='USD'&&!id){o.bakiyeUSD=o.bakiye;o.bakiye=0}
   if(id){Object.assign(cari(id),o)}else{o.id=nid('c');db.cariler.push(o)}
   save();
   if(!id&&_cariReturn){const cb=_cariReturn;_cariReturn=null;$('ov').classList.remove('show');toast(({musteri:'Müşteri',tedarikci:'Tedarikçi',fason:'Fason',gider:'Gider'}[tip]||'Kayıt')+' eklendi ✓');setTimeout(()=>cb(o.id),130);return}
@@ -3811,6 +3828,7 @@ function cariKart(id){
 function cariEkstre(id){
   const c=cari(id);const evs=[];const isMus=c.tip==='musteri';
   db.satislar.filter(s=>s.mid===id).forEach(s=>{const div=satisDiv(s);
+    if(s.tip==='iade'){if(!s.nakit)evs.push({t:s.tarih,ad:'İade',det:s.kalemler.map(k=>k.urun).join(', ').slice(0,40),alacak:(+s.tutar||0)*div,sid:s.id});return;}
     evs.push({t:s.tarih,ad:'Satış',det:s.kalemler.map(k=>k.urun).join(', ').slice(0,40),borc:s.tutar*div,sid:s.id});
     if(s.odenen>0)evs.push({t:s.tarih+1,ad:'Ödeme (satışta)',det:s.odemeTur||'',alacak:s.odenen*div});
     if(s.kesik>0)evs.push({t:s.tarih+2,ad:'Kesik',det:'müşteri kırdı',alacak:s.kesik*div});
@@ -3919,7 +3937,7 @@ function kaydetOdeme(id){
     if(c.doviz==='USD'){c.bakiyeUSD=(c.bakiyeUSD||0)-(t/(+db.kurUSD||1))}else{c.bakiye-=t}
     if(tur==='Çek'){db.cekler.push({id:nid('cek'),tur:'cek',tip:'verilen',cariId:c.id,cari:c.ad,tutar:t,vade:Date.now()+90*86400000,banka:'—',durum:'portfoyde'})}else if(h){h.bakiye-=t}
   }
-  const hitHesap=(tur!=='Çek'&&tur!=='Kredi Kartı')&&h&&t>0;
+  const hitHesap=(tur!=='Çek'&&(isMus?tur!=='Kredi Kartı':true))&&h&&t>0;
   db.hareketler.push({id:nid('hr'),cariId:id,tip:isMus?'tahsilat':'odeme',tutar:t,kesik,tur,tarih:Date.now(),hesapId:hitHesap?h.id:null,yon:hitHesap?(isMus?'in':'out'):null});
   save();closeM();rCari();toast((isMus?'Tahsilat':'Ödeme')+' kaydedildi ✓ '+TL(t)+(isMus&&kesik>0?' + kesik '+TL(kesik):''))}
 function formAlim(id){
@@ -3948,7 +3966,7 @@ function rKasa(){
   const buAy=x=>{const d=new Date(x.tarih);return d.getMonth()===ay&&d.getFullYear()===yil};
   const ayGiren=(db.hareketler||[]).filter(x=>x.yon==='in'&&buAy(x)).reduce((a,x)=>a+x.tutar,0);
   const ayCikan=(db.hareketler||[]).filter(x=>x.yon==='out'&&buAy(x)).reduce((a,x)=>a+x.tutar,0);
-  const giderGrup={};(db.hareketler||[]).filter(x=>x.yon==='out'&&buAy(x)&&(x.tur==='Gider'||x.tur==='Ortak Harcama'||x.tur==='odeme')).forEach(x=>{const k=x.tur==='Ortak Harcama'?'Ortak Harcama':x.tur==='odeme'?'Fason/Tedarik':((x.aciklama||'Diğer').split('·')[0].trim()||'Diğer');giderGrup[k]=(giderGrup[k]||0)+x.tutar});
+  const giderGrup={};(db.hareketler||[]).filter(x=>x.yon==='out'&&buAy(x)&&(x.tur==='Gider'||x.tur==='Ortak Harcama'||x.tip==='odeme')).forEach(x=>{const k=x.tur==='Ortak Harcama'?'Ortak Harcama':x.tip==='odeme'?'Fason/Tedarik':((x.aciklama||'Diğer').split('·')[0].trim()||'Diğer');giderGrup[k]=(giderGrup[k]||0)+x.tutar});
   const topGider=Object.entries(giderGrup).sort((a,b)=>b[1]-a[1]).slice(0,5);
   let html=`<div class="tiles"><div class="tile b1" style="grid-column:1/-1"><div class="l">Toplam Elimizde (likit)</div><div class="v">${TL(toplam)}</div><div class="em">🏦</div><div style="font-size:11px;opacity:.9;margin-top:4px">💵 Nakit ${TL(nakit)} · 🏦 Banka ${TL(banka)}${pos?' · POS '+TL(pos):''} · vadeli çek +${TL(bekleyenCek)}</div></div></div>
     <div class="g2"><div class="card" style="padding:11px;margin:0;text-align:center"><div class="mini">Bugün Giren</div><div style="font-weight:800;font-size:17px;color:var(--good)">+${TL(giren)}</div></div><div class="card" style="padding:11px;margin:0;text-align:center"><div class="mini">Bugün Çıkan</div><div style="font-weight:800;font-size:17px;color:var(--bad)">−${TL(cikan)}</div></div></div>
@@ -4124,7 +4142,7 @@ function cekForm(editId){
   const al=c?c.tip==='alinan':cekTab==='alinan';
   ckFotoOn=c?.foto||'';ckFotoArka=c?.fotoArka||'';ckFormAl=al;ckCariId=c?.cariId||0;
   const carAd=c&&c.cariId&&cari(c.cariId)?cari(c.cariId).ad:'';
-  const vv=c?new Date(c.vade).toISOString().slice(0,10):new Date(Date.now()+30*86400000).toISOString().slice(0,10);
+  const vv=_isoTar(c?c.vade:Date.now()+30*86400000);
   open_(editId?'✏️ Çek Düzenle':(al?'📥 Alınan Çek Ekle':'📤 Verilen Çek Ekle'),`
     <label>${al?'Kimden aldın?':'Kime verdin?'}</label>
     <input id="ck-cari-in" placeholder="${al?'müşteri':'tedarikçi/fason'} adı yaz..." autocomplete="off" value="${esc(carAd)}" oninput="cekCariAra()" onfocus="cekCariAra()">
@@ -4285,7 +4303,7 @@ function cekTahsil(id){
   // kur farkı: çek TL sabit ödendi, ödeme günü döviz farkı cariye eklenir
   // (kurTakipli çek mevcut döviz borcu için de verilebilir; fark cariIsle'den bağımsız gerçekleşir)
   const kf=cekKurFarki(c);
-  if(kf&&Math.abs(kf.fark)>=1){const cc=cari(c.cariId);if(cc){cc.bakiye+=kf.fark;c.kurFarki=kf.fark;c.odemeKur=kf.gk;
+  if(kf&&Math.abs(kf.fark)>=1){const cc=cari(c.cariId);if(cc){if(cc.doviz==='USD')cc.bakiyeUSD=(+cc.bakiyeUSD||0)+kf.fark/(+db.kurUSD||1);else cc.bakiye+=kf.fark;c.kurFarki=kf.fark;c.odemeKur=kf.gk;
     msg+=` · 💱 kur farkı ${kf.fark>=0?'+':'−'}${TL(Math.abs(kf.fark))} → ${c.cari} bakiyesine işlendi`;}}
   save();closeM();rCek();toast(msg);
 }
@@ -4343,7 +4361,7 @@ function aksesuarAlimAc(ie){
 function aksesuarGeldiIsle(s){
   if(!s||!s.oto||!s.ieId)return '';
   const ie=db.isemirleri.find(x=>x.id===s.ieId);if(!ie||ie.durum==='tamam')return '';
-  (ie.malzeme||[]).forEach(m=>{if(m.alimId===s.id||(s.hid&&m.hid===s.hid)){m.durum='var';if(s.hid)m.hid=s.hid;}});
+  (ie.malzeme||[]).forEach(m=>{if(m.alimId===s.id||(s.hid&&m.hid===s.hid)){if(m.durum!=='var'){m.durum='var';if(s.hid)m.hid=s.hid;const h=m.hid?db.hammadde.find(x=>x.id===m.hid):null;if(h)malStokUygula(h,m,-1);} }});
   const kalan=(ie.malzeme||[]).filter(m=>m.durum==='alinacak').length;
   if(kalan===0){
     // tüm eksikler geldi → aksesuar/malzeme kontrol maddelerini otomatik tikle + panelde bildir
@@ -4382,10 +4400,6 @@ function kurCevir(pb){return pb==='USD'?(+db.kurUSD||1):pb==='EUR'?(+db.kurEUR||
 function ieKumasMaliyet(i){return (+i.kumasTukToplam||0)*(+i.kumasFiyat||0)*kurCevir(i.kumasPB);}
 function ieMalMaliyet(i){return (i.malzeme||[]).reduce((a,m)=>a+(+m.tutar||0)*kurCevir(m.pb),0)+ieKumasMaliyet(i);}
 const MAL_BIRIM=['kg','metre','adet','top','paket','düzine'];
-function kumasStok(){const list=[...db.hammadde].sort((a,b)=>(a.kat==='Kumaş'?0:1)-(b.kat==='Kumaş'?0:1)||a.ad.localeCompare(b.ad,'tr'));
-  $('sT').textContent='🧵 Hammadde / Kumaş Stoğum';
-  $('sB').innerHTML=`<div class="mini">Elindeki stoğa göre iş emri çıkar. Bu pencere formu kapatmaz — bakıp geri dönebilirsin.</div>`+(list.length?`<div class="card" style="margin-top:8px">`+list.map(h=>`<div class="row"><div class="av gray">${h.kat==='Kumaş'?'🧵':'📦'}</div><div class="mid"><div class="t">${esc(h.ad)}</div><div class="s">${esc(h.detay||h.kat||'')}</div></div><div class="end"><div class="n ${h.stok<=h.kritik?'warnc':''}">${(+h.stok||0).toLocaleString('tr-TR')}</div><div class="u">${esc(h.birim||'')}</div></div></div>`).join('')+`</div>`:emp('🧵','Hammadde yok'));
-  $('sov').classList.add('show');}
 function ieCarpan(i){return i.birim==='seri'?Math.max(1,+i.seriAdet||1):1}
 function ieFasonMaliyet(i){const c=ieCarpan(i);return (i.duraklar||[]).reduce((a,d)=>a+(+d.ucret||0)*(+d.gelen||0)*c,0)}
 function ieGenelGider(i){return (+i.genelGiderBirim||0)*ieSaglam(i)*ieCarpan(i)}
@@ -4479,29 +4493,6 @@ function uretimListe(tur){
   open_(title,items.length?items.map(m=>`<div class="row" onclick="closeM();setTimeout(()=>uretimDetay(${m.id}),120)"><div class="av gray">${m.ic}</div><div class="mid"><div class="t">${esc(m.t)}</div><div class="s">${esc(m.s)}</div></div><span style="color:var(--sub)">›</span></div>`).join(''):emp('✅','Kayıt yok'));
 }
 /* --- Maliyet simülasyonu (üretsem kaça gelir?) --- */
-function maliyetSim(){
-  open_('💡 Üretsem Kaça Gelir?',`
-    <div class="mini">Üretime başlamadan tahmini birim maliyeti ve önerilen satış fiyatını gör. Hazır alımla kıyasla.</div>
-    <div class="g2"><div><label>Üretim Adedi</label><input id="ms-adet" type="number" inputmode="numeric" value="100" oninput="msHesap()"></div><div><label>Tahmini Fire %</label><input id="ms-fire" type="number" inputmode="numeric" value="5" oninput="msHesap()"></div></div>
-    <label>Kumaş + Aksesuar (toplam ₺)</label><input id="ms-mal" type="number" inputmode="numeric" placeholder="ör. 40000" oninput="msHesap()">
-    <div class="sec" style="margin-top:10px">Fason Ücretleri (₺/adet)</div>
-    <div class="g2"><div><label>Kesim</label><input id="ms-kes" type="number" inputmode="numeric" placeholder="0" oninput="msHesap()"></div><div><label>Nakış/Baskı</label><input id="ms-nak" type="number" inputmode="numeric" placeholder="0" oninput="msHesap()"></div></div>
-    <div class="g2"><div><label>Dikim</label><input id="ms-dik" type="number" inputmode="numeric" placeholder="0" oninput="msHesap()"></div><div><label>Ütü/Paket</label><input id="ms-utu" type="number" inputmode="numeric" placeholder="0" oninput="msHesap()"></div></div>
-    <div class="g2"><div><label>Genel Gider (₺/adet)</label><input id="ms-gg" type="number" inputmode="numeric" value="12" oninput="msHesap()"></div><div><label>Hedef Kâr %</label><input id="ms-kar" type="number" inputmode="numeric" value="40" oninput="msHesap()"></div></div>
-    <label>Hazır Alım Fiyatı (kıyas · ₺/adet)</label><input id="ms-hazir" type="number" inputmode="numeric" placeholder="opsiyonel" oninput="msHesap()">
-    <div id="ms-sonuc" style="margin-top:12px"></div>`);
-  msHesap();
-}
-function msHesap(){const g=id=>+($(id)?.value||0);
-  const adet=g('ms-adet')||1,fire=g('ms-fire'),saglam=Math.max(1,Math.round(adet*(1-fire/100)));
-  const fasonBirim=g('ms-kes')+g('ms-nak')+g('ms-dik')+g('ms-utu');
-  const toplam=g('ms-mal')+fasonBirim*adet+g('ms-gg')*adet;
-  const birim=toplam/saglam;const kar=g('ms-kar');const satis=birim*(1+kar/100);const hazir=g('ms-hazir');
-  const el=$('ms-sonuc');if(!el)return;let cmp='';
-  if(hazir>0){const fark=hazir-birim;cmp=fark>=0?`<div class="okbox" style="margin-top:8px">✅ Üretim <b>${TL(fark)}/adet</b> daha ucuz (${TL(birim)} vs hazır ${TL(hazir)}) — <b>üretmek mantıklı</b>.</div>`:`<div class="warnbox" style="margin-top:8px">⚠️ Hazır alım <b>${TL(-fark)}/adet</b> daha ucuz (${TL(hazir)} vs üretim ${TL(birim)}) — <b>almak mantıklı</b>.</div>`;}
-  el.innerHTML=`<div class="total"><div><div class="l">Net Birim Maliyet</div><div class="v">${TL(birim)}</div></div><div style="text-align:right"><div class="l">Önerilen Satış +%${kar}</div><div class="v pos">${TL(satis)}</div></div></div>
-    <div class="card" style="margin-top:8px;padding:4px 13px"><div class="kv"><span class="k">Toplam maliyet</span><span class="v">${TL(toplam)}</span></div><div class="kv"><span class="k">Sağlam adet (fire sonrası)</span><span class="v">${saglam} / ${adet}</span></div><div class="kv"><span class="k">Fason işçilik / adet</span><span class="v">${TL(fasonBirim)}</span></div></div>${cmp}`;
-}
 /* ===== 💰 MALİYET & KOLEKSİYON — ürün maliyetlerini sakla, içinden üretime yolla ===== */
 function maliyetHesapla(m){
   const adet=Math.max(1,+m.adet||1);const fire=+m.fire||0;const saglam=Math.max(1,Math.round(adet*(1-fire/100)));
@@ -4791,8 +4782,6 @@ function cizIeFoto(){const b=$('ie-foto-box');if(!b)return;
   b.innerHTML=`<div class="satfoto" onclick="$('ie-foto-in').click()">${ieFoto?`<img src="${ieFoto}"><span class="rm" onclick="event.stopPropagation();ieFoto='';cizIeFoto()">✕</span>`:'<span class="ph">📷 Numune / ürün fotoğrafı</span>'}</div><input type="file" id="ie-foto-in" accept="image/*" style="display:none" onchange="ieFotoSec(this)">`;
 }
 function ieFotoSec(input){const f=input.files&&input.files[0];if(!f)return;resimSecYukle(f,d=>{ieFoto=d;cizIeFoto()},1200,0.75)}
-function ieDurakFiyat(x){const fid=+($('dkfas-'+x)?.value||0);const uc=$('dkuc-'+x);if(!fid||!uc)return;const f=cari(fid);const s=ISTASYON[x];
-  if(f&&f.fiyatlar&&f.fiyatlar[s])uc.value=f.fiyatlar[s];}
 function ieKesimFiyat(){const fid=+($('dk-kesim-fas')?.value||0);const uc=$('dk-kesim-uc');if(!fid||!uc)return;const f=cari(fid);if(f&&f.fiyatlar&&f.fiyatlar['Kesim'])uc.value=f.fiyatlar['Kesim'];}
 /* --- Sonraki durak ekle (dinamik pipeline) --- */
 function formDurakEkle(id){const i=db.isemirleri.find(v=>v.id===id);if(!i||i.durum==='tamam')return;const fs=fasonlar();
@@ -4890,23 +4879,23 @@ function kaydetIsEmri(){
   const renkMap={};renkDagilim.forEach(r=>renkMap[r.ad]=r.adet);
   // sadece Kesim ile başla — sonraki duraklar üretim ilerledikçe eklenir
   const duraklar=[{ad:'Kesim',fasonId:+($('dk-kesim-fas')?.value||0)||null,ucret:+($('dk-kesim-uc')?.value||0)||0,gonderilen:hedef,gelen:0,defolu:0,gonderilenRenk:{...renkMap},renkGelen:{},renkDefo:{},durum:'devam',borclandi:false,borclanan:0,baslama:Date.now(),foto:'',not:'',kontrol:sablonKopya('Kesim')}];
-  const malzeme=ieMal.filter(m=>(m.ad||'').trim()).map(m=>{const h=db.hammadde.find(x=>x.ad.toLowerCase()===m.ad.trim().toLowerCase());return {ad:m.ad.trim(),mik:+m.mik||0,birim:m.birim||(h?h.birim:'kg'),tutar:+m.tutar||0,pb:m.pb||'TL',durum:m.durum||'var',hid:h?h.id:null}});
-  malzeme.forEach(m=>{if(m.durum==='var'&&m.hid){const h=db.hammadde.find(x=>x.id===m.hid);if(h)h.stok=(+h.stok||0)-m.mik}});
+  const malzeme=ieMal.filter(m=>(m.ad||'').trim()).map(m=>{const h=db.hammadde.find(x=>x.ad.toLowerCase()===m.ad.trim().toLowerCase());return {ad:m.ad.trim(),mik:+m.mik||0,birim:m.birim||(h?h.birim:'kg'),renk:(m.renk||''),tutar:+m.tutar||0,pb:m.pb||'TL',durum:m.durum||'var',hid:h?h.id:null}});
+  malzeme.forEach(m=>{if(m.durum==='var'&&m.hid){const h=db.hammadde.find(x=>x.id===m.hid);if(h)malStokUygula(h,m,-1)}});
   const seriAdet=birim==='seri'?Math.max(1,+$('ie-seriadet').value||1):1;
   const _kk=ieKumasId?db.hammadde.find(h=>h.id===ieKumasId):null;
   const _kad=_kk?_kk.ad:(ieKumasAd||'').trim();
   const _kfiyat=+($('ie-kumas-fiyat')?.value||ieKumasFiyat||0);const _kpb=$('ie-kumas-pb')?.value||ieKumasPB||'TL';
   // kumaş tüketimini renk renk stoktan düş (1 parça × adet × tüketim)
   const _ktuk=ieTukKgParca();let _ktukTop=0;
-  if(_kk&&_ktuk>0){
-    renkDagilim.forEach(r=>{const parca=r.adet*(birim==='seri'?seriAdet:1);_ktukTop+=parca*_ktuk;});
+  if(_ktuk>0)renkDagilim.forEach(r=>{const parca=r.adet*(birim==='seri'?seriAdet:1);_ktukTop+=parca*_ktuk;}); // maliyet için toplam tüketim (kumaş stokta olmasa da)
+  if(_kk&&_ktukTop>0){
     if(hamRenkli(_kk))renkDagilim.forEach(r=>{const parca=r.adet*(birim==='seri'?seriAdet:1);malStoklaRenk(_kk,r.ad,-(parca*_ktuk));}); // renk-renk stoklu kumaş
     else _kk.stok=(+_kk.stok||0)-_ktukTop; // renksiz (toplu) kumaş → toplamdan düş, renk satırı açma
   }
   const yeniIe={id:nid('ie'),urunId:ieUrunId||null,urun:ad,kod,foto:ieFoto,birim,seriAdet,hedef,renkDagilim,malzeme,duraklar,genelGiderBirim:+$('ie-gg').value||0,kumasId:ieKumasId||null,kumasAd:_kad,kumasFiyat:_kfiyat,kumasPB:_kpb,kumasYeni:(!ieKumasId&&!!_kad),kumasTukBirim:_ktuk,kumasTukToplam:_ktukTop,baslangic:Date.now(),gun,durum:'devam',stoklandi:false};
   db.isemirleri.push(yeniIe);
   const alimN=aksesuarAlimAc(yeniIe); // "alınacak" malzemeler için otomatik alım siparişi
-  save();closeM();rUretim();toast('İş emri açıldı ✓ · '+hedef+' '+birim+(alimN?' · 🛒 '+alimN+' malzeme alım listesine eklendi':'')+(_ktukTop>0?' · '+_ktukTop.toLocaleString('tr-TR',{maximumFractionDigits:2})+' '+(_kk.birim||'')+' kumaş düşüldü':''));
+  save();closeM();rUretim();toast('İş emri açıldı ✓ · '+hedef+' '+birim+(alimN?' · 🛒 '+alimN+' malzeme alım listesine eklendi':'')+((_kk&&_ktukTop>0)?' · '+_ktukTop.toLocaleString('tr-TR',{maximumFractionDigits:2})+' '+(_kk.birim||'')+' kumaş düşüldü':''));
 }
 /* --- İş emri detay --- */
 // İş emri fotoğrafı — kendi fotosu yoksa BAĞLI ÜRÜNÜN fotoğrafına düş (kapak → galeri → fotolar)
@@ -4948,7 +4937,7 @@ function uretimDetay(id){
       <div class="kv"><span class="k">🔥 Toplam defo/fire</span><span class="v" style="color:var(--bad)">${ieDefo(i)}</span></div>
     </div>`;}
   html+=`<div class="sec">Üretim Hattı</div><div class="card" style="padding:2px 14px">`;
-  i.duraklar.forEach((d,x)=>{const tutar=(+d.ucret||0)*(+d.gelen||0);const fad=fasonAd(d);
+  i.duraklar.forEach((d,x)=>{const tutar=(+d.ucret||0)*(+d.gelen||0)*(ieCarpan(i)||1);const fad=fasonAd(d);
     html+=`<div style="display:flex;gap:12px;padding:12px 0;${x<i.duraklar.length-1?'border-bottom:1px solid var(--ln)':''}">
       <div style="flex:0 0 auto;font-size:22px;line-height:1">${durIc[d.durum]||'⬜'}</div>
       <div style="flex:1;min-width:0">
@@ -5012,7 +5001,7 @@ function durakKaydet(id,x){
 /* --- Teslimat: varsayılan tek toplam, istenirse renk renk --- */
 function dagit(total,weights){const keys=Object.keys(weights);const sumW=keys.reduce((a,k)=>a+(weights[k]||0),0);const out={};
   if(total<=0)return out;if(sumW<=0){if(keys.length)out[keys[0]]=total;return out}
-  let acc=0;keys.forEach((k,idx)=>{if(idx===keys.length-1)out[k]=Math.max(0,total-acc);else{const v=Math.round(total*(weights[k]||0)/sumW);out[k]=v;acc+=v}});return out;
+  let acc=0;keys.forEach((k,idx)=>{if(idx===keys.length-1)out[k]=Math.max(0,total-acc);else{const v=Math.max(0,Math.min(Math.round(total*(weights[k]||0)/sumW),total-acc));out[k]=v;acc+=v}});return out;
 }
 let _teslimRenk=false;
 function teslimRenkToggle(){_teslimRenk=!_teslimRenk;
@@ -5155,7 +5144,8 @@ function malStokUygula(h,m,isaret){const mik=(+m.mik||0)*isaret;if(!mik)return;
   if(hamRenkli(h)&&m.renk){malStoklaRenk(h,m.renk,mik);return;} // parti FIFO + renk yoksa oluşturur
   h.stok=(+h.stok||0)+mik;}
 function ieMalKaydet(id){const i=db.isemirleri.find(v=>v.id===id);
-  const yeni=ieMal.filter(m=>(m.ad||'').trim()).map(m=>{const h=db.hammadde.find(x=>x.ad.toLowerCase()===m.ad.trim().toLowerCase());return {ad:m.ad.trim(),mik:+m.mik||0,birim:m.birim||(h?h.birim:''),renk:(m.renk||''),tutar:+m.tutar||0,pb:m.pb||'TL',durum:m.durum||'var',fis:m.fis||'',hid:h?h.id:null}});
+  const yeni=ieMal.filter(m=>(m.ad||'').trim()).map(m=>{const h=db.hammadde.find(x=>x.ad.toLowerCase()===m.ad.trim().toLowerCase());return {ad:m.ad.trim(),mik:+m.mik||0,birim:m.birim||(h?h.birim:''),renk:(m.renk||''),tutar:+m.tutar||0,pb:m.pb||'TL',durum:m.durum||'var',fis:m.fis||'',hid:h?h.id:null,alimId:m.alimId||null}});
+  yeni.forEach(m=>{if(!m.alimId){const e=(i.malzeme||[]).find(x=>(x.ad||'').toLowerCase()===m.ad.toLowerCase());if(e&&e.alimId)m.alimId=e.alimId;}});
   // önce eski 'var' malzemelerin stoğunu geri ekle, sonra güncel 'var' olanları düş → net fark uygulanır (çift düşme olmaz)
   (i.malzeme||[]).forEach(m=>{if(m.durum==='var'&&m.hid){const h=db.hammadde.find(x=>x.id===m.hid);if(h)malStokUygula(h,m,+1)}});
   yeni.forEach(m=>{if(m.durum==='var'&&m.hid){const h=db.hammadde.find(x=>x.id===m.hid);if(h)malStokUygula(h,m,-1)}});
@@ -5391,10 +5381,12 @@ function portalOnay(id,override,force){
     if(k.renkler&&k.renkler.length){k.renkler.forEach(r=>{const ro=renkObjs(u).find(x=>x.ad===r.ad);const st=ro?(+ro.stok||0):0;if(r.mik>st)eksik.push(`• ${u.ad} ${r.ad}: ${r.mik} istendi, ${st} var`)})}
     else{const st=stokTop(u);if(k.mik>st)eksik.push(`• ${u.ad}: ${k.mik} istendi, ${st} var`)}});
     if(eksik.length)return askConfirm('⚠️ Stok yetersiz:\n'+eksik.join('\n')+'\n\nYine de onaylansın mı? Stok eksiye düşecek.',()=>portalOnay(id,override,true),'Yine de Onayla');}
+  if(!override&&(o.kalemler||[]).some(k=>!(+k.fiyat>0))){toast('⚠️ Fiyatı belirsiz ürün var — önce toplam fiyatı belirle');return portalFiyatBelirle(id);}
   let m=cari(o.mid)||db.cariler.find(c=>c.tip==='musteri'&&c.ad.toLowerCase()===(o.mus||'').toLowerCase());
   if(!m){m={id:nid('c'),tip:'musteri',ad:o.mus,bakiye:0,tel:o.tel||'',sehir:o.sehir||'',adres:o.adres||''};db.cariler.push(m)}
   else{if(o.tel&&!m.tel)m.tel=o.tel;if(o.sehir&&!m.sehir)m.sehir=o.sehir;if(o.adres&&!m.adres)m.adres=o.adres}
   const baseT=o.kalemler.reduce((a,k)=>a+k.mik*(+k.fiyat||0),0)||o.tutar||1;
+  if(!override&&+o.tutar>0&&baseT>0&&Math.abs(baseT-o.tutar)>0.5)override=+o.tutar; // kupon/kademe indirimi → satır fiyatları orantılanır
   const oran=(override&&baseT>0)?override/baseT:1;
   const kalemler=o.kalemler.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:oran===1?k.fiyat:Math.round((+k.fiyat||0)*oran),renkler:k.renkler?k.renkler.map(r=>({...r})):undefined}));
   let tutar=override||o.tutar;
@@ -5435,7 +5427,7 @@ function kampanyaDuzenle(){const k=db.kampanya||{};const bit=k.bitis?new Date(k.
     ${k.baslik?`<button class="btn danger" style="margin-top:8px" onclick="db.kampanya=null;save();closeM();rPortal();toast('Kampanya kaldırıldı')">Kampanyayı Kaldır</button>`:''}`)}
 function kampanyaKaydet(){const bas=($('kmp-bas')?.value||'').trim();if(!bas)return toast('Başlık girin');
   const uid=+($('kmp-urun')?.value||0)||0;const bt=$('kmp-bitis')?.value||'';
-  db.kampanya={baslik:bas,metin:($('kmp-met')?.value||'').trim(),urunId:uid,bitis:bt?new Date(bt+'T23:59:59').getTime():0};
+  db.kampanya={baslik:bas,metin:($('kmp-met')?.value||'').trim(),urunId:uid,bitis:bt?new Date(bt.includes('T')?bt:bt+'T23:59:59').getTime():0};
   save();closeM();rPortal();toast('📣 Kampanya yayınlandı ✓');}
 function kademeKaydet(){db.kademe=_kad.filter(k=>+k.min>0&&+k.ind>0).sort((a,b)=>a.min-b.min);save();closeM();rPortal();toast('İndirim kademeleri kaydedildi ✓')}
 /* ---- KUPON KODLARI (Faz 3) ---- */
@@ -5800,9 +5792,9 @@ function portalKapat(){
   }
   document.getElementById('pov').style.display='none';if(_geriT){clearInterval(_geriT);_geriT=null}portalSepet=[];portalView='katalog';portalKat='';portalKumas='';portalSezon='';portalBattal=false;portalFiltreAcik=false;portalArama='';if(location.hash==='#siparis')history.replaceState(null,'',''+location.pathname);if(typeof cur!=='undefined')go('portal')}
 // güncel birim (seri) fiyat: promosyon (indirimli) varsa o, yoksa satış — parça fiyatı × seri
-function portalFiyat(u){const s=+u.satis||0,p=+u.promosyon||0;const base=(p>0&&p<s)?p:s;return base*birimAdet(u)}
+function portalFiyat(u){const s=+u.satis||0,p=+u.promosyon||0;const base=(p>0&&p<s)?p:s;return base*birimAdet(u)*((u.pb&&u.pb!=='TL')?(pbKur(u.pb)||1):1)}
 // indirim varsa üstü çizgili eski (seri) fiyat (yoksa 0)
-function portalEskiFiyat(u){const s=+u.satis||0,p=+u.promosyon||0;return (p>0&&p<s)?s*birimAdet(u):0}
+function portalEskiFiyat(u){const s=+u.satis||0,p=+u.promosyon||0;return (p>0&&p<s)?s*birimAdet(u)*((u.pb&&u.pb!=='TL')?(pbKur(u.pb)||1):1):0}
 function portalIndirimYuzde(u){const e=portalEskiFiyat(u);return e?Math.round((e-portalFiyat(u))/e*100):0}
 const BATTAL_BED=['XXL','2XL','3XL','4XL','5XL','6XL'];
 function urunBedenler(u){return (u.bedenler||[]).map(x=>typeof x==='object'?x.beden:x).filter(Boolean)}
@@ -6006,6 +5998,7 @@ function portalIstek(uid){const u=urun(uid);if(!u)return;db.stokBildirim=db.stok
   const ad=(portalMusAd||'').trim();
   if(!ad)return open_('🔔 İstek Oluştur',`<div class="mini">Bu ürün üretilince/gelince size haber verelim. İletişim bilginizi bırakın.</div><label>Adınız / Firmanız</label><input id="ist-ad" placeholder="ör. Yılmaz Tekstil"><label>Telefon</label><input id="ist-tel" type="tel" placeholder="0532..."><button class="btn" onclick="portalIstekKaydet(${uid})">İstek Oluştur</button>`);
   db.stokBildirim.push({uid,mus:ad,tel:(portalTel||'').trim(),tarih:Date.now()});save();closeM&&closeM();portalCiz();
+  if(typeof bulutMusteriMod!=='undefined'&&bulutMusteriMod){try{bulutSiparisGonder({tip:'istek',mus:ad,tel:(portalTel||'').trim(),kalemler:[],tutar:0,not:'STOK İSTEĞİ: '+u.ad,istekUid:uid,istekUrun:u.ad})}catch(e){}}
   const n=(db.stokBildirim||[]).filter(x=>x.uid===uid).length;
   toast('🔔 İsteğin alındı ✓'+(n>1?' · bu ürünü '+n+' kişi istedi':''));}
 function portalIstekKaydet(uid){const ad=($('ist-ad')?.value||'').trim();if(!ad)return toast('Adınızı yazın');portalMusAd=ad;portalTel=($('ist-tel')?.value||'').trim();closeM();portalIstek(uid)}
@@ -6014,11 +6007,11 @@ function portalFavToggle(uid){db.portalFav=db.portalFav||[];const i=db.portalFav
 function portalMusteriBul(){const g=portalMusteriGiris();if(g)return g;const ad=(portalMusAd||'').trim();if(!ad)return null;return db.cariler.find(c=>c.tip==='musteri'&&c.ad.toLowerCase()===ad.toLowerCase())||null}
 function portalSiparislerim(){const g=portalMusteriGiris();
   if(g){ // giriş yapılmışsa yalnızca o cariye ait siparişler (gizlilik)
-    const gecmis=db.satislar.filter(s=>s.mid===g.id).sort((a,b)=>b.tarih-a.tarih);
+    const gecmis=db.satislar.filter(s=>s.mid===g.id&&s.tip!=='iade').sort((a,b)=>b.tarih-a.tarih);
     const bekleyen=db.bekleyenPortal.filter(o=>o.mid===g.id||(!o.mid&&(o.mus||'').toLowerCase()===(g.ad||'').toLowerCase())).sort((a,b)=>b.tarih-a.tarih);
     return {gecmis,bekleyen};}
   const ad=(portalMusAd||'').trim().toLowerCase();if(!ad)return {gecmis:[],bekleyen:[]};const m=portalMusteriBul();
-  const gecmis=db.satislar.filter(s=>(m&&s.mid===m.id)||(s.mus||'').toLowerCase()===ad).sort((a,b)=>b.tarih-a.tarih);
+  const gecmis=db.satislar.filter(s=>s.tip!=='iade'&&((m&&s.mid===m.id)||(s.mus||'').toLowerCase()===ad)).sort((a,b)=>b.tarih-a.tarih);
   const bekleyen=db.bekleyenPortal.filter(o=>(o.mus||'').toLowerCase()===ad).sort((a,b)=>b.tarih-a.tarih);
   return {gecmis,bekleyen};}
 function portalTekrar(sid){const s=db.satislar.find(x=>x.id===sid)||db.bekleyenPortal.find(x=>x.id===sid);if(!s)return;
@@ -6068,9 +6061,9 @@ async function urunGorselPaylas(id){const u=urun(id);if(!u)return;
     const a=document.createElement('a');a.href=url;a.download='urun-'+id+'.png';a.click();toast('📥 Görsel indirildi');
   }catch(e){toast('Paylaşılamadı')}});}
 function portalFoto(ix){portalFotoIx=ix;portalCiz()}
-function portalCokSatan(){const map={};db.satislar.forEach(s=>(s.kalemler||[]).forEach(k=>map[k.uid]=(map[k.uid]||0)+(+k.mik||0)));return new Set(Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,3).filter(e=>e[1]>0).map(e=>+e[0]))}
+function portalCokSatan(){const map={};db.satislar.filter(s=>s.tip!=='iade').forEach(s=>(s.kalemler||[]).forEach(k=>map[k.uid]=(map[k.uid]||0)+(+k.mik||0)));return new Set(Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,3).filter(e=>e[1]>0).map(e=>+e[0]))}
 // bu ürünü alanların birlikte aldığı diğer ürünler (market-basket)
-function portalBirlikte(uid){const cnt={};db.satislar.forEach(s=>{const ids=(s.kalemler||[]).map(k=>k.uid);if(!ids.includes(uid))return;ids.forEach(id=>{if(id!==uid)cnt[id]=(cnt[id]||0)+1})});
+function portalBirlikte(uid){const cnt={};db.satislar.filter(s=>s.tip!=='iade').forEach(s=>{const ids=(s.kalemler||[]).map(k=>k.uid);if(!ids.includes(uid))return;ids.forEach(id=>{if(id!==uid)cnt[id]=(cnt[id]||0)+1})});
   return Object.entries(cnt).sort((a,b)=>b[1]-a[1]).map(e=>urun(+e[0])).filter(u=>u&&!u.pasif&&stokTop(u)>0).slice(0,6);}
 // ---- Kampanya / vitrin ----
 function kampanyaAktif(){const k=db.kampanya;if(!k||!k.baslik)return null;if(k.bitis&&k.bitis<Date.now())return null;return k}
@@ -6448,7 +6441,7 @@ function rapCtx(){
   const sat=filt(inRange);
   const satOnc=onc?filt(ts=>ts>=onc[0]&&ts<onc[1]):null;
   const ciroOf=arr=>arr.reduce((a,s)=>a+netTL(s),0);    // KDV hariç
-  const malOf=s=>{let m=0;s.kalemler.forEach(k=>{const u=urun(k.uid);if(u)m+=(+u.alis||0)*k.mik*(k.birim==='seri'?(u.seri||1):1)});return m};
+  const malOf=s=>{let m=0;s.kalemler.forEach(k=>{const u=urun(k.uid);if(u)m+=urunAlisTL(u)*k.mik*(k.birim==='seri'?(u.seri||1):1)});return m};
   const karTLof=s=>netTL(s)-malOf(s);
   const karOf=arr=>{let m=0;arr.forEach(s=>{m+=malOf(s)});return ciroOf(arr)-m};
   // iadeler (dönem içi) — ciro/kâr/adet netlenir
@@ -6459,7 +6452,8 @@ function rapCtx(){
   const ciro=ciroOf(sat)-iadeNetTL,brutKar=karOf(sat)-(iadeNetTL-iadeMalTL),marj=ciro?Math.round(brutKar/ciro*100):0;
   const adet=sat.reduce((a,s)=>a+s.kalemler.reduce((x,k)=>x+(+k.mik||0),0),0)-iadeAdet;
   const kesikTop=sat.reduce((a,s)=>a+(+s.kesik||0)*satisDiv(s),0);
-  const tahsil=sat.reduce((a,s)=>a+(+s.odenen||0)*satisDiv(s),0);
+  let tahsil=sat.reduce((a,s)=>a+(+s.odenen||0)*satisDiv(s),0);
+  (db.hareketler||[]).filter(x=>x.tip==='tahsilat'&&x.tur!=='Taksit'&&inRange(x.tarih)).forEach(x=>tahsil+=(+x.tutar||0)); // sonradan yapılan cari tahsilatları
   const ciroGross=sat.reduce((a,s)=>a+toTL(s),0);       // KDV dahil — tahsilat/açık için
   const acikDonem=Math.max(0,ciroGross-tahsil-kesikTop);
   const tahOran=ciroGross?Math.round(tahsil/ciroGross*100):0;
@@ -6511,8 +6505,7 @@ function rapOzet(R){let h='';
         <div class="mini" style="margin-top:6px">${pct>=100?'🎉 Hedefi geçtin, tebrikler!':'Hedefe <b>'+TL(kalan)+'</b> kaldı'}</div></div>`;
     }else h+=`<button class="btn ghost" style="margin-top:11px" onclick="hedefBelirle()">🎯 ${per} ciro hedefi belirle</button>`;
   }
-  if(R.kar){const net=R.brutKar-R.giderTop;
-    h+=`<div class="card" style="margin-top:11px;padding:13px 15px;display:flex;justify-content:space-between;align-items:center;background:${net>=0?'var(--good-s)':'var(--bad-s)'};border-color:${net>=0?'var(--good)':'var(--bad)'}"><div><div style="font-size:11.5px;font-weight:700;color:var(--sub)">NET KÂR (brüt − giderler)</div><div class="mini">${TL(R.brutKar)} kâr − ${TL(R.giderTop)} gider</div></div><div style="font-size:21px;font-weight:800;color:${net>=0?'var(--good)':'var(--bad)'}">${TL(net)}</div></div>`;
+  if(R.kar){
     // dönem kıyas tablosu
     h+=`<div class="sec">Dönem Karşılaştırma</div><div class="card" style="padding:6px 11px"><table style="width:100%;border-collapse:collapse"><thead><tr style="color:var(--sub)"><th style="text-align:left;font-size:10.5px;font-weight:700;padding:4px">${R.donemAd}</th><th style="text-align:right;font-size:10.5px;font-weight:700;padding:4px">şimdi</th><th style="text-align:right;font-size:10.5px;font-weight:700;padding:4px">önceki</th><th style="text-align:right;font-size:10.5px;font-weight:700;padding:4px">değişim</th></tr></thead><tbody>`
       +rapKiyasRow('Ciro',R.ciro,R.ciroOnc)

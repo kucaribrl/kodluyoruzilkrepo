@@ -68,7 +68,6 @@ function printRaw(file, copies, printerName) {
       const args = [];
       if (printerName) { args.push('-d', printerName); }
       args.push('-o', 'raw');
-      for (let i = 0; i < copies; i++) { /* lp -n yerine kopya döngüsü, raw'da güvenli */ }
       args.push('-n', String(copies), file);
       const child = spawn('lp', args);
       let err = '';
