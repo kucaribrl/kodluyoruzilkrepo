@@ -515,7 +515,7 @@ function durakKategori(ad){const s=(ad||'').toLowerCase();
 function durakSablonListe(ad){const k=durakKategori(ad);const t=(typeof db!=='undefined'&&db&&db.durakSablon)||DURAK_SABLON_VARSAYILAN;return (t[k]||[]).slice();}
 function sablonKopya(ad){return durakSablonListe(ad).map(x=>({ad:x,ok:false}));}
 let db=load();
-function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(!d||!d.urunler)return seed();seqFix(d);if(!d.kademe)d.kademe=[{min:20,ind:3},{min:50,ind:6},{min:100,ind:10}];if(!d.portalFav)d.portalFav=[];if(d.minSiparis==null)d.minSiparis=0;if(!d.portalTaslak)d.portalTaslak=[];if(d.kampanya===undefined)d.kampanya=null;if(!d.duzenliGider)d.duzenliGider=[];if(!d.maliyetler)d.maliyetler=[];if(!d.islenenSiparis)d.islenenSiparis=[];if(!d.malSiparis)d.malSiparis=[];if(!d.malKat)d.malKat=[];if(!d.durakSablon)d.durakSablon=JSON.parse(JSON.stringify(DURAK_SABLON_VARSAYILAN));if(!d.rolAyar)d.rolAyar={};return d}catch(e){return seed()}}
+function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(!d||!d.urunler)return seed();seqFix(d);if(!d.kademe)d.kademe=[{min:20,ind:3},{min:50,ind:6},{min:100,ind:10}];if(!d.portalFav)d.portalFav=[];if(d.minSiparis==null)d.minSiparis=0;if(!d.portalTaslak)d.portalTaslak=[];if(d.kampanya===undefined)d.kampanya=null;if(!d.duzenliGider)d.duzenliGider=[];if(!d.maliyetler)d.maliyetler=[];if(!d.islenenSiparis)d.islenenSiparis=[];if(!d.malSiparis)d.malSiparis=[];if(!d.malKat)d.malKat=[];if(!d.durakSablon)d.durakSablon=JSON.parse(JSON.stringify(DURAK_SABLON_VARSAYILAN));if(!d.rolAyar)d.rolAyar={};if(!d._tomb)d._tomb={};return d}catch(e){return seed()}}
 function kademeler(){return (db.kademe&&db.kademe.length)?db.kademe.slice().filter(k=>+k.min>0).sort((a,b)=>a.min-b.min):[]}
 function kademeIsk(mik){let ind=0;kademeler().forEach(k=>{if((+mik||0)>=(+k.min||0))ind=+k.ind||0});return ind}
 function portalKalemFiyat(k){const u=urun(k.uid);if(u&&u.fiyatGizli)return {base:0,ind:0,net:0,gizli:true};const base=u?portalFiyat(u):(+k.fiyat||0);
@@ -580,8 +580,56 @@ function canliRol(){const r=(bulutKul&&bulutKul.rol);if(r&&ROL_OKU[r])return r;
   return SAHIP_MAILLER.includes(mail)?'admin':'musteri';} // bilinmeyen rol → EN DÜŞÜK yetki (kurallar asıl kapı)
 let canliAcik=false,_canliUnsub=[],_canliGolge={},_canliUygulaniyor=false,_canliYazT=null,_canliUyari=false;
 function canliIzinHata(e){const c=(e&&e.code)||'';if(c==='permission-denied'&&!_canliUyari){_canliUyari=true;toast('☁️ Senkron İZNİ YOK — Firebase Rules güncel mi + yönetici hesabıyla giriş yaptın mı?');}return c;}
-function canliAl(obj,domen){const o={};CANLI_DOMEN[domen].forEach(k=>{if(obj[k]!==undefined)o[k]=obj[k];});return o;}
+/* ====== ÇOK CİHAZ AKILLI BİRLEŞTİRME ======
+   Eskiden bir domen belgesi geldiğinde liste KOMPLE değiştirilirdi (geç yazan erkeni ezerdi).
+   Artık id'li listeler kayıt-kayıt birleşir: her kayıt son değişiklik damgası (_m) taşır,
+   silinenler mezar taşına (_tomb) yazılır. İki cihaz aynı anda FARKLI kayıtlarda çalışırsa
+   hiçbir şey kaybolmaz; AYNI kaydı aynı anda değiştirirlerse son değişiklik kazanır. */
+const MERGE_LISTELER=['satislar','cariler','urunler','hammadde','cekler','isemirleri','malSiparis','hesaplar','hareketler','bekleyenPortal','maliyetler'];
+function _recMerge(local,cloud,tomb){local=local||[];cloud=cloud||[];tomb=tomb||{};const by={};
+  cloud.forEach(r=>{if(r&&r.id!=null)by[r.id]=r;});
+  local.forEach(r=>{if(r&&r.id!=null){const c=by[r.id];if(!c||(+r._m||0)>(+c._m||0))by[r.id]=r;}}); // eşitlikte bulut kazanır (yakınsama)
+  const out=[];for(const id in by){const r=by[id];const td=+tomb[id]||0;if(td&&td>=(+r._m||0))continue;out.push(r);}return out;}
+function _seqMerge(a,b){const o={...(a||{})};for(const k in (b||{}))o[k]=Math.max(+o[k]||0,+b[k]||0);return o;}
+function _unionDizi(a,b){return Array.from(new Set([...(a||[]),...(b||[])]));}
+function _tombMerge(a,b){const o={...(a||{})};for(const k in (b||{}))o[k]=Math.max(+o[k]||0,+b[k]||0);return o;}
+// Değişiklik damgalama: save() sırasında bir önceki durumla kayıt-kayıt kıyaslanır,
+// değişen/eklenen kayda _m vurulur, silinen mezar taşına yazılır.
+let _mSnap={};
+const _mReplacer=(k,v)=>k==='_m'?undefined:v;
+function _mSnapInit(){MERGE_LISTELER.forEach(L=>{const arr=db[L];if(!Array.isArray(arr))return;const m={};arr.forEach(r=>{if(r&&r.id!=null)m[r.id]=JSON.stringify(r,_mReplacer)});_mSnap[L]=m;});}
+function _damgala(){const now=Date.now();db._tomb=db._tomb||{};
+  MERGE_LISTELER.forEach(L=>{const arr=db[L];if(!Array.isArray(arr))return;const eski=_mSnap[L]||{};const yeni={};
+    arr.forEach(r=>{if(!r||r.id==null)return;const j=JSON.stringify(r,_mReplacer);yeni[r.id]=j;
+      if(eski[r.id]===undefined){if(!r._m)r._m=now;}
+      else if(eski[r.id]!==j){r._m=now;}});
+    for(const id in eski){if(yeni[id]===undefined){(db._tomb[L]=db._tomb[L]||{})[id]=now;}}
+    _mSnap[L]=yeni;});
+  const esik=now-30*86400000; // 30 günden eski mezar taşlarını buda
+  for(const L in db._tomb){for(const id in db._tomb[L]){if(db._tomb[L][id]<esik)delete db._tomb[L][id];}if(!Object.keys(db._tomb[L]).length)delete db._tomb[L];}
+}
+// Buluttan gelen domen verisini yerel db'ye AKILLI uygular (test edilebilir tek nokta)
+function canliDomenUygula(domen,d){
+  db._tomb=db._tomb||{};
+  const yIslenen=(domen==='satis')?(db.islenenSiparis||[]).slice():null;
+  const ySatis=(domen==='satis')?(db.satislar||[]).slice():null;
+  CANLI_DOMEN[domen].forEach(k=>{if(d[k]===undefined)return;
+    const gelenTomb=(d._tomb&&d._tomb[k])||null;
+    if(MERGE_LISTELER.includes(k)&&Array.isArray(d[k])){
+      const tomb=_tombMerge(db._tomb[k],gelenTomb);
+      if(Object.keys(tomb).length)db._tomb[k]=tomb;
+      db[k]=_recMerge(db[k],d[k],tomb);
+    }else if(k==='seq'){db.seq=_seqMerge(db.seq,d.seq);}
+    else if(k==='islenenSiparis'||k==='portalFav'){db[k]=_unionDizi(db[k],d[k]);}
+    else db[k]=d[k];
+  });
+  if(domen==='satis')canliSatisUzlas(yIslenen,ySatis);
+}
+function canliAl(obj,domen){const o={};CANLI_DOMEN[domen].forEach(k=>{if(obj[k]!==undefined)o[k]=obj[k];});
+  const tb={};CANLI_DOMEN[domen].forEach(k=>{if(obj._tomb&&obj._tomb[k]&&Object.keys(obj._tomb[k]).length)tb[k]=obj._tomb[k];});
+  if(Object.keys(tb).length)o._tomb=tb;return o;}
 function canliRef(domen){return _fb.collection('isletme').doc(MAGAZA_ID).collection('veri').doc(domen);}
+try{_mSnapInit()}catch(e){} // açılışta mevcut kayıtlar taban alınır (toplu yanlış damga olmasın)
 // Dinleyicileri kur — ilk snapshot buluttaki veriyi getirir (başka cihaz katılınca)
 // Buluttan gelen 'satis' verisi ESKİ olabilir (onay henüz buluta yazılmadan sekme kapandıysa).
 // Yerelde onaylanan portal siparişlerini KORU ve bekleyenden temizle — böylece onaylanan sipariş
@@ -606,14 +654,14 @@ function canliBaslat(sessiz){
       if(!snap.exists)return; const d=snap.data(); const js=JSON.stringify(canliAl(d,domen));
       if(js===_canliGolge[domen])return; // kendi yazımızın yankısı → atla
       _canliUygulaniyor=true;
-      const yIslenen=(domen==='satis')?(db.islenenSiparis||[]).slice():null;
-      const ySatis=(domen==='satis')?(db.satislar||[]).slice():null;
-      CANLI_DOMEN[domen].forEach(k=>{if(d[k]!==undefined)db[k]=d[k];});
-      if(domen==='satis')canliSatisUzlas(yIslenen,ySatis);
+      canliDomenUygula(domen,d); // 🧠 kayıt-bazlı akıllı birleştirme (geç yazan erkeni EZMEZ)
       db.ornek=false; // buluttan gerçek veri geldi → artık demo değil
       _canliGolge[domen]=js; try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){console.warn('yerel kayıt başarısız (depolama dolu olabilir)',e)}
+      try{_mSnapInit()}catch(e){} // buluttan uygulanan hali taban al — sonraki save yanlış damga vurmasın
       _canliUygulaniyor=false;
       try{if(typeof render==='function'&&typeof cur!=='undefined')render()}catch(e){}
+      // birleşimde YEREL katkı varsa (bulutta olmayan kayıt/mezar taşı) → birleşimi buluta geri yay
+      try{if(JSON.stringify(canliAl(db,domen))!==js)setTimeout(()=>{try{if(canliAcik)canliYazHemen([domen])}catch(e){}},300);}catch(e){}
     },err=>{console.warn('canlı-dinle',domen,err&&err.code);canliIzinHata(err);});
     _canliUnsub.push(un);
   });
@@ -674,14 +722,15 @@ function canliYazHemen(domenler){
     if(js!==_canliGolge[domen]){_canliGolge[domen]=js;ps.push(canliRef(domen).set(data).catch(e=>{console.warn('canlı-yaz-hemen',domen,e&&e.code);if(canliIzinHata(e)!=='permission-denied'&&(''+e).includes('longer than'))toast('⚠️ '+domen+' verisi 1MB sınırını aştı (fotoğraflar) — buluta yazılamadı. Fotoğrafları küçültün.');}));}});
   return Promise.all(ps);
 }
-function save(){try{localStorage.setItem(KEY,JSON.stringify(db));return true;}catch(e){console.error('save failed',e);
+function save(){try{_damgala()}catch(e){}
+  try{localStorage.setItem(KEY,JSON.stringify(db));return true;}catch(e){console.error('save failed',e);
     if(!window._saveHataG){window._saveHataG=1;setTimeout(()=>{try{askConfirm('🚨 DEPOLAMA DOLU — SON İŞLEM KALICI KAYDEDİLEMEDİ!\n\nSayfayı yenilersen son işlemler KAYBOLUR. Hemen:\n1) Ayarlar → Yedek Al (dosya olarak indir)\n2) Büyük fotoğrafları küçült/sil ya da eski verileri temizle\n\nSorun sürerse yedeği aldıktan sonra tarayıcı site verisini artırın.',()=>{},'Anladım')}catch(x){return false;}},200);}try{toast('⚠️ Depolama dolu — kayıt yapılamadı! Fotoğrafları küçült ya da Ayarlar\'dan Cloudinary aç.');}catch(_){}return;}if(canliAcik&&!_canliUygulaniyor)canliYaz();if(db.otoYayin){try{otoYayinTetik()}catch(e){}}}
 function canliBulutAyar(){
   if(!bulutVar())return toast('Önce bulut (Firebase) ayarlı olmalı');
   if(!bulutBaslat())return toast('Bulut başlatılamadı');
   if(!bulutGirisli())return bulutGirisIste('canli');
   open_('☁️ Canlı Bulut Senkronu',`
-    <div class="mini" style="line-height:1.6">Açıkken <b>stok, cari, kasa, çek, üretim ve ayarların</b> tüm cihazlarında <b>canlı aynı</b> olur — bir cihazda yapılan hareket diğerlerinde anında görünür. İnternet gerekir.</div>
+    <div class="mini" style="line-height:1.6">Açıkken <b>stok, cari, kasa, çek, üretim ve ayarların</b> tüm cihazlarında <b>canlı aynı</b> olur. 🧠 <b>Akıllı birleştirme:</b> iki cihaz aynı anda farklı kayıtlarda çalışsa bile hiçbir kayıt kaybolmaz (aynı kaydı aynı anda değiştirirseniz son değişiklik geçerli olur) — bir cihazda yapılan hareket diğerlerinde anında görünür. İnternet gerekir.</div>
     <div class="card" style="margin-top:10px;padding:11px 13px">Durum: <b style="color:${canliAcik?'var(--good)':'var(--sub)'}">${canliAcik?'AÇIK ✓ (canlı)':'kapalı'}</b>${canliAcik?` · ${navigator.onLine?'🌐 çevrimiçi':'📴 çevrimdışı — internet gelince otomatik yüklenecek'}`:''}</div>
     ${canliAcik?`<button class="btn danger" style="margin-top:12px" onclick="canliBulutKapat()">⏹ Senkronu Kapat</button>`:`
     <div class="mini" style="margin-top:14px;font-weight:800">İlk kez kuruyorsan (bu cihazdaki veri ana kaynak):</div>
@@ -767,7 +816,7 @@ async function canliBulutKatil(){
 function otoYedekListe(){const y=JSON.parse(localStorage.getItem('iq_yedekler')||'[]');
   open_('🕑 Otomatik Yedekler',(y.length?y.map((b,i)=>`<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><b>${tstr(b.t)}</b><div class="mini">${esc(b.etiket||'')} · ${esc(b.ozet||'')}</div></div><button class="btn ghost sm" style="width:auto;margin:0;padding:8px 12px;flex:0 0 auto" onclick="otoYedekGeri(${i})">↩︎ Geri yükle</button></div></div>`).join(''):'<div class="mini">Henüz yedek yok. Riskli işlemlerden önce ve günde bir otomatik alınır.</div>')+'<div class="mini" style="margin-top:8px">Yedekler bu cihazda saklanır (son 10). Cihaz değişimi için "Yedek Al (indir)" ile dosya da al.</div>');}
 function otoYedekGeri(i){const y=JSON.parse(localStorage.getItem('iq_yedekler')||'[]');const b=y[i];if(!b)return;
-  askConfirm('Bu yedeğe dönülsün mü? Şu anki veri bununla değişir ve canlı senkron kapatılır (istersen sonra tekrar açarsın).',()=>{try{JSON.parse(b.veri);if(canliAcik)canliDur();localStorage.setItem(KEY,b.veri);db=load();closeM();go('panel');toast('↩︎ Yedek geri yüklendi ✓');}catch(e){toast('Yedek okunamadı')}});}
+  askConfirm('Bu yedeğe dönülsün mü? Şu anki veri bununla değişir ve canlı senkron kapatılır (istersen sonra tekrar açarsın).',()=>{try{JSON.parse(b.veri);if(canliAcik)canliDur();localStorage.setItem(KEY,b.veri);db=load();try{_mSnapInit()}catch(e){}closeM();go('panel');toast('↩︎ Yedek geri yüklendi ✓');}catch(e){toast('Yedek okunamadı')}});}
 function canliBulutKapat(){askConfirm('Canlı senkron kapatılsın mı? (Veri cihazda kalır ama artık senkronlanmaz)',()=>{canliDur();closeM();toast('Senkron kapatıldı');});}
 // 👤 Personel girişi: depocu/mağaza/ortak kendi hesabıyla girer → rolüne göre canlı veriye bağlanır
 function personelGiris(){
@@ -826,7 +875,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-91'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-92'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -6974,7 +7023,7 @@ function yedekAl(){
 function yedekYukle(inp){
   const f=inp.files&&inp.files[0];if(!f)return;
   const r=new FileReader();
-  r.onload=()=>{let d;try{d=JSON.parse(r.result);if(!d||!d.urunler)throw 0}catch(e){toast('Geçersiz yedek dosyası');inp.value='';return}inp.value='';askConfirm('Mevcut veriler bu yedekle değiştirilsin mi? (Açıksa canlı senkron durdurulur.)',()=>{try{if(typeof canliAcik!=='undefined'&&canliAcik&&typeof canliDur==='function')canliDur();}catch(e){}localStorage.setItem(KEY,JSON.stringify(d));db=load();go('panel');toast('Yedek geri yüklendi ✓ · senkron durduruldu')},'Yükle')};
+  r.onload=()=>{let d;try{d=JSON.parse(r.result);if(!d||!d.urunler)throw 0}catch(e){toast('Geçersiz yedek dosyası');inp.value='';return}inp.value='';askConfirm('Mevcut veriler bu yedekle değiştirilsin mi? (Açıksa canlı senkron durdurulur.)',()=>{try{if(typeof canliAcik!=='undefined'&&canliAcik&&typeof canliDur==='function')canliDur();}catch(e){}localStorage.setItem(KEY,JSON.stringify(d));db=load();try{_mSnapInit()}catch(e){}go('panel');toast('Yedek geri yüklendi ✓ · senkron durduruldu')},'Yükle')};
   r.readAsText(f);
 }
 
