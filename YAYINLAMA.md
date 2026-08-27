@@ -4,10 +4,12 @@ Bu uygulama tek dosyalık bir web uygulamasıdır (`index.html`). Bulut olmadan 
 kendi cihazında tam çalışır. Aşağıdakiler, **müşteri / çalışan / fasonun kendi
 telefonundan** girip kendi işini görmesi için bulutu (Firebase) devreye alır.
 
-> Güvenlik ilkesi: Senin **cari / çek / kâr / kasa** verilerin buluta **hiç
-> gitmez**, kendi cihazında kalır. Bulutta yalnız katalog, siparişler, müşteriye
-> özel bakiye/geçmiş ve fason iş emirleri bulunur — herkes yalnız **kendi**
-> verisini görür (Firestore kuralları sunucu tarafında zorlar).
+> Güvenlik ilkesi: Katalog-yayın yolunda cari/çek/kasa buluta gitmez. Ancak
+> **Canlı Senkron açıkken** stok/cari/kasa/çek/satış/üretim verileri de
+> `isletme/iqbasics/veri/*` altına yazılır ve YALNIZ **onaylı + rol yetkili**
+> personel hesapları erişebilir (Firestore kuralları sunucu tarafında zorlar;
+> kurallar dosyasındaki onay şartını yayınlamayı unutma). Müşteriler yalnız
+> katalog, kendi siparişleri ve kendi bakiye/geçmişini görür.
 
 ---
 

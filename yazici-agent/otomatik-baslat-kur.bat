@@ -56,7 +56,7 @@ choice /c EH /n /m "Ajani simdi de (gizli) baslatayim mi? (E=Evet / H=Hayir): "
 if errorlevel 2 goto son
 
 rem --- Once eski/calisan ajan varsa kapat, sonra gizli baslat ---
-taskkill /IM node.exe /F >nul 2>&1
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process -Filter \"name='node.exe'\" | Where-Object { $_.CommandLine -like '*agent.js*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }" >nul 2>&1
 start "" wscript.exe "%TARGET%"
 echo.
 echo Ajan gizli olarak baslatildi (pencere yok).

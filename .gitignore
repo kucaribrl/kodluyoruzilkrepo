@@ -1,1 +1,3 @@
 node_modules/
+yazici-agent/config.json
+yazici-agent/agent.pid

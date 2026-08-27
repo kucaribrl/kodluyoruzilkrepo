@@ -25,13 +25,18 @@ ile ya da penceresiz/otomatik — aşağıdaki "GİZLİ başlasın" bölümü �
 - GitHub'da depoya gir → yeşil **Code** düğmesi → **Download ZIP**.
 - ZIP'i aç, içinden **`yazici-agent`** klasörünü masaüstüne çıkar.
 
+> 🔐 **Güvenlik önerisi:** Ajana patron hesabını yazmak yerine, Firebase'de
+> yalnız yazdırma için ayrı bir personel hesabı (ör. `yazici@...`) açıp onu
+> yönetici onayıyla `ortak` yapman daha güvenlidir — bilgisayara erişen biri
+> patron şifreni görememiş olur.
+
 ### 3) Ayar dosyasını doldur
 - Klasördeki **`config.example.json`** dosyasını kopyala, adını **`config.json`** yap.
 - Not defteri ile aç, doldur:
 
 ```json
 {
-  "email": "birol575@hotmail.com",
+  "email": "ornek@eposta.com",
   "sifre": "BULUTA_GIRDIGIN_SIFRE",
   "yaziciAdi": "",
   "etiketYaziciAdi": "",

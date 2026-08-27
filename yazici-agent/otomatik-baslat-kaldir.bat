@@ -18,7 +18,7 @@ echo [i] Otomatik baslatma zaten kurulu degil.
 :durdur
 echo.
 echo Arka planda calisan yazici ajani durduruluyor...
-taskkill /IM node.exe /F >nul 2>&1
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process -Filter \"name='node.exe'\" | Where-Object { $_.CommandLine -like '*agent.js*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }" >nul 2>&1
 if errorlevel 1 echo [i] Calisan ajan bulunamadi (zaten kapaliydi).
 if not errorlevel 1 echo [OK] Gizli ajan durduruldu.
 echo.

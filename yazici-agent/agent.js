@@ -11,7 +11,7 @@ const { spawn } = require('child_process');
 const { initializeApp } = require('firebase/app');
 const { getAuth, signInWithEmailAndPassword } = require('firebase/auth');
 const { getFirestore, collection, query, where, onSnapshot,
-        doc, updateDoc, deleteDoc, setDoc } = require('firebase/firestore');
+        doc, updateDoc, deleteDoc, setDoc, runTransaction } = require('firebase/firestore');
 
 // --- Uygulamayla aynı (herkese açık) bulut ayarı ---
 const FB_CONFIG = {
@@ -41,6 +41,9 @@ if (!cfg.email || !cfg.sifre || cfg.sifre === 'BULUT_SIFREN') {
 }
 
 const log = (...a) => console.log(new Date().toLocaleTimeString('tr-TR'), ...a);
+// Hedefli durdurma için PID dosyası (durdur.bat yalnız bu süreci kapatır)
+try { fs.writeFileSync(path.join(__dirname, 'agent.pid'), String(process.pid)); } catch (e) {}
+process.on('exit', () => { try { fs.unlinkSync(path.join(__dirname, 'agent.pid')); } catch (e) {} });
 const isWin = process.platform === 'win32';
 const inFlight = new Set();
 
@@ -117,12 +120,26 @@ async function handleJob(db, snapDoc) {
   if (!data || data.durum !== 'bekliyor' || (!escpos && (!imgs || !imgs.length))) return;
   inFlight.add(id);
   const ref = doc(db, 'isletme', MAGAZA_ID, 'yazdirma', id);
+  // güvenlik: aşırı büyük iş verisini basma (yanlış/kötü niyetli kuyruk kaydı)
+  const boyut = (escpos ? escpos.length : 0) + (imgs ? imgs.reduce((a, x) => a + (x ? x.length : 0), 0) : 0);
+  if (boyut > 8 * 1024 * 1024 || (imgs && imgs.length > 60)) {
+    log('⚠️ İş çok büyük, atlandı:', id, Math.round(boyut / 1024) + 'KB');
+    try { await updateDoc(ref, { durum: 'hata', hata: 'iş verisi çok büyük' }); } catch (e) {}
+    inFlight.delete(id); return;
+  }
   // hangi yazıcı? etiket → etiketYaziciAdi, fiş → yaziciAdi (biri boşsa diğerine/​varsayılana düşer)
   const printer = etiket ? (cfg.etiketYaziciAdi || cfg.yaziciAdi || '') : (cfg.yaziciAdi || '');
   // config ham baskıyı kapatmadıysa (hamBaski:false) ESC/POS kullan
   const useRaw = escpos && cfg.hamBaski !== false;
   try {
-    await updateDoc(ref, { durum: 'basiliyor' });
+    // işi güvenle sahiplen: hâlâ 'bekliyor' ise al (iki ajan aynı fişi iki kez basmasın)
+    const alindi = await runTransaction(db, async (tr) => {
+      const d0 = await tr.get(ref);
+      if (!d0.exists() || d0.data().durum !== 'bekliyor') return false;
+      tr.update(ref, { durum: 'basiliyor' });
+      return true;
+    });
+    if (!alindi) { inFlight.delete(id); return; }
     log('🖨️  Basılıyor:', etiket ? (imgs.length + ' barkod etiketi → ' + (printer || 'varsayılan'))
         : (data.tur === 'test' ? 'TEST' : ('Fiş #' + (data.satisId || '') + ' · ' + (data.mus || '') + (useRaw ? ' · ham ESC/POS' : ''))));
     if (useRaw) {
@@ -156,7 +173,13 @@ async function main() {
   const auth = getAuth(app);
   const db = getFirestore(app);
   try {
-    await signInWithEmailAndPassword(auth, cfg.email, cfg.sifre);
+    await signInWithEmailAndPassword(auth, cfg.email, cfg.sifre).catch(e => {
+    if (String(e && e.code || '').startsWith('auth/')) {
+      console.error('❌ Bulut girişi reddedildi (' + e.code + ') — config.json içindeki e-posta/şifreyi düzelt.');
+      process.exit(2); // gizli-baslat.vbs bu kodda yeniden denemeyi DURDURUR
+    }
+    throw e;
+  });
     log('🔐 Buluta giriş yapıldı:', cfg.email);
   } catch (e) {
     console.error('\n❌ Bulut girişi başarısız:', e.code || e.message);

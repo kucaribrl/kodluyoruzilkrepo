@@ -24,7 +24,7 @@ $l.TargetPath = 'wscript.exe'
 $l.Arguments = '"' + $vbsPath + '"'
 $l.WorkingDirectory = $d
 $l.Save()
-taskkill /IM node.exe /F 2>$null | Out-Null
+Get-CimInstance Win32_Process -Filter "name='node.exe'" | Where-Object { $_.CommandLine -like '*agent.js*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force } 2>$null
 Start-Process wscript.exe -ArgumentList ('"' + $vbsPath + '"')
 Write-Host ''
 Write-Host 'TAMAM - Ajan GIZLI calisiyor (pencere yok).' -ForegroundColor Green

@@ -33,10 +33,12 @@ service cloud.firestore {
       allow read: if girisli() && (request.auth.uid == uid || adminMi());
       // Kendi kaydını oluşturur; onaysız + admin OLMADAN (kendini yönetici yapamaz).
       // İstisna: işletme sahibi (sahipMi) kendi belgesini admin olarak oluşturabilir.
+      // Kendi kaydını yalnız müşteri/fason olarak açabilir; personel rolleri
+      // (ortak/mağaza/depocu/fasontakip) SADECE yönetici tarafından atanır.
       allow create: if (girisli()
         && request.auth.uid == uid
         && request.resource.data.onay == false
-        && request.resource.data.rol in ['musteri','calisan','fason','magaza','depocu','ortak','fasontakip'])
+        && request.resource.data.rol in ['musteri','fason'])
         || (sahipMi() && request.auth.uid == uid);
       // Sahip kendi belgesini güncelleyebilir; onay / rol / silme yönetici (sahip dahil)
       allow update, delete: if adminMi() || (sahipMi() && request.auth.uid == uid);
@@ -79,8 +81,13 @@ service cloud.firestore {
 
     // CANLI ORTAK VERİ — gerçek zamanlı çok cihaz senkron, ALAN + ROL bazlı izin.
     // rolu(): kullanicilar/{uid}.rol  → admin | ortak | magaza | depocu
+    // Onaylı mı? — rol yetkileri YALNIZ yönetici onayından sonra geçerli olur
+    function onayliMi() {
+      return exists(/databases/$(database)/documents/kullanicilar/$(request.auth.uid))
+        && get(/databases/$(database)/documents/kullanicilar/$(request.auth.uid)).data.onay == true;
+    }
     function rolVar(liste){ return sahipMi() || (girisli()
-      && exists(/databases/$(database)/documents/kullanicilar/$(request.auth.uid))
+      && onayliMi()
       && (rolu() in liste)); }
     match /isletme/{iid}/veri/stok   { allow read, write: if rolVar(['admin','ortak','magaza','depocu','fasontakip']); }
     match /isletme/{iid}/veri/cari   { allow read, write: if rolVar(['admin','ortak','magaza']); }
