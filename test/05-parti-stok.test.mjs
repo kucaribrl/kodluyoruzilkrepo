@@ -4,6 +4,7 @@ import { chromium } from 'playwright';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 
 import { fileURLToPath } from 'url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -106,7 +107,7 @@ const out = await page.evaluate(async () => {
 // ekran görüntüsü: düzenleme formu açık, parti kutuları görünür
 await page.evaluate(() => { const w = document.getElementById('ham-renk-wrap'); if (w) w.scrollIntoView({ block: 'center' }); });
 await page.waitForTimeout(200);
-await page.screenshot({ path: 'parti-stok-390.png' });
+await page.screenshot({ path: path.join(os.tmpdir(), 'parti-stok-390.png') });
 
 console.log(out.steps.join('\n'));
 console.log('pageErrors:', errs.length ? errs : 'none');
