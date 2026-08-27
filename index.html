@@ -928,7 +928,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-94'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-95'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -5951,6 +5951,8 @@ const PT_SOZ={
  'Kapat':{en:'Close',ar:'إغلاق',ru:'Закрыть'},
  'Bekleyen Siparişlerim':{en:'Pending Orders',ar:'طلباتي المعلقة',ru:'Ожидающие заказы'},
  'Geçmiş Siparişlerim':{en:'Past Orders',ar:'طلباتي السابقة',ru:'Прошлые заказы'},
+ 'Sipariş Detayı':{en:'Order Details',ar:'تفاصيل الطلب',ru:'Детали заказа'},
+ 'Sipariş Toplamı':{en:'Order Total',ar:'إجمالي الطلب',ru:'Итого'},
  'onay bekliyor':{en:'awaiting approval',ar:'بانتظار الموافقة',ru:'ждёт подтверждения'},
  'Tekrar':{en:'Reorder',ar:'إعادة الطلب',ru:'Повторить'},
  'CARİ DURUMUM':{en:'MY BALANCE',ar:'رصيدي',ru:'МОЙ БАЛАНС'},
@@ -6244,6 +6246,44 @@ function portalIstekKaydet(uid){const ad=($('ist-ad')?.value||'').trim();if(!ad)
 function isFav(uid){return (db.portalFav||[]).includes(uid)}
 function portalFavToggle(uid){db.portalFav=db.portalFav||[];const i=db.portalFav.indexOf(uid);if(i<0){db.portalFav.push(uid);toast('❤️ Favorilere eklendi')}else{db.portalFav.splice(i,1)}save();portalCiz()}
 function portalMusteriBul(){const g=portalMusteriGiris();if(g)return g;const ad=(portalMusAd||'').trim();if(!ad)return null;return db.cariler.find(c=>c.tip==='musteri'&&c.ad.toLowerCase()===ad.toLowerCase())||null}
+/* 🧾 MÜŞTERİ SİPARİŞ DETAYI — geçmiş/bekleyen siparişin ürün ürün dökümü
+   (fotoğraf, renk kırılımı, adet, birim fiyat, tutar — satış para biriminde) */
+function portalSipDetayModal(s,ops){ops=ops||{};
+  const pb=s.pb||'TL';
+  const dv=(+s.satisKur||(pb==='USD'?+db.kurUSD:pb==='EUR'?+db.kurEUR:1))||1;
+  const rows=(s.kalemler||[]).map(k=>{
+    const u=k.uid?urun(k.uid):null;const kap=u?urunKapak(u):'';
+    const fy=(+k.fiyat||0)/dv;
+    const renkSat=(k.renkler&&k.renkler.length)?`<div class="mini" style="margin-top:1px">${k.renkler.map(r=>esc(r.ad)+' ×'+r.mik).join(' · ')}</div>`:'';
+    return `<div style="display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--ln2)">
+      <div style="width:44px;height:44px;border-radius:10px;background:var(--ln2);overflow:hidden;flex:0 0 44px;display:flex;align-items:center;justify-content:center;font-size:20px">${kap?`<img src="${guvenliSrc(kap)}" style="width:100%;height:100%;object-fit:cover">`:'👕'}</div>
+      <div style="flex:1;min-width:0"><b style="font-size:13.5px">${esc(k.urun)}</b>${renkSat}<div class="mini">${k.mik} ${esc(k.birim||'adet')} × ${money(fy,pb)}</div></div>
+      <b style="flex:0 0 auto;font-size:13.5px">${money((+k.mik||0)*fy,pb)}</b></div>`;}).join('');
+  const araPB=(s.araToplam!=null?(+s.araToplam||0)/dv:null);
+  let alt='';
+  if(s.iskonto)alt+=`<div class="kv"><span class="k">${L('indirim')} %${s.iskonto}</span><span class="v">−${money((araPB||0)*s.iskonto/100,pb)}</span></div>`;
+  if(s.kdv)alt+=`<div class="kv"><span class="k">KDV %${s.kdv}</span><span class="v">+${money(+s.kdvTutar||0,pb)}</span></div>`;
+  if(s.tasima)alt+=`<div class="kv"><span class="k">🚚</span><span class="v">+${money(s.tasima,pb)}</span></div>`;
+  (s.ekstralar||[]).forEach(x=>{alt+=`<div class="kv"><span class="k">${esc(x.ad)}</span><span class="v">+${money(x.tutar,pb)}</span></div>`;});
+  const takip=(s.kaynak==='portal'&&s.sipDurum)?`<div style="margin:12px 2px 2px">${sipStepperHtml(s)}</div>`:'';
+  open_('🧾 '+L('Sipariş Detayı'),`
+    <div class="mini">${tstr(s.tarih)}${ops.durumEtiket?` · <b style="color:${ops.durumRenk||'var(--warn)'}">${ops.durumEtiket}</b>`:''}</div>
+    <div style="margin-top:8px">${rows||'<div class="mini" style="padding:12px">—</div>'}</div>
+    ${alt}
+    <div class="total" style="margin-top:10px"><div class="l">${L('Sipariş Toplamı')}</div><div class="v">${money(+s.tutar||0,pb)}</div></div>
+    ${takip}
+    ${ops.tekrarId?`<button class="btn g" style="margin-top:12px" onclick="closeM();portalTekrar(${ops.tekrarId})">🔁 ${L('Tekrar')}</button>`:''}`);
+}
+function portalSipAc(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;
+  portalSipDetayModal(s,{tekrarId:s.id});}
+function portalBekAc(id){const o=db.bekleyenPortal.find(x=>x.id===id);if(!o)return;
+  portalSipDetayModal({...o,pb:'TL',satisKur:1},{durumEtiket:'⏳ '+L('onay bekliyor')});}
+function portalGecmisAc(i){const g=(bulutMusVeri&&bulutMusVeri.gecmis)||[];const s=g[i];if(!s)return;
+  portalSipDetayModal(s,{});}
+function portalBulutSipAc(i){const o=(bulutSiparislerim||[])[i];if(!o)return;
+  const DS={yeni:['⏳ '+L('onay bekliyor'),'var(--warn)'],onaylandi:['✅','var(--good)'],red:['❌','var(--bad)']};
+  const d=DS[o.durum]||DS.yeni;
+  portalSipDetayModal({...o,tarih:o.olusturma||o.tarih,pb:'TL',satisKur:1},{durumEtiket:d[0],durumRenk:d[1]});}
 function portalSiparislerim(){const g=portalMusteriGiris();
   if(g){ // giriş yapılmışsa yalnızca o cariye ait siparişler (gizlilik)
     const gecmis=db.satislar.filter(s=>s.mid===g.id&&s.tip!=='iade').sort((a,b)=>b.tarih-a.tarih);
@@ -6449,8 +6489,8 @@ function portalCiz(){
       <div class="sec" style="margin-top:0">👤 ${L('Hesabım')}</div>
       <div class="card" style="padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><div style="font-weight:800;font-size:15px">${esc(bulutKul.ad||'')}</div><div class="mini">${esc(bulutKul.mail||'')}</div></div><button class="btn ghost sm" style="width:auto;margin:0;padding:8px 13px;flex:0 0 auto" onclick="portalBulutCikis()">⎋ ${L('Çıkış')}</button></div>
       ${v?`<div class="card" style="margin-top:12px;padding:13px 15px;background:${v.bakiye>0?'var(--warn-s)':'var(--good-s)'};border-color:${v.bakiye>0?'var(--warn)':'var(--good)'}"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11.5px;font-weight:700;color:var(--sub)">💳 ${L('CARİ DURUMUM')}</div><div class="mini">${v.limit?'limit '+TL(v.limit):L('kayıtlı müşteri')}</div></div><div style="text-align:right"><div style="font-size:19px;font-weight:800;color:${v.bakiye>0?'var(--warn)':'var(--good)'}">${TL(Math.abs(v.bakiye||0))}</div><div class="mini">${v.bakiye>0?L('borç'):v.bakiye<0?L('alacak'):L('kapalı')}</div></div></div></div>`:`<div class="mini" style="margin:10px 3px">Cari bilgin henüz yayınlanmadı — ${esc(db.firma||'firma')} yayınlayınca burada görünecek.</div>`}
-      ${sips.length?`<div class="sec">🧾 ${L('Siparişlerim')}</div>`+sips.map(o=>{const d=DS[o.durum]||DS.yeni;return `<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:13px">${tstr(o.olusturma||o.tarih)}</b><b style="color:var(--ind)">${TL(o.tutar||0)}</b></div><div class="mini" style="margin-top:3px">${(o.kalemler||[]).map(k=>esc(k.urun)+' ×'+k.mik).join(', ')}</div><div class="mini" style="color:${d.c};margin-top:3px;font-weight:700">${d.t}</div></div>`}).join(''):''}
-      ${v&&v.gecmis&&v.gecmis.length?`<div class="sec">📦 ${L('Geçmiş Alışverişlerim')}</div>`+v.gecmis.slice(0,15).map(s=>`<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between"><b style="font-size:13px">${tstr(s.tarih)}</b><b style="color:var(--ind)">${money(s.tutar,s.pb||'TL')}</b></div><div class="mini" style="margin-top:3px">${(s.kalemler||[]).map(k=>esc(k.urun)+' ×'+k.mik).join(', ')}</div></div>`).join(''):''}
+      ${sips.length?`<div class="sec">🧾 ${L('Siparişlerim')}</div>`+sips.map((o,si)=>{const d=DS[o.durum]||DS.yeni;return `<div class="card" style="padding:11px 13px;margin-bottom:8px;cursor:pointer" onclick="portalBulutSipAc(${si})"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:13px">${tstr(o.olusturma||o.tarih)}</b><b style="color:var(--ind)">${TL(o.tutar||0)}</b></div><div class="mini" style="margin-top:3px">${(o.kalemler||[]).map(k=>esc(k.urun)+' ×'+k.mik).join(', ')}</div><div class="mini" style="color:${d.c};margin-top:3px;font-weight:700">${d.t}</div></div>`}).join(''):''}
+      ${v&&v.gecmis&&v.gecmis.length?`<div class="sec">📦 ${L('Geçmiş Alışverişlerim')}</div>`+v.gecmis.slice(0,15).map((s,gi)=>`<div class="card" style="padding:11px 13px;margin-bottom:8px;cursor:pointer" onclick="portalGecmisAc(${gi})"><div style="display:flex;justify-content:space-between"><b style="font-size:13px">${tstr(s.tarih)}</b><b style="color:var(--ind)">${money(s.tutar,s.pb||'TL')}</b></div><div class="mini" style="margin-top:3px">${(s.kalemler||[]).map(k=>esc(k.urun)+' ×'+k.mik).join(', ')} <span style="color:var(--ind2);font-weight:700">· ${L('İncele')} ›</span></div></div>`).join(''):''}
       ${(!sips.length&&!(v&&v.gecmis&&v.gecmis.length))?`<div class="mini" style="text-align:center;padding:22px">${L('Henüz siparişin yok. Kataloğa göz at!')} 🛍️</div>`:''}
       <button class="btn ghost sm" style="margin-top:12px" onclick="portalHesapYenile()">🔄 Yenile</button>
     </div>`;
@@ -6463,8 +6503,8 @@ function portalCiz(){
       ${portalMusteriGiris()?`<div class="card" style="padding:12px 14px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:800;font-size:15px">${esc(portalMusteriGiris().ad)}</div><div class="mini">${esc(portalMusteriGiris().tel||'')||L('giriş yapıldı')}</div></div><button class="btn ghost sm" style="width:auto;margin:0;padding:8px 13px" onclick="portalCikis()">⎋ ${L('Çıkış')}</button></div>`:`<label>${L('Adınız / Firmanız')}</label><input id="p-hes-ad" value="${esc(portalMusAd)}" placeholder="ör. Yılmaz Tekstil" oninput="portalMusAd=this.value" onchange="portalCiz()"><div class="mini" style="margin-top:4px">${L('Sipariş geçmişinizi ve bakiyenizi görmek için adınızı girin.')}</div>`}
       ${m?`<div class="card" style="margin-top:12px;padding:13px 15px;background:${m.bakiye>0?'var(--warn-s)':'var(--good-s)'};border-color:${m.bakiye>0?'var(--warn)':'var(--good)'}"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11.5px;font-weight:700;color:var(--sub)">💳 ${L('CARİ DURUMUM')}</div><div class="mini">${m.limit?'limit '+TL(m.limit):L('kayıtlı müşteri')}${bekleyen.length?' · '+bekleyen.length+' bekleyen sipariş':''}</div></div><div style="text-align:right"><div style="font-size:19px;font-weight:800;color:${m.bakiye>0?'var(--warn)':'var(--good)'}">${TL(Math.abs(m.bakiye))}</div><div class="mini">${m.bakiye>0?L('borç'):m.bakiye<0?L('alacak'):L('kapalı')}</div></div></div></div>`:''}
       ${favs.length?`<div class="sec">❤️ ${L('Favorilerim')} (${favs.length})</div><div class="pgrid">${favs.map(u=>portalKart(u,portalCokSatan())).join('')}</div>`:''}
-      ${bekleyen.length?`<div class="sec">⏳ ${L('Bekleyen Siparişlerim')}</div>`+bekleyen.map(o=>`<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between"><b style="font-size:13px">${tstr(o.tarih)}</b><b style="color:var(--ind)">${TL(o.tutar)}</b></div><div class="mini" style="margin-top:3px">${o.kalemler.map(k=>esc(k.urun)+' ×'+k.mik).join(', ')}</div><div class="mini" style="color:var(--warn);margin-top:3px">${L('onay bekliyor')}</div></div>`).join(''):''}
-      ${gecmis.length?`<div class="sec">📦 ${L('Geçmiş Siparişlerim')}</div>`+gecmis.slice(0,10).map(s=>{const takip=s.kaynak==='portal'&&s.sipDurum,ax=takip?SIP_ASAMA[sipAsamaIx(s)]:null;return `<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center"><div style="min-width:0"><b style="font-size:13px">${tstr(s.tarih)}</b>${ax?` <span class="tag" style="background:${ax.k==='teslim'?'var(--good-s)':'#e7effb'};color:${ax.k==='teslim'?'var(--good)':'var(--ind2)'}">${ax.ic} ${ax.t}</span>`:''}<div class="mini" style="margin-top:2px">${s.kalemler.map(k=>esc(k.urun)+' ×'+k.mik).join(', ')}</div></div><div style="text-align:right;flex:0 0 auto;margin-left:8px"><div style="font-weight:800;color:var(--ind)">${TL(s.tutar)}</div><button class="btn ghost sm" style="width:auto;margin:4px 0 0;padding:6px 11px" onclick="portalTekrar(${s.id})">🔁 ${L('Tekrar')}</button></div></div>${takip?`<div style="margin:11px 2px 3px">${sipStepperHtml(s)}</div>`:''}</div>`}).join(''):(portalMusAd.trim()?`<div class="mini" style="text-align:center;padding:24px">${L('Bu isimle geçmiş sipariş bulunamadı')}</div>`:'')}
+      ${bekleyen.length?`<div class="sec">⏳ ${L('Bekleyen Siparişlerim')}</div>`+bekleyen.map(o=>`<div class="card" style="padding:11px 13px;margin-bottom:8px;cursor:pointer" onclick="portalBekAc(${o.id})"><div style="display:flex;justify-content:space-between"><b style="font-size:13px">${tstr(o.tarih)}</b><b style="color:var(--ind)">${TL(o.tutar)}</b></div><div class="mini" style="margin-top:3px">${o.kalemler.map(k=>esc(k.urun)+' ×'+k.mik).join(', ')}</div><div class="mini" style="color:var(--warn);margin-top:3px">${L('onay bekliyor')} · ${L('İncele')} ›</div></div>`).join(''):''}
+      ${gecmis.length?`<div class="sec">📦 ${L('Geçmiş Siparişlerim')}</div>`+gecmis.slice(0,10).map(s=>{const takip=s.kaynak==='portal'&&s.sipDurum,ax=takip?SIP_ASAMA[sipAsamaIx(s)]:null;return `<div class="card" style="padding:11px 13px;margin-bottom:8px;cursor:pointer" onclick="portalSipAc(${s.id})"><div style="display:flex;justify-content:space-between;align-items:center"><div style="min-width:0"><b style="font-size:13px">${tstr(s.tarih)}</b>${ax?` <span class="tag" style="background:${ax.k==='teslim'?'var(--good-s)':'#e7effb'};color:${ax.k==='teslim'?'var(--good)':'var(--ind2)'}">${ax.ic} ${ax.t}</span>`:''}<div class="mini" style="margin-top:2px">${s.kalemler.map(k=>esc(k.urun)+' ×'+k.mik).join(', ')} <span style="color:var(--ind2);font-weight:700">· ${L('İncele')} ›</span></div></div><div style="text-align:right;flex:0 0 auto;margin-left:8px"><div style="font-weight:800;color:var(--ind)">${TL(s.tutar)}</div><button class="btn ghost sm" style="width:auto;margin:4px 0 0;padding:6px 11px" onclick="event.stopPropagation();portalTekrar(${s.id})">🔁 ${L('Tekrar')}</button></div></div>${takip?`<div style="margin:11px 2px 3px">${sipStepperHtml(s)}</div>`:''}</div>`}).join(''):(portalMusAd.trim()?`<div class="mini" style="text-align:center;padding:24px">${L('Bu isimle geçmiş sipariş bulunamadı')}</div>`:'')}
     </div>`;
   }else if(portalView==='urun'){
     const u=urun(portalUrunId);
