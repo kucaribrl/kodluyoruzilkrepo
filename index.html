@@ -579,7 +579,17 @@ function canliRol(){const r=(bulutKul&&bulutKul.rol);if(r&&ROL_OKU[r])return r;
   const mail=((bulutKul&&bulutKul.mail)||'').toLowerCase();
   return SAHIP_MAILLER.includes(mail)?'admin':'musteri';} // bilinmeyen rol → EN DÜŞÜK yetki (kurallar asıl kapı)
 let canliAcik=false,_canliUnsub=[],_canliGolge={},_canliUygulaniyor=false,_canliYazT=null,_canliUyari=false;
-function canliIzinHata(e){const c=(e&&e.code)||'';if(c==='permission-denied'&&!_canliUyari){_canliUyari=true;toast('☁️ Senkron İZNİ YOK — Firebase Rules güncel mi + yönetici hesabıyla giriş yaptın mı?');}return c;}
+// ☁️ Senkron durumu — her an görünür küçük rozet (yazılıyor / eşitlendi / HATA)
+let _senk={son:0,bekleyen:false,hata:''};
+function senkRozetCiz(){
+  if(typeof canliAcik==='undefined'||!canliAcik){const e0=document.getElementById('senk-rozet');if(e0)e0.remove();return;}
+  let e=document.getElementById('senk-rozet');
+  if(!e){e=document.createElement('div');e.id='senk-rozet';e.style.cssText='position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 74px);left:10px;z-index:70;font-size:10px;font-weight:800;padding:3px 9px;border-radius:20px;pointer-events:none;opacity:.92;box-shadow:0 2px 8px rgba(0,0,0,.18)';document.body.appendChild(e);}
+  if(_senk.hata){e.style.background='#c0392b';e.style.color='#fff';e.textContent='☁️ senkron HATA ('+_senk.hata+')';}
+  else if(_senk.bekleyen){e.style.background='#d59433';e.style.color='#fff';e.textContent='☁️ buluta yazılıyor…';}
+  else{e.style.background='rgba(46,150,90,.92)';e.style.color='#fff';e.textContent='☁️ eşitlendi'+(_senk.son?' · '+(typeof zamanKisa==='function'?zamanKisa(_senk.son):''):'');}
+}
+function canliIzinHata(e){const c=(e&&e.code)||'';_senk.hata=c||'izin';try{senkRozetCiz()}catch(x){}if(c==='permission-denied'&&!_canliUyari){_canliUyari=true;toast('☁️ Senkron İZNİ YOK — Firebase Rules güncel mi + yönetici hesabıyla giriş yaptın mı?');}return c;}
 /* ====== ÇOK CİHAZ AKILLI BİRLEŞTİRME ======
    Eskiden bir domen belgesi geldiğinde liste KOMPLE değiştirilirdi (geç yazan erkeni ezerdi).
    Artık id'li listeler kayıt-kayıt birleşir: her kayıt son değişiklik damgası (_m) taşır,
@@ -630,6 +640,16 @@ function canliAl(obj,domen){const o={};CANLI_DOMEN[domen].forEach(k=>{if(obj[k]!
   if(Object.keys(tb).length)o._tomb=tb;return o;}
 function canliRef(domen){return _fb.collection('isletme').doc(MAGAZA_ID).collection('veri').doc(domen);}
 try{_mSnapInit()}catch(e){} // açılışta mevcut kayıtlar taban alınır (toplu yanlış damga olmasın)
+// localStorage boş/bozuksa IndexedDB güvence kopyasından kurtar (async — hazır olunca ekranı tazeler)
+(async()=>{try{
+  const mevcut=(()=>{try{const d=JSON.parse(localStorage.getItem(KEY));return d&&d.urunler?d:null}catch(e){return null}})();
+  if(mevcut)return; // yerel sağlam → dokunma
+  const v=await idbOku();if(!v)return;const d=JSON.parse(v);if(!d||!d.urunler)return;
+  try{localStorage.setItem(KEY,v)}catch(e){} // kota doluysa en azından bellekte çalış
+  db=d;try{_mSnapInit()}catch(e){}
+  try{if(typeof render==='function')render()}catch(e){}
+  toast('💾 Veriler IndexedDB güvence kopyasından geri yüklendi ✓');
+}catch(e){}})();
 // Dinleyicileri kur — ilk snapshot buluttaki veriyi getirir (başka cihaz katılınca)
 // Buluttan gelen 'satis' verisi ESKİ olabilir (onay henüz buluta yazılmadan sekme kapandıysa).
 // Yerelde onaylanan portal siparişlerini KORU ve bekleyenden temizle — böylece onaylanan sipariş
@@ -656,10 +676,11 @@ function canliBaslat(sessiz){
       _canliUygulaniyor=true;
       canliDomenUygula(domen,d); // 🧠 kayıt-bazlı akıllı birleştirme (geç yazan erkeni EZMEZ)
       db.ornek=false; // buluttan gerçek veri geldi → artık demo değil
-      _canliGolge[domen]=js; try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){console.warn('yerel kayıt başarısız (depolama dolu olabilir)',e)}
+      _canliGolge[domen]=js; try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){console.warn('yerel kayıt başarısız (depolama dolu olabilir)',e)} try{idbYaz()}catch(e){}
       try{_mSnapInit()}catch(e){} // buluttan uygulanan hali taban al — sonraki save yanlış damga vurmasın
       _canliUygulaniyor=false;
       try{if(typeof render==='function'&&typeof cur!=='undefined')render()}catch(e){}
+      _senk.son=Date.now();if(!_senk.bekleyen)_senk.hata='';try{senkRozetCiz()}catch(e){}
       // birleşimde YEREL katkı varsa (bulutta olmayan kayıt/mezar taşı) → birleşimi buluta geri yay
       try{if(JSON.stringify(canliAl(db,domen))!==js)setTimeout(()=>{try{if(canliAcik)canliYazHemen([domen])}catch(e){}},300);}catch(e){}
     },err=>{console.warn('canlı-dinle',domen,err&&err.code);canliIzinHata(err);});
@@ -667,9 +688,10 @@ function canliBaslat(sessiz){
   });
   if(['admin','ortak'].includes(canliRol()))siparisDinle(); // yönetici → siparişler otomatik gelsin
   if(!sessiz)toast('☁️ Canlı senkron açık');
+  try{senkRozetCiz()}catch(e){}
   return true;
 }
-function canliDur(){_canliUnsub.forEach(u=>{try{u()}catch(e){}});_canliUnsub=[];_canliGolge={};canliAcik=false;db.canliBulut=false;localStorage.setItem(KEY,JSON.stringify(db));}
+function canliDur(){_canliUnsub.forEach(u=>{try{u()}catch(e){}});_canliUnsub=[];_canliGolge={};canliAcik=false;db.canliBulut=false;localStorage.setItem(KEY,JSON.stringify(db));try{const e=document.getElementById('senk-rozet');if(e)e.remove()}catch(x){}}
 // OTOMATİK SENKRON — giriş varsa kendiliğinden bağlanır; kullanıcı hiçbir şey açmaz.
 // Bulut boşsa (ilk cihaz) yereli yükler; doluysa buluttakini alıp canlı dinler.
 let _otoSenkronCalisti=false;
@@ -719,12 +741,30 @@ function canliYazHemen(domenler){
   const ps=[];
   list.forEach(domen=>{const data=canliAl(db,domen);const js=JSON.stringify(data);
     if(js.length>900000){window._boyutUyari=window._boyutUyari||{};if(!window._boyutUyari[domen]){window._boyutUyari[domen]=1;try{toast('⚠️ '+domen+' verisi bulut sınırına yaklaşıyor ('+Math.round(js.length/1024)+'KB / 1MB) — eski kayıtları arşivlemek gerekebilir');}catch(e){}}}
-    if(js!==_canliGolge[domen]){_canliGolge[domen]=js;ps.push(canliRef(domen).set(data).catch(e=>{console.warn('canlı-yaz-hemen',domen,e&&e.code);if(canliIzinHata(e)!=='permission-denied'&&(''+e).includes('longer than'))toast('⚠️ '+domen+' verisi 1MB sınırını aştı (fotoğraflar) — buluta yazılamadı. Fotoğrafları küçültün.');}));}});
-  return Promise.all(ps);
+    if(js!==_canliGolge[domen]){_canliGolge[domen]=js;ps.push(canliRef(domen).set(data).catch(e=>{console.warn('canlı-yaz-hemen',domen,e&&e.code);_senk.hata=(e&&e.code)||'yazma hatası';if(canliIzinHata(e)!=='permission-denied'&&(''+e).includes('longer than'))toast('⚠️ '+domen+' verisi 1MB sınırını aştı (fotoğraflar) — buluta yazılamadı. Fotoğrafları küçültün.');}));}});
+  const pr=Promise.all(ps);
+  if(ps.length){_senk.bekleyen=true;try{senkRozetCiz()}catch(e){}
+    pr.then(()=>{_senk.bekleyen=false;if(!_senk.hata)_senk.son=Date.now();try{senkRozetCiz()}catch(e){}});}
+  return pr;
 }
+/* 💾 IndexedDB GÜVENCE KATMANI — localStorage kotası dolsa bile verinin tam
+   kopyası IndexedDB'de tutulur (kota ~5MB yerine yüzlerce MB). localStorage
+   boş/bozuksa açılışta IndexedDB kopyasından otomatik kurtarılır. */
+let _idb=null,_idbYazT=null;
+function idbAc(){return new Promise(res=>{try{const rq=indexedDB.open('iqbasics',1);
+  rq.onupgradeneeded=()=>{try{rq.result.createObjectStore('kv')}catch(e){}};
+  rq.onsuccess=()=>res(rq.result);rq.onerror=()=>res(null);}catch(e){res(null)}});}
+function idbYaz(){clearTimeout(_idbYazT);_idbYazT=setTimeout(async()=>{try{
+  if(!_idb)_idb=await idbAc();if(!_idb)return;
+  _idb.transaction('kv','readwrite').objectStore('kv').put(JSON.stringify(db),KEY);
+}catch(e){}},800);}
+function idbOku(){return new Promise(async res=>{try{if(!_idb)_idb=await idbAc();if(!_idb)return res(null);
+  const rq=_idb.transaction('kv','readonly').objectStore('kv').get(KEY);
+  rq.onsuccess=()=>res(rq.result||null);rq.onerror=()=>res(null);}catch(e){res(null)}});}
 function save(){try{_damgala()}catch(e){}
+  try{idbYaz()}catch(e){}
   try{localStorage.setItem(KEY,JSON.stringify(db));return true;}catch(e){console.error('save failed',e);
-    if(!window._saveHataG){window._saveHataG=1;setTimeout(()=>{try{askConfirm('🚨 DEPOLAMA DOLU — SON İŞLEM KALICI KAYDEDİLEMEDİ!\n\nSayfayı yenilersen son işlemler KAYBOLUR. Hemen:\n1) Ayarlar → Yedek Al (dosya olarak indir)\n2) Büyük fotoğrafları küçült/sil ya da eski verileri temizle\n\nSorun sürerse yedeği aldıktan sonra tarayıcı site verisini artırın.',()=>{},'Anladım')}catch(x){return false;}},200);}try{toast('⚠️ Depolama dolu — kayıt yapılamadı! Fotoğrafları küçült ya da Ayarlar\'dan Cloudinary aç.');}catch(_){}return;}if(canliAcik&&!_canliUygulaniyor)canliYaz();if(db.otoYayin){try{otoYayinTetik()}catch(e){}}}
+    if(!window._saveHataG){window._saveHataG=1;setTimeout(()=>{try{askConfirm('🚨 TARAYICI DEPOLAMASI DOLU!\nİşlemler İKİNCİL kopyaya (IndexedDB) kaydedilmeye devam ediyor — veri kaybı yok, ama alan açmalısın.\n\nSayfayı yenilersen son işlemler KAYBOLUR. Hemen:\n1) Ayarlar → Yedek Al (dosya olarak indir)\n2) Büyük fotoğrafları küçült/sil ya da eski verileri temizle\n\nSorun sürerse yedeği aldıktan sonra tarayıcı site verisini artırın.',()=>{},'Anladım')}catch(x){return false;}},200);}try{toast('⚠️ Depolama dolu — kayıt yapılamadı! Fotoğrafları küçült ya da Ayarlar\'dan Cloudinary aç.');}catch(_){}return;}if(canliAcik&&!_canliUygulaniyor)canliYaz();if(db.otoYayin){try{otoYayinTetik()}catch(e){}}}
 function canliBulutAyar(){
   if(!bulutVar())return toast('Önce bulut (Firebase) ayarlı olmalı');
   if(!bulutBaslat())return toast('Bulut başlatılamadı');
@@ -739,7 +779,20 @@ function canliBulutAyar(){
     <button class="btn" style="margin-top:6px" onclick="canliBulutKatil()">⬇️ Buluttaki veriyi bu cihaza al</button>
     <div class="mini" style="margin-top:12px;color:var(--warn);line-height:1.5">⚠️ "Yükle" bu cihazdaki veriyi buluta yazar. "Al" buluttakini alıp bu cihazdakinin üzerine yazar. İlk kuran <b>Yükle</b>, sonra katılanlar <b>Al</b> demeli.</div>`}
     <button class="btn ghost" style="margin-top:14px" onclick="canliTeshis()">🔍 Senkron Teşhis (neden çalışmıyor?)</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="defterKontrolAc()">🧮 Defter Tutarlılık Kontrolü</button>
   `);
+}
+// 🧮 Defter tutarlılık kontrolü — bakiyeler ile kayıt defteri karşılaştırılır (olay-temelli muhasebeye geçiş hazırlığı)
+function defterKontrolAc(){
+  const hs=db.hesaplar.map(h=>{const net=(db.hareketler||[]).filter(x=>x.hesapId===h.id&&x.yon).reduce((a,x)=>a+(x.yon==='in'?1:-1)*(+x.tutar||0),0);
+    return {ad:h.ad,bakiye:+h.bakiye||0,defter:net,fark:(+h.bakiye||0)-net};});
+  const cs=db.cariler.filter(c=>c.tip==='musteri').map(c=>{let devir=0;try{devir=cariEkstre(c.id).devir}catch(e){}return {ad:c.ad,bakiye:+c.bakiye||0,devir};})
+    .filter(x=>Math.abs(x.devir)>0.5).sort((a,b)=>Math.abs(b.devir)-Math.abs(a.devir));
+  open_('🧮 Defter Tutarlılık Kontrolü',`
+    <div class="mini" style="line-height:1.55">Hesap bakiyeleri <b>kasa defteriyle</b>, cari bakiyeler <b>satış/tahsilat kayıtlarıyla</b> karşılaştırılır.
+    <b>Fark/Devir</b> = kayıtlarla açıklanamayan kısım (açılış bakiyesi ya da eski/elle düzeltme). Sabit kalması normaldir; <b>zamanla BÜYÜYORSA</b> bir işlem deftere yazılmıyor demektir.</div>
+    <div class="sec">Hesaplar (kasa/banka)</div><div class="card" style="padding:6px 12px">${hs.map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--ln2);font-size:12.5px"><span>${esc(x.ad)}</span><span style="text-align:right"><b>${TL(x.bakiye)}</b><div class="mini">defter ${TL(x.defter)} · fark ${Math.abs(x.fark)<0.5?'✓ yok':TL(x.fark)}</div></span></div>`).join('')||'—'}</div>
+    <div class="sec">Devri en yüksek 10 cari</div><div class="card" style="padding:6px 12px">${cs.slice(0,10).map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--ln2);font-size:12.5px"><span>${esc(x.ad)}</span><span style="text-align:right"><b>${TL(x.bakiye)}</b><div class="mini">devir ${TL(x.devir)}</div></span></div>`).join('')||'<div class="mini" style="padding:8px">Tüm cari bakiyeler kayıtlarla tam açıklanıyor ✓</div>'}</div>`);
 }
 // 🔍 Senkron teşhis — internet/giriş/rol/okuma/yazma tek tek test edip rapor eder
 async function canliTeshis(){
@@ -875,7 +928,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-92'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-93'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -2746,6 +2799,28 @@ function sepEkle(){const u=sUrunId?urun(sUrunId):null;if(!u)return toast('Önce 
   const m=+$('s-mik').value;if(!m||m<=0)return toast('Miktar girin');
   const ex=sepet.find(k=>k.uid===u.id&&!k.renkler);if(ex)ex.mik+=m;else sepet.push({uid:u.id,urun:u.ad,mik:m,birim:u.birim,fiyat:fy});satisReset();cizSepet()}
 function vadeFarkiYuzde(){return sVade?Math.round(sVade/30)*2.5:0}
+/* 🖮 HARİCİ BARKOD TARAYICI (USB/Bluetooth — klavye gibi çok hızlı yazar ve Enter basar)
+   Satış formu açıkken, odak bir yazı kutusunda DEĞİLKEN okutulan barkod ürünü bulur:
+   renk barkoduysa o rengin adedini +1 yapar, ürün barkoduysa ürünü seçer. */
+let _bkBuf='',_bkT=0;
+document.addEventListener('keydown',e=>{try{
+  if(!document.getElementById('s-urun-in'))return; // yalnız satış formu açıkken
+  const a=document.activeElement;const inputta=a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.tagName==='SELECT');
+  if(inputta)return; // elle yazma akışına karışma
+  const simdi=Date.now();if(simdi-_bkT>90)_bkBuf='';_bkT=simdi;
+  if(e.key==='Enter'){if(_bkBuf.length>=6){barkodHizliEkle(_bkBuf);e.preventDefault();}_bkBuf='';return;}
+  if(e.key.length===1)_bkBuf+=e.key;
+}catch(x){}});
+function barkodHizliEkle(kod){kod=(''+kod).trim();if(!kod)return;
+  for(const u of db.urunler){if(u.pasif)continue;
+    const objs=renkObjs(u);
+    const ro=objs.find(r=>(r.barkod||'')===kod);
+    if(ro){sUrunId=u.id;const inp=document.getElementById('s-urun-in');if(inp)inp.value=u.ad;urnBilgi();
+      setTimeout(()=>{const ix=objs.findIndex(r=>r.ad===ro.ad);const el=document.getElementById('rq-'+ix);if(el)el.value=(+el.value||0)+1;},140);
+      toast('🖮 '+u.ad+' · '+ro.ad+' +1');return;}
+    if((u.barkod||'')===kod||(u.kod||'').toLowerCase()===kod.toLowerCase()){sUrunId=u.id;const inp=document.getElementById('s-urun-in');if(inp)inp.value=u.ad;urnBilgi();toast('🖮 '+u.ad+' seçildi — miktar gir');return;}
+  }
+  toast('Barkod eşleşmedi: '+kod);}
 // 💠 Adlandırılabilir ek ücretler (nakış, işleme...) — fişte ayrı satır basılır
 function ekstraEkle(){sEkstra.push({ad:'',tutar:0});cizEkstra();}
 function ekstraSil(i){sEkstra.splice(i,1);cizEkstra();cizSepet();}
