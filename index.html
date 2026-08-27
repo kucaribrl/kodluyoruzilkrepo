@@ -566,7 +566,7 @@ const CANLI_DOMEN={
   satis:['satislar','bekleyenPortal','islenenSiparis','kuponlar','stokBildirim'],
   cek:['cekler'],
   uretim:['isemirleri'],
-  ayar:['firma','firmaSlogan','firmaAdres','firmaTel','firmaWp','firmaTelegram','firmaLogo','firmaSite','satici','kurUSD','kurEUR','seq','kademe','minSiparis','kampanya','kurTarih','portalFav','portalTaslak','duzenliGider','cldName','cldPreset','rolAyar']
+  ayar:['firma','firmaSlogan','firmaAdres','firmaTel','firmaWp','firmaTelegram','firmaLogo','firmaSite','satici','kurUSD','kurEUR','seq','kademe','minSiparis','kampanya','kurTarih','portalFav','portalTaslak','duzenliGider','cldName','cldPreset','rolAyar','waOtoMod']
 };
 // Rol → hangi alanları OKUR / YAZAR (veri seviyesinde sınır; arayüz gizlemesiyle birlikte)
 const _CTUM=Object.keys(CANLI_DOMEN);
@@ -928,7 +928,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-93'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-94'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -4051,7 +4051,48 @@ function sonTahsilat(id){let t=0;(db.hareketler||[]).filter(h=>h.cariId===id&&h.
 function gecikmeGun(id){const t=sonTahsilat(id);if(t)return Math.floor((Date.now()-t)/86400000);const ilk=db.satislar.filter(s=>s.mid===id).map(s=>s.tarih).sort((a,b)=>a-b)[0];return ilk?Math.floor((Date.now()-ilk)/86400000):0}
 function waTel(t){let ph=((t)||'').replace(/\D/g,'');if(!ph)return '';if(ph.length===10)ph='90'+ph;else if(ph[0]==='0')ph='9'+ph;return ph}
 function waLink(ph,txt){const u='https://wa.me/'+(ph||'')+'?text='+encodeURIComponent(txt);const w=window.open(u,'_blank');if(!w)location.href=u;} // popup engellenirse aynı sekmede aç
+/* 🤖 WHATSAPP OTOMASYONU (G6) — mesajlar buluttaki wa_kuyruk'a yazılır,
+   kullanıcının whatsapp-web.js sistemi kuyruğu dinleyip KENDİSİ gönderir
+   (yazıcı ajanıyla aynı Firestore-kuyruğu deseni; örnek: wa-agent/). */
+let _waSonMesaj='',_waSonTel='';
+function waKuyrukEkle(tel,txt,tip){
+  try{
+    if(!bulutBaslat()||!bulutGirisli())return Promise.reject('bulut girişi yok');
+    const ph=waTel(tel);if(!ph)return Promise.reject('telefon yok');
+    return _fb.collection('isletme').doc(MAGAZA_ID).collection('wa_kuyruk').add({
+      tel:ph,mesaj:''+(txt||''),tip:tip||'genel',durum:'bekliyor',olusturma:Date.now(),
+      kim:(typeof bulutKul!=='undefined'&&bulutKul&&(bulutKul.mail||bulutKul.ad))||''});
+  }catch(e){return Promise.reject((e&&e.message)||e)}
+}
+function waSecim(tel,txt,tip){_waSonMesaj=''+(txt||'');_waSonTel=''+(tel||'');
+  open_('📤 WhatsApp Gönderimi',`
+    <div class="mini" style="line-height:1.5">Otomatik gönderimde mesajı bilgisayardaki WhatsApp sistemin gönderir — telefonda WhatsApp açılmaz, sen beklemezsin.</div>
+    <div class="card" style="padding:10px 12px;margin-top:10px;max-height:170px;overflow:auto;font-size:12px;white-space:pre-wrap">${esc(txt)}</div>
+    <button class="btn g" style="margin-top:12px" onclick="closeM();waKuyrukEkle(_waSonTel,_waSonMesaj,'${tip||'genel'}').then(()=>toast('🤖 Kuyruğa eklendi — WhatsApp sistemin gönderecek ✓')).catch(e=>{toast('⚠️ Kuyruğa eklenemedi ('+e+') — elle açılıyor');waLink(waTel(_waSonTel),_waSonMesaj);})">🤖 Otomatik Gönder</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="closeM();waLink(waTel(_waSonTel),_waSonMesaj)">📱 WhatsApp'ı Elle Aç</button>`);
+}
+function waOtoAyar(){
+  const acik=db.waOtoMod==='kuyruk';
+  open_('🤖 WhatsApp Otomasyonu',`
+    <div class="mini" style="line-height:1.6">Fiş, sipariş, makbuz ve hatırlatma mesajları buluttaki <b>wa_kuyruk</b>'a yazılır; bilgisayarındaki <b>whatsapp-web.js</b> sistemi kuyruğu dinleyip mesajı kendisi gönderir. Sistemine eklenecek hazır örnek kod: repodaki <b>wa-agent/</b> klasörü.</div>
+    <div class="card" style="margin-top:10px;padding:11px 13px">Durum: <b style="color:${acik?'var(--good)':'var(--sub)'}">${acik?'AÇIK ✓ — WA butonları önce otomatik gönderimi önerir':'kapalı — WA butonları telefonda WhatsApp açar'}</b></div>
+    <button class="btn ${acik?'danger':'g'}" style="margin-top:12px" onclick="db.waOtoMod='${acik?'kapali':'kuyruk'}';save();try{canliYazHemen(['ayar'])}catch(e){}closeM();waOtoAyar()">${acik?'⏹ Otomasyonu Kapat':'▶️ Otomasyonu Aç'}</button>
+    ${acik?`<button class="btn ghost" style="margin-top:8px" onclick="waTestMesaj()">🧪 Test mesajı kuyruğa ekle</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="waKuyrukDurum()">📋 Kuyruk durumu (son 8)</button>`:''}
+    <div class="mini" style="margin-top:12px;line-height:1.5">⚠️ Bu özellik için Firebase kurallarına <b>wa_kuyruk</b> bölümü eklendi — Console'da <b>firestore.rules</b>'u bir kez daha yayınla.</div>`);
+}
+function waTestMesaj(){const tel=db.firmaWp||db.firmaTel||'';
+  if(!waTel(tel))return toast('Önce Ayarlar > Firma bölümüne kendi WhatsApp numaranı yaz');
+  waKuyrukEkle(tel,'🧪 IQ Basics test mesajı — WhatsApp otomasyonu çalışıyor ✓','test')
+    .then(()=>toast('🧪 Test kuyruğa eklendi — sistemin gönderdiğini kontrol et'))
+    .catch(e=>toast('⚠️ Eklenemedi: '+e));}
+async function waKuyrukDurum(){try{
+  const s=await _fb.collection('isletme').doc(MAGAZA_ID).collection('wa_kuyruk').orderBy('olusturma','desc').limit(8).get();
+  const rows=[];s.forEach(d0=>{const x=d0.data();rows.push(`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--ln2);font-size:12px"><span style="min-width:0">${esc((x.mesaj||'').slice(0,34))}…<div class="mini">${esc(x.tel||'')} · ${x.olusturma?tstr(x.olusturma):''}</div></span><b style="flex:0 0 auto;color:${x.durum==='gonderildi'?'var(--good)':x.durum==='hata'?'var(--bad)':'var(--warn)'}">${esc(x.durum||'?')}</b></div>`)});
+  open_('📋 WhatsApp Kuyruğu (son 8)',`<div class="card" style="padding:6px 12px">${rows.join('')||'<div class="mini" style="padding:10px">Kuyruk boş</div>'}</div><button class="btn ghost sm" style="margin-top:10px" onclick="waKuyrukDurum()">🔄 Yenile</button>`);
+}catch(e){toast('Kuyruk okunamadı: '+((e&&e.code)||e))}}
 function waAc(tel,txt){const ph=waTel(tel);
+  if(ph&&db.waOtoMod==='kuyruk'&&bulutGirisli())return waSecim(tel,txt);
   if(ph){waLink(ph,txt);return;}
   // numara yok → kullanıcıya SÖYLE, sonra paylaş/kopyala yedeği
   toast('📵 Bu kişinin telefonu kayıtlı değil — kişiyi WhatsApp\'ta kendin seçeceksin (cari kartına numara eklersen direkt açılır)');
@@ -7030,6 +7071,7 @@ function rAyarlar(){
   let html=`<div class="sec">Firma</div><div class="card"><div class="row" onclick="formFirma()"><div class="av" style="background:var(--ind)">🏢</div><div class="mid"><div class="t">${esc(db.firma)}</div><div class="s">${esc(db.firmaSlogan||'firma bilgileri · fişte görünür')}</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="formKur()"><div class="av o">💱</div><div class="mid"><div class="t">Kur</div><div class="s">$ ${db.kurUSD.toFixed(2)} · € ${db.kurEUR.toFixed(2)}</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="yaziciAyar()"><div class="av" style="background:${db.otoYazdir?'var(--good)':'var(--ind2)'}">🖨️</div><div class="mid"><div class="t">Otomatik Yazıcı ${db.otoYazdir?'<span class="pill ok">açık</span>':''}</div><div class="s">bilgisayara bağlı termal yazıcıdan otomatik fiş</div></div><span style="color:var(--sub)">›</span></div>
+    <div class="row" onclick="waOtoAyar()"><div class="av" style="background:${db.waOtoMod==='kuyruk'?'var(--good)':'var(--ind2)'}">🤖</div><div class="mid"><div class="t">WhatsApp Otomasyonu ${db.waOtoMod==='kuyruk'?'<span class="pill ok">açık</span>':''}</div><div class="s">fiş/makbuz/hatırlatma mesajlarını sistem göndersin</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="cloudinaryAyar()"><div class="av" style="background:${db.cldName?'var(--good)':'var(--ind2)'}">🖼️</div><div class="mid"><div class="t">Fotoğraf Depolama ${db.cldName?'<span class="pill ok">açık</span>':''}</div><div class="s">çok fotoğraf için Cloudinary (ücretsiz) — ${db.cldName?esc(db.cldName):'kurulu değil'}</div></div><span style="color:var(--sub)">›</span></div></div>`;
   if(!kisitli)html+=`<div class="sec">Kullanıcılar & Roller</div><div class="card">
     <div class="row" onclick="rolIzinAyar()"><div class="av" style="background:var(--pur)">🔐</div><div class="mid"><div class="t">Rol İzinleri${Object.keys(db.rolAyar||{}).length?' <span class="pill ok">özelleştirildi</span>':''}</div><div class="s">her rolün görebileceği ekranlar ve yetkiler — sen belirle</div></div><span style="color:var(--sub)">›</span></div>`+Object.keys(ROLLER).map(k=>{const y=rolYetki(k);return `<div class="row" onclick="setRol('${k}')"><div class="av" style="background:${rolRenk(k)}">${ROLLER[k].ic}</div><div class="mid"><div class="t">${ROLLER[k].ad}${(db.rolAyar||{})[k]?' <span class="tag" style="background:var(--thr-s);color:var(--thr)">özel</span>':''}</div><div class="s">${y.kar?'kâr görür':'kâr gizli'}</div></div>${db.rol===k?'<span class="pill ok">aktif</span>':''}</div>`}).join('')+`</div>`;

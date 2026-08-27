@@ -103,6 +103,14 @@ service cloud.firestore {
     // Diğer/yeni alanlar → yalnız yönetici+ortak
     match /isletme/{iid}/veri/{domen} { allow read, write: if rolVar(['admin','ortak']); }
 
+    // WHATSAPP KUYRUĞU — uygulama mesajı ekler; kullanıcının whatsapp-web.js
+    // sistemi (yönetici hesabıyla) okuyup gönderir ve durumu günceller.
+    // Telefon numarası içerir → dar yetki: yalnız onaylı personel.
+    match /isletme/{iid}/wa_kuyruk/{msgId} {
+      allow create: if rolVar(['admin','ortak','magaza']);
+      allow read, update, delete: if rolVar(['admin','ortak']);
+    }
+
     // YAZDIRMA KUYRUĞU — telefon/kasa fiş atar, bilgisayardaki "yazıcı ajanı" okuyup basar.
     // Satış yapan herkes (admin/ortak/mağaza) iş ekler; ajan (yönetici hesabı) okur/günceller/siler.
     match /isletme/{iid}/yazdirma/{jobId} {
