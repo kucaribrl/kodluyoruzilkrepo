@@ -1,45 +1,69 @@
-# 🤖 IQ Basics — WhatsApp Otomasyonu (whatsapp-web.js entegrasyonu)
+# 🤖 IQ Basics — WhatsApp Ajanı (Windows)
 
 Uygulamadaki **fiş, makbuz, sipariş ve hatırlatma** mesajlarını telefonda
-WhatsApp açmadan, senin mevcut **whatsapp-web.js** sistemin otomatik göndersin.
+WhatsApp açmadan **otomatik** gönderir. Yazıcı ajanı gibi çalışır:
+uygulama mesajı buluttaki kuyruğa yazar, **bilgisayarındaki bu program**
+kuyruğu dinleyip mesajı senin WhatsApp numaran üzerinden gönderir.
 
-## Nasıl çalışır?
+> **Nereye kurulur?** Yazıcı ajanının çalıştığı bilgisayara — masaüstüne
+> `wa-agent` klasörü olarak. Telefonla aynı ağda olması gerekmez.
 
-1. Uygulamada **Ayarlar → WhatsApp Otomasyonu**'nu aç.
-2. Artık her WhatsApp butonunda iki seçenek çıkar:
-   **🤖 Otomatik Gönder** → mesaj buluttaki `wa_kuyruk`'a yazılır.
-   **📱 Elle Aç** → eski davranış (telefonda WhatsApp açılır).
-3. Bilgisayarındaki whatsapp-web.js sistemi kuyruğu dinler, mesajı gönderir,
-   durumu `gonderildi` yapar. Uygulamadan **Kuyruk durumu** ile izlersin.
+---
 
-Yazıcı ajanıyla aynı desen: telefon ↔ bilgisayar aynı ağda olmak zorunda değil.
+## Kurulum (bir kez · ~10 dakika)
 
-## Kurulum (senin whatsapp-web.js projende)
+### 1) Klasörü bilgisayara indir
+- GitHub'da depoya gir → yeşil **Code** → **Download ZIP**.
+- ZIP'i aç, içinden **`wa-agent`** klasörünü masaüstüne çıkar.
+- (Node.js zaten kurulu — yazıcı ajanı için kurmuştun.)
 
-1. `npm i firebase`
-2. Bu klasördeki **`ornek-dinleyici.js`**'yi projene kopyala.
-3. Yanına `config.json` koy (yazıcı ajanındakiyle aynı biçim):
+### 2) Ayar dosyasını doldur
+- Klasördeki **`config.example.json`**'u kopyala, adını **`config.json`** yap.
+- Not defteriyle aç; buluta girdiğin **e-posta ve şifreyi** yaz
+  (yazıcı ajanındaki config ile aynı bilgiler):
 ```json
-{ "email": "ornek@eposta.com", "sifre": "BULUT_SIFREN" }
+{ "email": "senin@epostan.com", "sifre": "BULUT_SIFREN" }
 ```
-4. Client hazır olunca başlat:
+
+### 3) Başlat ve WhatsApp'ı bağla
+- **`baslat.bat`**'a çift tıkla. İlk sefer paketleri indirir (2-5 dk, bir defalık).
+- Ekrana bir **kare kod (QR)** gelir. Telefonunda:
+  **WhatsApp → Ayarlar → Bağlı Cihazlar → Cihaz Bağla** → kareyi okut.
+- `✅ WhatsApp bağlı — mesaj kuyruğu dinleniyor.` yazınca hazırsın.
+  Giriş kaydedilir; bir daha QR istemez. **Bu pencere açık kaldıkça** mesajlar gider.
+
+### 4) Uygulamada aç ve dene
+- **Ayarlar → 🤖 WhatsApp Otomasyonu → Otomasyonu Aç**.
+- **🧪 Test mesajı kuyruğa ekle** → birkaç saniye içinde firma numarana
+  WhatsApp mesajı düşmeli. Durumu **📋 Kuyruk durumu**ndan izlersin.
+
+Artık her WhatsApp butonunda **🤖 Otomatik Gönder** seçeneği çıkar —
+mesaj telefonuna dokunmadan gönderilir. İstersen **📱 Elle Aç** hâlâ orada.
+
+---
+
+## Zaten kendi whatsapp-web.js sistemin varsa (alternatif)
+
+Bu klasörü ayrıca çalıştırmana gerek yok — kendi projene şunu ekle:
+1. `npm i firebase`
+2. `ornek-dinleyici.js`'yi projene kopyala, yanına yukarıdaki `config.json`'u koy.
+3. Client hazır olduğunda bağla:
 ```js
 const { waKuyrukBaslat } = require('./ornek-dinleyici');
 client.on('ready', () => waKuyrukBaslat(client));
 ```
 
-## Bir kez yapılacaklar
+---
 
-- **Firebase kurallarını yeniden yayınla** — repodaki `firestore.rules`'a
-  `wa_kuyruk` bölümü eklendi (Console → Firestore → Rules → yapıştır → Publish).
-  Yayınlamazsan kuyruğa yazma "permission-denied" verir.
-- Uygulamada **Ayarlar → WhatsApp Otomasyonu → 🧪 Test mesajı** ile dene
-  (test kendi firma numarana gider).
+## Sık sorunlar
 
-## Güvenlik notları
+| Sorun | Çözüm |
+|---|---|
+| "permission-denied" | `firestore.rules` içindeki **wa_kuyruk** bölümü Firebase Console'da yayınlanmamış — depodaki güncel kuralları yapıştırıp Publish et. Ayrıca config'teki hesap yönetici/ortak olmalı. |
+| QR sürekli yenileniyor / bağlanmıyor | Pencereyi kapatıp `baslat.bat`'ı tekrar aç; telefonda interneti kontrol et. |
+| "npm install basarisiz" | Node.js kurulu mu? nodejs.org → LTS. Şirket ağı engelliyorsa telefon paylaşımıyla dene. |
+| Mesaj "hata" durumuna düştü | Kuyruk durumunda nedeni yazar — çoğu zaman numara hatalıdır (cari kartındaki telefonu düzelt). |
+| Bilgisayar kapanınca mesajlar? | Kuyrukta bekler; ajan tekrar açılınca hepsi gönderilir. |
 
-- Kuyruk telefon numarası içerir → kurallar yalnız **onaylı personel**e açık.
-- İki dinleyici aynı anda çalışsa bile mesaj **iki kez gitmez**
-  (transaction ile sahiplenme).
-- Gönderim başarısızsa kayıt `hata` durumuna düşer ve nedeni yazılır —
-  uygulamadaki *Kuyruk durumu* ekranında görürsün.
+> 🔒 `config.json` ve `wa-oturum/` klasörü (WhatsApp girişin) bu bilgisayarda
+> kalır, repoya gönderilmez. Kimseyle paylaşma.

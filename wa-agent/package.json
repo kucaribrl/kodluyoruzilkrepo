@@ -1,0 +1,15 @@
+{
+  "name": "iq-basics-whatsapp-ajani",
+  "version": "1.0.0",
+  "description": "IQ Basics — buluttaki wa_kuyruk mesajlarini WhatsApp Web uzerinden otomatik gonderir.",
+  "private": true,
+  "main": "baslat.js",
+  "scripts": {
+    "start": "node baslat.js"
+  },
+  "dependencies": {
+    "firebase": "^10.12.0",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.26.0"
+  }
+}
