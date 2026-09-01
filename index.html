@@ -928,7 +928,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-99'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-100'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1828,10 +1828,8 @@ function malSipDetay(id){
   if(sipAcik(s)){
     if(s.durum==='bekliyor'&&s.ted&&s.fiyat>0)h+=`<div class="okbox" style="margin-top:10px">🚚 Teslim alınca gelen tutar <b>${esc(s.ted)}</b> bakiyesine <b>borç</b> yazılır.</div>`;
     h+=`<button class="btn g" style="margin-top:12px" onclick="malSipTeslim(${id})">✓ Teslim Al${s.kat==='Kumaş'?' (tartıp gir)':''}</button>
-      <button class="btn ghost" style="margin-top:8px" onclick="malSipPdf(${id})">🧾 İş Emri — PDF / Yazdır</button>
-      <button class="btn ghost" style="margin-top:8px" onclick="malSipGonder(${id})">📱 WhatsApp ile Gönder</button>
+      <button class="btn ghost" style="margin-top:8px" onclick="malSipPdf(${id})">🧾 İş Emri — Gönder / PDF</button>
       ${s.durum==='bekliyor'?`<button class="btn ghost" style="margin-top:8px" onclick="malSipForm(${id})">✏️ Düzenle</button>`:''}
-      <button class="btn ghost" style="margin-top:8px" onclick="malSipFisEkle(${id})">📎 Fiş fotoğrafı ekle</button>
       <button class="btn ghost" style="margin-top:8px" onclick="malSipIptal(${id})">Siparişi İptal Et</button>`;
   }else{
     h+=`${s.durum!=='iptal'?`<button class="btn g" style="margin-top:12px" onclick="malSipTekrar(${id})">🔁 Aynısını Tekrar Sipariş Ver</button>
@@ -1875,6 +1873,7 @@ async function malSipPdf(id){const s=db.malSiparis.find(x=>x.id===id);if(!s)retu
     <button class="btn g" style="margin-top:12px" onclick="malSipResimPaylas(${id})">📤 Kumaşçıya Gönder (resim paylaş)</button>
     <button class="btn ghost" style="margin-top:8px" onclick="malSipYazdir(${id})">🖨 Yazdır / PDF olarak kaydet</button>
     <button class="btn ghost" style="margin-top:8px" onclick="malSipResimIndir(${id})">⬇️ Resmi indir</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="malSipGonder(${id})">📱 Yazı olarak gönder (resim gitmezse)</button>
     <button class="btn ghost" style="margin-top:8px" onclick="malSipDetay(${id})">‹ Siparişe dön</button>`);
 }
 async function malSipResimPaylas(id){
