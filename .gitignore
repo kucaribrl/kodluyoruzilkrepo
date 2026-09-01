@@ -4,3 +4,5 @@ yazici-agent/agent.pid
 /parti-*.png
 wa-agent/config.json
 wa-agent/wa-oturum/
+wa-agent/ajan-hata.log
+yazici-agent/ajan-hata.log

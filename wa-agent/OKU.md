@@ -42,6 +42,21 @@ mesaj telefonuna dokunmadan gönderilir. İstersen **📱 Elle Aç** hâlâ orad
 
 ---
 
+## 🫥 Siyah pencere kalksın: gizli + otomatik başlatma
+
+QR'ı bir kez okuttuktan sonra siyah pencereye gerek yok — yazıcı ajanı
+gibi gizli çalışır ve bilgisayar açılınca kendiliğinden başlar:
+
+- **`otomatik-baslat-kur.bat`**'a çift tıkla → Başlangıç'a gizli kısayol
+  kurulur. İstersen "şimdi de başlat" der, pencereyi hemen kapatabilirsin.
+- Durdurmak: **`durdur.bat`** · Geri almak: **`otomatik-baslat-kaldir.bat`**
+- Gizli moddayken bir sorun olursa (şifre hatası, WhatsApp oturumu düşmesi)
+  ajan durur ve nedenini **`ajan-hata.log`** dosyasına yazar — o durumda
+  `baslat.bat` ile görünür açıp ekrandakini yap (örn. QR'ı yeniden okut).
+- Çalışıyor mu emin olmak için: uygulamada **🧪 Test mesajı kuyruğa ekle**.
+
+---
+
 ## Zaten kendi whatsapp-web.js sistemin varsa (alternatif)
 
 Bu klasörü ayrıca çalıştırmana gerek yok — kendi projene şunu ekle:

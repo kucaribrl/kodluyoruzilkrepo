@@ -27,7 +27,7 @@ exit /b
 
 :pkgok
 :loop
-node baslat.js
+node baslat.js iqwa
 echo.
 echo [i] Ajan durdu. 3 saniye sonra yeniden baslatiliyor... (kapatmak icin pencereyi kapat)
 timeout /t 3 /nobreak >nul
