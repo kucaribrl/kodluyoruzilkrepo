@@ -52,13 +52,13 @@ const out = await page.evaluate(async () => {
     const rows = box ? box.children : [];
     ok('form: 2 renk satırı geldi', rows.length === 2);
     const inps = rows[0] ? rows[0].querySelectorAll('input') : [];
-    ok('form: satırda 2 input (renk+miktar) — parti YOK', inps.length === 2);
-    ok('form: parti kutusu hiç yok', box && !box.innerHTML.includes('parti'));
+    ok('form: satırda 3 input (renk+kartela kodu+miktar) — parti YOK', inps.length === 3 && inps[1].placeholder === 'kod');
+    ok('form: parti kutusu hiç yok', box && !box.innerHTML.includes('parti no'));
 
     // 2) miktarları doldur, kaydet — satırlar partisiz
-    inps[1].value = '120'; inps[1].dispatchEvent(new Event('input'));
+    inps[2].value = '120'; inps[2].dispatchEvent(new Event('input'));
     const r2 = rows[1].querySelectorAll('input');
-    r2[1].value = '80'; r2[1].dispatchEvent(new Event('input'));
+    r2[2].value = '80'; r2[2].dispatchEvent(new Event('input'));
     kaydetMalSip(0);
     const s = db.malSiparis[db.malSiparis.length - 1];
     ok('kaydet: satırlar partisiz kaydedildi', s && s.satirlar.length === 2 && !s.satirlar[0].parti && !s.satirlar[1].parti);
