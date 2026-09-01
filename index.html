@@ -928,7 +928,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-97'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-98'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1858,8 +1858,95 @@ function malSipFisEkle(id){
 function malSipTekrar(id){const s=db.malSiparis.find(x=>x.id===id);if(!s)return;
   _msKopya={...s,satirlar:sipSatirlar(s).map(l=>({renk:l.renk||'',miktar:+l.miktar||0,gelen:0})),siparisTarih:0,beklenen:0,durum:undefined,gelenMiktar:0,gelenTarih:0,gelenNot:'',fisler:[],borclandi:false,borcTutar:0};
   closeM();malSipForm(0);toast('🔁 Önceki sipariş yüklendi — miktarları kontrol edip oluştur');}
-// 🧾 A4 İş Emri — yazdır penceresinden PDF olarak kaydedilir / paylaşılır
-function malSipPdf(id){const s=db.malSiparis.find(x=>x.id===id);if(!s)return;
+/* 🧾 İŞ EMRİ — önce EKRANDA ÖNİZLEME açılır (telefonda window.print çalışmadığı için
+   "hiçbir şey olmuyor" hissi kalmasın): resim olarak WhatsApp'a paylaşılır,
+   bilgisayarda Yazdır penceresinden PDF kaydedilir. */
+let _isEmriData='';
+async function malSipPdf(id){const s=db.malSiparis.find(x=>x.id===id);if(!s)return;
+  closeM();
+  open_('🧾 İş Emri #'+id,'<div class="mini" style="text-align:center;padding:26px">⏳ İş emri hazırlanıyor…</div>');
+  let d='';try{d=await malSipResim(s);}catch(e){}
+  if(!d){open_('🧾 İş Emri #'+id,`<div class="warnbox">Önizleme oluşturulamadı — bilgisayarda Yazdır/PDF'i dene.</div>
+    <button class="btn g" style="margin-top:10px" onclick="malSipYazdir(${id})">🖨 Yazdır / PDF</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="malSipDetay(${id})">‹ Siparişe dön</button>`);return;}
+  _isEmriData=d;
+  open_('🧾 İş Emri #'+id,`
+    <img src="${d}" style="width:100%;border-radius:10px;border:1px solid var(--ln)">
+    <button class="btn g" style="margin-top:12px" onclick="malSipResimPaylas(${id})">📤 Kumaşçıya Gönder (resim paylaş)</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="malSipYazdir(${id})">🖨 Yazdır / PDF olarak kaydet</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="malSipResimIndir(${id})">⬇️ Resmi indir</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="malSipDetay(${id})">‹ Siparişe dön</button>`);
+}
+async function malSipResimPaylas(id){
+  if(!_isEmriData)return;
+  const txt='🧵 '+(db.firma||'IQ Basics')+' — Malzeme Siparişi #'+id;
+  try{const file=dataURLtoFile(_isEmriData,'siparis-'+id+'.png');
+    if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){await navigator.share({files:[file],text:txt});return;}
+  }catch(e){if(e&&e.name==='AbortError')return;}
+  malSipResimIndir(id);toast('Bu cihaz paylaşımı desteklemiyor — resim indirildi, WhatsApp\'ta 📎 ile ekle');
+}
+function malSipResimIndir(id){if(!_isEmriData)return;const a=document.createElement('a');a.href=_isEmriData;a.download='siparis-'+id+'.png';document.body.appendChild(a);a.click();setTimeout(()=>a.remove(),300);toast('⬇️ İndirildi: siparis-'+id+'.png');}
+// İş emrini resme çiz (A4 oranı) — telefonda da her yerde çalışır
+async function malSipResim(s){
+  const lines=sipSatirlar(s).filter(l=>(+l.miktar||0)>0);
+  const bir=s.birim||'';
+  const fsrc=s.foto||_msHF(s);
+  let foto=null;
+  if(fsrc){try{foto=await new Promise((res,rej)=>{const im=new Image();im.crossOrigin='anonymous';im.onload=()=>res(im);im.onerror=()=>rej();im.src=fsrc;setTimeout(()=>rej(),2500);});}catch(e){foto=null;}}
+  const W=1000,P=52;
+  const infoH=150+(((+s.gramaj)||(+s.en))?36:0);
+  const tabloH=58+lines.length*46+52;
+  const H=190+infoH+tabloH+(s.not?66:0)+150;
+  const c=document.createElement('canvas');c.width=W;c.height=H;
+  const x=c.getContext('2d');
+  x.fillStyle='#ffffff';x.fillRect(0,0,W,H);
+  // Başlık
+  x.fillStyle='#16233b';x.font='800 42px system-ui,sans-serif';x.fillText(db.firma||'IQ Basics',P,86);
+  x.fillStyle='#5b6472';x.font='400 21px system-ui,sans-serif';let hy=118;
+  if(db.firmaAdres){x.fillText(db.firmaAdres,P,hy);hy+=28;}
+  if(db.firmaTel||db.firmaWp)x.fillText('Tel: '+(db.firmaTel||'')+(db.firmaWp?' · WP: '+db.firmaWp:''),P,hy);
+  x.textAlign='right';x.fillStyle='#c14b47';x.font='800 30px system-ui,sans-serif';x.fillText('MALZEME SİPARİŞİ',W-P,74);
+  x.fillStyle='#16233b';x.font='700 25px system-ui,sans-serif';x.fillText('#'+s.id+' · '+(s.siparisTarih?dstr(s.siparisTarih):dstr(Date.now())),W-P,108);
+  x.textAlign='left';
+  x.strokeStyle='#c14b47';x.lineWidth=3;x.beginPath();x.moveTo(P,160);x.lineTo(W-P,160);x.stroke();
+  // Bilgiler
+  let y=205;const lab=(k,v)=>{x.fillStyle='#8a93a3';x.font='700 20px system-ui,sans-serif';x.fillText(k.toUpperCase(),P,y);x.fillStyle='#16233b';x.font='700 25px system-ui,sans-serif';x.fillText(v,P+230,y);y+=38;};
+  lab('Tedarikçi',s.ted||'—');
+  lab('Malzeme',s.ad+' · '+s.kat);
+  if((+s.gramaj)||(+s.en))lab('Özellik',((+s.gramaj)?s.gramaj+' gr/m²':'')+(((+s.gramaj)&&(+s.en))?' · ':'')+((+s.en)?'en '+s.en+' cm':''));
+  lab('İstenen teslim',s.beklenen?dstr(s.beklenen):'—');
+  // Foto sağda
+  if(foto){try{const fw=170,fh=Math.min(170,fw*foto.height/foto.width);x.save();x.beginPath();x.roundRect(W-P-fw,182,fw,fh,12);x.clip();x.drawImage(foto,W-P-fw,182,fw,fh);x.restore();x.strokeStyle='#d5dae2';x.lineWidth=2;x.beginPath();x.roundRect(W-P-fw,182,fw,fh,12);x.stroke();}catch(e){}}
+  y+=16;
+  // Tablo
+  const tw=W-2*P;
+  x.fillStyle='#eef2f8';x.fillRect(P,y,tw,50);
+  x.fillStyle='#3b4657';x.font='800 21px system-ui,sans-serif';
+  x.fillText('#',P+18,y+33);x.fillText('RENK / ÇEŞİT',P+70,y+33);
+  x.textAlign='right';x.fillText('MİKTAR',P+tw-18,y+33);x.textAlign='left';
+  y+=50;
+  lines.forEach((l,i)=>{
+    if(i%2===1){x.fillStyle='#f7f9fc';x.fillRect(P,y,tw,46);}
+    x.fillStyle='#5b6472';x.font='600 22px system-ui,sans-serif';x.fillText(String(i+1),P+18,y+31);
+    const hx=hexFromAd(l.renk);
+    if(hx){x.fillStyle=hx;x.beginPath();x.roundRect(P+64,y+11,24,24,7);x.fill();x.strokeStyle='#d5dae2';x.lineWidth=1.5;x.beginPath();x.roundRect(P+64,y+11,24,24,7);x.stroke();}
+    x.fillStyle='#16233b';x.font='700 24px system-ui,sans-serif';x.fillText(l.renk||'—',P+(hx?100:70),y+32);
+    x.textAlign='right';x.fillText((+l.miktar||0).toLocaleString('tr-TR')+' '+bir,P+tw-18,y+32);x.textAlign='left';
+    y+=46;});
+  x.strokeStyle='#16233b';x.lineWidth=2;x.beginPath();x.moveTo(P,y+2);x.lineTo(P+tw,y+2);x.stroke();
+  x.fillStyle='#16233b';x.font='800 26px system-ui,sans-serif';x.fillText('TOPLAM',P+70,y+38);
+  x.textAlign='right';x.fillText(sipTopMik(s).toLocaleString('tr-TR')+' '+bir,P+tw-18,y+38);x.textAlign='left';
+  y+=66;
+  if(s.not){x.fillStyle='#8a93a3';x.font='700 20px system-ui,sans-serif';x.fillText('NOT',P,y+8);x.fillStyle='#16233b';x.font='600 23px system-ui,sans-serif';x.fillText(String(s.not).slice(0,70),P+90,y+8);y+=52;}
+  y=H-96;
+  x.strokeStyle='#d5dae2';x.lineWidth=2;x.beginPath();x.moveTo(P,y);x.lineTo(W-P,y);x.stroke();
+  x.fillStyle='#8a93a3';x.font='500 19px system-ui,sans-serif';
+  x.fillText('Sipariş veren: '+(db.firma||'IQ Basics')+((db.firmaWp||db.firmaTel)?' · 📞 '+(db.firmaWp||db.firmaTel):''),P,y+38);
+  x.textAlign='right';x.fillText('Malzeme Sipariş Formu · '+dstr(Date.now()),W-P,y+38);x.textAlign='left';
+  return c.toDataURL('image/png');
+}
+// 🖨 Bilgisayarda: A4 yazdırma penceresi (oradan "PDF olarak kaydet" seçilebilir)
+function malSipYazdir(id){const s=db.malSiparis.find(x=>x.id===id);if(!s)return;
   const lines=sipSatirlar(s).filter(l=>(+l.miktar||0)>0);const bir=esc(s.birim||'');
   const foto=s.foto||_msHF(s);
   const rows=lines.map((l,i)=>`<tr><td class="r">${i+1}</td><td><b>${esc(l.renk||'—')}</b></td><td class="r">${(+l.miktar||0).toLocaleString('tr-TR')} ${bir}</td></tr>`).join('');
