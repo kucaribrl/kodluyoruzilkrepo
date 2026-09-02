@@ -1,5 +1,5 @@
 /* IQ Basics — Service Worker (çevrimdışı çalışma + kurulabilir PWA) */
-const CACHE = 'iqbasics-v100';
+const CACHE = 'iqbasics-v101';
 
 /* Uygulama kabuğu: internet olmasa da açılması gereken dosyalar */
 const SHELL = [
@@ -22,8 +22,14 @@ self.addEventListener('install', (e) => {
     caches.open(CACHE).then((c) =>
       // tek tek ekle: biri düşse bile kurulum bozulmasın
       Promise.all(SHELL.map((u) => c.add(u).catch(() => null)))
-    ).then(() => self.skipWaiting())
+    )
   );
+});
+
+/* Yeni sürüm hazır olunca sayfa kullanıcıya sorar; onaylayınca bu mesajla devreye alınır
+   (satış ortasında kendiliğinden yenileme olmasın) */
+self.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {
@@ -50,8 +56,11 @@ self.addEventListener('fetch', (e) => {
   if (req.mode === 'navigate') {
     e.respondWith(
       fetch(req.url, { cache: 'no-store' }).then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put('./index.html', copy)).catch(() => {});
+        // yalnız başarılı ve gerçekten ana sayfa olan yanıtı sakla (404/başka yol kabuğu bozmasın)
+        if (res.ok && (url.pathname.endsWith('/') || url.pathname.endsWith('/index.html'))) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put('./index.html', copy)).catch(() => {});
+        }
         return res;
       }).catch(() => caches.match('./index.html').then((r) => r || caches.match('./')))
     );
@@ -66,6 +75,6 @@ self.addEventListener('fetch', (e) => {
         caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
       }
       return res;
-    }).catch(() => hit))
+    }).catch(() => Response.error()))
   );
 });

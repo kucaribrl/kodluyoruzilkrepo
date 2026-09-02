@@ -3,6 +3,7 @@
   "short_name": "IQ Basics",
   "description": "IQ Basics toptan tekstil sipariş ve yönetim uygulaması",
   "lang": "tr",
+  "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
