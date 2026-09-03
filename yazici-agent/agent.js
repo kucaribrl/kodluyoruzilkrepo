@@ -10,7 +10,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { initializeApp } = require('firebase/app');
 const { getAuth, signInWithEmailAndPassword } = require('firebase/auth');
-const { getFirestore, collection, query, where, onSnapshot,
+const { getFirestore, collection, query, where, onSnapshot, getDocs,
         doc, updateDoc, deleteDoc, setDoc, runTransaction } = require('firebase/firestore');
 
 // --- Uygulamayla aynı (herkese açık) bulut ayarı ---
@@ -46,6 +46,9 @@ try { fs.writeFileSync(path.join(__dirname, 'agent.pid'), String(process.pid)); 
 process.on('exit', () => { try { fs.unlinkSync(path.join(__dirname, 'agent.pid')); } catch (e) {} });
 const isWin = process.platform === 'win32';
 const inFlight = new Set();
+const IS_SURESI_MS = 6 * 3600 * 1000;      // 6 saatten eski iş basılmaz (hata olarak işaretlenir)
+const ZOMBI_SURESI_MS = 5 * 60 * 1000;     // 5 dk'dır 'basiliyor'da kalan iş → takılmış sayılır
+let kuyruk = Promise.resolve();            // işler sırayla (kronolojik) basılır
 
 function dataUrlToPng(dataUrl, file) {
   const b64 = String(dataUrl).replace(/^data:image\/\w+;base64,/, '');
@@ -127,6 +130,12 @@ async function handleJob(db, snapDoc) {
     try { await updateDoc(ref, { durum: 'hata', hata: 'iş verisi çok büyük' }); } catch (e) {}
     inFlight.delete(id); return;
   }
+  // süresi geçmiş iş (örn. ajan günlerce kapalıydı) → basma, hata olarak işaretle
+  if (Date.now() - (+data.olusturma || 0) > IS_SURESI_MS) {
+    log('⏳ İşin süresi geçti, basılmadı:', id);
+    try { await updateDoc(ref, { durum: 'hata', hata: 'süresi geçti (6 saat)' }); } catch (e) {}
+    inFlight.delete(id); return;
+  }
   // hangi yazıcı? etiket → etiketYaziciAdi, fiş → yaziciAdi (biri boşsa diğerine/​varsayılana düşer)
   const printer = etiket ? (cfg.etiketYaziciAdi || cfg.yaziciAdi || '') : (cfg.yaziciAdi || '');
   // config ham baskıyı kapatmadıysa (hamBaski:false) ESC/POS kullan
@@ -136,7 +145,7 @@ async function handleJob(db, snapDoc) {
     const alindi = await runTransaction(db, async (tr) => {
       const d0 = await tr.get(ref);
       if (!d0.exists() || d0.data().durum !== 'bekliyor') return false;
-      tr.update(ref, { durum: 'basiliyor' });
+      tr.update(ref, { durum: 'basiliyor', baslama: Date.now() });
       return true;
     });
     if (!alindi) { inFlight.delete(id); return; }
@@ -194,17 +203,39 @@ async function main() {
       { durum: 'ajan', online: true, ts: Date.now(), cihaz: os.hostname(), yazici: cfg.yaziciAdi || 'varsayılan', etiket: cfg.etiketYaziciAdi || '' }); }
     catch (e) { /* sessiz */ }
   };
-  await heartbeat();
-  setInterval(heartbeat, 20000);
+  // 🧟 Açılışta takılı kalmış işleri kurtar: önceki ajan 'basiliyor' derken kapandıysa
+  // (baslama 5 dk'dan eski ya da hiç yok) işi tekrar 'bekliyor'a al.
+  try {
+    const takili = await getDocs(query(collection(db, 'isletme', MAGAZA_ID, 'yazdirma'), where('durum', '==', 'basiliyor')));
+    for (const d of takili.docs) {
+      const b = +(d.data().baslama || 0);
+      if (!b || Date.now() - b > ZOMBI_SURESI_MS) {
+        log('♻️  Takılı iş tekrar kuyruğa alındı:', d.id);
+        try { await updateDoc(d.ref, { durum: 'bekliyor', baslama: null }); } catch (e) { log('⚠️ Takılı iş güncellenemedi:', d.id, e.message); }
+      }
+    }
+  } catch (e) { log('⚠️ Takılı iş kontrolü yapılamadı:', e.message); }
   const q = query(collection(db, 'isletme', MAGAZA_ID, 'yazdirma'), where('durum', '==', 'bekliyor'));
   console.log('\n✅ Yazıcı ajanı çalışıyor — yeni fişler bekleniyor. (Bu pencereyi kapatma.)\n');
+  let heartbeatTimer = null;
   onSnapshot(q, snap => {
-    snap.docChanges().forEach(ch => {
-      if (ch.type === 'added' || ch.type === 'modified') handleJob(db, ch.doc);
-    });
+    // yeni/değişen 'bekliyor' işleri topla, eskiden yeniye sırala, tek tek (sırayla) bas
+    const isler = snap.docChanges()
+      .filter(ch => (ch.type === 'added' || ch.type === 'modified') && ch.doc.data().durum === 'bekliyor')
+      .map(ch => ch.doc)
+      .sort((a, b) => (+a.data().olusturma || 0) - (+b.data().olusturma || 0));
+    for (const d of isler) {
+      kuyruk = kuyruk.then(() => handleJob(db, d)).catch(e => log('⚠️ İş işlenemedi:', d.id, e && e.message));
+    }
   }, err => {
-    log('⚠️ Dinleme hatası:', err.message, '— yeniden bağlanılıyor...');
+    // Dinleyici koptu (izin/ağ/kota) — SDK yeniden bağlanmaz; ajan kapanır, baslat.bat/vbs yeniden başlatır.
+    log('❌ Dinleme hatası:', err.message, '— ajan kapanıyor, yeniden başlatılacak.');
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    process.exit(1);
   });
+  // 💓 Kalp atışı yalnız dinleyici kurulduktan sonra başlar (dinlemeyen ajan "bağlı" görünmesin)
+  await heartbeat();
+  heartbeatTimer = setInterval(heartbeat, 20000);
 }
 
 process.on('unhandledRejection', e => log('⚠️ Beklenmeyen hata:', e && e.message));

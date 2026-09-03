@@ -19,10 +19,19 @@ function Resolve-PrinterName([string]$want) {
   $want = $want.Trim()
   $all = Get-Printers
   foreach ($p in $all) { if ($p -ieq $want) { return $p } }
-  foreach ($p in $all) { $pl=$p.ToLower(); $wl=$want.ToLower(); if ($pl.Contains($wl) -or $wl.Contains($pl)) { return $p } }
   $wn = Norm $want
   foreach ($p in $all) { if ((Norm $p) -eq $wn) { return $p } }
-  foreach ($p in $all) { $pn = Norm $p; if ($pn.Contains($wn) -or $wn.Contains($pn)) { return $p } }
+  # esnek eşleme yalnız TEK yönlü: istenen ad gerçek adın İÇİNDE geçmeli (ters yön yanlış yazıcıya basardı)
+  # çok kısa ad (<3 karakter) her şeyle eşleşir → reddet
+  if ($wn.Length -lt 3) { return $null }
+  $wl = $want.ToLower()
+  $adaylar = @($all | Where-Object { $_.ToLower().Contains($wl) -or (Norm $_).Contains($wn) })
+  if ($adaylar.Count -gt 1) {
+    $list = $adaylar -join "`n   - "
+    [Console]::Error.WriteLine("Yazici adi belirsiz: '$want' birden fazla yaziciyla eslesiyor:`n   - $list`n(config.json icindeki adi bunlardan biriyle BIREBIR ayni yaz.)")
+    exit 1
+  }
+  if ($adaylar.Count -eq 1) { return $adaylar[0] }
   return $null
 }
 
