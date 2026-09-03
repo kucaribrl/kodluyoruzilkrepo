@@ -4,6 +4,9 @@
   "description": "IQ Basics — buluttaki wa_kuyruk mesajlarini WhatsApp Web uzerinden otomatik gonderir.",
   "private": true,
   "main": "baslat.js",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node baslat.js"
   },

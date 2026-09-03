@@ -28,6 +28,13 @@ exit /b
 :pkgok
 :loop
 node baslat.js iqwa
+rem cikis kodu 2/3 = yapilandirma hatasi (sifre/QR) -> yeniden denemenin anlami yok
+if errorlevel 2 (
+  echo.
+  echo [!] Ajan durdu: yapilandirma hatasi ^(sifre/QR^). Duzeltip tekrar baslatin.
+  pause
+  exit /b
+)
 echo.
 echo [i] Ajan durdu. 3 saniye sonra yeniden baslatiliyor... (kapatmak icin pencereyi kapat)
 timeout /t 3 /nobreak >nul

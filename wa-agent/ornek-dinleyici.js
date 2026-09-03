@@ -19,8 +19,8 @@ const fs = require('fs');
 const path = require('path');
 const { initializeApp } = require('firebase/app');
 const { getAuth, signInWithEmailAndPassword } = require('firebase/auth');
-const { getFirestore, collection, query, where, onSnapshot,
-        doc, runTransaction } = require('firebase/firestore');
+const { getFirestore, collection, query, where, onSnapshot, getDocs,
+        doc, updateDoc, runTransaction } = require('firebase/firestore');
 
 // Uygulamayla aynı (herkese açık) bulut ayarı — yazici-agent/agent.js ile birebir
 const FB_CONFIG = {
@@ -38,13 +38,28 @@ const log = (...a) => console.log(new Date().toLocaleTimeString('tr-TR'), '[wa-k
 async function waKuyrukBaslat(client, configYolu) {
   const cfgPath = configYolu || path.join(__dirname, 'config.json');
   if (!fs.existsSync(cfgPath)) { log('❌ config.json yok (email+sifre) —', cfgPath); return; }
-  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  let cfg;
+  try { cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8')); }
+  catch (e) { throw new Error('config.json okunamadı (yazım hatası olabilir): ' + e.message); }
 
   const app = initializeApp(FB_CONFIG, 'wa-kuyruk');
   const auth = getAuth(app);
   await signInWithEmailAndPassword(auth, cfg.email, cfg.sifre);
   const db = getFirestore(app);
   log('✅ Buluta bağlandı — kuyruk dinleniyor.');
+
+  // 🧟 Açılışta takılı kalmış mesajları kurtar: önceki süreç 'gonderiliyor' derken kapandıysa
+  // (baslama 5 dk'dan eski ya da hiç yok) mesajı tekrar 'bekliyor'a al.
+  try {
+    const takili = await getDocs(query(collection(db, 'isletme', MAGAZA_ID, 'wa_kuyruk'), where('durum', '==', 'gonderiliyor')));
+    for (const d of takili.docs) {
+      const b = +(d.data().baslama || 0);
+      if (!b || Date.now() - b > 5 * 60 * 1000) {
+        log('♻️  Takılı mesaj tekrar kuyruğa alındı:', d.id);
+        try { await updateDoc(d.ref, { durum: 'bekliyor', baslama: null }); } catch (e) { log('⚠️ Takılı mesaj güncellenemedi:', d.id, String(e).slice(0, 120)); }
+      }
+    }
+  } catch (e) { log('⚠️ Takılı mesaj kontrolü yapılamadı:', String(e).slice(0, 120)); }
 
   const q = query(collection(db, 'isletme', MAGAZA_ID, 'wa_kuyruk'), where('durum', '==', 'bekliyor'));
   onSnapshot(q, snap => {
@@ -69,14 +84,18 @@ async function waKuyrukBaslat(client, configYolu) {
         if (no.length === 10) no = '90' + no;
         if (no.length < 11) throw new Error('geçersiz numara: ' + veri.tel);
         await client.sendMessage(no + '@c.us', String(veri.mesaj || ''));
-        await runTransaction(db, async tr => tr.update(ref, { durum: 'gonderildi', gonderim: Date.now() }));
+        await updateDoc(ref, { durum: 'gonderildi', gonderim: Date.now() });
         log('📤 Gönderildi →', no, '(' + (veri.tip || 'genel') + ')');
       } catch (e) {
-        try { await runTransaction(db, async tr => tr.update(ref, { durum: 'hata', hata: String(e).slice(0, 200) })); } catch (x) {}
+        try { await updateDoc(ref, { durum: 'hata', hata: String(e).slice(0, 200) }); } catch (x) {}
         log('⚠️ Gönderilemedi:', String(e).slice(0, 120));
       }
     });
-  }, e => log('⚠️ Dinleme hatası:', (e && e.code) || e));
+  }, e => {
+    // Dinleyici koptu (izin/ağ/kota) — SDK yeniden bağlanmaz; süreç kapanır, baslat.bat/vbs yeniden başlatır.
+    log('❌ Dinleme hatası:', (e && e.code) || e, '— süreç kapanıyor, yeniden başlatılacak.');
+    process.exit(1);
+  });
 }
 
 module.exports = { waKuyrukBaslat };

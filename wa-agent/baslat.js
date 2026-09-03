@@ -36,4 +36,17 @@ client.on('ready', () => {
 });
 client.on('disconnected', r => { console.log('⚠️ WhatsApp bağlantısı koptu:', r, '— yeniden başlatılıyor.'); process.exit(1); });
 
-client.initialize();
+// Beklenmeyen (yakalanmamış) promise hatası → günlüğe yaz, çık (baslat.bat/vbs yeniden başlatır)
+process.on('unhandledRejection', e => {
+  const m = String((e && e.message) || e);
+  console.error('❌ Beklenmeyen hata:', m);
+  hataLog('Beklenmeyen hata: ' + m);
+  process.exit(1);
+});
+
+client.initialize().catch(e => {
+  const m = String((e && e.message) || e);
+  console.error('❌ WhatsApp başlatılamadı:', m);
+  hataLog('WhatsApp başlatılamadı: ' + m);
+  process.exit(1);
+});
