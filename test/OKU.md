@@ -17,6 +17,7 @@ node test/03-temiz-uctan-uca.test.mjs
 node test/04-parti-siparis.test.mjs
 node test/05-parti-stok.test.mjs
 node test/06-inceleme-duzeltmeleri.test.mjs
+node test/07-envanter-siparis.test.mjs
 ```
 Hepsi birden:
 ```bash
@@ -34,9 +35,10 @@ PLAYWRIGHT_CHROMIUM=/usr/bin/chromium node test/01-hata-duzeltmeleri.test.mjs
 | 01 | 50 hatalık denetimin kritik düzeltmeleri: iade kuru, dövizli ürün fiyatı, çek kilidi/karşılıksız, parti stoğu, dagit, kampanya tarihi, fiş toplamları, portal kupon, rol/temizlik |
 | 02 | Güvenlik+para raporu: esc/guvenliSrc, satış tahsilatının kasa defterine yazımı, dövizli rapor çift-kur, portal fiyat güvencesi, iade vade farkı, ekstre taksit ayrımı, yedek foto ayıklama |
 | 03 | Sıfırdan temiz akış: temizle → müşteri/ürün → satış → fişler → kumaş siparişi+parti+teslim → rapor → portal → tüm ekranlar |
-| 04 | Kumaş siparişi formunda parti/lot akışı (giriş → teslim prefill → stok FIFO → WhatsApp metni) |
+| 04 | Parti/lot akışı — siparişte parti YOK, teslimde girilir; aynı renkten çoklu parti, stok kırılımı, 'siparişi kapat' |
 | 05 | Stok kartında parti kutusu (tek/çok parti, koruma ve toplama davranışı) |
 | 06 | Eylül 2026 kod incelemesi düzeltmeleri: kk/çek cariIsle+POS hesabı, USD fason borcu, çok cihazlı id, tek net kâr, bakiye ezilmesi, müşteri modu mezar taşı, onclick XSS (jsq) |
+| 07 | Envanter malzeme siparişi: gramaj/en/foto/kartela+renk kodu, tüm türlerde çeşit satırları, teslimde çoklu parti + fiş foto + kapat, iş emri önizleme/yazdır, tekrar sipariş, sade bekleyen ekranı, WA dönüşü |
 
 > Not: Para birimi modeli — `kalem.fiyat` her zaman TL, satışın `tutar` alanı satış
 > para birimindedir; `satisDiv(s)` PB→TL çarpanıdır. Hesap değiştiren her
