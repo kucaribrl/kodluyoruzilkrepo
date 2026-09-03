@@ -62,7 +62,7 @@ const out = await page.evaluate(async () => {
     const kalanStok = u.renkler.reduce((a, r) => a + (+r.stok || 0), 0);
     ok('satış: renk stokları düştü (20→18)', kalanStok === 18, 'kalan=' + kalanStok);
     const m = db.cariler.find(c => c.id === 501);
-    ok('satış: müşteri borcu = tutar (ödeme 0)', Math.abs((+m.bakiye || 0) - (s ? s.tutar - s.odenen : 0) * 1) < 0.01 || (+m.bakiye || 0) > 0, 'bakiye=' + m.bakiye + ' tutar=' + (s && s.tutar));
+    ok('satış: müşteri borcu = tutar (ödeme 0)', Math.abs((+m.bakiye || 0) - (s ? s.tutar - s.odenen : 0) * 1) < 0.01, 'bakiye=' + m.bakiye + ' tutar=' + (s && s.tutar));
 
     // ===== 3) FİŞ ÜRETİMLERİ (3 tür de hatasız çalışmalı) =====
     let f1 = '', f2 = '', f3 = '';
@@ -78,14 +78,14 @@ const out = await page.evaluate(async () => {
     // ===== 5) KUMAŞ SİPARİŞİ + PARTİ + TESLİM =====
     malSipForm(0); await sleep(120);
     document.getElementById('ms-ad').value = 'E2E Süprem';
-    msSatir = [{ renk: 'Lacivert', miktar: 50, parti: 'P100' }];
+    // YENİ tasarım: siparişte parti yok — parti teslimde (depoya inerken) girilir (bkz. test 04)
+    msSatir = [{ renk: 'Lacivert', miktar: 50 }];
     kaydetMalSip(0); await sleep(150);
     const ms = db.malSiparis[db.malSiparis.length - 1];
-    ok('kumaş siparişi: parti ile kaydedildi', !!ms && ms.satirlar[0].parti === 'P100');
+    ok('kumaş siparişi: kaydedildi (partisiz)', !!ms && ms.satirlar[0].miktar === 50 && !ms.satirlar[0].parti);
     malSipTeslim(ms.id); await sleep(120);
-    const p0 = document.getElementById('mt-p-0');
-    ok('teslim: parti prefill P100', p0 && p0.value === 'P100');
-    document.getElementById('mt-g-0').value = '50';
+    ok('teslim: parti kutusu teslim modalında', (document.getElementById('mt-wrap') || {innerHTML:''}).innerHTML.includes('parti no'));
+    mtSatir[0].rows = [{ parti: 'P100', mik: 50 }];
     kaydetMalSipTeslim(ms.id); await sleep(150);
     const hh = db.hammadde.find(x => x.ad === 'E2E Süprem');
     const lr = hh && hh.renkler.find(r => r.ad === 'Lacivert');
@@ -107,7 +107,7 @@ const out = await page.evaluate(async () => {
     // portal siparişi gönder (yerel mod)
     portalMusAd = 'Test Müşteri'; portalTel = '05551112233';
     if (typeof portalSiparisGonder === 'function') { try { portalSiparisGonder(); await sleep(200); } catch (e) { R.push('portalSiparisGonder HATA ' + e.message); } }
-    const pb = (db.portalBekleyen || db.portalSiparis || []).length;
+    const pb = (db.bekleyenPortal || []).length;
     R.push('bilgi: portal bekleyen sipariş=' + pb);
     document.getElementById('pov').style.display = 'none';
 
@@ -115,11 +115,14 @@ const out = await page.evaluate(async () => {
     for (const e of ['panel','satis','stok','cari','envanter','uretim','kasa','rapor','ayarlar','daha']) {
       try { go(e); await sleep(100); } catch (x) { ok('ekran ' + e, false, x.message); }
     }
-    ok('ekran turu: hepsi açıldı', true);
   } catch (e) { R.push('EXC ' + (e && e.stack || e).slice(0, 300)); }
   return R;
 });
 
+// ekran turu ve tüm akış boyunca sayfada JS hatası (pageerror) olmamalı → hata varsa test düşer
+out.push((errs.length === 0 ? 'PASS ' : 'FAIL ') + 'ekran turu temiz (pageerror yok)' + (errs.length ? ' → ' + errs.join(' | ') : ''));
 console.log(out.join('\n'));
 console.log('pageErrors:', errs.length ? errs : 'none');
+const fails = out.filter(s => !s.startsWith('PASS') && !s.startsWith('bilgi:')).length;
 await browser.close(); srv.close();
+process.exit(fails ? 1 : 0);

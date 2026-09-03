@@ -129,11 +129,13 @@ const out = await page.evaluate(async () => {
 
     // ekran turu
     for (const e of ['panel', 'satis', 'stok', 'cari', 'envanter', 'uretim', 'kasa', 'rapor', 'ayarlar', 'daha']) { go(e); await sleep(80); }
-    ok('ekran turu temiz', true);
+    ok('ekran turu: hepsi açıldı', true); // asıl kontrol aşağıda: pageerror sayısı
   } catch (e) { R.push('EXC ' + (e && e.stack || e).slice(0, 400)); }
   return R;
 });
 
+// sayfada JS hatası (pageerror) olmamalı → hata varsa test düşer
+out.push((errs.length === 0 ? 'PASS ' : 'FAIL ') + 'ekran turu temiz (pageerror yok)' + (errs.length ? ' → ' + errs.join(' | ') : ''));
 console.log(out.join('\n'));
 console.log('pageErrors:', errs.length ? errs : 'none');
 const fails = out.filter(s => !s.startsWith('PASS')).length;

@@ -141,6 +141,8 @@ const out = await page.evaluate(async () => {
   return R;
 });
 
+// sayfada JS hatası (pageerror) olmamalı → hata varsa test düşer
+out.steps.push((errs.length === 0 ? 'PASS ' : 'FAIL ') + 'sayfa hatasız (pageerror yok)' + (errs.length ? ' → ' + errs.join(' | ') : ''));
 console.log(out.steps.join('\n'));
 console.log('pageErrors:', errs.length ? errs : 'none');
 const fails = out.steps.filter(s => !s.startsWith('PASS')).length;
