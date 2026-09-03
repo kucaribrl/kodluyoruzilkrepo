@@ -1,4 +1,4 @@
-# IQ Basics — HAM (RAW) ESC/POS baskı (Windows)
+﻿# IQ Basics — HAM (RAW) ESC/POS baskı (Windows)
 # Verilen dosyadaki ham baytları yazıcıya DOĞRUDAN gönderir (sürücü ölçekleme/dither YOK).
 # → yazıcının doğal çözünürlüğünde, nokta-nokta net baskı (eski sistem gibi).
 param(

@@ -1,4 +1,4 @@
-# IQ Basics — sessiz görsel baskı (Windows)
+﻿# IQ Basics — sessiz görsel baskı (Windows)
 # Verilen PNG'yi, yazıcının tam basılabilir genişliğine sığdırarak sessizce basar.
 param(
   [Parameter(Mandatory=$true)][string]$img,
