@@ -567,11 +567,12 @@ const CANLI_DOMEN={
   satis:['satislar','bekleyenPortal','islenenSiparis','kuponlar','stokBildirim'],
   cek:['cekler'],
   uretim:['isemirleri'],
-  ayar:['firma','firmaSlogan','firmaAdres','firmaTel','firmaWp','firmaTelegram','firmaLogo','firmaSite','satici','kurUSD','kurEUR','seq','kademe','minSiparis','kampanya','kurTarih','portalFav','portalTaslak','duzenliGider','cldName','cldPreset','rolAyar','waOtoMod']
+  ayar:['firma','firmaSlogan','firmaAdres','firmaTel','firmaWp','firmaTelegram','firmaLogo','firmaSite','satici','kurUSD','kurEUR','seq','kademe','minSiparis','kampanya','kurTarih','portalFav','portalTaslak','duzenliGider','cldName','cldPreset','waOtoMod'],
+  yonetim:['rolAyar'] // rol izin matrisi — yalnız admin/ortak yazar (firestore.rules), personel okur
 };
 // Rol → hangi alanları OKUR / YAZAR (veri seviyesinde sınır; arayüz gizlemesiyle birlikte)
 const _CTUM=Object.keys(CANLI_DOMEN);
-const ROL_OKU={admin:_CTUM,ortak:_CTUM,magaza:['stok','cari','satis','ayar'],depocu:['stok','ayar'],fasontakip:['stok','uretim','ayar'],fason:[],musteri:[],calisan:[]};
+const ROL_OKU={admin:_CTUM,ortak:_CTUM,magaza:['stok','cari','satis','ayar','yonetim'],depocu:['stok','ayar','yonetim'],fasontakip:['stok','uretim','ayar','yonetim'],fason:[],musteri:[],calisan:[]};
 const ROL_YAZ={admin:_CTUM,ortak:_CTUM,magaza:['stok','cari','satis','ayar'],depocu:['stok'],fasontakip:['uretim','ayar'],fason:[],musteri:[],calisan:[]};
 // Bilinen rol → kendisi; bilinmeyen/'?' (sahip, kullanicilar belgesi yoksa) → admin (bulut kuralları asıl kapıyı tutar)
 // İşletme sahibi e-postaları (firestore.rules'taki sahipMi listesiyle aynı — zaten herkese açık)
@@ -634,7 +635,9 @@ function canliDomenUygula(domen,d){
     else if(k==='islenenSiparis'||k==='portalFav'){db[k]=_unionDizi(db[k],d[k]);}
     else db[k]=d[k];
   });
-  if(domen==='satis')canliSatisUzlas(yIslenen,ySatis);
+  if(domen==='satis'){canliSatisUzlas(yIslenen,ySatis);
+    // aynı bulut siparişi iki cihazda ayrı id ile eklendiyse tekle (küçük id kalır)
+    const gor=new Set();db.bekleyenPortal=(db.bekleyenPortal||[]).sort((a,b)=>(+a.id||0)-(+b.id||0)).filter(o=>{if(!o||!o.bulutId)return !!o;if(gor.has(o.bulutId))return false;gor.add(o.bulutId);return true;});}
 }
 function canliAl(obj,domen){const o={};CANLI_DOMEN[domen].forEach(k=>{if(obj[k]!==undefined)o[k]=obj[k];});
   const tb={};CANLI_DOMEN[domen].forEach(k=>{if(obj._tomb&&obj._tomb[k]&&Object.keys(obj._tomb[k]).length)tb[k]=obj._tomb[k];});
@@ -644,6 +647,7 @@ try{_mSnapInit()}catch(e){} // açılışta mevcut kayıtlar taban alınır (top
 // localStorage boş/bozuksa IndexedDB güvence kopyasından kurtar (async — hazır olunca ekranı tazeler)
 (async()=>{try{
   const mevcut=(()=>{try{const d=JSON.parse(localStorage.getItem(KEY));return d&&d.urunler?d:null}catch(e){return null}})();
+  if(!mevcut&&localStorage.getItem('iq_oturumKilit'))return; // cihaz temizlendi/kilitli → eski kopya geri yüklenmez
   const v=await idbOku();if(!v)return;const d=JSON.parse(v);if(!d||!d.urunler)return;
   // yerel sağlam ve IndexedDB kopyasından yeni (ya da eşit) → dokunma; IDB daha yeniyse (kota dolu kalmış işlemler) onu al
   if(mevcut&&!((+d._t||0)>(+mevcut._t||0)+1000))return;
@@ -670,6 +674,11 @@ function canliSatisUzlas(yerelIslenen,yerelSatis){
 function canliBaslat(sessiz){
   if(canliAcik)return true; if(!bulutBaslat())return false;
   try{autoYedek('senkron öncesi')}catch(e){} // buluttan gelen ilk veri yerelin üzerine yazmadan önce güvenlik yedeği
+  if(db.ornek){ // 🧹 DEMO cihaz buluta katılıyor: örnek ürün/cari/kasa/satış kayıtları buluta ve diğer cihazlara KARIŞMASIN
+    MERGE_LISTELER.forEach(k=>{if(Array.isArray(db[k]))db[k]=[];});
+    ['bekleyenPortal','islenenSiparis','stokBildirim','kuponlar','duzenliGider','ortakHarcama','portalTaslak'].forEach(k=>{if(Array.isArray(db[k]))db[k]=[];});
+    db._tomb={};db.kampanya=null;try{_mSnapInit()}catch(e){}
+  }
   canliAcik=true; db.canliBulut=true;
   (ROL_OKU[canliRol()]||_CTUM).forEach(domen=>{
     const un=canliRef(domen).onSnapshot(snap=>{
@@ -699,13 +708,16 @@ function canliDur(){_canliUnsub.forEach(u=>{try{u()}catch(e){}});_canliUnsub=[];
 let _otoSenkronCalisti=false;
 async function otoSenkron(){
   if(canliAcik)return true;
+  if(db.canliBulut===false)return false; // kullanıcı senkronu kapattı / sıfırladı / yedeğe döndü → kendiliğinden bağlanma (Ayarlar > Canlı Bulut ile açar)
   if(!bulutVar()||!bulutBaslat())return false;
   if(!bulutGirisli()||bulutMusteriMod)return false;
   try{
     // Bulut "boş" mu? — yalnız stok değil, cari/satış/kasa belgelerine de bakılır (ürünsüz ama carili bulut ezilmesin)
-    const docs=await Promise.all(['stok','cari','satis','kasa'].map(dm=>canliRef(dm).get().catch(()=>null)));
+    let okumaHata=false;
+    const docs=await Promise.all(['stok','cari','satis','kasa'].map(dm=>canliRef(dm).get().catch(()=>{okumaHata=true;return null})));
+    const onbellek=docs.some(d=>d&&d.metadata&&d.metadata.fromCache); // çevrimdışı önbellek → sunucu durumu BİLİNMİYOR
     const dolu=docs.some(d=>{if(!d||!d.exists)return false;const x=d.data()||{};return Object.keys(x).some(k=>Array.isArray(x[k])&&x[k].length>0)});
-    const bulutBos=!dolu;
+    const bulutBos=!dolu&&!okumaHata&&!onbellek; // okunamadıysa "boş" DEĞİL → yükleme yapılmaz, yalnız dinlenir
     const yerelDolu=(db.urunler&&db.urunler.length)||(db.cariler&&db.cariler.length)||(db.satislar&&db.satislar.length);
     // ⚠️ VERİ KAYBI KORUMASI: yalnızca GERÇEK veri (demo değil) buluta yüklenir.
     // Böylece demo verili bir cihaz, başka cihazın gerçek verisini asla ezemez.
@@ -717,6 +729,7 @@ async function otoSenkron(){
 // Bu cihazın verisini buluta gönder (ilk kurulum / ana cihaz)
 async function canliGonder(){
   if(!bulutBaslat())return false;
+  if(db.ornek){toast('Örnek (demo) veri buluta yüklenmez — önce Ayarlar > "Test verilerini temizle" ile gerçek veriye geç');return false;}
   for(const domen of Object.keys(CANLI_DOMEN)){
     const data=canliAl(db,domen); _canliGolge[domen]=JSON.stringify(data);
     try{await canliRef(domen).set(data);}catch(e){toast('Yükleme hatası ('+domen+'): '+(e.message||e).slice(0,60));return false;}
@@ -730,8 +743,9 @@ function canliYaz(){
   _canliYazT=setTimeout(()=>{
     (ROL_YAZ[canliRol()]||_CTUM).forEach(domen=>{
       const data=canliAl(db,domen); const js=JSON.stringify(data);
+      if(js.length>950000){window._boyutUyari2=window._boyutUyari2||{};const son=window._boyutUyari2[domen]||0;if(Date.now()-son>300000){window._boyutUyari2[domen]=Date.now();try{toast('🚨 '+domen+' verisi bulut belge sınırını aştı ('+Math.round(js.length/1024)+' KB / 1 MB) — fotoğraf/fişleri küçültün ya da Cloudinary açın; bu alan senkronlanamıyor')}catch(e){}}}
       if(js!==_canliGolge[domen]){_canliGolge[domen]=js;
-        canliRef(domen).set(data).then(()=>{try{_senk.son=Date.now();_senk.hata='';senkRozetCiz()}catch(x){}}).catch(e=>{delete _canliGolge[domen];/* başarısız yazım: bir sonraki save() yeniden dener */try{_senk.hata=(e&&e.code)||'hata';senkRozetCiz()}catch(x){}console.warn('canlı-yaz',domen,e&&e.code);if(canliIzinHata(e)!=='permission-denied'&&(''+e).includes('longer than'))toast('⚠️ '+domen+' verisi çok büyük (fotoğraflar) — canlı senkron için küçültün');});}
+        canliRef(domen).set(data).then(()=>{try{_senk.son=Date.now();_senk.hata='';senkRozetCiz()}catch(x){}}).catch(e=>{delete _canliGolge[domen];/* başarısız yazım: bir sonraki save() yeniden dener */try{_senk.hata=(e&&e.code)||'hata';senkRozetCiz()}catch(x){}console.warn('canlı-yaz',domen,e&&e.code);if(canliIzinHata(e)!=='permission-denied'&&/longer than|exceeds the maximum/i.test(''+e))toast('🚨 '+domen+' verisi 1 MB bulut sınırını aştı — fotoğraf/fişleri küçültün ya da Cloudinary açın');});}
     });
   },450);
 }
@@ -744,7 +758,7 @@ function canliYazHemen(domenler){
   const ps=[];
   list.forEach(domen=>{const data=canliAl(db,domen);const js=JSON.stringify(data);
     if(js.length>900000){window._boyutUyari=window._boyutUyari||{};if(!window._boyutUyari[domen]){window._boyutUyari[domen]=1;try{toast('⚠️ '+domen+' verisi bulut sınırına yaklaşıyor ('+Math.round(js.length/1024)+'KB / 1MB) — eski kayıtları arşivlemek gerekebilir');}catch(e){}}}
-    if(js!==_canliGolge[domen]){_canliGolge[domen]=js;ps.push(canliRef(domen).set(data).catch(e=>{console.warn('canlı-yaz-hemen',domen,e&&e.code);_senk.hata=(e&&e.code)||'yazma hatası';if(canliIzinHata(e)!=='permission-denied'&&(''+e).includes('longer than'))toast('⚠️ '+domen+' verisi 1MB sınırını aştı (fotoğraflar) — buluta yazılamadı. Fotoğrafları küçültün.');}));}});
+    if(js!==_canliGolge[domen]){_canliGolge[domen]=js;ps.push(canliRef(domen).set(data).catch(e=>{console.warn('canlı-yaz-hemen',domen,e&&e.code);_senk.hata=(e&&e.code)||'yazma hatası';if(canliIzinHata(e)!=='permission-denied'&&/longer than|exceeds the maximum/i.test(''+e))toast('🚨 '+domen+' verisi 1 MB sınırını aştı — buluta yazılamadı. Fotoğraf/fişleri küçültün ya da Cloudinary açın.');}));}});
   const pr=Promise.all(ps);
   if(ps.length){_senk.bekleyen=true;try{senkRozetCiz()}catch(e){}
     pr.then(()=>{_senk.bekleyen=false;if(!_senk.hata)_senk.son=Date.now();try{senkRozetCiz()}catch(e){}});}
@@ -761,6 +775,8 @@ function idbYaz(){clearTimeout(_idbYazT);_idbYazT=setTimeout(async()=>{try{
   if(!_idb)_idb=await idbAc();if(!_idb)return;
   _idb.transaction('kv','readwrite').objectStore('kv').put(JSON.stringify(db),KEY);
 }catch(e){}},800);}
+function idbSil(){clearTimeout(_idbYazT);return new Promise(async res=>{try{if(!_idb)_idb=await idbAc();if(!_idb)return res(false);
+  const rq=_idb.transaction('kv','readwrite').objectStore('kv').delete(KEY);rq.onsuccess=()=>res(true);rq.onerror=()=>res(false);}catch(e){res(false)}});}
 function idbOku(){return new Promise(async res=>{try{if(!_idb)_idb=await idbAc();if(!_idb)return res(null);
   const rq=_idb.transaction('kv','readonly').objectStore('kv').get(KEY);
   rq.onsuccess=()=>res(rq.result||null);rq.onerror=()=>res(null);}catch(e){res(null)}});}
@@ -877,7 +893,7 @@ async function canliBulutKatil(){
 function otoYedekListe(){const y=JSON.parse(localStorage.getItem('iq_yedekler')||'[]');
   open_('🕑 Otomatik Yedekler',(y.length?y.map((b,i)=>`<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><b>${tstr(b.t)}</b><div class="mini">${esc(b.etiket||'')} · ${esc(b.ozet||'')}</div></div><button class="btn ghost sm" style="width:auto;margin:0;padding:8px 12px;flex:0 0 auto" onclick="otoYedekGeri(${i})">↩︎ Geri yükle</button></div></div>`).join(''):'<div class="mini">Henüz yedek yok. Riskli işlemlerden önce ve günde bir otomatik alınır.</div>')+'<div class="mini" style="margin-top:8px">Yedekler bu cihazda saklanır (son 10). Cihaz değişimi için "Yedek Al (indir)" ile dosya da al.</div>');}
 function otoYedekGeri(i){const y=JSON.parse(localStorage.getItem('iq_yedekler')||'[]');const b=y[i];if(!b)return;
-  askConfirm('Bu yedeğe dönülsün mü? Şu anki veri bununla değişir ve canlı senkron kapatılır (istersen sonra tekrar açarsın).',()=>{try{JSON.parse(b.veri);if(canliAcik)canliDur();localStorage.setItem(KEY,b.veri);db=load();try{_mSnapInit()}catch(e){}closeM();go('panel');toast('↩︎ Yedek geri yüklendi ✓');}catch(e){toast('Yedek okunamadı')}});}
+  askConfirm('Bu yedeğe dönülsün mü? Şu anki veri bununla değişir ve canlı senkron kapatılır (istersen sonra tekrar açarsın).',()=>{try{JSON.parse(b.veri);if(canliAcik)canliDur();localStorage.setItem(KEY,b.veri);db=load();try{_mSnapInit()}catch(e){}db._t=Date.now();try{save()}catch(e){}closeM();go('panel');toast('↩︎ Yedek geri yüklendi ✓');}catch(e){toast('Yedek okunamadı')}});}
 function canliBulutKapat(){askConfirm('Canlı senkron kapatılsın mı? (Veri cihazda kalır ama artık senkronlanmaz)',()=>{canliDur();closeM();toast('Senkron kapatıldı');});}
 // 👤 Personel girişi: depocu/mağaza/ortak kendi hesabıyla girer → rolüne göre canlı veriye bağlanır
 function personelGiris(){
@@ -889,11 +905,11 @@ async function personelBaslat(){
   await bulutProfilYukle(); const r=bulutKul&&bulutKul.rol;
   if(!bulutKul||!bulutKul.onay)return toast('Hesabın onaylı değil — yöneticinin onaylaması lazım');
   if(!['ortak','magaza','depocu','fasontakip'].includes(r))return toast('Bu hesap personel değil (rol: '+(ROL_AD[r]||r||'?')+'). Yönetici seni Ortak/Mağaza/Depocu yapmalı.');
-  db.rol=r; db.personelMod=true; _canliUyari=false; save();
+  db.rol=r; db.personelMod=true; _canliUyari=false; db.canliBulut=true; save();
   otoSenkron(); try{closeM()}catch(e){} go('panel');
   toast('👤 '+ROL_AD[r]+' olarak bağlanıldı — canlı veri geliyor…');
 }
-function personelCik(){askConfirm('Çıkış yapılsın mı? Bu cihazdaki veriler temizlenecek (verilerin bulutta güvende kalır).',()=>{try{if(canliAcik)canliDur()}catch(e){}try{bulutCikisPortal()}catch(e){}try{localStorage.removeItem(KEY);localStorage.removeItem('iq_yedekler')}catch(e){}bulutKul=null;location.reload();},'Çıkış yap ve temizle');}
+function personelCik(){askConfirm('Çıkış yapılsın mı? Bu cihazdaki veriler temizlenecek (verilerin bulutta güvende kalır).',()=>{try{if(canliAcik)canliDur()}catch(e){}try{bulutCikisPortal()}catch(e){}try{localStorage.removeItem(KEY);localStorage.removeItem('iq_yedekler');localStorage.setItem('iq_oturumKilit','1')}catch(e){}bulutKul=null;idbSil().then(()=>location.reload()).catch(()=>location.reload());},'Çıkış yap ve temizle');}
 // Güvenli çıkış: ÖNCE veriyi buluta yükle (kayıp olmasın), SONRA bu cihazdaki her şeyi sil.
 // Silme GÜVENİLİR olmalı — indirme/gezinme araya girip silmeyi kesmesin.
 async function _cihazTemizle(yedegiKoru){
@@ -903,9 +919,11 @@ async function _cihazTemizle(yedegiKoru){
   // Tekrar açılışta parola iste (güvenli çıkış → oturum kilidi)
   try{if(bulutVar())localStorage.setItem('iq_oturumKilit','1')}catch(e){}
   bulutKul=null;
+  try{await idbSil()}catch(e){} // IndexedDB güvence kopyası da silinsin — açılışta geri gelmesin
   try{location.replace(location.pathname)}catch(e){location.reload()}
 }
 function guvenliCikis(){
+  if(!adminMi())return toast('Yetkiniz yok');
   const bg=(function(){try{return bulutGirisli()}catch(e){return false}})();
   if(!bg){
     // Buluta yükleyemeyiz → silmek veri kaybı olur. Önce giriş yaptır (indirme yapma; mobilde silmeyi keser).
@@ -940,7 +958,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-101'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-102'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -963,7 +981,7 @@ async function bulutGirisYap(sonra){if(!bulutBaslat())return toast('Bulut ayarl�
   const mail=($('fbg-mail')?.value||'').trim(),pw=$('fbg-pw')?.value||'';if(!mail||!pw)return toast('E-posta ve şifre gir');
   try{await firebase.auth().signInWithEmailAndPassword(mail,pw);await bulutProfilYukle();closeM();
     // Girişten sonra OTOMATİK senkron (elle açmak gerekmez)
-    if(!canliAcik&&bulutGirisli()){_canliUyari=false;otoSenkron();}
+    if(!canliAcik&&bulutGirisli()){_canliUyari=false;db.canliBulut=true;otoSenkron();}
     if(sonra==='personel'){personelBaslat();return;}
     if(!bulutAdminMi()){toast('⚠️ Bu hesap yönetici değil. Firebase\'de kullanicilar/'+((bulutKul&&bulutKul.uid)||'UID')+' → rol:admin yapın.');return;}
     toast('☁️ Giriş yapıldı ✓');if(sonra==='yayin')bulutYayinla();else if(sonra==='cek')bulutSiparisleriCek();else if(sonra==='kullanici')bulutKullaniciYonet();else if(sonra==='fasonyayin')bulutFasonYayinla();else if(sonra==='fasoncek')bulutFasonDurumCek();else if(sonra==='canli')canliBulutAyar();else if(sonra==='personel')personelBaslat();}
@@ -1018,6 +1036,21 @@ async function bulutKatalogYukle(){if(!bulutBaslat())return false;
     return true;
   }catch(e){console.warn('katalog',e);return false}
 }
+// 🧼 Portaldan gelen sipariş belgesi ŞEMAYA göre temizlenir (müşteri istemcisi her şeyi yazabilir):
+// tipler zorlanır, uzunluklar kırpılır, mid YOK SAYILIR (cari, kullanıcı hesabından bağlanır), kupon yalnız kod olarak kalır.
+function siparisNormalize(o){o=(o&&typeof o==='object')?o:{};const S=(v,n)=>(v==null?'':(typeof v==='string'?v:String(v))).slice(0,n||400);const N=v=>{const n=+v;return isFinite(n)?n:0};
+  const kal=Array.isArray(o.kalemler)?o.kalemler.slice(0,200).map(k=>{k=(k&&typeof k==='object')?k:{};const r=Array.isArray(k.renkler)?k.renkler.slice(0,60).map(x=>{x=(x&&typeof x==='object')?x:{};return {ad:S(x.ad,60),mik:Math.max(0,N(x.mik))}}):undefined;
+    return {uid:N(k.uid),urun:S(k.urun,120),mik:Math.max(0,N(k.mik)),birim:S(k.birim,20),fiyat:Math.max(0,N(k.fiyat)),kademeInd:N(k.kademeInd),renkler:r};}):[];
+  return {tip:S(o.tip,20),uid:S(o.uid,128),mus:S(o.mus,120),tel:S(o.tel,40),adres:S(o.adres,300),sehir:S(o.sehir,60),not:S(o.not,500),calisan:S(o.calisan,80),
+    tutar:Math.max(0,N(o.tutar)),tarih:N(o.tarih),olusturma:N(o.olusturma),istekUid:N(o.istekUid),istekUrun:S(o.istekUrun,120),kalemler:kal,
+    kupon:(o.kupon&&typeof o.kupon==='object'&&o.kupon.kod)?{kod:S(o.kupon.kod,40)}:null,mid:0};}
+// Bekleyen siparişin carisi: müşterinin kullanıcı hesabındaki cariId'den (yöneticinin bağladığı) — belgedeki mid'e güvenilmez
+const _kulCariCache={};
+function portalCariCoz(bp){try{const uid=bp&&bp.uid;if(!uid||!_fb)return;
+  const uy=c=>{if(c&&cari(c)){bp.mid=c;try{save()}catch(e){}try{if(typeof cur!=='undefined'&&cur==='portal')rPortal()}catch(e){}}};
+  if(_kulCariCache[uid]!==undefined)return uy(_kulCariCache[uid]);
+  _fb.collection('kullanicilar').doc(uid).get().then(d=>{const c=(d.exists&&+((d.data()||{}).cariId))||0;_kulCariCache[uid]=c;uy(c);}).catch(()=>{});
+}catch(e){}}
 // Müşteri cihazı: siparişi buluta yaz (admin çeker)
 async function bulutSiparisGonder(o){if(!bulutBaslat())return false;
   if(!bulutKul||!bulutKul.uid){toast('Sipariş için giriş yapmalısınız');return false}
@@ -1032,9 +1065,10 @@ function siparisIslendiMi(bid){if(!bid)return true;return (db.islenenSiparis||[]
 async function bulutSiparisleriCek(){if(!bulutBaslat())return toast('☁️ Bulut ayarlı değil');
   if(!bulutGirisli())return bulutGirisIste('cek');
   try{const snap=await _fb.collection('siparisler').where('magaza','==',MAGAZA_ID).where('durum','==','yeni').get();
-    let n=0,ni=0;snap.forEach(doc=>{const o=doc.data();if(siparisIslendiMi(doc.id))return;
+    let n=0,ni=0;snap.forEach(doc=>{const o=siparisNormalize(doc.data());if(siparisIslendiMi(doc.id))return;
       if(o.tip==='istek'){db.stokBildirim=db.stokBildirim||[];if(!db.stokBildirim.some(x=>x.bulutId===doc.id))db.stokBildirim.push({uid:o.istekUid||0,mus:o.mus||'',tel:o.tel||'',tarih:o.tarih||Date.now(),bulutId:doc.id});ni++;return;}
-        db.bekleyenPortal.push({id:nid('bp',false),bulutId:doc.id,mus:o.mus,mid:o.mid||0,tarih:o.tarih||o.olusturma||Date.now(),kalemler:o.kalemler||[],tutar:o.tutar||0,not:o.not||'',tel:o.tel||'',adres:o.adres||'',sehir:o.sehir||'',kupon:o.kupon||null,calisan:o.calisan||''});n++;});
+        const _bp={id:nid('bp',false),bulutId:doc.id,mus:o.mus,mid:0,uid:o.uid||'',tarih:o.tarih||o.olusturma||Date.now(),kalemler:o.kalemler||[],tutar:o.tutar||0,not:o.not||'',tel:o.tel||'',adres:o.adres||'',sehir:o.sehir||'',kupon:o.kupon||null,calisan:o.calisan||''};
+        db.bekleyenPortal.push(_bp);portalCariCoz(_bp);n++;});
     if(n||ni){save();rPortal();}toast((n||ni)?('☁️ '+[n?n+' yeni sipariş':'',ni?ni+' ürün isteği':''].filter(Boolean).join(' + ')+' alındı ✓'):'Yeni sipariş yok');
   }catch(e){toast('Sipariş çekme hatası: '+(e.message||e))}
 }
@@ -1245,9 +1279,10 @@ function siparisDinle(){
   try{if('Notification'in window&&Notification.permission==='default')Notification.requestPermission().catch(()=>{})}catch(e){}
   try{
     _sipUnsub=_fb.collection('siparisler').where('magaza','==',MAGAZA_ID).where('durum','==','yeni').onSnapshot(snap=>{
-      let n=0,ni=0;snap.forEach(doc=>{const o=doc.data();if(siparisIslendiMi(doc.id))return;
+      let n=0,ni=0;snap.forEach(doc=>{const o=siparisNormalize(doc.data());if(siparisIslendiMi(doc.id))return;
         if(o.tip==='istek'){db.stokBildirim=db.stokBildirim||[];if(!db.stokBildirim.some(x=>x.bulutId===doc.id))db.stokBildirim.push({uid:o.istekUid||0,mus:o.mus||'',tel:o.tel||'',tarih:o.tarih||Date.now(),bulutId:doc.id});ni++;return;}
-        db.bekleyenPortal.push({id:nid('bp',false),bulutId:doc.id,mus:o.mus,mid:o.mid||0,tarih:o.tarih||o.olusturma||Date.now(),kalemler:o.kalemler||[],tutar:o.tutar||0,not:o.not||'',tel:o.tel||'',adres:o.adres||'',sehir:o.sehir||'',kupon:o.kupon||null,calisan:o.calisan||''});n++;});
+        const _bp={id:nid('bp',false),bulutId:doc.id,mus:o.mus,mid:0,uid:o.uid||'',tarih:o.tarih||o.olusturma||Date.now(),kalemler:o.kalemler||[],tutar:o.tutar||0,not:o.not||'',tel:o.tel||'',adres:o.adres||'',sehir:o.sehir||'',kupon:o.kupon||null,calisan:o.calisan||''};
+        db.bekleyenPortal.push(_bp);portalCariCoz(_bp);n++;});
       if(n||ni){save();try{if(typeof render==='function'&&typeof cur!=='undefined')render()}catch(e){}
         const ozet=[n?n+' yeni sipariş':'',ni?ni+' ürün isteği':''].filter(Boolean).join(' + ');
         toast('🔔 '+ozet+' geldi!');
@@ -1271,9 +1306,10 @@ function siparisDinleMusteri(){
 }
 function siparisMusDur(){if(_sipMusUnsub){try{_sipMusUnsub()}catch(e){}_sipMusUnsub=null;}}
 
-function sifirla(){askConfirm('Tüm veriler örnek verilere sıfırlansın mı?'+(typeof canliAcik!=='undefined'&&canliAcik?'\n\n⚠️ Canlı senkron açık: önce yedek alınır ve senkron durdurulur — buluttaki gerçek veri EZİLMEZ.':''),()=>{try{autoYedek('sıfırlamadan önce')}catch(e){}try{if(typeof canliAcik!=='undefined'&&canliAcik)canliDur()}catch(e){}db=seed();db.canliBulut=false;save();go('panel');toast('Sıfırlandı — örnek veriye dönüldü')})}
+function sifirla(){if(!adminMi())return toast('Yetkiniz yok');askConfirm('Tüm veriler örnek verilere sıfırlansın mı?'+(typeof canliAcik!=='undefined'&&canliAcik?'\n\n⚠️ Canlı senkron açık: önce yedek alınır ve senkron durdurulur — buluttaki gerçek veri EZİLMEZ.':''),()=>{try{autoYedek('sıfırlamadan önce')}catch(e){}try{if(typeof canliAcik!=='undefined'&&canliAcik)canliDur()}catch(e){}db=seed();db.canliBulut=false;delete db._tomb;try{_mSnapInit()}catch(e){}save();go('panel');toast('Sıfırlandı — örnek veriye dönüldü')})}
 // 🧹 Test/örnek verileri temizle — sıfırdan boş başla (firma bilgisi + kur + roller + PIN korunur)
 function bosBaslat(){
+  if(!adminMi())return toast('Yetkiniz yok');
   const canli=canliAcik;
   askConfirm('🧹 Sıfırdan başla?\n\nTÜM örnek/test verileri silinecek: ürünler, cariler, satışlar, kasa hareketleri, çekler, iş emirleri, bekleyen siparişler.\n\nKORUNUR: firma bilgilerin, döviz kuru, indirim kademeleri, roller, PIN.\n'+(canli?'\n⚠️ Canlı senkron AÇIK — bu temizlik BULUTA ve tüm cihazlara da yansır.\n':'')+'\nÖnce otomatik yedek alınır (geri dönebilirsin). Devam?',()=>{
     autoYedek('sıfırdan başlamadan önce');
@@ -1372,6 +1408,9 @@ function rolYetki(rol){
 function yetki(){return rolYetki(db.rol)}
 function karGoster(){return !!yetki().kar}
 function paraGoster(){return !!yetki().para}
+// 👑 YÖNETİCİ KAPISI — rol/izin/sıfırlama/yedek/çıkış gibi yıkıcı ya da yükseltici işler yalnız buradan geçer
+// ("para görür" izni yönetici yetkisi DEĞİLDİR; personel modunda hiçbir zaman yönetici sayılmaz)
+function adminMi(){if(db.personelMod)return false;try{if(typeof bulutKul!=='undefined'&&bulutKul&&bulutKul.rol==='admin')return true}catch(e){}return db.rol==='patron'||db.rol==='ortak'}
 function canUrunYaz(){return !!yetki().urunYaz}
 function canHammadde(){return !!yetki().hammadde}
 function canSee(v){if(v==='envanter')return canHammadde();return yetki().views.split(',').includes(v)}
@@ -1404,7 +1443,7 @@ function hesapMenu(){
   const rol=ROL_AD[db.rol]||ROLLER[db.rol]?.ad||db.rol;
   let h=`<div class="card" style="padding:13px 15px"><div style="font-weight:800;font-size:15px">${(ROLLER[db.rol]||{}).ic||'👤'} ${esc(rol)}</div><div class="mini">${db.personelMod?'Personel oturumu · canlı bağlı':(bg?'Yönetici · bulut girişli':'Yönetici · bu cihaz')}</div></div>`;
   if(db.personelMod){h+=`<button class="btn danger" style="margin-top:12px" onclick="personelCik()">🚪 Çıkış Yap (cihazı temizle)</button>`;}
-  else if(!paraGoster()){ // kısıtlı rol (mağaza/depocu/fason): yıkıcı/yükseltme seçenekleri yok
+  else if(!adminMi()){ // yönetici olmayan rol: yıkıcı/yükseltme seçenekleri yok
     h+=`<button class="btn ghost" style="margin-top:12px" onclick="closeM();go('ayarlar')">⚙️ Ayarlar</button>`;
     h+=`<button class="btn" style="margin-top:8px" onclick="closeM();yoneticiDon()">🔓 Yönetici (Patron) moduna dön</button>`;
   }
@@ -1425,7 +1464,7 @@ let _kilitT=null;
 function kilitGoster(){if(!db.pin)return;_paraGizli=true;const el=$('kilit');if(!el)return;el.style.display='flex';const i=$('kilit-pin');if(i){i.value='';$('kilit-msg').textContent='Devam etmek için PIN girin';setTimeout(()=>i.focus(),60);}}
 function kilitDene(){const v=$('kilit-pin')?.value||'';if(db.pin&&pinHash(v)===db.pin){$('kilit').style.display='none';kilitZamanla();}else{$('kilit-msg').textContent='❌ Yanlış PIN, tekrar deneyin';const i=$('kilit-pin');if(i){i.value='';i.focus();}}}
 function kilitZamanla(){clearTimeout(_kilitT);if(!db.pin)return;const dk=Math.max(1,+db.pinDk||3);_kilitT=setTimeout(kilitGoster,dk*60000);}
-function kilitAyar(){open_('🔒 Uygulama Kilidi (PIN)',`
+function kilitAyar(){if(!adminMi())return toast('Yetkiniz yok');open_('🔒 Uygulama Kilidi (PIN)',`
     <div class="mini" style="line-height:1.6">Cihazını biri eline alırsa uygulamayı açamasın diye PIN koy. Durum: <b style="color:${db.pin?'var(--good)':'var(--sub)'}">${db.pin?'AÇIK':'kapalı'}</b></div>
     ${db.pin?'':`<label style="margin-top:10px">Yeni PIN (4–8 rakam)</label><input id="pin-yeni" type="password" inputmode="numeric" maxlength="8" placeholder="••••">
     <label>PIN tekrar</label><input id="pin-yeni2" type="password" inputmode="numeric" maxlength="8">`}
@@ -1450,7 +1489,10 @@ async function oturumKilitGiris(){
     // 1) BULUTA giriş (şifre doğrulama = cihaz kilidini açar)
     await firebase.auth().signInWithEmailAndPassword(mail,pw);
     await bulutProfilYukle(); await bulutRolVerisiYukle();
-    // Giriş başarılı → kilit kalkar. (Onay/rol yetkisini Firestore kuralları zaten uygular.)
+    // 🔐 Kilidi yalnız BU işletmenin onaylı personeli/yöneticisi açabilir (müşteri hesabı açamaz)
+    const rr=bulutKul&&bulutKul.rol;
+    const yetkili=!!bulutKul&&(rr==='admin'||(bulutKul.onay===true&&['ortak','magaza','depocu','fasontakip'].includes(rr)));
+    if(!yetkili){try{await firebase.auth().signOut()}catch(e){}bulutKul=null;if(m)m.textContent='❌ Bu hesap bu işletmenin onaylı personeli/yöneticisi değil';return;}
     localStorage.removeItem('iq_oturumKilit');
     const r=bulutKul&&bulutKul.rol;
     if(['ortak','magaza','depocu','fasontakip'].includes(r)){db.rol=r;db.personelMod=true;}
@@ -1466,16 +1508,18 @@ async function oturumKilitGiris(){
 async function oturumKilitSifre(){const m=$('ok-msg');if(!bulutBaslat())return;const mail=($('ok-mail')?.value||'').trim();if(!mail){if(m)m.textContent='Önce e-posta adresini yaz';return;}try{await firebase.auth().sendPasswordResetEmail(mail);if(m)m.textContent='📧 Sıfırlama bağlantısı e-postana gönderildi';}catch(e){if(m)m.textContent='Gönderilemedi: '+(e.code||e.message);}}
 function rolSec(){
   if(db.personelMod)return toast('👤 Personel modundasın ('+(ROL_AD[db.rol]||db.rol)+') — rol değiştirilemez. Çıkış: sağ üst 👤 menüsü.');
-  if(!paraGoster())return yoneticiDon(); // kısıtlı rol kendini yükseltemesin → PIN'li dönüş
+  if(!adminMi())return yoneticiDon(); // kısıtlı rol kendini yükseltemesin → PIN'li dönüş
   open_('Rol Önizleme (deneme)',Object.keys(ROLLER).map(k=>`<div class="row" onclick="setRol('${k}')"><div class="av" style="background:${rolRenk(k)}">${ROLLER[k].ic}</div><div class="mid"><div class="t">${ROLLER[k].ad}</div><div class="s">${ROLLER[k].kar?'kâr görür':'kâr gizli'}</div></div>${db.rol===k?'<span class="pill ok">aktif</span>':''}</div>`).join('')+'<div class="mini" style="text-align:center;margin-top:14px">Sadece farklı rollerin ne gördüğünü denemen için. Gerçekte personel kendi şifresiyle girer (Ayarlar → Bulut → Personel Girişi).</div>');
 }
-function setRol(k){db.rol=k;save();closeM();go('panel');toast(ROLLER[k].ad+' görünümü')}
+function setRol(k,zorla){if(db.personelMod)return toast('Personel modunda rol değiştirilemez');
+  if(!zorla&&!adminMi()&&(k==='patron'||k==='ortak'))return yoneticiDon(); // yükseltme yalnız PIN/yönetici ile
+  db.rol=k;save();closeM();go('panel');toast(ROLLER[k].ad+' görünümü')}
 /* ===== 🔐 ROL İZİNLERİ — patron her rolün ekran/yetkilerini buradan yönetir ===== */
 const RI_EKRAN=[['satis','🧾 Satış'],['stok','📦 Stok'],['cari','👥 Cari'],['kasa','🏦 Kasa'],['cek','🏷️ Çek'],['uretim','🏭 Üretim'],['portal','🛍️ Portal'],['rapor','📊 Rapor']];
 const RI_YETKI=[['kar','💰 Kâr & maliyet görür','alış fiyatı, kâr, birim maliyet'],['para','🏦 Para/finans görür','bakiyeler, kasa özetleri, ciro kutuları'],['urunYaz','✏️ Ürün ekler/düzenler','ürün kartı açma, fiyat/stok düzeltme, sayım'],['hammadde','🗂️ Envanter erişimi','kumaş/aksesuar stoğu ve malzeme siparişleri']];
 let _riRol='magaza';
 function rolIzinAyar(){
-  if(!paraGoster())return toast('Yetkiniz yok');
+  if(!adminMi())return toast('Yetkiniz yok');
   open_('🔐 Rol İzinleri',`<div class="mini">Rol seç, izinlerini aç/kapat — anında kaydedilir ve senkronla tüm cihazlara gider. <b>Patron her zaman tam yetkilidir</b> (kilitlenme olmaz).</div>
     <div class="iechips" id="ri-roller" style="margin:10px 0 4px"></div>
     <div id="ri-body"></div>
@@ -1497,6 +1541,7 @@ function cizRolIzin(){
     `</div>${_riRol==='ortak'?'<div class="mini" style="margin-top:8px;color:var(--warn)">⚠️ Ortak\'tan para/kâr yetkisini kısarsan o hesap kısıtlı görünüme düşer (PIN ile Patron\'a dönüş her zaman açık).</div>':''}`;
 }
 function rolIzinSet(rol,tur,k,val){
+  if(!adminMi())return toast('Yetkiniz yok');
   db.rolAyar=db.rolAyar||{};const o=db.rolAyar[rol]=db.rolAyar[rol]||{};
   if(tur==='v'){o.views=o.views||{};o.views[k]=!!val;}
   else o[k]=!!val;
@@ -1516,11 +1561,11 @@ function yoneticiDon(){
   if(!db.pin){ // PIN yoksa: bulutta yönetici olarak girişli değilsen personel kendini yükseltemesin
     const adminMi=(typeof bulutGirisli==='function'&&bulutGirisli()&&typeof bulutKul!=='undefined'&&bulutKul&&(bulutKul.rol==='admin'||bulutKul.rol==='ortak'));
     if(!adminMi)return toast('🔒 Patron moduna dönmek için PIN gerekli (Ayarlar → Uygulama Kilidi) ya da yönetici hesabıyla bulut girişi');
-    return askConfirm('Güvenlik için Ayarlar → Uygulama Kilidi\'nden PIN koymanı öneririm. Patron moduna dönülsün mü?',()=>setRol('patron'),'Patron\'a Dön');}
+    return askConfirm('Güvenlik için Ayarlar → Uygulama Kilidi\'nden PIN koymanı öneririm. Patron moduna dönülsün mü?',()=>setRol('patron',true),'Patron\'a Dön');}
   open_('🔒 Yönetici PIN',`<div class="mini">Patron (yönetici) moduna dönmek için uygulama PIN'ini gir.</div><input id="yd-pin" type="password" inputmode="numeric" maxlength="8" placeholder="••••" style="margin-top:10px" onkeydown="if(event.key==='Enter')yoneticiDonDene()"><div id="yd-msg" class="mini" style="color:var(--bad);margin-top:6px"></div><button class="btn g" style="margin-top:12px" onclick="yoneticiDonDene()">🔓 Patron'a Dön</button>`);
   setTimeout(()=>{const i=$('yd-pin');if(i)i.focus();},90);
 }
-function yoneticiDonDene(){const v=($('yd-pin')&&$('yd-pin').value)||'';if(pinHash(v)===db.pin){closeM();setRol('patron');}else{const m=$('yd-msg');if(m)m.textContent='❌ Yanlış PIN, tekrar deneyin';const i=$('yd-pin');if(i){i.value='';i.focus();}}}
+function yoneticiDonDene(){const v=($('yd-pin')&&$('yd-pin').value)||'';if(pinHash(v)===db.pin){closeM();setRol('patron',true);}else{const m=$('yd-msg');if(m)m.textContent='❌ Yanlış PIN, tekrar deneyin';const i=$('yd-pin');if(i){i.value='';i.focus();}}}
 
 /* =================== RENDER =================== */
 // 💰 Gizli mod: uygulama her açılışta tutarlar GİZLİ; göstermek için PIN
@@ -1697,7 +1742,7 @@ function rDaha(){
     {ic:'⚙️',ad:'Ayarlar',s:'kur · rol · hesap',v:'ayarlar'},
   ].filter(i=>canSee(i.v));
   $('app').innerHTML=`<div class="sec">Daha Fazlası</div><div class="card">`+items.map(i=>`<div class="row" onclick="go('${i.v}')"><div class="av" style="background:var(--ind)">${i.ic}</div><div class="mid"><div class="t">${i.ad}</div><div class="s">${i.s}</div></div><span style="color:var(--sub)">›</span></div>`).join('')+`</div>
-    ${paraGoster()?`<div class="sec">Uygulama</div><div class="card"><div class="row" onclick="sifirla()"><div class="av r">🔄</div><div class="mid"><div class="t">Örnek verilere sıfırla</div><div class="s">test için</div></div></div></div>`:''}
+    ${adminMi()?`<div class="sec">Uygulama</div><div class="card"><div class="row" onclick="sifirla()"><div class="av r">🔄</div><div class="mid"><div class="t">Örnek verilere sıfırla</div><div class="s">test için</div></div></div></div>`:''}
     <div class="mini" style="text-align:center;margin-top:20px">${esc(db.firma||'IQ Basics')} · Toptan Yönetim 🧵</div>`;
 }
 
@@ -1774,6 +1819,8 @@ function sipKalan(s){return sipSatirlar(s).reduce((a,l)=>a+Math.max(0,(+l.miktar
 // 🧵 Kumaş PARTİ (lot) takibi: aynı rengin birden fazla partisi olabilir; partiler arası ton farkı riskine karşı
 // giriş parti koduyla yapılır, düşüm FIFO'dur ve birden fazla partiye taşarsa uyarı verilir.
 function malStoklaRenk(h,renk,mik,parti){if(!mik)return;
+  if(!renk&&h.renkler&&h.renkler.length)renk='—'; // renkli malzemeye renksiz giriş → '—' rengine (h.stok = renk toplamı bozulmasın)
+  if(renk&&(!h.renkler||!h.renkler.length)&&(+h.stok||0)>0)h.renkler=[{ad:'—',stok:+h.stok||0,top:0}]; // ilk renkli giriş: eski renksiz stok '—' satırına taşınır, KAYBOLMAZ
   if(renk){if(!h.renkler)h.renkler=[];let r=h.renkler.find(x=>(x.ad||'').toLowerCase()===(renk||'').toLowerCase());if(!r){r={ad:renk,stok:0,top:0};h.renkler.push(r);}
     const partili=(parti&&(''+parti).trim())||((r.partiler||[]).length>0);
     if(partili){
@@ -1866,8 +1913,8 @@ function malSipFisBuyut(id,i){const s=db.malSiparis.find(x=>x.id===id);if(!s||!s
 function malSipFisEkle(id){
   let inp=document.getElementById('ms-fis-gizli');
   if(!inp){inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.multiple=true;inp.id='ms-fis-gizli';inp.style.display='none';document.body.appendChild(inp);}
-  inp.onchange=()=>{const fls=Array.from(inp.files||[]).slice(0,6);if(!fls.length)return;let n=0;
-    fls.forEach(f=>resimSecYukle(f,d=>{const s=db.malSiparis.find(x=>x.id===id);if(s){s.fisler=(s.fisler||[]);s.fisler.push(d);save();}n++;if(n===fls.length){toast('📎 '+n+' fiş eklendi ✓');malSipDetay(id);}},1100,0.72));
+  inp.onchange=()=>{const fls=Array.from(inp.files||[]).slice(0,3);if(!fls.length)return;let n=0;fisDepoUyari();
+    fls.forEach(f=>resimSecYukle(f,d=>{const s=db.malSiparis.find(x=>x.id===id);if(s){s.fisler=(s.fisler||[]);if(s.fisler.length<6)s.fisler.push(d);save();}n++;if(n===fls.length){toast('📎 '+n+' fiş eklendi ✓');malSipDetay(id);}},800,0.62));
     inp.value='';};
   inp.click();
 }
@@ -2127,8 +2174,9 @@ function cizMtRows(id){const s=db.malSiparis.find(x=>x.id===id);if(!s)return;con
     g.rows.map((r,ri)=>`<div style="display:flex;gap:6px;margin:5px 0 0 25px;align-items:center">${kumas?`<input value="${esc(r.parti||'')}" placeholder="parti no" oninput="mtSatir[${gi}].rows[${ri}].parti=this.value" style="flex:1;min-width:0;margin:0;padding:8px;font-size:12px" title="kumaş parti/lot kodu — top etiketinde yazar">`:''}<input type="number" inputmode="decimal" min="0" value="${r.mik||''}" oninput="mtSatir[${gi}].rows[${ri}].mik=Math.max(0,+this.value||0);malSipTesHesap(${id})" placeholder="0" style="width:${kumas?'80px':'120px'};margin:0;padding:8px" title="${bir}"><span class="mini" style="width:30px;flex:0 0 auto">${bir}</span>${ri>0?`<button type="button" class="del" style="flex:0 0 auto" onclick="mtSatir[${gi}].rows.splice(${ri},1);cizMtRows(${id})">✕</button>`:(kumas?`<button type="button" class="btn ghost sm" style="width:auto;margin:0;padding:6px 10px;flex:0 0 auto" onclick="mtSatir[${gi}].rows.push({parti:'',mik:0});cizMtRows(${id})">＋ parti</button>`:'')}</div>`).join('')+`</div>`;}).join('');
   malSipTesHesap(id);
 }
-function mtFisSec(input){const fls=Array.from(input.files||[]).slice(0,6);if(!fls.length)return;
-  fls.forEach(f=>resimSecYukle(f,d=>{mtFisler.push(d);mtFisCiz();},1100,0.72));input.value='';toast('📎 Fiş ekleniyor…');}
+function fisDepoUyari(){if(!(db.cldName&&db.cldPreset)&&!window._fisUyari){window._fisUyari=1;toast('ℹ️ Fişler cihazda saklanır ve buluta gider — çok fiş için Ayarlar > Fotoğraf Depolama (Cloudinary) aç');}}
+function mtFisSec(input){const fls=Array.from(input.files||[]).slice(0,3);if(!fls.length)return;fisDepoUyari();
+  fls.forEach(f=>resimSecYukle(f,d=>{if(mtFisler.length<3)mtFisler.push(d);mtFisCiz();},800,0.62));input.value='';toast('📎 Fiş ekleniyor… (bitmeden kaydetme)');}
 function mtFisCiz(){const b=$('mt-fis-box');if(!b)return;b.innerHTML=mtFisler.map((f,i)=>`<div style="position:relative"><img src="${guvenliSrc(f)}" style="width:58px;height:58px;object-fit:cover;border-radius:8px;border:1px solid var(--ln)"><button type="button" class="del" style="position:absolute;top:-7px;right:-7px" onclick="mtFisler.splice(${i},1);mtFisCiz()">✕</button></div>`).join('');}
 function malSipTesHesap(id){const s=db.malSiparis.find(x=>x.id===id);if(!s)return;const lines=sipSatirlar(s);
   let buParti=0,kalanSonra=0;
@@ -2790,7 +2838,7 @@ function silHammadde(id){askConfirm('Silinsin mi?',()=>{db.hammadde=db.hammadde.
 function envStokTazele(){if(cur==='envanter')rEnvanter();else rStok();}
 
 // 💹 Toplu fiyat güncelleme — kategoriye ya da tüm ürünlere yüzde zam/indirim
-function topluZam(){const kats=['Tümü',...new Set(db.urunler.map(u=>u.kat).filter(Boolean))];
+function topluZam(){if(!adminMi())return toast('Yetkiniz yok');const kats=['Tümü',...new Set(db.urunler.map(u=>u.kat).filter(Boolean))];
   open_('💹 Toplu Fiyat Güncelle',`
     <div class="infobox">Seçtiğin kategorideki ürünlerin fiyatına yüzde uygulanır. Eksi yazarsan indirim olur (ör. -5).</div>
     <label>Kategori</label><select id="tz-kat">${kats.map(k=>`<option>${esc(k)}</option>`).join('')}</select>
@@ -3035,7 +3083,7 @@ function cizEkstra(){const b=$('s-ekstra');if(!b)return;
     <button class="del" onclick="ekstraSil(${i})" style="flex:0 0 auto">✕</button></div>`).join('');}
 function cizSepet(){
   const el=$('s-sepet');if(!el)return;
-  el.innerHTML=sepet.map((k,i)=>{const sub=k.renkler&&k.renkler.length?`${k.renkler.map(r=>esc(r.ad)+' ×'+r.mik).join(' · ')} — ${TL(k.fiyat)}/${k.birim}`:`${k.mik} ${k.birim} × ${TL(k.fiyat)}`;return `<div class="li"><div class="lt">${esc(k.urun)}<small>${sub}</small></div><b style="margin-right:8px">${TL(k.mik*k.fiyat)}</b><button class="del" onclick="sepet.splice(${i},1);cizSepet()">✕</button></div>`}).join('')||'<div class="mini">Sepet boş</div>';
+  el.innerHTML=sepet.map((k,i)=>{const sub=k.renkler&&k.renkler.length?`${k.renkler.map(r=>esc(r.ad)+' ×'+r.mik).join(' · ')} — ${TL(k.fiyat)}/${k.birim}`:`${k.mik} ${esc(k.birim||"")} × ${TL(k.fiyat)}`;return `<div class="li"><div class="lt">${esc(k.urun)}<small>${sub}</small></div><b style="margin-right:8px">${TL(k.mik*k.fiyat)}</b><button class="del" onclick="sepet.splice(${i},1);cizSepet()">✕</button></div>`}).join('')||'<div class="mini">Sepet boş</div>';
   const h=satisHesap();const parts=[];
   if(h.isk)parts.push(`iskonto −%${h.isk}`);
   if(h.vf)parts.push(`vade +%${h.vf}`);
@@ -3127,7 +3175,7 @@ function satisFis(id){
   const durP=s.teslimDurum==='ayrildi'?'<span class="pill low">🔖 Ayrıldı (rezerve)</span>':'<span class="pill ok">✓ Teslim Edildi</span>';
   open_('Satış Fişi',`
     <div class="mini">${esc(s.mus)} · ${tstr(s.tarih)}${s.pb!=='TL'?' · '+s.pb:''}</div>
-    <div style="margin-top:12px">${s.kalemler.map(k=>{const sub=k.renkler&&k.renkler.length?`${k.renkler.map(r=>esc(r.ad)+' ×'+r.mik).join(' · ')} — ${TL(k.fiyat)}`:`${k.mik} ${k.birim} × ${TL(k.fiyat)}`;return `<div class="li"><div class="lt">${esc(k.urun)}<small>${sub}</small></div><b>${TL(k.mik*k.fiyat)}</b></div>`}).join('')}</div>
+    <div style="margin-top:12px">${s.kalemler.map(k=>{const sub=k.renkler&&k.renkler.length?`${k.renkler.map(r=>esc(r.ad)+' ×'+r.mik).join(' · ')} — ${TL(k.fiyat)}`:`${k.mik} ${esc(k.birim||"")} × ${TL(k.fiyat)}`;return `<div class="li"><div class="lt">${esc(k.urun)}<small>${sub}</small></div><b>${TL(k.mik*k.fiyat)}</b></div>`}).join('')}</div>
     ${s.iskonto?`<div class="kv"><span class="k">İskonto</span><span class="v neg">%${s.iskonto}</span></div>`:''}
     ${s.vadeFarki?`<div class="kv"><span class="k">Vade farkı</span><span class="v">+%${s.vadeFarki}</span></div>`:''}
     ${s.kdv?`<div class="kv"><span class="k">KDV %${s.kdv}</span><span class="v">+${money(s.kdvTutar||0,s.pb)}</span></div>`:''}
@@ -4802,7 +4850,7 @@ function aksesuarAlimAc(ie){
     if(!hh){hh={id:nid('h'),ad:(m.ad||'').trim(),kat:'Aksesuar',birim:m.birim||'ad',detay:'',stok:0,renkler:[],kritik:0,alis:0,pb:m.pb||'TL',foto:''};db.hammadde.push(hh);}
     m.hid=hh.id;
     const o={id:nid('ms'),kat:hh.kat||'Aksesuar',ad:hh.ad,hid:hh.id,ted:'',tedId:null,
-      satirlar:[{renk:'',miktar:+m.mik||0,gelen:0}],miktar:+m.mik||0,birim:m.birim||'ad',
+      satirlar:[{renk:(m.renk||'').trim(),miktar:+m.mik||0,gelen:0}],miktar:+m.mik||0,birim:m.birim||'ad',
       fiyat:0,pb:m.pb||'TL',siparisTarih:Date.now(),beklenen:0,
       not:'İş Emri #'+ie.id+' için'+(ie.urun?' — '+ie.urun:''),durum:'bekliyor',
       gelenMiktar:0,gelenTarih:0,gelenNot:'',ieId:ie.id,ieKod:ie.kod||'',oto:true};
@@ -5788,7 +5836,7 @@ function rPortal(){
   html+=`<div class="sec">Onay Bekleyen Siparişler (${db.bekleyenPortal.length})</div>`;
   html+=db.bekleyenPortal.length?db.bekleyenPortal.map(o=>{const kayitli=o.mid&&cari(o.mid);return `<div class="card" style="margin-bottom:11px;padding:13px"><div style="display:flex;align-items:center;gap:10px"><div class="av">${ii(o.mus)}</div><div class="mid"><div class="t">${esc(o.mus)}${kayitli?' <span class="tag" style="background:var(--good-s);color:var(--good)">kayıtlı</span>':' <span class="tag">yeni</span>'}</div><div class="s">${tstr(o.tarih)}${o.tel?' · 📞 '+esc(o.tel):''}</div></div></div>
     ${(o.adres||o.sehir)?`<div class="mini" style="margin:6px 0 0">📍 ${esc([o.sehir,o.adres].filter(Boolean).join(' · '))}</div>`:''}
-    <div style="background:var(--ln2);border-radius:9px;padding:9px 11px;margin:10px 0;font-size:12px">${o.kalemler.map(k=>`<b>${esc(k.urun)}</b> — ${+k.mik||0} ${esc(k.birim||'')}${k.renkler&&k.renkler.length?' <span style="color:var(--sub)">('+k.renkler.map(r=>esc(r.ad)+'×'+(+r.mik||0)).join(', ')+')</span>':''}${k.kademeInd?' <span style="color:var(--good)">%'+k.kademeInd+'↓</span>':''}`).join('<br>')}</div>
+    <div style="background:var(--ln2);border-radius:9px;padding:9px 11px;margin:10px 0;font-size:12px">${o.kalemler.map(k=>`<b>${esc(k.urun)}</b> — ${+k.mik||0} ${esc(k.birim||'')}${k.renkler&&k.renkler.length?' <span style="color:var(--sub)">('+k.renkler.map(r=>esc(r.ad)+'×'+(+r.mik||0)).join(', ')+')</span>':''}${k.kademeInd?' <span style="color:var(--good)">%'+(+k.kademeInd||0)+'↓</span>':''}`).join('<br>')}</div>
     ${o.kupon?`<div class="mini" style="margin-bottom:8px;color:var(--good)">🎟️ Kupon <b>${esc(o.kupon.kod)}</b> · −${TL(o.kupon.indirim)}</div>`:''}
     ${o.not?`<div class="mini" style="margin-bottom:8px">📝 ${esc(o.not)}</div>`:''}
     <div style="display:flex;justify-content:space-between;align-items:center"><div class="v" style="font-size:16px;font-weight:800;color:var(--ind)">${TL(o.tutar)}</div><div style="display:flex;gap:8px"><button class="btn danger sm" onclick="portalRed(${o.id})">Reddet</button><button class="btn ghost sm" onclick="portalFiyatBelirle(${o.id})">Fiyat</button><button class="btn g sm" onclick="portalOnay(${o.id})">✓ Onayla</button></div></div></div>`}).join(''):emp('🛍️','Onay bekleyen sipariş yok');
@@ -5805,7 +5853,7 @@ function rPortal(){
   const bil=db.stokBildirim||[];
   if(bil.length){const grp={};bil.forEach(x=>{grp[x.uid]=grp[x.uid]||{n:0,mus:new Set()};grp[x.uid].n++;grp[x.uid].mus.add(x.mus)});
     html+=`<div class="sec">🔔 Talep Edilen (tükenen) Ürünler</div>`+Object.entries(grp).sort((a,b)=>b[1].n-a[1].n).map(([uid,v])=>{const u=urun(+uid);const yeter=v.n>=3;return `<div class="card" style="padding:12px 13px;margin-bottom:9px"><div style="display:flex;justify-content:space-between;align-items:center"><div style="min-width:0"><b>${esc(u?u.ad:'—')}</b><div class="mini">${[...v.mus].map(esc).slice(0,3).join(', ')}${v.mus.size>3?' +'+(v.mus.size-3):''}</div></div><div style="text-align:right;flex:0 0 auto"><div style="font-weight:800;color:${yeter?'var(--good)':'var(--warn)'}">${v.n} istek</div>${yeter?'<div class="mini" style="color:var(--good)">✓ üretime değer</div>':''}</div></div>
-      <div class="g2" style="margin-top:9px"><button class="btn ghost sm" onclick="portalHaberVer(${uid})">📤 Hazır · Haber Ver</button><button class="btn ghost sm" onclick="portalUretimeAl(${uid})">🏭 Üretime Al</button></div></div>`}).join('')+`<div class="mini" style="margin:2px 3px 0">💡 Yeterli talep birikince (3+) üretime alıp, "Haber Ver" ile isteyen müşterilere ulaş.</div>`;
+      <div class="g2" style="margin-top:9px"><button class="btn ghost sm" onclick="portalHaberVer(${+uid||0})">📤 Hazır · Haber Ver</button><button class="btn ghost sm" onclick="portalUretimeAl(${+uid||0})">🏭 Üretime Al</button></div></div>`}).join('')+`<div class="mini" style="margin:2px 3px 0">💡 Yeterli talep birikince (3+) üretime alıp, "Haber Ver" ile isteyen müşterilere ulaş.</div>`;
   }
   $('app').innerHTML=html;
 }
@@ -5832,6 +5880,7 @@ function sipBildir(sid){const s=db.satislar.find(x=>x.id===sid);if(!s)return;con
   waAc(((m&&m.tel)||s.tel||''),txt);}
 function portalOnay(id,override,force){
   const o=db.bekleyenPortal.find(x=>x.id===id);if(!o)return;
+  if(o.bulutId&&((db.islenenSiparis||[]).includes(o.bulutId)||(db.satislar||[]).some(s=>s.bulutId===o.bulutId))){db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);save();try{rPortal()}catch(e){}return toast('Bu sipariş zaten işlenmiş (başka cihazdan) — mükerrer kayıt kaldırıldı');}
   // stok yeterlilik kontrolü — eksiye düşürecekse admin'e sor
   if(!force){const eksik=[];o.kalemler.forEach(k=>{const u=urun(k.uid);if(!u)return;
     if(k.renkler&&k.renkler.length){k.renkler.forEach(r=>{const ro=renkObjs(u).find(x=>x.ad===r.ad);const st=ro?(+ro.stok||0):0;if(r.mik>st)eksik.push(`• ${u.ad} ${r.ad}: ${r.mik} istendi, ${st} var`)})}
@@ -5844,8 +5893,11 @@ function portalOnay(id,override,force){
     let katalogT=0,esle=0;(o.kalemler||[]).forEach(k=>{const u=urun(k.uid);if(!u)return;esle++;
       // Portalın kendi fiyat mantığı (promosyon + kademe indirimi); fiyatı gizli üründe son satış/liste fiyatı
       const pf=portalKalemFiyat({uid:u.id,mik:+k.mik||0});const f=pf.gizli?(sonFiyat(o.mid||0,u.id)||urunSatisTL(u)):pf.net;katalogT+=(+k.mik||0)*f;});
-    const kuponInd=(o.kupon&&(+o.kupon.indirim||+o.kupon.ind))||0;const beklenen=Math.max(0,katalogT-kuponInd);
-    if(esle>0&&beklenen>0&&Math.abs(beklenen-(+o.tutar||0))>Math.max(1,beklenen*0.005)){
+    // 🎟️ Kupon: müşteri beyanı DEĞİL — kod bulunur, indirim güncel katalog toplamından yeniden hesaplanır
+    let kuponInd=0;const kk=(o.kupon&&o.kupon.kod)?kuponBul(o.kupon.kod):null;
+    if(kk&&!((+kk.minTutar||0)>0&&katalogT<+kk.minTutar))kuponInd=kk.tip==='tutar'?Math.min(+kk.deger||0,katalogT):Math.round(katalogT*(+kk.deger||0)/100);
+    const beklenen=Math.max(0,katalogT-kuponInd);
+    if(esle>0&&Math.abs(beklenen-(+o.tutar||0))>Math.max(1,beklenen*0.005)){
       return askConfirm('⚠️ FİYAT FARKI!\nSiparişte yazan: '+TL(+o.tutar||0)+'\nGüncel katalog: '+TL(beklenen)+(kuponInd?' (kupon −'+TL(kuponInd)+' düşülmüş)':'')+'\n\nGüncel KATALOG fiyatından onaylansın mı?\n(Müşteri tutarını kullanmak için "Fiyat Belirle" ekranını kullan.)',()=>portalOnay(id,beklenen,force),'Katalog Fiyatından');
     }
   }
@@ -5857,6 +5909,7 @@ function portalOnay(id,override,force){
   const oran=(override&&baseT>0)?override/baseT:1;
   const kalemler=o.kalemler.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:oran===1?k.fiyat:Math.round((+k.fiyat||0)*oran),renkler:k.renkler?k.renkler.map(r=>({...r})):undefined}));
   let tutar=override||o.tutar;
+  if(!(+tutar>0))return toast('⚠️ Sipariş tutarı 0 ya da geçersiz — onaylanamaz. "Fiyat Belirle" ile tutar gir.');
   if(oran!==1&&kalemler.length){ // yuvarlama artığını son kaleme yedir → fatura satır toplamı = genel toplam
     const son=kalemler[kalemler.length-1];const dig=kalemler.slice(0,-1).reduce((a,k)=>a+(+k.fiyat||0)*k.mik,0);
     if(son.mik>0)son.fiyat=Math.max(0,Math.round((tutar-dig)/son.mik));
@@ -6354,13 +6407,14 @@ function pzSure(sn){sn=Math.round(+sn||0);if(sn<60)return sn+' sn';const d=Math.
 function pazarAnalizCiz(sesler){
   const pu={},pm={};
   sesler.forEach(s=>{
-    const key=s.mid?('c'+s.mid):('n:'+((s.mus||'?').toLowerCase()));
-    const m=pm[key]||(pm[key]={ad:s.mus||'?',mid:s.mid||0,kez:0,sure:0,urun:{},sepet:{},talep:false,son:0,ses:0});
-    m.ses++;if(s.talep)m.talep=true;if((s.guncel||0)>m.son)m.son=s.guncel||0;if(s.mus&&s.mus!=='Ziyaretçi')m.ad=s.mus;
-    Object.entries(s.gorunum||{}).forEach(([uid,g])=>{uid=+uid;m.kez+=g.kez||0;m.sure+=g.sure||0;
-      const mu=m.urun[uid]||(m.urun[uid]={kez:0,sure:0});mu.kez+=g.kez||0;mu.sure+=g.sure||0;
-      const p=pu[uid]||(pu[uid]={kez:0,sure:0,kisi:new Set()});p.kez+=g.kez||0;p.sure+=g.sure||0;p.kisi.add(key);});
-    (s.sepet||[]).forEach(it=>{if(it.mik>0)m.sepet[it.uid]=(m.sepet[it.uid]||0)+it.mik;});
+    const sMid=+s.mid||0,sMus=String(s.mus||'?').slice(0,120);
+    const key=sMid?('c'+sMid):('n:'+sMus.toLowerCase());
+    const m=pm[key]||(pm[key]={ad:sMus,mid:sMid,kez:0,sure:0,urun:{},sepet:{},talep:false,son:0,ses:0});
+    m.ses++;if(s.talep)m.talep=true;if((+s.guncel||0)>m.son)m.son=+s.guncel||0;if(sMus&&sMus!=='Ziyaretçi'&&sMus!=='?')m.ad=sMus;
+    Object.entries((s.gorunum&&typeof s.gorunum==='object')?s.gorunum:{}).forEach(([uid,g])=>{uid=+uid||0;g=(g&&typeof g==='object')?g:{};const gk=+g.kez||0,gs=+g.sure||0;if(!uid)return;m.kez+=gk;m.sure+=gs;
+      const mu=m.urun[uid]||(m.urun[uid]={kez:0,sure:0});mu.kez+=gk;mu.sure+=gs;
+      const p=pu[uid]||(pu[uid]={kez:0,sure:0,kisi:new Set()});p.kez+=gk;p.sure+=gs;p.kisi.add(key);});
+    (Array.isArray(s.sepet)?s.sepet:[]).forEach(it=>{it=(it&&typeof it==='object')?it:{};const im=+it.mik||0,iu=+it.uid||0;if(im>0&&iu)m.sepet[iu]=(m.sepet[iu]||0)+im;});
   });
   const musL=Object.values(pm);
   const topU=Object.entries(pu).map(([uid,v])=>({uid:+uid,...v})).sort((a,b)=>b.kez-a.kez).slice(0,10);
@@ -7340,7 +7394,7 @@ function rRapor(){
 /* ---------- AYARLAR ---------- */
 function rAyarlar(){
   const y=yetki();
-  const kisitli=!paraGoster(); // kâr/para görmeyen roller (mağaza/depocu/fason) → hassas bölümler gizli
+  const kisitli=!adminMi(); // yönetici olmayan roller → kullanıcı/rol/yedek/sıfırlama bölümleri gizli
   let html=`<div class="sec">Firma</div><div class="card"><div class="row" onclick="formFirma()"><div class="av" style="background:var(--ind)">🏢</div><div class="mid"><div class="t">${esc(db.firma)}</div><div class="s">${esc(db.firmaSlogan||'firma bilgileri · fişte görünür')}</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="formKur()"><div class="av o">💱</div><div class="mid"><div class="t">Kur</div><div class="s">$ ${db.kurUSD.toFixed(2)} · € ${db.kurEUR.toFixed(2)}</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="yaziciAyar()"><div class="av" style="background:${db.otoYazdir?'var(--good)':'var(--ind2)'}">🖨️</div><div class="mid"><div class="t">Otomatik Yazıcı ${db.otoYazdir?'<span class="pill ok">açık</span>':''}</div><div class="s">bilgisayara bağlı termal yazıcıdan otomatik fiş</div></div><span style="color:var(--sub)">›</span></div>
@@ -7411,9 +7465,10 @@ function yedekAl(){
   toast('Yedek indirildi ✓');
 }
 function yedekYukle(inp){
+  if(!adminMi()){inp.value='';return toast('Yetkiniz yok');}
   const f=inp.files&&inp.files[0];if(!f)return;
   const r=new FileReader();
-  r.onload=()=>{let d;try{d=JSON.parse(r.result);if(!d||!d.urunler)throw 0}catch(e){toast('Geçersiz yedek dosyası');inp.value='';return}inp.value='';askConfirm('Mevcut veriler bu yedekle değiştirilsin mi? (Açıksa canlı senkron durdurulur.)',()=>{try{if(typeof canliAcik!=='undefined'&&canliAcik&&typeof canliDur==='function')canliDur();}catch(e){}localStorage.setItem(KEY,JSON.stringify(d));db=load();try{_mSnapInit()}catch(e){}go('panel');toast('Yedek geri yüklendi ✓ · senkron durduruldu')},'Yükle')};
+  r.onload=()=>{let d;try{d=JSON.parse(r.result);if(!d||!d.urunler)throw 0}catch(e){toast('Geçersiz yedek dosyası');inp.value='';return}inp.value='';askConfirm('Mevcut veriler bu yedekle değiştirilsin mi? (Açıksa canlı senkron durdurulur.)',()=>{try{if(typeof canliAcik!=='undefined'&&canliAcik&&typeof canliDur==='function')canliDur();}catch(e){}localStorage.setItem(KEY,JSON.stringify(d));db=load();try{_mSnapInit()}catch(e){}db._t=Date.now();try{save()}catch(e){}go('panel');toast('Yedek geri yüklendi ✓ · senkron durduruldu')},'Yükle')};
   r.readAsText(f);
 }
 

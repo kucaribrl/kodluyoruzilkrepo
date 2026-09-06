@@ -140,6 +140,12 @@ async function handleJob(db, snapDoc) {
   const printer = etiket ? (cfg.etiketYaziciAdi || cfg.yaziciAdi || '') : (cfg.yaziciAdi || '');
   // config ham baskıyı kapatmadıysa (hamBaski:false) ESC/POS kullan
   const useRaw = escpos && cfg.hamBaski !== false;
+  // hamBaski:false (sürücüden resim basma) ama uygulama metin modunda resim göndermemiş → net hata, çökme yok
+  if (!useRaw && (!imgs || !imgs.length)) {
+    log('⚠️ Fiş resmi yok: config hamBaski:false ama uygulama yalnız ESC/POS gönderdi (Ayarlar > Otomatik Yazıcı > resim modu) —', id);
+    try { await updateDoc(ref, { durum: 'hata', hata: 'hamBaski:false ama fiş resmi gönderilmedi — uygulamada yazıcı resim modunu aç ya da config hamBaski satırını kaldır' }); } catch (e) {}
+    inFlight.delete(id); return;
+  }
   try {
     // işi güvenle sahiplen: hâlâ 'bekliyor' ise al (iki ajan aynı fişi iki kez basmasın)
     const alindi = await runTransaction(db, async (tr) => {

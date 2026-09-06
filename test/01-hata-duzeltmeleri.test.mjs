@@ -147,7 +147,8 @@ const out = await page.evaluate(async () => {
 
     // ===== H10/H27: portal onay =====
     db.cariler.push({ id: 555, tip: 'musteri', ad: 'Kupon Musterisi', bakiye: 0 }); // fiyat geçmişi temiz → katalog=liste fiyatı
-    db.bekleyenPortal.push({ id: 8001, mus: 'Kupon Musterisi', mid: 555, tarih: Date.now(), kalemler: [{ uid: 601, urun: 'Polo TL', mik: 2, birim: 'adet', fiyat: 400 }], tutar: 720, kupon: { kod: 'X10', ind: 80 }, tel: '', adres: '', sehir: '' });
+    db.kuponlar = [{ kod: 'X10', tip: 'tutar', deger: 80, aktif: true }]; // kupon onayda SİSTEMDEN bulunup katalogdan yeniden hesaplanır (müşteri beyanına güvenilmez)
+    db.bekleyenPortal.push({ id: 8001, mus: 'Kupon Musterisi', mid: 555, tarih: Date.now(), kalemler: [{ uid: 601, urun: 'Polo TL', mik: 2, birim: 'adet', fiyat: 400 }], tutar: 720, kupon: { kod: 'X10' }, tel: '', adres: '', sehir: '' });
     save();
     portalOnay(8001); await sleep(250);
     const pSat = db.satislar[db.satislar.length - 1];

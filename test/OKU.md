@@ -18,6 +18,7 @@ node test/04-parti-siparis.test.mjs
 node test/05-parti-stok.test.mjs
 node test/06-inceleme-duzeltmeleri.test.mjs
 node test/07-envanter-siparis.test.mjs
+node test/08-faz-a-guvenlik.test.mjs
 ```
 Hepsi birden:
 ```bash
@@ -38,6 +39,7 @@ PLAYWRIGHT_CHROMIUM=/usr/bin/chromium node test/01-hata-duzeltmeleri.test.mjs
 | 04 | Parti/lot akışı — siparişte parti YOK, teslimde girilir; aynı renkten çoklu parti, stok kırılımı, 'siparişi kapat' |
 | 05 | Stok kartında parti kutusu (tek/çok parti, koruma ve toplama davranışı) |
 | 06 | Eylül 2026 kod incelemesi düzeltmeleri: kk/çek cariIsle+POS hesabı, USD fason borcu, çok cihazlı id, tek net kâr, bakiye ezilmesi, müşteri modu mezar taşı, onclick XSS (jsq) |
+| 08 | Faz A güvenlik (Eylül inceleme raporu): adminMi yönetici kapısı, sıfırlamada mezar taşı yok, IndexedDB silme, portal belge şeması + kupon yeniden hesabı, mükerrer onay, analitik enjeksiyonu, renksiz↔renkli stok, yedek kalıcılığı |
 | 07 | Envanter malzeme siparişi: gramaj/en/foto/kartela+renk kodu, tüm türlerde çeşit satırları, teslimde çoklu parti + fiş foto + kapat, iş emri önizleme/yazdır, tekrar sipariş, sade bekleyen ekranı, WA dönüşü |
 
 > Not: Para birimi modeli — `kalem.fiyat` her zaman TL, satışın `tutar` alanı satış
