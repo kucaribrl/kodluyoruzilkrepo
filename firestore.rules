@@ -53,7 +53,11 @@ service cloud.firestore {
     // SİPARİŞLER — giriş yapmış kullanıcı KENDİ adına oluşturur,
     // kendi siparişini okur; yönetici hepsini okur/günceller.
     match /siparisler/{id} {
-      allow create: if girisli() && request.resource.data.uid == request.auth.uid;
+      // alan tipleri: tutar sayı, kalemler liste, mus metin (istemci belgeyi serbest yazar → en azından tip kapısı)
+      allow create: if girisli() && request.resource.data.uid == request.auth.uid
+        && request.resource.data.tutar is number
+        && request.resource.data.kalemler is list
+        && (!('mus' in request.resource.data) || request.resource.data.mus is string);
       allow read:   if girisli() && (resource.data.uid == request.auth.uid || adminMi());
       allow update, delete: if adminMi();
     }
@@ -75,7 +79,9 @@ service cloud.firestore {
     // FASON İŞ EMİRLERİ — yalnız o fason (okur+durum günceller) + yönetici (Faz 3)
     match /fason_isemri/{id} {
       allow read:   if girisli() && (resource.data.fasonUid == request.auth.uid || adminMi());
-      allow update: if girisli() && (resource.data.fasonUid == request.auth.uid || adminMi());
+      // fason yalnız durum/teslimAdet/guncelleme alanlarını değiştirebilir (adet/ücret/aktif/fasonUid dokunulmaz)
+      allow update: if adminMi() || (girisli() && resource.data.fasonUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['durum','teslimAdet','guncelleme']));
       allow create, delete: if adminMi();
     }
 

@@ -1,0 +1,29 @@
+name: Testler
+on:
+  push:
+    branches: ['**']
+  pull_request:
+jobs:
+  playwright:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Playwright kur
+        run: |
+          npm i --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Sürüm / önbellek tutarlılığı
+        run: |
+          A=$(grep -o "APP_SURUM = '[^']*'" index.html | grep -o "[0-9]*'$" | tr -d "'")
+          B=$(grep -o "CACHE = 'iqbasics-v[0-9]*'" sw.js | grep -o "[0-9]*")
+          echo "APP_SURUM son numara=$A  sw CACHE=$B"
+          test "$A" = "$B"
+      - name: Satır sonu (bat/vbs/ps1 CRLF)
+        run: |
+          git ls-files --eol '*.bat' '*.vbs' '*.ps1' | awk '$1!="i/crlf"{print "LF kalmış:",$0; bad=1} END{exit bad}'
+      - name: Uçtan uca testler
+        run: for f in test/*.test.mjs; do echo "== $f =="; node "$f" || exit 1; done

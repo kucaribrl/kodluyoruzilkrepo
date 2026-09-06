@@ -1,22 +1,31 @@
-# Kodluyoruz İlk Repo
-## Bu repo [Kodluyoruz](wwww.google.com)  Front-End eğitiminde oluşturduğumuz ilk repo .İçerisinde bir adet  READMe dosyası ,bir adet de index.html dosyası bulunuyor
+# IQ Basics — Toptan Tekstil Yönetimi
 
-# Installation
-## Öncelikle projenizi klonlayın
+Tek dosyalık (index.html) çevrimdışı çalışabilen bir PWA: stok, satış, cari, kasa/çek,
+üretim (iş emri, fason), envanter (kumaş/aksesuar siparişi ve teslim), müşteri sipariş
+portalı, raporlar, termal fiş, WhatsApp ve yazıcı otomasyonu. Çok cihazda Firebase
+üzerinden canlı senkron çalışır.
 
-```
-git clone  https:// github.com
-```
-# Usage 
-## Projeyi klonladıktan sonra visual code ortamında çalıştırınız 
-## Linux için:
-```linux
-cd kodluyoruzilkrepo
-code.
-```
-# Contribution
-## Pull requestler kabul edilir.Büyük değişikler için,lütfen önce  neyi değiştirmek istediğinizi tartışmak için bir konu açınız.
-# Licence
-[MIT](wwww.google.com   )
+- **Canlı uygulama:** https://kucaribrl.github.io/kodluyoruzilkrepo/
+- **Yayınlama / bulut kurulumu:** `YAYINLAMA.md`
+- **Firestore kuralları:** `firestore.rules` (Console'a yapıştırılıp yayınlanır), `storage.rules`
 
-![ekran resmi](https://cdn.pixabay.com/photo/2018/09/09/02/25/kzkulesi-3663817__480.jpg) 
+## Klasörler
+| Yer | Ne |
+|---|---|
+| `index.html` | Uygulamanın tamamı (arayüz + veri modeli + senkron) |
+| `sw.js`, `manifest.webmanifest` | PWA: çevrimdışı önbellek, kurulum |
+| `yazici-agent/` | Bilgisayardaki termal yazıcıdan otomatik fiş basan ajan (Windows) — `BASLA-TR.md` |
+| `wa-agent/` | WhatsApp mesajlarını otomatik gönderen ajan (Windows) — `OKU.md` |
+| `sessiz-yazici/` | Tarayıcıdan sessiz yazdırma kısayolu |
+| `test/` | Playwright uçtan uca testler — `test/OKU.md` |
+
+## Geliştirme
+- Sürüm damgası `index.html` içinde `APP_SURUM`, önbellek adı `sw.js` içinde `CACHE`; ikisi
+  aynı numarayı taşımalı (CI kontrol eder). Her yayında ikisi birlikte artırılır.
+- Para modeli: kalem fiyatları TL'dir; satışın `tutar` alanı satış para birimindedir,
+  `satisDiv(s)` PB→TL çarpanıdır.
+- Testler: `npm i playwright` (bir kez) → `for f in test/*.test.mjs; do node "$f" || exit 1; done`
+- GitHub Actions her push'ta testleri, sürüm tutarlılığını ve bat/vbs/ps1 satır sonlarını kontrol eder.
+
+## Lisans
+MIT

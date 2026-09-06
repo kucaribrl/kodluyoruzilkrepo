@@ -62,11 +62,15 @@ async function waKuyrukBaslat(client, configYolu) {
   } catch (e) { log('⚠️ Takılı mesaj kontrolü yapılamadı:', String(e).slice(0, 120)); }
 
   const q = query(collection(db, 'isletme', MAGAZA_ID, 'wa_kuyruk'), where('durum', '==', 'bekliyor'));
-  onSnapshot(q, snap => {
-    snap.docChanges().forEach(async ch => {
-      if (ch.type !== 'added') return;
-      const ref = doc(db, 'isletme', MAGAZA_ID, 'wa_kuyruk', ch.doc.id);
-      // İşi güvenle sahiplen (iki dinleyici aynı mesajı iki kez göndermesin)
+  // 🐢 SIRALI gönderim: mesajlar tek tek, aralarında 3-8 sn rastgele bekleyerek gider
+  // (30 mesaj aynı anda gitmesin — WhatsApp hesabı için ban riski). Numara kayıtlı değilse 'hata'.
+  const kuyruk = []; let calisiyor = false;
+  const bekle = ms => new Promise(r => setTimeout(r, ms));
+  async function isle() {
+    if (calisiyor) return; calisiyor = true;
+    while (kuyruk.length) {
+      const id = kuyruk.shift();
+      const ref = doc(db, 'isletme', MAGAZA_ID, 'wa_kuyruk', id);
       let veri = null;
       try {
         veri = await runTransaction(db, async tr => {
@@ -75,22 +79,30 @@ async function waKuyrukBaslat(client, configYolu) {
           tr.update(ref, { durum: 'gonderiliyor', baslama: Date.now() });
           return d0.data();
         });
-      } catch (e) { return; }
-      if (!veri) return;
+      } catch (e) { continue; }
+      if (!veri) continue;
       try {
-        // tel uygulamadan 90XXXXXXXXXX biçiminde gelir (waTel) — yine de normalle
         let no = String(veri.tel || '').replace(/\D/g, '');
-        if (no.startsWith('0')) no = '9' + no;
-        if (no.length === 10) no = '90' + no;
+        if (no.startsWith('00')) no = no.slice(2);          // 0049… uluslararası önek
+        if (no.length === 10) no = '90' + no;               // 5xx… → 90 5xx…
+        else if (no.startsWith('0') && no.length === 11) no = '9' + no; // 05xx… → 905xx…
         if (no.length < 11) throw new Error('geçersiz numara: ' + veri.tel);
-        await client.sendMessage(no + '@c.us', String(veri.mesaj || ''));
+        let hedef = no + '@c.us';
+        try { const nid = await client.getNumberId(no); if (!nid) throw new Error('WhatsApp\'ta kayıtlı değil: ' + no); hedef = nid._serialized; } catch (e) { if (/kayıtlı değil/.test(String(e))) throw e; }
+        await client.sendMessage(hedef, String(veri.mesaj || ''));
         await updateDoc(ref, { durum: 'gonderildi', gonderim: Date.now() });
         log('📤 Gönderildi →', no, '(' + (veri.tip || 'genel') + ')');
       } catch (e) {
         try { await updateDoc(ref, { durum: 'hata', hata: String(e).slice(0, 200) }); } catch (x) {}
         log('⚠️ Gönderilemedi:', String(e).slice(0, 120));
       }
-    });
+      if (kuyruk.length) await bekle(3000 + Math.floor(Math.random() * 5000));
+    }
+    calisiyor = false;
+  }
+  onSnapshot(q, snap => {
+    snap.docChanges().forEach(ch => { if (ch.type === 'added' && !kuyruk.includes(ch.doc.id)) kuyruk.push(ch.doc.id); });
+    isle();
   }, e => {
     // Dinleyici koptu (izin/ağ/kota) — SDK yeniden bağlanmaz; süreç kapanır, baslat.bat/vbs yeniden başlatır.
     log('❌ Dinleme hatası:', (e && e.code) || e, '— süreç kapanıyor, yeniden başlatılacak.');

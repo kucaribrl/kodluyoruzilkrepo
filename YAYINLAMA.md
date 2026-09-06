@@ -80,6 +80,8 @@ telefonundan** girip kendi işini görmesi için bulutu (Firebase) devreye alır
 
 ## Sık sorulanlar
 - **Ücret?** Firebase Spark (ücretsiz) + GitHub Pages = 0₺.
-- **Kayıt olan admin olur mu?** Hayır. Kayıtta rol yalnız müşteri/çalışan/fason olabilir,
-  onaysız başlar. Admin yalnız Firestore'dan elle atanır (sadece sen).
+- **Kayıt olan admin olur mu?** Hayır. Kayıtta rol yalnız müşteri/fason olabilir (personel
+  isteği `istenenRol` olarak bekler), onaysız başlar. Yönetici: `firestore.rules` içindeki
+  sahip e-postası otomatik yöneticidir; uygulamada Senkron Teşhis → "Bu Hesabı Yönetici Yap"
+  ile `kullanicilar` belgen de admin olarak yazılır. Diğer rolleri onay ekranından sen verirsin.
 - **Müşteri başka müşteriyi görür mü?** Hayır — Firestore kuralları kendi verisine hapseder.

@@ -20,6 +20,7 @@ node test/06-inceleme-duzeltmeleri.test.mjs
 node test/07-envanter-siparis.test.mjs
 node test/08-faz-a-guvenlik.test.mjs
 node test/09-faz-b-para.test.mjs
+node test/10-faz-c.test.mjs
 ```
 Hepsi birden:
 ```bash
@@ -42,6 +43,7 @@ PLAYWRIGHT_CHROMIUM=/usr/bin/chromium node test/01-hata-duzeltmeleri.test.mjs
 | 06 | Eylül 2026 kod incelemesi düzeltmeleri: kk/çek cariIsle+POS hesabı, USD fason borcu, çok cihazlı id, tek net kâr, bakiye ezilmesi, müşteri modu mezar taşı, onclick XSS (jsq) |
 | 08 | Faz A güvenlik (Eylül inceleme raporu): adminMi yönetici kapısı, sıfırlamada mezar taşı yok, IndexedDB silme, portal belge şeması + kupon yeniden hesabı, mükerrer onay, analitik enjeksiyonu, renksiz↔renkli stok, yedek kalıcılığı |
 | 09 | Faz B para doğruluğu: bosBaslat hesap id, ayar alan bazlı birleştirme, satışa bağlı çek koruması, üretim renk eşleşmesi, renksiz düşüm, renkli ürün satış kuralı, düzenlemede vade/kur, müşteri ekleme stash, taksitli iptal, dövizli stok raporu, kasa transfer, kritik 0, open_ kaçış |
+| 10 | Faz C: portal şifre özeti + oturum belirteci, dönem kıyası (aynı gün sayısı), tahsilat tek tanım, karşılıksız çek kasa, ciro ekstre, taksit yuvarlama, waTel 00, gunFark, fiş guard, aksesuar gelen kadar, katalog gizli fiyat/kupon |
 | 07 | Envanter malzeme siparişi: gramaj/en/foto/kartela+renk kodu, tüm türlerde çeşit satırları, teslimde çoklu parti + fiş foto + kapat, iş emri önizleme/yazdır, tekrar sipariş, sade bekleyen ekranı, WA dönüşü |
 
 > Not: Para birimi modeli — `kalem.fiyat` her zaman TL, satışın `tutar` alanı satış
