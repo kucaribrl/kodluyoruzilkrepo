@@ -1009,7 +1009,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-106'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-107'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1511,10 +1511,29 @@ function hesapMenu(){
 function bulutCikisTum(){askConfirm('Bulut oturumu kapatılsın mı? Bu cihazdaki veriler kalır; tekrar giriş yapılabilir.',()=>{try{if(canliAcik)canliDur()}catch(e){}try{bulutCikisPortal()}catch(e){}bulutKul=null;closeM();toast('Bulut oturumu kapatıldı');});}
 function rolOnizle(){rolSec();}
 /* 🔒 Uygulama kilidi (PIN) + hareketsizlik otomatik kilit */
-function pinHash(s){let h=5381;for(let i=0;i<s.length;i++)h=((h*33)^s.charCodeAt(i))>>>0;return 'p'+h;}
+function pinHash(s){let h=5381;for(let i=0;i<s.length;i++)h=((h*33)^s.charCodeAt(i))>>>0;return 'p'+h;} // eski (zayıf) özet — yalnız eski kayıtları doğrulayıp yükseltmek için
+// 🔐 PIN özeti: tuzlu PBKDF2-SHA256 (120.000 tur) → yedek dosyası ele geçse bile PIN anında kırılamaz.
+// Kayıt biçimi 'k2:<tuz hex>:<özet hex>'. crypto.subtle yoksa (http/eski tarayıcı) eski özete düşer.
+async function pinOzet(s,tuzHex){
+  try{const tuz=tuzHex||Array.from(crypto.getRandomValues(new Uint8Array(16))).map(x=>x.toString(16).padStart(2,'0')).join('');
+    const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(String(s)),'PBKDF2',false,['deriveBits']);
+    const bits=await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt:new TextEncoder().encode(tuz),iterations:120000},key,256);
+    return 'k2:'+tuz+':'+Array.from(new Uint8Array(bits)).map(x=>x.toString(16).padStart(2,'0')).join('');
+  }catch(e){return pinHash(String(s));}
+}
+let _pinHata=0,_pinKilit=0;try{_pinKilit=+localStorage.getItem('iq_pin_kilit')||0}catch(e){}
+// PIN doğrula (async). 5 yanlışta 30 sn bekletir. Eski 'p…' kayıt doğru girildiğinde arka planda güçlü özete yükseltilir.
+async function pinDogrula(v){v=String(v||'');if(!db.pin)return false;
+  if(Date.now()<_pinKilit){try{toast('⏳ Çok fazla yanlış deneme — '+Math.ceil((_pinKilit-Date.now())/1000)+' sn bekle')}catch(e){}return false;}
+  let ok=false;
+  if(/^k2:/.test(db.pin)){const p=db.pin.split(':');ok=(await pinOzet(v,p[1]))===db.pin;}
+  else{ok=pinHash(v)===db.pin;if(ok){try{const y=await pinOzet(v);if(/^k2:/.test(y)){db.pin=y;save();}}catch(e){}}}
+  if(ok){_pinHata=0;_pinKilit=0;try{localStorage.removeItem('iq_pin_kilit')}catch(e){}}
+  else{_pinHata++;if(_pinHata>=5){_pinHata=0;_pinKilit=Date.now()+30000;try{localStorage.setItem('iq_pin_kilit',_pinKilit)}catch(e){}}}
+  return ok;}
 let _kilitT=null;
 function kilitGoster(){if(!db.pin)return;_paraGizli=true;const el=$('kilit');if(!el)return;el.style.display='flex';const i=$('kilit-pin');if(i){i.value='';$('kilit-msg').textContent='Devam etmek için PIN girin';setTimeout(()=>i.focus(),60);}}
-function kilitDene(){const v=$('kilit-pin')?.value||'';if(db.pin&&pinHash(v)===db.pin){$('kilit').style.display='none';kilitZamanla();}else{$('kilit-msg').textContent='❌ Yanlış PIN, tekrar deneyin';const i=$('kilit-pin');if(i){i.value='';i.focus();}}}
+async function kilitDene(){const v=$('kilit-pin')?.value||'';if(db.pin&&await pinDogrula(v)){$('kilit').style.display='none';kilitZamanla();}else{$('kilit-msg').textContent='❌ Yanlış PIN, tekrar deneyin';const i=$('kilit-pin');if(i){i.value='';i.focus();}}}
 function kilitZamanla(){clearTimeout(_kilitT);if(!db.pin)return;const dk=Math.max(1,+db.pinDk||3);_kilitT=setTimeout(kilitGoster,dk*60000);}
 function kilitAyar(){if(!adminMi())return toast('Yetkiniz yok');open_('🔒 Uygulama Kilidi (PIN)',`
     <div class="mini" style="line-height:1.6">Cihazını biri eline alırsa uygulamayı açamasın diye PIN koy. Durum: <b style="color:${db.pin?'var(--good)':'var(--sub)'}">${db.pin?'AÇIK':'kapalı'}</b></div>
@@ -1523,7 +1542,7 @@ function kilitAyar(){if(!adminMi())return toast('Yetkiniz yok');open_('🔒 Uygu
     <label style="margin-top:8px">Otomatik kilit — kaç dakika hareketsizlikte?</label><input id="pin-dk" type="number" inputmode="numeric" value="${+db.pinDk||3}" min="1">
     ${db.pin?`<button class="btn g" style="margin-top:12px" onclick="kilitDkKaydet()">Süreyi Kaydet</button><button class="btn danger" style="margin-top:8px" onclick="kilitKaldir()">Kilidi Kaldır (PIN sil)</button>`:`<button class="btn g" style="margin-top:12px" onclick="kilitKur()">🔒 Kilidi Kur</button>`}
     <div class="mini" style="margin-top:10px;color:var(--warn)">⚠️ PIN'i unutma! Unutursan: Ayarlar → Veri Güvenliği → yedekten yükle ya da tarayıcı verisini temizle (veriler bulutta/yedekte durur).</div>`);}
-function kilitKur(){const a=$('pin-yeni')?.value||'',b=$('pin-yeni2')?.value||'';if(!/^\d{4,8}$/.test(a))return toast('PIN 4–8 rakam olmalı');if(a!==b)return toast('PIN\'ler aynı değil');db.pin=pinHash(a);db.pinDk=Math.max(1,+($('pin-dk')?.value)||3);save();closeM();toast('🔒 Uygulama kilidi açıldı');kilitZamanla();}
+function kilitKur(){const a=$('pin-yeni')?.value||'',b=$('pin-yeni2')?.value||'';if(!/^\d{4,8}$/.test(a))return toast('PIN 4–8 rakam olmalı');if(a!==b)return toast('PIN\'ler aynı değil');pinOzet(a).then(h=>{db.pin=h;db.pinDk=Math.max(1,+($('pin-dk')?.value)||3);save();closeM();toast('🔒 Uygulama kilidi açıldı');kilitZamanla();});}
 function kilitDkKaydet(){db.pinDk=Math.max(1,+($('pin-dk')?.value)||3);save();closeM();toast('Süre kaydedildi ✓');kilitZamanla();}
 function kilitKaldir(){askConfirm('Uygulama kilidi kaldırılsın mı? (PIN silinir, uygulama şifresiz açılır)',()=>{db.pin=null;save();closeM();toast('Kilit kaldırıldı');clearTimeout(_kilitT);});}
 ['click','keydown','touchstart','mousemove'].forEach(ev=>document.addEventListener(ev,()=>{if(db&&db.pin){const k=$('kilit');if(k&&k.style.display!=='flex')kilitZamanla();}},{passive:true}));
@@ -1617,7 +1636,7 @@ function yoneticiDon(){
   open_('🔒 Yönetici PIN',`<div class="mini">Patron (yönetici) moduna dönmek için uygulama PIN'ini gir.</div><input id="yd-pin" type="password" inputmode="numeric" maxlength="8" placeholder="••••" style="margin-top:10px" onkeydown="if(event.key==='Enter')yoneticiDonDene()"><div id="yd-msg" class="mini" style="color:var(--bad);margin-top:6px"></div><button class="btn g" style="margin-top:12px" onclick="yoneticiDonDene()">🔓 Patron'a Dön</button>`);
   setTimeout(()=>{const i=$('yd-pin');if(i)i.focus();},90);
 }
-function yoneticiDonDene(){const v=($('yd-pin')&&$('yd-pin').value)||'';if(pinHash(v)===db.pin){closeM();setRol('patron',true);}else{const m=$('yd-msg');if(m)m.textContent='❌ Yanlış PIN, tekrar deneyin';const i=$('yd-pin');if(i){i.value='';i.focus();}}}
+async function yoneticiDonDene(){const v=($('yd-pin')&&$('yd-pin').value)||'';if(await pinDogrula(v)){closeM();setRol('patron',true);}else{const m=$('yd-msg');if(m)m.textContent='❌ Yanlış PIN, tekrar deneyin';const i=$('yd-pin');if(i){i.value='';i.focus();}}}
 
 /* =================== RENDER =================== */
 // 💰 Gizli mod: uygulama her açılışta tutarlar GİZLİ; göstermek için PIN
@@ -1627,7 +1646,7 @@ function tutarGoster(){
   open_('🔒 PIN',`<div class="mini">Tutarları göstermek için PIN girin.</div><input id="pg-pin" type="password" inputmode="numeric" maxlength="8" placeholder="••••" style="margin-top:10px" onkeydown="if(event.key==='Enter')tutarGosterDene()"><div id="pg-msg" class="mini" style="color:var(--bad);margin-top:6px"></div><button class="btn g" style="margin-top:12px" onclick="tutarGosterDene()">👁️ Göster</button>`);
   setTimeout(()=>{const i=$('pg-pin');if(i)i.focus();},90);
 }
-function tutarGosterDene(){const v=($('pg-pin')&&$('pg-pin').value)||'';if(pinHash(v)===db.pin){_paraGizli=false;closeM();render();toast('👁️ Tutarlar gösteriliyor');}else{const m=$('pg-msg');if(m)m.textContent='❌ Yanlış PIN, tekrar deneyin';const i=$('pg-pin');if(i){i.value='';i.focus();}}}
+async function tutarGosterDene(){const v=($('pg-pin')&&$('pg-pin').value)||'';if(await pinDogrula(v)){_paraGizli=false;closeM();render();toast('👁️ Tutarlar gösteriliyor');}else{const m=$('pg-msg');if(m)m.textContent='❌ Yanlış PIN, tekrar deneyin';const i=$('pg-pin');if(i){i.value='';i.focus();}}}
 function tutarGizle(){_paraGizli=true;render();toast('🙈 Tutarlar gizlendi');}
 function render(){
   const y=yetki();
