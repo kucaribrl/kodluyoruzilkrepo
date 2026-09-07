@@ -22,6 +22,7 @@ node test/08-faz-a-guvenlik.test.mjs
 node test/09-faz-b-para.test.mjs
 node test/10-faz-c.test.mjs
 node test/11-isemri-iptal-metre.test.mjs
+node test/12-kumulatif-birlesim.test.mjs
 ```
 Hepsi birden:
 ```bash
@@ -46,6 +47,7 @@ PLAYWRIGHT_CHROMIUM=/usr/bin/chromium node test/01-hata-duzeltmeleri.test.mjs
 | 09 | Faz B para doğruluğu: bosBaslat hesap id, ayar alan bazlı birleştirme, satışa bağlı çek koruması, üretim renk eşleşmesi, renksiz düşüm, renkli ürün satış kuralı, düzenlemede vade/kur, müşteri ekleme stash, taksitli iptal, dövizli stok raporu, kasa transfer, kritik 0, open_ kaçış |
 | 10 | Faz C: portal şifre özeti + oturum belirteci, dönem kıyası (aynı gün sayısı), tahsilat tek tanım, karşılıksız çek kasa, ciro ekstre, taksit yuvarlama, waTel 00, gunFark, fiş guard, aksesuar gelen kadar, katalog gizli fiyat/kupon |
 | 11 | Kumaş tüketiminde kg↔metre dönüşümü (gramaj × en) ve iş emri iptali (kumaş + 'elimde var' malzeme geri, otomatik alım siparişi iptal, başlamış üretimde engel) |
+| 12 | K5 üç yönlü kümülatif birleşim: iki cihaz aynı cari/kasa/ürün stoğunu değiştirince taban + yerel fark + bulut fark (LWW para/stok silmez); taban yerelde, bulut belgesine gitmez |
 | 07 | Envanter malzeme siparişi: gramaj/en/foto/kartela+renk kodu, tüm türlerde çeşit satırları, teslimde çoklu parti + fiş foto + kapat, iş emri önizleme/yazdır, tekrar sipariş, sade bekleyen ekranı, WA dönüşü |
 
 > Not: Para birimi modeli — `kalem.fiyat` her zaman TL, satışın `tutar` alanı satış

@@ -602,6 +602,33 @@ function _recMerge(local,cloud,tomb){local=local||[];cloud=cloud||[];tomb=tomb||
   cloud.forEach(r=>{if(r&&r.id!=null)by[r.id]=r;});
   local.forEach(r=>{if(r&&r.id!=null){const c=by[r.id];if(!c||(+r._m||0)>(+c._m||0))by[r.id]=r;}}); // eşitlikte bulut kazanır (yakınsama)
   const out=[];for(const id in by){const r=by[id];const td=+tomb[id]||0;if(td&&td>=(+r._m||0))continue;out.push(r);}return out;}
+/* 🧮 KÜMÜLATİF ALANLAR (bakiye / stok) — "son yazan kazanır" para/stok hareketini SİLER:
+   kasa PC cariyi 100→120 (veresiye), telefon çevrimdışı aynı cariyi 100→70 (tahsilat) yaparsa LWW 70 der; doğrusu 90.
+   Çözüm: son senkrondaki TABAN (db._sb, yalnız bu alanlar) saklanır; birleşimde
+   sonuç = taban + (yerel − taban) + (bulut − taban). Tek taraf değiştiyse onun değeri alınır (LWW'nin kaybettirdiği delta da kurtulur). */
+const KUMULATIF={cariler:['bakiye','bakiyeUSD','kesikToplam'],hesaplar:['bakiye'],urunler:['stok'],hammadde:['stok']};
+function _sbAl(L,r){const o={};(KUMULATIF[L]||[]).forEach(f=>o[f]=+r[f]||0);
+  if((L==='urunler'||L==='hammadde')&&Array.isArray(r.renkler)){o.renk={};r.renkler.forEach(x=>{if(x&&typeof x==='object'&&x.ad!=null)o.renk[x.ad]=+x.stok||0});}
+  return o;}
+function _sbGuncelle(L,arr){if(!KUMULATIF[L])return;db._sb=db._sb||{};const m={};(arr||[]).forEach(r=>{if(r&&r.id!=null)m[r.id]=_sbAl(L,r)});db._sb[L]=m;}
+function _sbYaz(domen,data){(CANLI_DOMEN[domen]||[]).forEach(k=>{if(KUMULATIF[k]&&Array.isArray(data[k]))_sbGuncelle(k,data[k])});}
+function _kumulatifBirlestir(L,yerel,bulut,sonuc){
+  const base=(db._sb||{})[L];if(!base||!KUMULATIF[L])return 0;
+  const yi={};(yerel||[]).forEach(r=>{if(r&&r.id!=null)yi[r.id]=r});const bi={};(bulut||[]).forEach(r=>{if(r&&r.id!=null)bi[r.id]=r});
+  const uc=(hedef,f,bv,yv,cv,yaz)=>{if(yv===bv&&cv===bv)return 0;if(yv===cv){if(hedef!==yv){yaz(yv);return 1}return 0;}
+    const dy=yv-bv,dc=cv-bv;const v=(dy&&dc)?+(bv+dy+dc).toFixed(3):(dy?yv:cv);if(hedef!==v){yaz(v);return 1}return 0;};
+  let n=0;
+  (sonuc||[]).forEach(r=>{if(!r||r.id==null)return;const b=base[r.id],y=yi[r.id],c=bi[r.id];if(!b||!y||!c||y===c)return;
+    const ys=_sbAl(L,y),cs=_sbAl(L,c);let k=0;
+    KUMULATIF[L].forEach(f=>{k+=uc(+r[f]||0,f,+b[f]||0,+ys[f]||0,+cs[f]||0,v=>{r[f]=v});});
+    if(b.renk&&ys.renk&&cs.renk&&Array.isArray(r.renkler)){let rk=0;
+      r.renkler.forEach(x=>{if(!x||typeof x!=='object'||x.ad==null)return;const bv=b.renk[x.ad],yv=ys.renk[x.ad],cv=cs.renk[x.ad];if(bv==null||yv==null||cv==null)return;rk+=uc(+x.stok||0,'stok',bv,yv,cv,v=>{x.stok=v});});
+      if(rk){r.stok=+(r.renkler.reduce((a,x)=>a+(+(x&&x.stok)||0),0)).toFixed(3);k+=rk;}}
+    if(k){r._m=Date.now();n+=k;} // birleşmiş değer en yeni → buluta geri yayılır
+  });
+  return n;}
+let _kumToastT=0;
+function _kumulatifBildir(L,n){if(Date.now()-_kumToastT<20000)return;_kumToastT=Date.now();const ad={cariler:'cari bakiyesi',hesaplar:'kasa bakiyesi',urunler:'ürün stoğu',hammadde:'malzeme stoğu'}[L]||L;try{toast('🔀 '+n+' '+ad+' iki cihazda aynı anda değişmişti — farklar toplandı, kayıp yok')}catch(e){}}
 function _seqMerge(a,b){const o={...(a||{})};for(const k in (b||{}))o[k]=Math.max(+o[k]||0,+b[k]||0);return o;}
 function _unionDizi(a,b){return Array.from(new Set([...(a||[]),...(b||[])]));}
 function _tombMerge(a,b){const o={...(a||{})};for(const k in (b||{}))o[k]=Math.max(+o[k]||0,+b[k]||0);return o;}
@@ -635,7 +662,9 @@ function canliDomenUygula(domen,d){
     if(MERGE_LISTELER.includes(k)&&Array.isArray(d[k])){
       const tomb=_tombMerge(db._tomb[k],gelenTomb);
       if(Object.keys(tomb).length)db._tomb[k]=tomb;
+      const _yerelOnce=db[k];
       db[k]=_recMerge(db[k],d[k],tomb);
+      if(KUMULATIF[k]){try{const n=_kumulatifBirlestir(k,_yerelOnce,d[k],db[k]);if(n)_kumulatifBildir(k,n);}catch(e){console.warn('kümülatif birleşim',e)}try{_sbGuncelle(k,db[k])}catch(e){}} // taban = birleşmiş hâl
     }else if(k==='seq'){db.seq=_seqMerge(db.seq,d.seq);}
     else if(k==='islenenSiparis'||k==='portalFav'){db[k]=_unionDizi(db[k],d[k]);}
     else if(domen==='ayar'){ // alan bazlı: yalnız daha yeni damgalı değer alınır (yerel daha yeniyse korunur → geri yayılır)
@@ -754,7 +783,7 @@ async function canliGonder(){
   if(db.ornek){toast('Örnek (demo) veri buluta yüklenmez — önce Ayarlar > "Test verilerini temizle" ile gerçek veriye geç');return false;}
   for(const domen of Object.keys(CANLI_DOMEN)){
     const data=canliAl(db,domen); _canliGolge[domen]=JSON.stringify(data);
-    try{await canliRef(domen).set(data);}catch(e){delete _canliGolge[domen];toast('Yükleme hatası ('+domen+'): '+(e.message||e).slice(0,60));return false;}
+    try{await canliRef(domen).set(data);try{_sbYaz(domen,data)}catch(x){}}catch(e){delete _canliGolge[domen];toast('Yükleme hatası ('+domen+'): '+(e.message||e).slice(0,60));return false;}
   }
   return true;
 }
@@ -767,7 +796,7 @@ function canliYaz(){
       const data=canliAl(db,domen); const js=JSON.stringify(data);
       if(js.length>950000){window._boyutUyari2=window._boyutUyari2||{};const son=window._boyutUyari2[domen]||0;if(Date.now()-son>300000){window._boyutUyari2[domen]=Date.now();try{toast('🚨 '+domen+' verisi bulut belge sınırını aştı ('+Math.round(js.length/1024)+' KB / 1 MB) — fotoğraf/fişleri küçültün ya da Cloudinary açın; bu alan senkronlanamıyor')}catch(e){}}}
       if(js!==_canliGolge[domen]){_canliGolge[domen]=js;
-        canliRef(domen).set(data).then(()=>{try{_senk.son=Date.now();_senk.hata='';senkRozetCiz()}catch(x){}}).catch(e=>{delete _canliGolge[domen];/* başarısız yazım: bir sonraki save() yeniden dener */try{_senk.hata=(e&&e.code)||'hata';senkRozetCiz()}catch(x){}console.warn('canlı-yaz',domen,e&&e.code);if(canliIzinHata(e)!=='permission-denied'&&/longer than|exceeds the maximum/i.test(''+e))toast('🚨 '+domen+' verisi 1 MB bulut sınırını aştı — fotoğraf/fişleri küçültün ya da Cloudinary açın');});}
+        canliRef(domen).set(data).then(()=>{try{_sbYaz(domen,data)}catch(x){}try{_senk.son=Date.now();_senk.hata='';senkRozetCiz()}catch(x){}}).catch(e=>{delete _canliGolge[domen];/* başarısız yazım: bir sonraki save() yeniden dener */try{_senk.hata=(e&&e.code)||'hata';senkRozetCiz()}catch(x){}console.warn('canlı-yaz',domen,e&&e.code);if(canliIzinHata(e)!=='permission-denied'&&/longer than|exceeds the maximum/i.test(''+e))toast('🚨 '+domen+' verisi 1 MB bulut sınırını aştı — fotoğraf/fişleri küçültün ya da Cloudinary açın');});}
     });
   },450);
 }
@@ -780,7 +809,7 @@ function canliYazHemen(domenler){
   const ps=[];
   list.forEach(domen=>{const data=canliAl(db,domen);const js=JSON.stringify(data);
     if(js.length>900000){window._boyutUyari=window._boyutUyari||{};if(!window._boyutUyari[domen]){window._boyutUyari[domen]=1;try{toast('⚠️ '+domen+' verisi bulut sınırına yaklaşıyor ('+Math.round(js.length/1024)+'KB / 1MB) — eski kayıtları arşivlemek gerekebilir');}catch(e){}}}
-    if(js!==_canliGolge[domen]){_canliGolge[domen]=js;ps.push(canliRef(domen).set(data).catch(e=>{console.warn('canlı-yaz-hemen',domen,e&&e.code);_senk.hata=(e&&e.code)||'yazma hatası';if(canliIzinHata(e)!=='permission-denied'&&/longer than|exceeds the maximum/i.test(''+e))toast('🚨 '+domen+' verisi 1 MB sınırını aştı — buluta yazılamadı. Fotoğraf/fişleri küçültün ya da Cloudinary açın.');}));}});
+    if(js!==_canliGolge[domen]){_canliGolge[domen]=js;ps.push(canliRef(domen).set(data).then(()=>{try{_sbYaz(domen,data)}catch(x){}}).catch(e=>{console.warn('canlı-yaz-hemen',domen,e&&e.code);_senk.hata=(e&&e.code)||'yazma hatası';if(canliIzinHata(e)!=='permission-denied'&&/longer than|exceeds the maximum/i.test(''+e))toast('🚨 '+domen+' verisi 1 MB sınırını aştı — buluta yazılamadı. Fotoğraf/fişleri küçültün ya da Cloudinary açın.');}));}});
   const pr=Promise.all(ps);
   if(ps.length){_senk.bekleyen=true;try{senkRozetCiz()}catch(e){}
     pr.then(()=>{_senk.bekleyen=false;if(!_senk.hata)_senk.son=Date.now();try{senkRozetCiz()}catch(e){}});}
@@ -980,7 +1009,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-105'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-106'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
