@@ -1,5 +1,5 @@
 /* IQ Basics — Service Worker (çevrimdışı çalışma + kurulabilir PWA) */
-const CACHE = 'iqbasics-v107';
+const CACHE = 'iqbasics-v108';
 
 /* Uygulama kabuğu: internet olmasa da açılması gereken dosyalar */
 const SHELL = [
@@ -14,7 +14,8 @@ const SHELL = [
   './apple-touch-icon.png',
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js',
-  'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js'
+  'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js',
+  'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js'
 ];
 
 self.addEventListener('install', (e) => {

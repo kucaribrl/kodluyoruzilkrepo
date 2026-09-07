@@ -17,6 +17,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 <!-- 🔳 QR kod üreteci (fiş altındaki QR için) — yerel dosya, çevrimdışı çalışır -->
 <script src="./qrcode.js"></script>
 <style>
@@ -1009,7 +1010,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-107'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-108'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -2432,19 +2433,61 @@ const ISLEMLER=['Kesim','Dikim','Nakış','Baskı','Ütü / Paket','Yıkama'];
 let fRenk=[], fBeden=[], uPB='TL', uTab='genel', uKaynak='uretim';
 function resizeImg(file,cb,max=900,q=0.72){const r=new FileReader();r.onload=()=>{const img=new Image();img.onload=()=>{let w=img.width,h=img.height;if(w>h&&w>max){h=Math.round(h*max/w);w=max}else if(h>max){w=Math.round(w*max/h);h=max}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);try{cb(c.toDataURL('image/jpeg',q))}catch(e){cb(r.result)}};img.src=r.result};r.readAsDataURL(file)}
 // 🖼️ Fotoğrafı Cloudinary'ye yükle (ayarlıysa) → kısa link döndür; ayar yoksa/yüklenemezse base64 döndür (fallback → hiçbir şey bozulmaz)
+/* 📦 FOTOĞRAF DEPOSU — öncelik: Cloudinary (ayarlıysa) → Firebase Storage (bulut girişi varsa) → cihaz (base64).
+   Base64 fotoğraf Firestore belgesini şişirir (1 MB sınırı); linke çevrilince senkron belgesi küçük kalır. */
+function fotoDepoTur(){if((db.cldName||'').trim()&&(db.cldPreset||'').trim())return 'cloudinary';
+  try{if(window.firebase&&firebase.storage&&bulutGirisli()&&!bulutMusteriMod)return 'storage';}catch(e){}return 'cihaz';}
+async function fotoStorageYukle(dataUrl){
+  const m=/^data:(image\/[a-z0-9.+-]+);base64,/i.exec(dataUrl||'');if(!m)throw new Error('geçersiz veri');
+  const ext=m[1]==='image/png'?'png':m[1]==='image/webp'?'webp':'jpg';
+  const ad=Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+  const ref=firebase.storage().ref('isletme/'+MAGAZA_ID+'/foto/'+ad+'.'+ext);
+  const snap=await ref.putString(dataUrl,'data_url',{contentType:m[1],cacheControl:'public,max-age=31536000'});
+  return await snap.ref.getDownloadURL();}
+let _fotoUyariT=0;
 function resimYukle(dataUrl,cb){
+  if(!dataUrl||!/^data:/.test(dataUrl)){cb(dataUrl);return;}
+  const tur=fotoDepoTur();
+  if(tur==='storage'){fotoStorageYukle(dataUrl).then(u=>cb(u)).catch(e=>{const c=String((e&&e.code)||e||'');
+      if(Date.now()-_fotoUyariT>30000){_fotoUyariT=Date.now();try{toast(/unauthorized|permission/i.test(c)?'⚠️ Bulut fotoğraf yazma izni yok (hesabın onaylı mı? Senkron Teşhis > "Bu Hesabı Yönetici Yap") — fotoğraf cihazda saklandı':'⚠️ Buluta yüklenemedi — fotoğraf cihazda saklandı')}catch(x){}}
+      cb(dataUrl);});return;}
+  if(tur!=='cloudinary'){cb(dataUrl);return;}
   const cloud=(db.cldName||'').trim(),preset=(db.cldPreset||'').trim();
-  if(!dataUrl||!cloud||!preset||!/^data:/.test(dataUrl)){cb(dataUrl);return;}
   try{const fd=new FormData();fd.append('file',dataUrl);fd.append('upload_preset',preset);fd.append('folder','iqbasics');
     fetch('https://api.cloudinary.com/v1_1/'+cloud+'/image/upload',{method:'POST',body:fd})
       .then(r=>r.json()).then(j=>{if(j&&j.secure_url)cb(j.secure_url);else{try{toast('⚠️ Cloudinary yüklemesi başarısız — fotoğraf cihazda (base64) saklandı')}catch(e){}cb(dataUrl);}}).catch(()=>{try{toast('⚠️ Cloudinary\'ye ulaşılamadı — fotoğraf cihazda (base64) saklandı')}catch(e){}cb(dataUrl)});
   }catch(e){cb(dataUrl);}
 }
+// ☁️ Cihazdaki (base64) fotoğrafları toplu olarak buluta taşı — veride yalnız link kalır
+function _fotoTopla(){const L=[];const walk=(o,d)=>{if(!o||typeof o!=='object'||d>7)return;
+  if(Array.isArray(o)){o.forEach((v,i)=>{if(typeof v==='string'){if(/^data:image/.test(v))L.push({o,k:i,v})}else walk(v,d+1)});return;}
+  for(const k in o){if(k==='_sb'||k==='_tomb')continue;const v=o[k];
+    if(typeof v==='string'){if((k==='foto'||k==='fotoArka'||k==='firmaLogo')&&/^data:image/.test(v))L.push({o,k,v})}
+    else if(v&&typeof v==='object')walk(v,d+1);}};
+  walk(db,0);return L;}
+async function fotolariBulutaTasi(){const tur=fotoDepoTur();if(tur==='cihaz')return toast('Önce bulut girişi yap (ya da Cloudinary ayarla)');
+  const L=_fotoTopla();if(!L.length)return toast('Cihazda taşınacak fotoğraf yok ✓');
+  const kb=Math.round(L.reduce((a,x)=>a+x.v.length,0)*0.75/1024);
+  askConfirm(L.length+' fotoğraf (~'+kb+' KB) buluta ('+(tur==='cloudinary'?'Cloudinary':'Firebase Storage')+') taşınsın mı?\nVeride yalnız link kalır, senkron belgesi küçülür. Önce otomatik yedek alınır.',async()=>{
+    try{autoYedek('fotoğraflar buluta taşınmadan önce')}catch(e){}
+    open_('☁️ Fotoğraflar taşınıyor',`<div id="ft-msg" class="mini" style="padding:14px;text-align:center">0 / ${L.length}</div><div class="mini" style="text-align:center">Pencereyi kapatma</div>`);
+    let ok=0,hata=0;
+    for(const x of L){try{const url=await new Promise((res,rej)=>{resimYukle(x.v,u=>{if(/^https?:/.test(u))res(u);else rej(new Error('yüklenemedi'))})});x.o[x.k]=url;ok++;}catch(e){hata++;if(hata>=3)break;}
+      const m=$('ft-msg');if(m)m.textContent=(ok+hata)+' / '+L.length+(hata?' · '+hata+' hata':'');
+      if((ok+hata)%10===0)save();}
+    save();try{canliYazHemen()}catch(e){}closeM();try{render()}catch(e){}
+    toast(hata?('⚠️ '+ok+' taşındı, '+hata+' başarısız (izin/ağ) — kalanlar cihazda'):('✅ '+ok+' fotoğraf buluta taşındı — veri küçüldü'));
+  },'Taşı');}
 // Dosya seç → küçült → (varsa) Cloudinary'ye yükle → cb(link/base64)
 function resimSecYukle(file,cb,max,q){resizeImg(file,d=>resimYukle(d,cb),max,q);}
 function cloudinaryAyar(){
-  open_('🖼️ Fotoğraf Depolama (Cloudinary)',`
-    <div class="mini">Çok fotoğraf yükleyebilmek için fotoğraflar <b>Cloudinary</b>'ye (ücretsiz) yüklenir; veriye sadece kısa link konur. <b>cloudinary.com</b>'da ücretsiz üye ol, aşağıdaki 2 bilgiyi gir.</div>
+  const tur=fotoDepoTur();const cihazda=_fotoTopla().length;
+  open_('🖼️ Fotoğraf Depolama',`
+    <div class="card" style="padding:11px 13px"><div style="font-weight:800">Şu an: ${tur==='cloudinary'?'☁️ Cloudinary':tur==='storage'?'🔥 Firebase Storage (bulut girişiyle otomatik)':'📱 Cihazda (base64)'}</div><div class="mini" style="margin-top:3px">${tur==='cihaz'?'Bulut girişi yapınca fotoğraflar kendiliğinden Firebase Storage\'a gider; Cloudinary ayarlarsan o öncelikli olur.':'Yeni fotoğraflar buluta yüklenir, veride yalnız link kalır.'}</div>
+      ${cihazda?`<div class="mini" style="margin-top:6px;color:var(--warn);font-weight:700">📦 Cihazda ${cihazda} fotoğraf hâlâ veri içinde (base64) — senkron belgesini şişirir.</div>`:''}</div>
+    ${(cihazda&&tur!=='cihaz')?`<button class="btn g" style="margin-top:10px" onclick="fotolariBulutaTasi()">☁️ ${cihazda} fotoğrafı buluta taşı</button>`:''}
+    <div class="sec" style="margin-top:12px">Cloudinary (isteğe bağlı)</div>
+    <div class="mini">Firebase yerine <b>Cloudinary</b> kullanmak istersen <b>cloudinary.com</b>'da ücretsiz üye ol, 2 bilgiyi gir.</div>
     <label style="margin-top:10px">Cloud name</label><input id="cld-name" value="${esc(db.cldName||'')}" placeholder="ör. iohwfj2n" autocapitalize="off" autocomplete="off">
     <label>Unsigned upload preset</label><input id="cld-preset" value="${esc(db.cldPreset||'')}" placeholder="ör. iq_basics" autocapitalize="off" autocomplete="off">
     <div class="mini" style="margin-top:6px">Preset'i: Cloudinary → Settings → Upload → <b>Add upload preset</b> → Signing mode: <b>Unsigned</b> → kaydet, adını buraya yaz.</div>

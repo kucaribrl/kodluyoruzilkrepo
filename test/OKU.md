@@ -24,6 +24,7 @@ node test/10-faz-c.test.mjs
 node test/11-isemri-iptal-metre.test.mjs
 node test/12-kumulatif-birlesim.test.mjs
 node test/13-pin-pbkdf2.test.mjs
+node test/14-foto-storage.test.mjs
 ```
 Hepsi birden:
 ```bash
@@ -50,6 +51,7 @@ PLAYWRIGHT_CHROMIUM=/usr/bin/chromium node test/01-hata-duzeltmeleri.test.mjs
 | 11 | Kumaş tüketiminde kg↔metre dönüşümü (gramaj × en) ve iş emri iptali (kumaş + 'elimde var' malzeme geri, otomatik alım siparişi iptal, başlamış üretimde engel) |
 | 12 | K5 üç yönlü kümülatif birleşim: iki cihaz aynı cari/kasa/ürün stoğunu değiştirince taban + yerel fark + bulut fark (LWW para/stok silmez); taban yerelde, bulut belgesine gitmez |
 | 13 | PIN güvenliği: tuzlu PBKDF2 özeti, eski djb2 kaydın yükseltilmesi, 5 yanlışta 30 sn kilit, kilit/yönetici dönüşü/tutar gösterme akışları |
+| 14 | Fotoğraf deposu: Cloudinary → Firebase Storage → cihaz önceliği, izin hatasında base64'e düşüş, cihazdaki fotoğrafları toplu buluta taşıma |
 | 07 | Envanter malzeme siparişi: gramaj/en/foto/kartela+renk kodu, tüm türlerde çeşit satırları, teslimde çoklu parti + fiş foto + kapat, iş emri önizleme/yazdır, tekrar sipariş, sade bekleyen ekranı, WA dönüşü |
 
 > Not: Para birimi modeli — `kalem.fiyat` her zaman TL, satışın `tutar` alanı satış
