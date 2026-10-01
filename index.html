@@ -1387,6 +1387,25 @@ function askConfirm(msg,onYes,yesLabel){$('cMsg').textContent=msg;$('cYes').text
 $('cYes').onclick=()=>{$('cov').classList.remove('show');const f=_cYes;_cYes=null;if(f)f()};
 $('cNo').onclick=()=>{$('cov').classList.remove('show');_cYes=null};
 $('cov').addEventListener('click',e=>{if(e.target.id==='cov'){$('cov').classList.remove('show');_cYes=null}});
+/* 🔐 KRİTİK SİLME ONAYI — PIN kuruluysa PIN sorar, yoksa "SİL" yazdırır. onYes yalnız doğrulanınca çalışır. */
+let _kkYes=null,_kkPinli=false;
+function askKritik(msg,onYes,yesLabel){
+  _kkPinli=!!db.pin; _kkYes=onYes;
+  open_('⚠️ '+(yesLabel||'Kritik İşlem'),`
+    <div class="mini" style="line-height:1.6;white-space:pre-line">${esc(msg)}</div>
+    ${_kkPinli
+      ? `<label style="margin-top:12px">Onaylamak için PIN gir</label><input id="kk-pin" type="password" inputmode="numeric" maxlength="8" placeholder="••••" onkeydown="if(event.key==='Enter')kritikOnayla()">`
+      : `<label style="margin-top:12px">Onaylamak için <b>SİL</b> yaz</label><input id="kk-txt" autocapitalize="characters" placeholder="SİL" onkeydown="if(event.key==='Enter')kritikOnayla()">`}
+    <button class="btn danger" style="margin-top:12px;width:100%" onclick="kritikOnayla()">${esc(yesLabel||'Onayla')}</button>
+    <button class="btn ghost" style="margin-top:8px;width:100%" onclick="kritikVazgec()">Vazgeç</button>`);
+  setTimeout(()=>{const i=$('kk-pin')||$('kk-txt');if(i)i.focus();},60);
+}
+function kritikVazgec(){_kkYes=null;closeM();}
+async function kritikOnayla(){
+  if(_kkPinli){const v=$('kk-pin')?.value||'';if(!(await pinDogrula(v))){const i=$('kk-pin');if(i){i.value='';i.focus();}return toast('❌ Yanlış PIN');}}
+  else{const t=($('kk-txt')?.value||'').trim().toLocaleUpperCase('tr-TR');if(t!=='SİL'&&t!=='SIL')return toast('Onay için SİL yazın');}
+  const f=_kkYes;_kkYes=null;closeM();if(f)f();
+}
 function tstr(ts){const d=new Date(ts);return d.toLocaleDateString('tr-TR',{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'})}
 function dstr(ts){return new Date(ts).toLocaleDateString('tr-TR',{day:'2-digit',month:'short'})}
 function zamanKisa(ts){if(!ts)return '';const fark=Date.now()-ts,dk=Math.floor(fark/60000);if(dk<1)return 'az önce';if(dk<60)return dk+' dk önce';const sa=Math.floor(dk/60);if(sa<24)return sa+' sa önce';const g=Math.floor(sa/24);if(g===1)return 'dün';if(g<7)return g+' gün önce';return tstr(ts)}
@@ -2319,7 +2338,10 @@ function malSipGonder(id){const s=db.malSiparis.find(x=>x.id===id);if(!s)return;
   setTimeout(()=>{try{if(cur==='envanter'){envView='siparis';rEnvanter();}}catch(e){}},500);
 }
 function malSipIptal(id){askConfirm('Sipariş iptal edilsin mi?',()=>{const s=db.malSiparis.find(x=>x.id===id);if(s)s.durum='iptal';save();closeM();envView='siparis';rEnvanter();toast('Sipariş iptal edildi');});}
-function malSipSil(id){askConfirm('Sipariş kaydı silinsin mi?',()=>{db.malSiparis=db.malSiparis.filter(x=>x.id!==id);save();closeM();envView='siparis';rEnvanter();toast('Silindi');});}
+function malSipSil(id){const s=(db.malSiparis||[]).find(x=>x.id===id);
+  const alinmis=s&&(s.durum==='kismi'||(typeof sipTopGelen==='function'&&sipTopGelen(s)>0));
+  const msg=alinmis?'Bu siparişin KISMİ teslimatı var — silersen gelen miktar kaydı kaybolur. Yine de silinsin mi?':'Sipariş kaydı silinsin mi?';
+  askKritik(msg,()=>{db.malSiparis=db.malSiparis.filter(x=>x.id!==id);save();closeM();envView='siparis';rEnvanter();toast('Silindi');},'Sil');}
 
 function urunKapak(u){const r=(u.renkler||[]).find(x=>x&&typeof x==='object'&&x.foto);return r?r.foto:''}
 // ürünün tüm görselleri (renk fotoğrafları + genel fotolar) — galeri için
@@ -2636,7 +2658,7 @@ function silUrun(id){const u=urun(id);
   const ieVar=db.isemirleri.some(i=>i.urunId===id);
   if(satisVar||ieVar){const nrd=[satisVar?'satış':'',ieVar?'iş emri':''].filter(Boolean).join(' + ');
     return askConfirm(`"${u?u.ad:'Ürün'}" ${nrd} kayıtlarında kullanılıyor. Silmek geçmişi bozar (stok/iade hesapları kırılır). Silmek yerine PASİF (arşiv) yapılsın mı? — geçmiş korunur, listede görünmez.`,()=>{if(u){u.pasif=true;save();}closeM();render();toast('Ürün pasife alındı 🗄️');},'Pasife Al');}
-  askConfirm('Ürün silinsin mi?',()=>{db.urunler=db.urunler.filter(x=>x.id!==id);save();closeM();render();toast('Silindi')});}
+  askKritik('"'+(u?u.ad:'Ürün')+'" silinsin mi? Bu işlem geri alınamaz.',()=>{db.urunler=db.urunler.filter(x=>x.id!==id);save();closeM();render();toast('Silindi')},'Sil');}
 /* ---- Ürün Çoğalt ---- */
 function cogaltUrun(id){const src=urun(id);if(!src)return;const c=JSON.parse(JSON.stringify(src));delete c.id;c.kod='';c.renkler=(c.renkler||[]).map(r=>({...r,barkod:genBarkod()}));closeM();setTimeout(()=>{formUrun(0,c);toast('Kopyalandı — yeni ürün kodu gir')},120)}
 /* ---- CODE128 barkod çizimi (okunabilir) ---- */
@@ -2954,7 +2976,13 @@ function hamBorcSor(hid,tedId,delta){const h=db.hammadde.find(x=>x.id===hid);con
   },'Borç Yaz');
 }
 function hamFotoSec(input){const f=input.files&&input.files[0];if(!f)return;const b=$('h-foto-box');if(b)b.textContent='⏳';resimSecYukle(f,d=>{fHamFoto=d;const bx=$('h-foto-box');if(bx)bx.innerHTML=`<img src="${guvenliSrc(d)}">`},900,0.75)}
-function silHammadde(id){askConfirm('Silinsin mi?',()=>{db.hammadde=db.hammadde.filter(x=>x.id!==id);save();closeM();envStokTazele();toast('Silindi')})}
+function silHammadde(id){
+  const h=db.hammadde.find(x=>x.id===id);
+  const ieVar=(db.isemirleri||[]).some(i=>(i.malzeme||[]).some(m=>m.hid===id));
+  const sipVar=(db.malSiparis||[]).some(s=>s.hid===id&&(s.durum==='bekliyor'||s.durum==='kismi'));
+  if(ieVar||sipVar){const nrd=[ieVar?'iş emri malzemesi':'',sipVar?'açık malzeme siparişi':''].filter(Boolean).join(' + ');
+    return toast('Silinemez: '+nrd+' bu malzemeye bağlı. Önce onları kapat/iptal et.');}
+  askKritik('"'+((h&&h.ad)||'Malzeme')+'" silinsin mi? Bu işlem geri alınamaz.',()=>{db.hammadde=db.hammadde.filter(x=>x.id!==id);save();closeM();envStokTazele();toast('Silindi')},'Sil')}
 // Malzeme kaydı sonrası: hangi ekrandan geldiyse oraya dön (Envanter ya da Stok)
 function envStokTazele(){if(cur==='envanter')rEnvanter();else rStok();}
 
@@ -3414,7 +3442,7 @@ function iadeFis(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;const k
     <button class="btn danger" style="margin-top:12px" onclick="iadeSil(${id})">İadeyi Geri Al</button>`);
 }
 function iadeSil(id){const s=db.satislar.find(x=>x.id===id);if(!s||s.tip!=='iade')return;
-  askConfirm('Bu iade geri alınsın mı? Mal tekrar stoktan düşülür, tutar cari/kasaya iade edilir.',()=>{
+  askKritik('Bu iade geri alınsın mı? Mal tekrar stoktan düşülür, tutar cari/kasaya iade edilir.',()=>{
     s.kalemler.forEach(k=>stokUygula(k,-1)); // stok tekrar düş
     const netTL=(+s.tutar||0)*(s.satisKur||1);const m=cari(s.mid);
     if(s.nakit){const hs=hesap(s.hesapId)||db.hesaplar[0];if(hs)kasaHareket(hs.id,'in',netTL,'İade iptali',(s.mus||'')+' · iade geri',s.mid)}else{if(m)m.bakiye+=netTL}
@@ -4248,7 +4276,7 @@ function depoHazirla(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;
 }
 function silSatis(id){const s0=db.satislar.find(x=>x.id===id);
   if(satisKilitliCek(s0))return toast('⚠️ Çeki tahsil/ciro edilmiş satış iptal edilemez — önce Çekler ekranından işlemi geri al');
-  askConfirm('Satış iptal edilsin mi? Stok, bakiye, ödeme ve çek geri alınır.',()=>{
+  askKritik('Satış iptal edilsin mi? Stok, bakiye, ödeme ve çek geri alınır.',()=>{
   const s=db.satislar.find(x=>x.id===id);revertSatis(s);
   {const _tak=(s.taksitler||[]).filter(t=>t.odendi).reduce((a,t)=>a+(+t.tutar||0),0);if(_tak>0){const _m=cari(s.mid);if(_m){_m.bakiye-=_tak*satisDiv(s);setTimeout(()=>toast('ℹ️ Ödenmiş taksitler ('+money(_tak,s.pb||'TL')+') müşteri alacağına yazıldı — kasa değişmedi'),900);}}}
   db.satislar=db.satislar.filter(x=>x.id!==id);save();closeM();go('satis');toast('İptal edildi')})}
@@ -4348,7 +4376,7 @@ function silCari(id){
   const borc=Math.abs(c.bakiye||0)>0.5||Math.abs(c.bakiyeUSD||0)>0.5;
   if(borc){return toast('Silinemez: bakiyesi sıfır değil. Önce hesabı kapat.')}
   if(satVar||cekVar||harVar){return toast('Silinemez: geçmiş kayıtları (satış/tahsilat/çek) var. Önce onlar silinmeli.')}
-  askConfirm(`${c.ad} silinsin mi?\n(Hiç kaydı ve borcu yok)`,()=>{db.cariler=db.cariler.filter(x=>x.id!==id);save();closeM();rCari();toast('Silindi')})}
+  askKritik(`${c.ad} silinsin mi?\n(Hiç kaydı ve borcu yok)`,()=>{db.cariler=db.cariler.filter(x=>x.id!==id);save();closeM();rCari();toast('Silindi')},'Sil')}
 function cariKart(id){
   const c=cari(id);const isMus=c.tip==='musteri';const usd=c.doviz==='USD';
   const sat=db.satislar.filter(s=>s.mid===id).sort((a,b)=>b.tarih-a.tarih);
@@ -4683,10 +4711,10 @@ function hesapDetay(id){const h=hesap(id);
 function silHesap(id){const h=hesap(id);if(!h)return;if(Math.abs(h.bakiye)>0.5)return toast('Bakiyesi sıfır değil — silinemez');
   const yap=()=>{db.hesaplar=db.hesaplar.filter(x=>x.id!==id);save();closeM();rKasa();toast('Hesap silindi')};
   const hrk=(db.hareketler||[]).filter(x=>x.hesapId===id).length;
-  if(hrk)return askConfirm(`Bu hesabın ${hrk} geçmiş hareketi var. Silersen o kayıtlar hesapsız kalır (kasa geçmişi bozulur). Yine de silinsin mi?`,yap,'Yine de Sil');
-  askConfirm('Hesap silinsin mi?',yap);}
+  if(hrk)return askKritik(`Bu hesabın ${hrk} geçmiş hareketi var. Silersen o kayıtlar hesapsız kalır (kasa geçmişi bozulur). Yine de silinsin mi?`,yap,'Yine de Sil');
+  askKritik('Hesap silinsin mi?',yap,'Sil');}
 function silHareket(hid){const x=(db.hareketler||[]).find(h=>h.id===hid);if(!x)return;
-  askConfirm('Bu kayıt silinsin mi? Hesap bakiyesi geri düzeltilecek.',()=>{
+  askKritik('Bu kayıt silinsin mi? Hesap bakiyesi geri düzeltilecek.',()=>{
     const h=hesap(x.hesapId);if(h)h.bakiye+=(x.yon==='in'?-x.tutar:x.tutar);
     if(x.tur==='Gider'&&/ · düzenli$/.test(x.aciklama||'')){const _ad=(x.aciklama||'').replace(/ · düzenli$/,'');const _g=(db.duzenliGider||[]).find(z=>(z.ad||'')===_ad);if(_g&&_g.sonAy===ayKodu(x.tarih))_g.sonAy='';} // silinen düzenli gider o ay tekrar işlenebilsin
     if(x.tur==='Ortak Harcama')db.ortakHarcama=db.ortakHarcama.filter(o=>o.hareketId?o.hareketId!==hid:(o.tarih!==x.tarih||o.tutar!==x.tutar)); // id ile (eski kayıtlarda tarih+tutar)
@@ -4963,7 +4991,7 @@ function cekSatisBagli(id){return (db.satislar||[]).some(s=>s.odemeCekId===id||(
 function cekSil(id){const c=db.cekler.find(x=>x.id===id);if(!c)return;
   if(c.durum!=='portfoyde')return toast('İşlem görmüş çek silinemez (tahsil/ciro/karşılıksız) — kayıt geçmişte kalır');
   if(cekSatisBagli(id))return toast('Bu çek bir satışın ödemesi — silmek için satışı düzenle ya da iptal et (çek satışla birlikte kalkar)');
-  askConfirm('Bu çek kaydı silinsin mi?'+(c.cariIsle?'\nCari bakiyesi geri düzeltilecek.':''),()=>{
+  askKritik('Bu çek kaydı silinsin mi?'+(c.cariIsle?'\nCari bakiyesi geri düzeltilecek.':''),()=>{
     if(c.cariIsle){const cc=cari(c.cariId);if(cc){if(cc.doviz==='USD')cc.bakiyeUSD=(cc.bakiyeUSD||0)+c.tutar/(+c.islemKur||+db.kurUSD||1);else cc.bakiye+=c.tutar}}
     db.cekler=db.cekler.filter(x=>x.id!==id);save();closeM();rCek();toast('Çek silindi');
   },'Sil');
@@ -5792,7 +5820,7 @@ function isEmriIptal(id){const i=db.isemirleri.find(v=>v.id===id);if(!i)return;
   const per=+i.kumasTukStokParca||+i.kumasTukBirim||0; // 1 parça tüketimi (stok biriminde); eski kayıtlarda kg
   const mal=(i.malzeme||[]).filter(m=>m.durum==='var'&&m.hid);
   const oto=db.malSiparis.filter(s=>s.oto&&s.ieId===id&&sipAcik(s));
-  askConfirm('İş emri #'+id+' iptal edilsin mi?\n'+(k&&i.kumasTukToplam>0?'• '+(+i.kumasTukToplam).toLocaleString('tr-TR',{maximumFractionDigits:2})+' '+(k.birim||'')+' '+k.ad+' stoğa geri gelir\n':'')+(mal.length?'• '+mal.length+' malzeme düşümü geri alınır\n':'')+(oto.length?'• '+oto.length+' otomatik alım siparişi iptal olur\n':'')+'\nKayıt silinir (geri alınamaz).',()=>{
+  askKritik('İş emri #'+id+' iptal edilsin mi?\n'+(k&&i.kumasTukToplam>0?'• '+(+i.kumasTukToplam).toLocaleString('tr-TR',{maximumFractionDigits:2})+' '+(k.birim||'')+' '+k.ad+' stoğa geri gelir\n':'')+(mal.length?'• '+mal.length+' malzeme düşümü geri alınır\n':'')+(oto.length?'• '+oto.length+' otomatik alım siparişi iptal olur\n':'')+'\nKayıt silinir (geri alınamaz).',()=>{
     try{autoYedek('iş emri iptali öncesi')}catch(e){}
     if(k&&i.kumasTukToplam>0){
       if(hamRenkli(k)&&per>0)(i.renkDagilim||[]).forEach(r=>{const parca=(+r.adet||0)*(i.birim==='seri'?(+i.seriAdet||1):1);if(parca>0)malStoklaRenk(k,r.ad,parca*per);});
