@@ -6292,12 +6292,12 @@ async function fiyatListesiResimGonder(){
   });
 }
 // müşteri portal giriş bilgileri (kullanıcı adı / şifre)
-function portalKullanicilar(){open_('👤 Müşteri Giriş Bilgileri',`<div class="mini">Her müşteriye portal için <b>kullanıcı adı ve şifre</b> verin. Müşteri bunlarla girip yalnızca kendi siparişlerini ve cari durumunu görür. (Gerçekten kendi telefonundan girebilmesi için uygulamanın sunucuda yayınlanması gerekir.)</div><input id="pk-ara" placeholder="🔍 müşteri ara" oninput="cizPortalKul(this.value)" style="margin-top:10px"><div id="pk-list" style="margin-top:10px;max-height:60vh;overflow:auto"></div>`);cizPortalKul('')}
+function portalKullanicilar(){open_('👤 Müşteri Giriş Bilgileri',`<div class="mini">Her müşteriye portal için <b>kullanıcı adı ve şifre</b> verin. Müşteri bunlarla girip yalnızca kendi siparişlerini ve cari durumunu görür.<br><b>☁️ Buluta taşı:</b> müşteri kendi telefonundan <b>telefon + şifre</b> ile girer; telefon değişse bile siparişleri/bakiyesi kayıtlı kalır (önce 🎲 ile şifre üret, sonra buluta taşı). Bunun için senin bir kez <b>admin bulut girişi</b> yapmış olman gerekir.</div><input id="pk-ara" placeholder="🔍 müşteri ara" oninput="cizPortalKul(this.value)" style="margin-top:10px"><div id="pk-list" style="margin-top:10px;max-height:60vh;overflow:auto"></div>`);cizPortalKul('')}
 function cizPortalKul(q){const el=$('pk-list');if(!el)return;q=(q||'').trim().toLowerCase();
   const ms=db.cariler.filter(c=>c.tip==='musteri'&&(!q||(c.ad||'').toLowerCase().includes(q)));
   el.innerHTML=ms.length?ms.map(m=>`<div class="card" style="padding:10px 12px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center"><b>${esc(m.ad)}</b>${m.kullanici?`<span class="tag" style="background:var(--good-s);color:var(--good)">✓ tanımlı</span>`:`<span class="tag">giriş yok</span>`}</div>
     <div class="g2" style="margin-top:8px"><div><label style="font-size:11px">Kullanıcı adı</label><input value="${esc(m.kullanici||'')}" placeholder="ör. yilmaz" autocapitalize="off" oninput="cariKulSet(${m.id},'kullanici',this.value)" style="margin:2px 0 0"></div><div><label style="font-size:11px">Şifre</label><input value="${esc(m.sifre||'')}" placeholder="${m.sifreH?'•••• (gönderildi)':'şifre'}" oninput="cariKulSet(${m.id},'sifre',this.value)" style="margin:2px 0 0"></div></div>
-    <div style="display:flex;gap:7px;margin-top:8px"><button class="btn ghost sm" style="margin:0" onclick="cariKulUret(${m.id})">🎲 Otomatik oluştur</button>${m.kullanici?`<button class="btn ghost sm" style="margin:0" onclick="cariKulPaylas(${m.id})">📤 Bilgileri Gönder</button><button class="btn ghost sm danger" style="margin:0;flex:0 0 auto" onclick="cariKulSil(${m.id})">✕</button>`:''}</div></div>`).join(''):'<div class="mini" style="text-align:center;padding:20px">Müşteri bulunamadı</div>';}
+    <div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap"><button class="btn ghost sm" style="margin:0" onclick="cariKulUret(${m.id})">🎲 Otomatik oluştur</button>${m.kullanici?`<button class="btn ghost sm" style="margin:0" onclick="cariKulPaylas(${m.id})">📤 Bilgileri Gönder</button>${m.bulutUid?`<span class="tag" style="background:var(--ind-s);color:var(--ind);align-self:center">☁️ bulutta</span>`:`<button class="btn ghost sm" style="margin:0" onclick="cariBulutHesap(${m.id})">☁️ Buluta taşı</button>`}<button class="btn ghost sm danger" style="margin:0;flex:0 0 auto" onclick="cariKulSil(${m.id})">✕</button>`:''}</div></div>`).join(''):'<div class="mini" style="text-align:center;padding:20px">Müşteri bulunamadı</div>';}
 // 🔐 Portal şifresi: SHA-256 özeti (sifreH) ile doğrulanır; düz metin yalnız müşteriye gönderilene kadar tutulur, sonra silinir
 async function sifreOzet(s){try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('iq|'+s));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('')}catch(e){return 'djb:'+pinHash(s)}}
 function cariKulSet(id,f,v){const c=cari(id);if(!c)return;c[f]=(v||'').trim();if(f==='sifre'){const s=c.sifre;if(s)sifreOzet(s).then(h=>{if(c.sifre===s){c.sifreH=h;save();}});else{c.sifreH='';}}save()}
@@ -6309,10 +6309,49 @@ function cariKulUret(id){const c=cari(id);if(!c)return;const tr={'ç':'c','ğ':'
 function cariKulSil(id){const c=cari(id);if(!c)return;askConfirm(esc(c.ad)+' portal girişini silmek istiyor musun?',()=>{c.kullanici='';c.sifre='';c.sifreH='';delete c.portalTok;save();cizPortalKul(($('pk-ara')||{}).value||'');toast('Giriş bilgisi silindi')},'Sil')}
 function cariKulPaylas(id){const c=cari(id);if(!c||!c.kullanici)return;const url=location.href.split('#')[0]+'#siparis';
   if(!c.sifre)return toast('Şifre daha önce gönderildi ve silindi — "🎲 Otomatik oluştur" ile yeni şifre üretip gönder');
-  const t=`${db.firma||'IQ Basics'} toptan sipariş portalı giriş bilgileriniz:\n\n🔗 ${url}\n👤 Kullanıcı adı: ${c.kullanici}\n🔑 Şifre: ${c.sifre}\n\nGiriş yapıp katalogdan sipariş verebilirsiniz.`;
+  const t=c.bulutUid
+    ? `${db.firma||'IQ Basics'} toptan sipariş portalı — giriş:\n\n🔗 ${url}\n"Giriş" sekmesinden:\n📱 Telefon: ${c.tel||''}\n🔑 Şifre: ${c.sifre}\n\nHer telefondan bu bilgilerle girebilirsiniz; siparişleriniz ve bakiyeniz kayıtlı kalır.`
+    : `${db.firma||'IQ Basics'} toptan sipariş portalı giriş bilgileriniz:\n\n🔗 ${url}\n👤 Kullanıcı adı: ${c.kullanici}\n🔑 Şifre: ${c.sifre}\n\nGiriş yapıp katalogdan sipariş verebilirsiniz.`;
   waAc(c.tel||'',t);
   // gönderildi → düz metin şifre cihazda/bulutta durmasın (giriş özetle doğrulanır)
   if(c.sifreH){c.sifre='';save();setTimeout(()=>cizPortalKul(($('pk-ara')||{}).value||''),400);}}
+// ☁️ Patron, atadığı şifreyle müşteri için BULUT hesabı açar — müşteri her cihazdan telefon+şifre ile girer, verisi bulutta kalır.
+// Patron oturumu bozulmasın diye hesap İKİNCİL Firebase uygulamasında oluşturulur.
+async function cariBulutHesap(id){
+  const c=cari(id); if(!c)return;
+  if(!bulutBaslat())return toast('☁️ Bulut ayarlı değil');
+  if(!bulutGirisli())return bulutGirisIste('kullanici');
+  try{await bulutProfilYukle()}catch(e){}
+  if(!bulutAdminMi())return toast('Bu işlem için yönetici (admin) bulut girişi gerekli');
+  const tel=(c.tel||'').replace(/\D/g,'');
+  if(tel.length<10)return toast('Bulut hesabı için cari telefonu gerekli — önce cariyi düzenleyip telefon ekle');
+  const pw=c.sifre||'';
+  if(pw.length<6)return toast('Önce "🎲 Otomatik oluştur" ile şifre üret (en az 6 hane), sonra buluta taşı');
+  const authMail=kimlikMail(tel);
+  toast('☁️ Bulut hesabı açılıyor…');
+  const secName='iqb-sec';
+  let sec; try{sec=firebase.apps.find(a=>a&&a.name===secName)||firebase.initializeApp(FB_CONFIG,secName);}catch(e){return toast('Bulut başlatılamadı: '+(e.code||e.message));}
+  let uid=null;
+  try{
+    const cred=await sec.auth().createUserWithEmailAndPassword(authMail,pw);
+    uid=cred.user.uid;
+    await sec.firestore().collection('kullanicilar').doc(uid).set({rol:'musteri',istenenRol:'musteri',ad:c.ad||'',tel:c.tel||'',onay:false,cariId:0,istenenCari:c.id,girisMail:authMail,olusturma:Date.now()});
+  }catch(e){
+    try{await sec.auth().signOut()}catch(_){}
+    if(e.code==='auth/email-already-in-use')return toast('Bu telefonla zaten bulut hesabı var — müşteri o şifresiyle girsin ya da "👥 Bulut Kullanıcıları"ndan bu cariye bağla.');
+    return toast('Bulut hesabı açılamadı: '+(e.code||e.message));
+  }
+  try{await sec.auth().signOut()}catch(_){}
+  const ok=await bulutKullaniciOnayla(uid,'musteri',c.id);
+  if(!ok)return toast('Hesap açıldı ama onay yazılamadı — "👥 Bulut Kullanıcıları"ndan elle onayla');
+  try{
+    const gecmis=db.satislar.filter(s=>s.mid===c.id&&s.tip!=='iade').sort((a,b)=>b.tarih-a.tarih).slice(0,20).map(s=>({tarih:s.tarih,tutar:s.tutar,pb:s.pb||'TL',kalemler:(s.kalemler||[]).map(k=>({urun:k.urun,mik:k.mik,birim:k.birim}))}));
+    await _fb.collection('musteri_veri').doc(uid).set({ad:c.ad,bakiye:+c.bakiye||0,limit:+c.limit||0,gecmis,guncelleme:Date.now()});
+  }catch(e){console.warn('musteri_veri',e&&e.code);}
+  c.bulutUid=uid; save();
+  try{cizPortalKul(($('pk-ara')||{}).value||'')}catch(e){}
+  toast('☁️ Bulut hesabı hazır — müşteri TELEFON + şifre ile her cihazdan girebilir');
+}
 // 🔗 Davet linki & QR — rol (+cari) seç, hazır link/QR üret
 let davetGenRol='musteri';
 function bulutDavetLinki(){davetGenRol='musteri';open_('🔗 Davet Linki & QR',`
