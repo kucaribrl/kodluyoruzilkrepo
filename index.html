@@ -2893,16 +2893,19 @@ function formHammadde(id,presetKat){
     <div id="ham-tek-wrap" style="display:${renkli?'none':''}"><label>Stok</label><input id="h-stok" type="number" inputmode="numeric" value="${h.stok||0}"></div>
     <div class="g2"><div><label>Kritik seviye (uyarı)</label><input id="h-kritik" type="number" inputmode="numeric" value="${h.kritik||0}"></div><div><label>Raf / Depo yeri</label><input id="h-raf" value="${esc(h.raf||'')}" placeholder="ör. A-3"></div></div>
     <label>Barkod (opsiyonel)</label><input id="h-barkod" value="${esc(h.barkod||'')}" placeholder="okut / yaz">
-    <label>Aldığın yer (tedarikçi)</label><input id="h-ted" list="h-ted-dl" autocomplete="off" value="${esc(h.ted||'')}" placeholder="ör. Antep Kumaşçı" oninput="hamTedBorc()">
+    <label>Aldığın yer (tedarikçi) <span style="color:var(--bad)">*</span></label><input id="h-ted" list="h-ted-dl" autocomplete="off" value="${esc(h.ted||'')}" placeholder="ör. Antep Kumaşçı" oninput="hamTedBorc()">
     <datalist id="h-ted-dl">${teds.map(c=>`<option value="${esc(c.ad)}">`).join('')}</datalist>
     <div class="mini" id="h-ted-borc" style="margin-top:3px"></div>
+    <label style="display:flex;align-items:center;gap:7px;margin-top:8px;font-weight:600;color:var(--sub)"><input type="checkbox" id="h-acilis" ${h.acilis?'checked':''} style="width:auto" onchange="hamAcilisToggle()"> 📦 Açılış stoğu / sayım — kimseden alınmadı (tedarikçi & borç gerekmez)</label>
     <label>Alış Fiyatı (birim başı)</label>
     <div style="display:flex;gap:6px"><input id="h-alis" type="number" inputmode="decimal" value="${h.alis||0}" style="flex:1;min-width:0;margin:0"><select id="h-pb" style="width:64px;flex:0 0 auto;margin:0"><option value="TL" ${(h.pb||'TL')==='TL'?'selected':''}>₺</option><option value="USD" ${h.pb==='USD'?'selected':''}>$</option></select></div>
     <button class="btn" onclick="kaydetHammadde(${id||0})">Kaydet</button>
     ${id?`<button class="btn danger" onclick="silHammadde(${id})">Sil</button>`:''}`);
   if(renkli){if(!fHamRenk.length)fHamRenk=[{ad:'',stok:0,top:0,parti:''}];cizHamRenk();}
-  hamTedBorc();
+  hamTedBorc(); hamAcilisToggle();
 }
+// Açılış stoğu işaretliyse tedarikçi/fiyat zorunlu değil (borç yazılmaz)
+function hamAcilisToggle(){const on=$('h-acilis')&&$('h-acilis').checked;const t=$('h-ted');if(t){t.disabled=!!on;t.style.opacity=on?.5:1;}const a=$('h-alis');if(a)a.style.opacity=on?.6:1;}
 // Tedarikçiye güncel borç metni
 function tedBorc(ad){const c=ad?db.cariler.find(x=>x.tip==='tedarikci'&&(x.ad||'').toLowerCase()===(ad||'').trim().toLowerCase()):null;if(!c)return null;const p=[];if(+c.bakiye)p.push(money(c.bakiye,'TL'));if(+c.bakiyeUSD)p.push(money(c.bakiyeUSD,'USD'));return {c,str:p.length?p.join(' + '):'0'};}
 function hamTedBorc(){const el=$('h-ted-borc');if(!el)return;const t=tedBorc($('h-ted')?.value);
@@ -2952,19 +2955,22 @@ function kaydetHammadde(id){const ad=$('h-ad').value.trim();if(!ad)return toast(
     renkler.forEach(r=>{if(r.parti&&r.stok>0)r.partiler=[{kod:r.parti,mik:r.stok}];delete r.parti;}); // yazılan kod stok kırılımına işlenir
   }
   else stok=+($('h-stok')?.value||0);
+  const acilis=!!($('h-acilis')&&$('h-acilis').checked);
   const ted=($('h-ted')?.value||'').trim();const tedC=ted?db.cariler.find(c=>c.tip==='tedarikci'&&(c.ad||"").toLowerCase()===ted.toLowerCase()):null;
+  if(!acilis&&!ted)return toast('Kimden alındığı (tedarikçi) zorunlu — ya seç ya "Açılış stoğu"nu işaretle');
+  if(!acilis&&stok>0&&!(+($('h-alis')?.value)>0))return toast('Alış fiyatı gerekli — borç bu fiyattan yazılır (ya da "Açılış stoğu"nu işaretle)');
   const topSay=renkli?fHamRenk.reduce((a,r)=>a+(+r.top||0),0):0;
   const oldStok=id?(db.hammadde.find(x=>x.id===id)?.stok||0):0;
-  const o={ad,kat:$('h-kat').value,kod:($('h-kod')?.value||'').trim(),gramaj:+($('h-gramaj')?.value||0)||0,en:+($('h-en')?.value||0)||0,raf:($('h-raf')?.value||'').trim(),barkod:($('h-barkod')?.value||'').trim(),birim:$('h-birim').value,detay:$('h-detay').value.trim(),stok,top:topSay,renkler,kritik:+$('h-kritik').value||0,alis:+$('h-alis').value||0,pb:$('h-pb')?.value||'TL',ted,tedId:tedC?tedC.id:null,foto:fHamFoto||''};
+  const o={ad,kat:$('h-kat').value,kod:($('h-kod')?.value||'').trim(),gramaj:+($('h-gramaj')?.value||0)||0,en:+($('h-en')?.value||0)||0,raf:($('h-raf')?.value||'').trim(),barkod:($('h-barkod')?.value||'').trim(),birim:$('h-birim').value,detay:$('h-detay').value.trim(),stok,top:topSay,renkler,kritik:+$('h-kritik').value||0,alis:+$('h-alis').value||0,pb:$('h-pb')?.value||'TL',ted,tedId:tedC?tedC.id:null,foto:fHamFoto||'',acilis};
   if(id){Object.assign(db.hammadde.find(x=>x.id===id),o)}else{o.id=nid('h');db.hammadde.push(o)}
   const savedId=id||o.id;const delta=id?Math.max(0,stok-oldStok):stok; // yeni gelen miktar
   save();closeM();envStokTazele();
   // Tedarikçi yazılmış ama carilerde yoksa — kayıt ekranını aç, sonra borç sor
-  if(ted&&!tedC){toast('Kaydedildi ✓ · tedarikçiyi kaydet');
+  if(!acilis&&ted&&!tedC){toast('Kaydedildi ✓ · tedarikçiyi kaydet');
     _cariReturn=(ncid)=>{const m=db.hammadde.find(x=>x.id===savedId);if(m){m.tedId=ncid;save();}formHammadde(savedId);setTimeout(()=>hamBorcSor(savedId,ncid,delta),220);};
     setTimeout(()=>formCari('tedarikci',0,ted),150);return;}
   // Kayıtlı tedarikçi + fiyat + yeni miktar → borç yazmayı öner
-  if(tedC&&(+o.alis>0)&&delta>0){hamBorcSor(savedId,tedC.id,delta);return;}
+  if(!acilis&&tedC&&(+o.alis>0)&&delta>0){hamBorcSor(savedId,tedC.id,delta);return;}
   toast('Kaydedildi ✓')}
 // Doğrudan alımda tedarikçiye borç yazmayı öner (formUrun'daki hazır-alım mantığı)
 function hamBorcSor(hid,tedId,delta){const h=db.hammadde.find(x=>x.id===hid);const ted=cari(tedId);
