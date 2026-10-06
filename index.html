@@ -2312,8 +2312,9 @@ function kaydetMalSipTeslim(id){
   let ted=s.tedId?cari(s.tedId):null;
   if(!ted&&s.ted)ted=db.cariler.find(c=>c.tip==='tedarikci'&&(c.ad||'').toLowerCase()===(s.ted||'').toLowerCase());
   if(ted)s.tedId=ted.id;
-  if(ted&&s.fiyat>0&&buParti>0){const tutar=buParti*(+s.fiyat||0),pb=s.pb||'TL';
+  if(ted&&s.fiyat>0&&buParti>0){const tutar=buParti*(+s.fiyat||0),pb=s.pb||'TL';const kur=+db.kurUSD||1;
     if(pb==='USD'){ted.doviz='USD';ted.bakiyeUSD=(+ted.bakiyeUSD||0)+tutar}else{ted.bakiye=(+ted.bakiye||0)+tutar}
+    db.hareketler.push({id:nid('hr'),cariId:ted.id,tip:'alim',tutar:pb==='USD'?tutar*kur:tutar,pb,tutarPB:tutar,kur,tarih:gelenTarih||Date.now(),hesapId:null,yon:null,aciklama:'Sipariş: '+(s.ad||''),sipId:s.id});
     s.borclandi=true;s.borcTutar=(+s.borcTutar||0)+tutar;s.borcPB=pb;borcMsj=' · '+esc(ted.ad)+' +'+money(tutar,pb)+' borç';}
   else if(!ted&&s.ted&&s.fiyat>0&&buParti>0)borcMsj=' · ⚠️ "'+esc(s.ted)+'" carilerde kayıtlı değil — borç YAZILMADI (tedarikçiyi Cari\'ye ekle)';
   save();closeM();envView='siparis';rEnvanter();
@@ -2341,7 +2342,10 @@ function malSipIptal(id){askConfirm('Sipariş iptal edilsin mi?',()=>{const s=db
 function malSipSil(id){const s=(db.malSiparis||[]).find(x=>x.id===id);
   const alinmis=s&&(s.durum==='kismi'||(typeof sipTopGelen==='function'&&sipTopGelen(s)>0));
   const msg=alinmis?'Bu siparişin KISMİ teslimatı var — silersen gelen miktar kaydı kaybolur. Yine de silinsin mi?':'Sipariş kaydı silinsin mi?';
-  askKritik(msg,()=>{db.malSiparis=db.malSiparis.filter(x=>x.id!==id);save();closeM();envView='siparis';rEnvanter();toast('Silindi');},'Sil','Sipariş Sil');}
+  askKritik(msg,()=>{
+    let iptalVar=false;
+    (db.hareketler||[]).filter(x=>x.tip==='alim'&&x.sipId===id).forEach(x=>{const ted=cari(x.cariId);if(!ted)return;const pb=x.pb||'TL',amt=+x.tutarPB||+x.tutar||0;if(pb==='USD')ted.bakiyeUSD=(+ted.bakiyeUSD||0)-amt;else ted.bakiye=(+ted.bakiye||0)-amt;db.hareketler.push({id:nid('hr'),cariId:ted.id,tip:'alim-iptal',tutar:+x.tutar||0,pb,tutarPB:amt,kur:x.kur||1,tarih:Date.now(),hesapId:null,yon:null,aciklama:'Sipariş silindi — alım iptali: '+((s&&s.ad)||'')});iptalVar=true;});
+    db.malSiparis=db.malSiparis.filter(x=>x.id!==id);save();closeM();envView='siparis';rEnvanter();toast('Silindi'+(iptalVar?' · tedarikçi borcu geri alındı':''));},'Sil','Sipariş Sil');}
 
 function urunKapak(u){const r=(u.renkler||[]).find(x=>x&&typeof x==='object'&&x.foto);return r?r.foto:''}
 // ürünün tüm görselleri (renk fotoğrafları + genel fotolar) — galeri için
@@ -2977,7 +2981,9 @@ function hamBorcSor(hid,tedId,delta){const h=db.hammadde.find(x=>x.id===hid);con
   if(!h||!ted||!(delta>0)||!(+h.alis>0)){toast('Kaydedildi ✓');return;}
   const tutar=delta*(+h.alis||0),pb=h.pb||'TL';
   askConfirm(`${delta.toLocaleString('tr-TR')} ${h.birim} × ${money(h.alis,pb)} = ${money(tutar,pb)}\n${ted.ad} firmasına borç yazılsın mı?`,()=>{
+    const kur=+db.kurUSD||1;
     if(pb==='USD'){ted.doviz='USD';ted.bakiyeUSD=(+ted.bakiyeUSD||0)+tutar}else{ted.bakiye=(+ted.bakiye||0)+tutar}
+    db.hareketler.push({id:nid('hr'),cariId:ted.id,tip:'alim',tutar:pb==='USD'?tutar*kur:tutar,pb,tutarPB:tutar,kur,tarih:Date.now(),hesapId:null,yon:null,aciklama:'Malzeme: '+(h.ad||''),hid:h.id});
     save();toast(`${ted.ad} firmasına ${money(tutar,pb)} borç yazıldı`);
   },'Borç Yaz');
 }
@@ -2988,7 +2994,10 @@ function silHammadde(id){
   const sipVar=(db.malSiparis||[]).some(s=>s.hid===id&&(s.durum==='bekliyor'||s.durum==='kismi'));
   if(ieVar||sipVar){const nrd=[ieVar?'iş emri malzemesi':'',sipVar?'açık malzeme siparişi':''].filter(Boolean).join(' + ');
     return toast('Silinemez: '+nrd+' bu malzemeye bağlı. Önce onları kapat/iptal et.');}
-  askKritik('"'+((h&&h.ad)||'Malzeme')+'" silinsin mi? Bu işlem geri alınamaz.',()=>{db.hammadde=db.hammadde.filter(x=>x.id!==id);save();closeM();envStokTazele();toast('Silindi')},'Sil','Malzeme Sil')}
+  askKritik('"'+((h&&h.ad)||'Malzeme')+'" silinsin mi? Bu işlem geri alınamaz.',()=>{
+    let iptalVar=false;
+    (db.hareketler||[]).filter(x=>x.tip==='alim'&&x.hid===id).forEach(x=>{const ted=cari(x.cariId);if(!ted)return;const pb=x.pb||'TL',amt=+x.tutarPB||+x.tutar||0;if(pb==='USD')ted.bakiyeUSD=(+ted.bakiyeUSD||0)-amt;else ted.bakiye=(+ted.bakiye||0)-amt;db.hareketler.push({id:nid('hr'),cariId:ted.id,tip:'alim-iptal',tutar:+x.tutar||0,pb,tutarPB:amt,kur:x.kur||1,tarih:Date.now(),hesapId:null,yon:null,aciklama:'Malzeme silindi — alım iptali: '+((h&&h.ad)||'')});iptalVar=true;});
+    db.hammadde=db.hammadde.filter(x=>x.id!==id);save();closeM();envStokTazele();toast('Silindi'+(iptalVar?' · tedarikçi borcu geri alındı':''))},'Sil','Malzeme Sil')}
 // Malzeme kaydı sonrası: hangi ekrandan geldiyse oraya dön (Envanter ya da Stok)
 function envStokTazele(){if(cur==='envanter')rEnvanter();else rStok();}
 
@@ -4437,6 +4446,7 @@ function cariEkstre(id){
   });
   (db.hareketler||[]).filter(h=>h.cariId===id).forEach(h=>{
     if(h.tip==='alim'){if(h.tutar>0)evs.push({t:h.tarih,ad:'Alım',det:h.aciklama||'',borc:h.tutar});return;}
+    if(h.tip==='alim-iptal'){if(h.tutar>0)evs.push({t:h.tarih,ad:'Alım İptali',det:h.aciklama||'',alacak:h.tutar});return;}
     const isTah=h.tip==='tahsilat';
     if(h.tutar>0)evs.push({t:h.tarih,ad:isTah?'Tahsilat':'Ödeme',det:h.tur||'',[isMus===isTah?'alacak':'borc']:h.tutar});
     if(h.kesik>0)evs.push({t:h.tarih+1,ad:'Kesik',det:'müşteri kırdı',alacak:h.kesik});
