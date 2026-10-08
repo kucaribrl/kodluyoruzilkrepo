@@ -1909,7 +1909,7 @@ function sipKalan(s){return sipSatirlar(s).reduce((a,l)=>a+Math.max(0,(+l.miktar
 // Stoğa renk bazlı ekle
 // 🧵 Kumaş PARTİ (lot) takibi: aynı rengin birden fazla partisi olabilir; partiler arası ton farkı riskine karşı
 // giriş parti koduyla yapılır, düşüm FIFO'dur ve birden fazla partiye taşarsa uyarı verilir.
-function malStoklaRenk(h,renk,mik,parti){if(!mik)return;
+function malStoklaRenk(h,renk,mik,parti,meta){if(!mik)return;
   if(!renk&&h.renkler&&h.renkler.length)renk='—'; // renkli malzemeye renksiz giriş → '—' rengine (h.stok = renk toplamı bozulmasın)
   if(renk&&(!h.renkler||!h.renkler.length)&&(+h.stok||0)>0)h.renkler=[{ad:'—',stok:+h.stok||0,top:0}]; // ilk renkli giriş: eski renksiz stok '—' satırına taşınır, KAYBOLMAZ
   if(renk){if(!h.renkler)h.renkler=[];let r=h.renkler.find(x=>(x.ad||'').toLocaleLowerCase('tr-TR')===(renk||'').toLocaleLowerCase('tr-TR'));if(!r){r={ad:renk,stok:0,top:0};h.renkler.push(r);}
@@ -1920,7 +1920,7 @@ function malStoklaRenk(h,renk,mik,parti){if(!mik)return;
       const pSum=()=>r.partiler.reduce((a,x)=>a+(+x.mik||0),0);
       if((+r.stok||0)>pSum()+0.0001)r.partiler.push({kod:'—',mik:+((+r.stok||0)-pSum()).toFixed(3)});
       if(mik>0){const pk=((parti||'')+'').trim()||'—';let pp=r.partiler.find(x=>x.kod===pk);
-        if(!pp){pp={kod:pk,mik:0};r.partiler.push(pp);}pp.mik=+((+pp.mik||0)+mik).toFixed(3);}
+        if(!pp){pp={kod:pk,mik:0};if(meta){if(meta.fiyat!=null&&+meta.fiyat>0)pp.fiyat=+meta.fiyat;if(meta.pb)pp.pb=meta.pb;if(meta.tarih)pp.tarih=meta.tarih;if(meta.ted)pp.ted=meta.ted;}r.partiler.push(pp);}pp.mik=+((+pp.mik||0)+mik).toFixed(3);}
       else{let kalan=-mik,kullanilan=0;
         for(const pp of r.partiler){if(kalan<=0.0001)break;const al=Math.min(+pp.mik||0,kalan);if(al>0){pp.mik=+((+pp.mik||0)-al).toFixed(3);kalan-=al;kullanilan++;}}
         r.partiler=r.partiler.filter(x=>(+x.mik||0)>0.0001);
@@ -2291,16 +2291,17 @@ function kaydetMalSipTeslim(id){
   if(!h)h=db.hammadde.find(x=>x.kat===s.kat&&(x.ad||'').toLowerCase()===(s.ad||'').toLowerCase());
   if(!h){h={id:nid('h'),ad:s.ad,kat:s.kat,birim:s.birim,detay:'',stok:0,renkler:[],kritik:0,alis:+s.fiyat||0,pb:s.pb||'TL',ted:s.ted||'',tedId:s.tedId||null,foto:s.foto||'',gramaj:+s.gramaj||0,en:+s.en||0};db.hammadde.push(h);}
   s.hid=h.id;if(s.fiyat>0){h.alis=+s.fiyat;h.pb=s.pb;}
+  const tV=$('mt-tarih')?.value;const gelenTarih=tV?new Date(tV+'T12:00:00').getTime():Date.now();
+  const _lotMeta={fiyat:+s.fiyat||0,pb:s.pb||'TL',tarih:gelenTarih,ted:s.ted||''};
   let buParti=0;
   mtSatir.forEach(g=>{const l=lines[g.li];if(!l)return;
     g.rows.forEach(r=>{const inp=Math.max(0,+r.mik||0);if(!(inp>0))return;
       const pk=(r.parti||'').trim();
       l.gelen=(+l.gelen||0)+inp;buParti+=inp;
       if(pk){l.partiGelen=(l.partiGelen?l.partiGelen+' · ':'')+pk+' '+inp;l.parti=pk;} // gelen geçmişi + son kod
-      if(l.renk||pk)malStoklaRenk(h,l.renk||'—',inp,pk);else malStoklaRenk(h,'',inp);});});
+      if(l.renk||pk)malStoklaRenk(h,l.renk||'—',inp,pk,_lotMeta);else malStoklaRenk(h,'',inp,'',_lotMeta);});});
   if(!(buParti>0))return toast('Gelen miktarı gir');
   s.satirlar=lines;const tg=sipTopGelen(s),to=sipTopMik(s);
-  const tV=$('mt-tarih')?.value;const gelenTarih=tV?new Date(tV+'T12:00:00').getTime():Date.now();
   s.gelenMiktar=tg;s.gelenTarih=gelenTarih;const nnot=($('mt-not')?.value||'').trim();if(nnot)s.gelenNot=nnot;
   if(mtFisler.length){s.fisler=(s.fisler||[]).concat(mtFisler);mtFisler=[];}
   // "Siparişi kapat" işaretliyse eksik bile olsa sipariş biter — gelen ne kadarsa o kadar, fark bilgi olarak kalır
@@ -2941,7 +2942,7 @@ function cizHamRenk(){const box=$('ham-renk-box');if(!box)return;const bir=$('h-
       <input type="number" inputmode="decimal" min="0" value="${r.stok||0}" oninput="fHamRenk[${i}].stok=Math.max(0,+this.value||0);hamRenkTot()" placeholder="0" style="width:56px;margin:0;padding:8px 5px" title="${esc(bir)}">
       ${kumas?`<input type="number" inputmode="numeric" min="0" value="${r.top||''}" oninput="fHamRenk[${i}].top=Math.max(0,+this.value||0);hamRenkTot()" placeholder="top" style="width:46px;margin:0;padding:8px 5px" title="top sayısı">`:''}
       <button type="button" class="del" onclick="fHamRenk.splice(${i},1);if(!fHamRenk.length)fHamRenk=[{ad:'',stok:0,top:0,parti:''}];cizHamRenk()" style="flex:0 0 auto">✕</button>
-    </div>${(r.partiler&&r.partiler.length)?`<div class="mini" style="margin:-2px 0 6px 29px">🧾 Parti: ${r.partiler.map(x=>esc(x.kod)+' '+(+x.mik||0)).join(' · ')} <span style="color:var(--sub)">(kutuya kod yazarsan hepsi o partiye toplanır)</span></div>`:''}`;}).join('')+`<datalist id="renkList">${['Beyaz','Siyah','Lacivert','Gri','Antrasit','Bej','Bordo','Yeşil','Haki','Ekru','Mavi','Kırmızı','Kahverengi','Vizon','Füme'].map(c=>`<option value="${c}">`).join('')}</datalist>
+    </div>${(r.partiler&&r.partiler.length)?`<div class="mini" style="margin:-2px 0 6px 29px">🧾 Partiler:<br>${r.partiler.map(x=>'&nbsp;• '+esc(x.kod)+' · <b>'+(+x.mik||0)+'</b>'+(x.fiyat?' · '+money(x.fiyat,x.pb||'TL'):'')+(x.tarih?' · '+new Date(x.tarih).toLocaleDateString('tr-TR'):'')+(x.ted?' · '+esc(x.ted):'')).join('<br>')}<br><span style="color:var(--sub)">(kutuya kod yazarsan hepsi o partiye toplanır)</span></div>`:''}`;}).join('')+`<datalist id="renkList">${['Beyaz','Siyah','Lacivert','Gri','Antrasit','Bej','Bordo','Yeşil','Haki','Ekru','Mavi','Kırmızı','Kahverengi','Vizon','Füme'].map(c=>`<option value="${c}">`).join('')}</datalist>
     <button type="button" class="btn ghost sm" onclick="fHamRenk.push({ad:'',stok:0,top:0,parti:''});cizHamRenk()" style="margin-top:2px">+ Renk Ekle</button>
     <div class="mini" id="ham-renk-tot" style="margin-top:6px;font-weight:700"></div>`;
   hamRenkTot();}
@@ -2956,7 +2957,8 @@ function kaydetHammadde(id){const ad=$('h-ad').value.trim();if(!ad)return toast(
       if(eskiH)renkler.forEach(r=>{const er=(eskiH.renkler||[]).find(x=>x&&typeof x==='object'&&(x.ad||'').toLowerCase()===r.ad.toLowerCase());
         if(er&&er.partiler&&er.partiler.length){const ps=er.partiler.reduce((a,x)=>a+(+x.mik||0),0);
           r.partiler=Math.abs(ps-r.stok)<0.001?er.partiler.map(x=>({...x})):[{kod:'—',mik:r.stok}];}});}
-    renkler.forEach(r=>{if(r.parti&&r.stok>0)r.partiler=[{kod:r.parti,mik:r.stok}];delete r.parti;}); // yazılan kod stok kırılımına işlenir
+    const _alis=+($('h-alis')?.value)||0,_pb=$('h-pb')?.value||'TL',_nowT=Date.now(),_tedAd=($('h-ted')?.value||'').trim();
+    renkler.forEach(r=>{if(r.parti&&r.stok>0){const _lot={kod:r.parti,mik:r.stok};if(_alis>0){_lot.fiyat=_alis;_lot.pb=_pb;_lot.tarih=_nowT;if(_tedAd)_lot.ted=_tedAd;}r.partiler=[_lot];}delete r.parti;}); // yazılan kod stok kırılımına işlenir (fiyat/tarih ile)
   }
   else stok=+($('h-stok')?.value||0);
   const acilis=!!($('h-acilis')&&$('h-acilis').checked);
@@ -2966,8 +2968,21 @@ function kaydetHammadde(id){const ad=$('h-ad').value.trim();if(!ad)return toast(
   const topSay=renkli?fHamRenk.reduce((a,r)=>a+(+r.top||0),0):0;
   const oldStok=id?(db.hammadde.find(x=>x.id===id)?.stok||0):0;
   const o={ad,kat:$('h-kat').value,kod:($('h-kod')?.value||'').trim(),gramaj:+($('h-gramaj')?.value||0)||0,en:+($('h-en')?.value||0)||0,raf:($('h-raf')?.value||'').trim(),barkod:($('h-barkod')?.value||'').trim(),birim:$('h-birim').value,detay:$('h-detay').value.trim(),stok,top:topSay,renkler,kritik:+$('h-kritik').value||0,alis:+$('h-alis').value||0,pb:$('h-pb')?.value||'TL',ted,tedId:tedC?tedC.id:null,foto:fHamFoto||'',acilis};
-  if(id){Object.assign(db.hammadde.find(x=>x.id===id),o)}else{o.id=nid('h');db.hammadde.push(o)}
-  const savedId=id||o.id;const delta=id?Math.max(0,stok-oldStok):stok; // yeni gelen miktar
+  let savedId=id, mergedTo=null;
+  if(id){Object.assign(db.hammadde.find(x=>x.id===id),o)}
+  else{
+    const mevcut=db.hammadde.find(x=>!x.pasif&&x.kat===o.kat&&(x.ad||'').toLocaleLowerCase('tr-TR')===(o.ad||'').toLocaleLowerCase('tr-TR'));
+    if(mevcut){ // aynı isimli malzeme var → kopya açma, yeni parti olarak ekle
+      mergedTo=mevcut;
+      if(renkli){(o.renkler||[]).forEach(r=>{(r.partiler&&r.partiler.length?r.partiler:[{kod:'—',mik:r.stok}]).forEach(p=>{if(+p.mik>0)malStoklaRenk(mevcut,r.ad,+p.mik,p.kod,{fiyat:(p.fiyat!=null?p.fiyat:(o.alis||0)),pb:(p.pb||o.pb),tarih:(p.tarih||Date.now()),ted:(p.ted||o.ted)});});});}
+      else{mevcut.stok=+(((+mevcut.stok||0)+stok).toFixed(3));}
+      if(o.alis>0){mevcut.alis=o.alis;mevcut.pb=o.pb;}
+      if(o.ted){mevcut.ted=o.ted;mevcut.tedId=o.tedId;}
+      if(!mevcut.foto&&o.foto)mevcut.foto=o.foto;
+      savedId=mevcut.id;
+    } else { o.id=nid('h');db.hammadde.push(o);savedId=o.id; }
+  }
+  const delta=id?Math.max(0,stok-oldStok):stok; // yeni gelen miktar
   save();closeM();envStokTazele();
   // Tedarikçi yazılmış ama carilerde yoksa — kayıt ekranını aç, sonra borç sor
   if(!acilis&&ted&&!tedC){toast('Kaydedildi ✓ · tedarikçiyi kaydet');
@@ -2975,7 +2990,7 @@ function kaydetHammadde(id){const ad=$('h-ad').value.trim();if(!ad)return toast(
     setTimeout(()=>formCari('tedarikci',0,ted),150);return;}
   // Kayıtlı tedarikçi + fiyat + yeni miktar → borç yazmayı öner
   if(!acilis&&tedC&&(+o.alis>0)&&delta>0){hamBorcSor(savedId,tedC.id,delta);return;}
-  toast('Kaydedildi ✓')}
+  toast(mergedTo?('Mevcut "'+mergedTo.ad+'" malzemesine eklendi ✓ (yeni parti)'):'Kaydedildi ✓')}
 // Doğrudan alımda tedarikçiye borç yazmayı öner (formUrun'daki hazır-alım mantığı)
 function hamBorcSor(hid,tedId,delta){const h=db.hammadde.find(x=>x.id===hid);const ted=cari(tedId);
   if(!h||!ted||!(delta>0)||!(+h.alis>0)){toast('Kaydedildi ✓');return;}
