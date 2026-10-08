@@ -1886,6 +1886,7 @@ function rEnvanter(){
   html+=`<div class="segs">`+mkats.map(k=>`<div class="seg ${k===envMalKat?'on':''}" onclick="envMalKat='${esc(jsq(k))}';rEnvanter()">${k==='Tümü'?'Tümü':envKatIc(k)+' '+esc(k)}</div>`).join('')+`</div>`;
   const yeniKat=envMalKat==='Tümü'?'Kumaş':envMalKat;
   html+=`<button class="btn g" style="margin-bottom:10px" onclick="formHammadde(0,'${esc(jsq(yeniKat))}')">＋ ${envMalKat==='Tümü'?'Malzeme':yeniKat} Alımı / Ekle</button>`;
+  if(typeof canSayim==='function'&&canSayim())html+=`<button class="btn ghost sm" style="margin-bottom:10px" onclick="envSayim()">📋 Malzeme / Kumaş Sayımı Yap</button>`;
   html+=`<div class="card" id="env-list"></div>`;
   $('app').innerHTML=html; rEnvList();
 }
@@ -2449,6 +2450,47 @@ function kaydetSayim(id,fromList){const u=urun(id);if(!u)return;
   u.sonSayim=Date.now();save();
   toast(fark===0?'Sayım kaydedildi ✓ fark yok':`Sayım kaydedildi · fark ${fark>0?'+':''}${fark} ${u.birim}`);
   if(fromList)depoSayim();else{closeM();render()}
+}
+/* ---- Malzeme / Kumaş Sayımı (envanter) — renkli kumaşta renk renk, parti tutarlılığı korunur ---- */
+function envSayim(){if(!canSayim())return toast('Yetkiniz yok');
+  const list=[...db.hammadde].filter(h=>!h.pasif).sort((a,b)=>(a.sonSayim||0)-(b.sonSayim||0));
+  if(!list.length)return toast('Malzeme yok');
+  const today=new Date().toDateString();
+  const bugunN=list.filter(h=>h.sonSayim&&new Date(h.sonSayim).toDateString()===today).length;
+  const rows=list.map(h=>{const sayilmis=h.sonSayim&&new Date(h.sonSayim).toDateString()===today;
+    return `<div class="row" onclick="formHamSayim(${h.id},1)"><div class="av ${sayilmis?'g':'gray'}">${sayilmis?'✅':envKatIc(h.kat)}</div><div class="mid"><div class="t">${esc(h.ad)}</div><div class="s">${esc(h.kat||'')} · 📍 ${h.raf?esc(h.raf):'<span style="color:var(--bad)">raf yok</span>'} · ${h.sonSayim?'son '+dstr(h.sonSayim):'hiç sayılmadı'}</div></div><div class="end"><div class="n">${(+h.stok||0).toLocaleString('tr-TR')}</div><div class="u">${esc(h.birim||'')}</div></div></div>`}).join('');
+  open_('📋 Malzeme Sayımı',`<div class="mini">Fiziksel sayımı gir; stok sayılan değere çekilir, fark kaydedilir. Kumaşta renk renk say — partiler korunur (eksikte eski partiden düşer).</div>
+    <div class="okbox" style="margin:8px 0">Bugün sayılan: <b>${bugunN}</b> / ${list.length}</div>
+    <div class="card" style="max-height:60vh;overflow:auto">${rows}</div>`);
+}
+function formHamSayim(id,fromList){const h=db.hammadde.find(x=>x.id===id);if(!h)return;if(!canSayim())return toast('Yetkiniz yok');
+  const cols=hamRenkli(h);
+  const rows=cols?h.renkler.map((r,i)=>`<div class="syrow"><span class="sw sm" style="background:${r.hex||hexFromAd(r.ad)||'#8a8f98'}"></span><span class="synm">${esc(r.ad||'—')}<small>sistemde ${(+r.stok||0).toLocaleString('tr-TR')} ${esc(h.birim||'')}</small></span><input id="hsy-${i}" type="number" inputmode="decimal" min="0" value="${+r.stok||0}" oninput="hamSayFark()" class="syin"></div>`).join('')
+    :`<div class="syrow"><span class="synm">${esc(h.ad)}<small>sistemde ${(+h.stok||0).toLocaleString('tr-TR')} ${esc(h.birim||'')}</small></span><input id="hsy-0" type="number" inputmode="decimal" min="0" value="${+h.stok||0}" oninput="hamSayFark()" class="syin"></div>`;
+  open_('📋 Sayım · '+h.ad,`
+    <label>📍 RAF / Depo Yeri</label><input id="hsy-raf" value="${esc(h.raf||'')}" placeholder="A-12">
+    <div class="sec" style="margin-top:12px">Saydığın ${esc(h.birim||'miktar')} ${cols?'<span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub)">— renk renk</span>':''}</div>
+    <div class="card" style="padding:6px 12px">${rows}</div>
+    <div class="mini" id="hsy-fark" style="margin-top:8px"></div>
+    <button class="btn" onclick="kaydetHamSayim(${id},${fromList?1:0})">✓ Sayımı Kaydet</button>
+    ${fromList?`<button class="btn ghost sm" style="margin-top:8px" onclick="envSayim()">← Sayım listesine dön</button>`:''}`);
+  window._haySay=h; hamSayFark();
+}
+function hamSayFark(){const h=window._haySay;if(!h)return;const el=$('hsy-fark');if(!el)return;
+  const cols=hamRenkli(h);let sis=0,say=0;
+  if(cols)h.renkler.forEach((r,i)=>{sis+=(+r.stok||0);say+=Math.max(0,+($('hsy-'+i)?.value||0))});
+  else{sis=+h.stok||0;say=Math.max(0,+($('hsy-0')?.value||0))}
+  const f=+(say-sis).toFixed(3);
+  el.innerHTML=`Sistemde <b>${sis.toLocaleString('tr-TR')}</b> · saydın <b>${say.toLocaleString('tr-TR')}</b> · fark <b style="color:${f===0?'var(--good)':f<0?'var(--bad)':'var(--thr)'}">${f>0?'+':''}${f.toLocaleString('tr-TR')}</b>${f?' '+(f<0?'(eksik/kayıp)':'(fazla)'):' ✓'}`;
+}
+function kaydetHamSayim(id,fromList){const h=db.hammadde.find(x=>x.id===id);if(!h)return;if(!canSayim())return toast('Yetkiniz yok');
+  h.raf=($('hsy-raf')?.value||'').trim();
+  const cols=hamRenkli(h);let fark=0;
+  if(cols){h.renkler.forEach((r,i)=>{const el=$('hsy-'+i);if(!el)return;const say=Math.max(0,+el.value||0);const d=+(say-(+r.stok||0)).toFixed(3);if(d!==0){fark+=d;malStoklaRenk(h,r.ad,d);}});}
+  else{const say=Math.max(0,+($('hsy-0')?.value||0));fark=+(say-(+h.stok||0)).toFixed(3);h.stok=say;}
+  h.sonSayim=Date.now();save();
+  toast(Math.abs(fark)<0.001?'Sayım kaydedildi ✓ fark yok':`Sayım kaydedildi · fark ${fark>0?'+':''}${+fark.toFixed(3)} ${h.birim||''}`);
+  if(fromList)envSayim();else{closeM();envStokTazele();}
 }
 const PAL=['#111111','#ffffff','#1d2f52','#8a8f98','#e8e2d4','#5a1220','#2b2b2b','#0f9d63','#c8891a','#7a4fd0','#e0455f','#333940'];
 const RENK_ADI={'#111111':'Siyah','#ffffff':'Beyaz','#f2f2ee':'Beyaz','#1d2f52':'Lacivert','#8a8f98':'Gri','#e8e2d4':'Bej','#5a1220':'Bordo','#2b2b2b':'Antrasit','#0f9d63':'Yeşil','#c8891a':'Hardal','#7a4fd0':'Mor','#e0455f':'Kırmızı','#333940':'Antrasit'};
