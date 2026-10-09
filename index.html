@@ -3109,7 +3109,7 @@ function formSatis(pre,editId){
   sepet=[];sPB='TL';sVade=0;sKurEski=null;sEdit=editId||0;sDurum='teslim';sMusId=0;sUrunId=0;sCekFoto='';sOdemeler=[];sDepo=false;sFoto='';sEkstra=[];
   if(!db.cariler.some(c=>c.tip==='musteri'))return toast('Önce müşteri ekle (Cari)');
   if(!db.urunler.length)return toast('Önce ürün ekle (Stok)');
-  let eIsk=0,eKdv=10,eTasima=0,eSevk='',eKesik=0;
+  let eIsk=0,eKdv=0,eTasima=0,eSevk='',eKesik=0;
   if(editId){const s=db.satislar.find(x=>x.id===editId);if(s){sMusId=s.mid;sPB=s.pb;sDurum=s.teslimDurum||'teslim';eIsk=s.iskonto||0;eKdv=s.kdv||0;eTasima=s.tasima||0;eSevk=s.sevkiyat||'';eKesik=s.kesik||0;sDepo=!!s.depo;sFoto=s.foto||'';sOdemeler=(s.odemeler||(s.odenen>0?[{tur:s.odemeTur||'Nakit',tutar:s.odenen,pb:s.pb,hesapId:s.odemeHesapId||0,vade:s.cekVade||0,foto:s.cekFoto||''}]:[])).map(l=>({...l}));sepet=s.kalemler.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:k.fiyat,renkler:k.renkler?k.renkler.map(r=>({...r})):undefined}));sEkstra=(s.ekstralar||[]).map(x=>({...x}));sVade=(+s.vadeGun)||(Math.round((+s.vadeFarki||0)/2.5)*30);sKurEski=(s.pb&&s.pb!=='TL'&&+s.satisKur)?{pb:s.pb,kur:+s.satisKur}:null}}
   else if(pre){const u=urun(pre);if(u){sMusId=0;if(hasRenkStok(u))sUrunId=u.id;else sepet.push({uid:u.id,urun:u.ad,mik:1,birim:u.birim,fiyat:urunSatisTL(u)})}} // renkli ürün → renk paneli açılır, sepete körlemesine girmez
   if(!sOdemeler.length)sOdemeler=[{tur:'Nakit',tutar:0,pb:sPB,hesapId:(db.hesaplar[0]&&db.hesaplar[0].id)||0,vade:0,foto:''}];
@@ -3161,13 +3161,15 @@ const ODEME_TUR=['Nakit','Kredi Kartı','Havale','Çek'];
 function odemeToplamTL(){return sOdemeler.reduce((a,l)=>a+(+l.tutar||0)*pbKur(l.pb),0)}
 function odemeEkle(){sOdemeler.push({tur:'Nakit',tutar:0,pb:sPB,hesapId:(db.hesaplar[0]&&db.hesaplar[0].id)||0,vade:0,foto:''});cizOdeme()}
 function odemeSil(i){sOdemeler.splice(i,1);if(!sOdemeler.length)sOdemeler=[{tur:'Nakit',tutar:0,pb:sPB,hesapId:(db.hesaplar[0]&&db.hesaplar[0].id)||0,vade:0,foto:''}];cizOdeme()}
-function odemeSet(i,key,val){const l=sOdemeler[i];if(!l)return;if(key==='tutar')l.tutar=Math.max(0,+val||0);else if(key==='vade')l.vade=val?new Date(val+'T12:00:00').getTime():0;else if(key==='hesapId')l.hesapId=+val;else l[key]=val;if(key==='tutar'||key==='pb')odemeOzet();}
+function odemeSet(i,key,val){const l=sOdemeler[i];if(!l)return;if(key==='tutar')l.tutar=Math.max(0,+val||0);else if(key==='vade')l.vade=val?new Date(val+'T12:00:00').getTime():0;else if(key==='hesapId')l.hesapId=+val;else l[key]=val;if(key==='pb')cizOdeme();else if(key==='tutar')odemeOzet();}
 function odemeFoto(i,input){const f=input.files&&input.files[0];if(!f)return;resimSecYukle(f,d=>{sOdemeler[i].foto=d;cizOdeme()},1200,0.7)}
 function odemeKalan(){const div=satisHesap().div;const saleTL=satisHesap().tutar*div;const kalanTL=saleTL-odemeToplamTL();if(kalanTL<=0)return toast('Kalan yok');
   const bos=sOdemeler.find(l=>!(+l.tutar));if(bos){bos.tutar=Math.round(kalanTL/pbKur(bos.pb))}else sOdemeler.push({tur:'Nakit',tutar:Math.round(kalanTL/pbKur(sPB)),pb:sPB,hesapId:(db.hesaplar[0]&&db.hesaplar[0].id)||0,vade:0,foto:''});cizOdeme()}
 function cizOdeme(){const box=$('s-odeme-list');if(!box)return;
+  const _d=satisHesap();const _saleTL=_d.tutar*_d.div; // o satır boşsa, KALANI o para biriminde silik göster
+  const _kalanPH=(i,pb)=>{const other=sOdemeler.reduce((a,x,j)=>j===i?a:a+(+x.tutar||0)*pbKur(x.pb),0);const kal=(_saleTL-other)/(pbKur(pb)||1);return kal>0.5?('kalan ≈ '+Math.round(kal)):'tutar';};
   box.innerHTML=sOdemeler.map((l,i)=>`<div class="odrow">
-    <div class="odtop"><input class="odt" type="number" inputmode="numeric" min="0" value="${l.tutar||''}" placeholder="tutar" oninput="odemeSet(${i},'tutar',this.value)"><select class="odpb" onchange="odemeSet(${i},'pb',this.value)">${['TL','USD','EUR'].map(x=>`<option ${l.pb===x?'selected':''}>${x}</option>`).join('')}</select><select class="odtur" onchange="odemeSet(${i},'tur',this.value);cizOdeme()">${ODEME_TUR.map(x=>`<option ${l.tur===x?'selected':''}>${x}</option>`).join('')}</select>${sOdemeler.length>1?`<button class="del" onclick="odemeSil(${i})">✕</button>`:''}</div>
+    <div class="odtop"><input class="odt" type="number" inputmode="numeric" min="0" value="${l.tutar||''}" placeholder="${_kalanPH(i,l.pb)}" oninput="odemeSet(${i},'tutar',this.value)"><select class="odpb" onchange="odemeSet(${i},'pb',this.value)">${['TL','USD','EUR'].map(x=>`<option ${l.pb===x?'selected':''}>${x}</option>`).join('')}</select><select class="odtur" onchange="odemeSet(${i},'tur',this.value);cizOdeme()">${ODEME_TUR.map(x=>`<option ${l.tur===x?'selected':''}>${x}</option>`).join('')}</select>${sOdemeler.length>1?`<button class="del" onclick="odemeSil(${i})">✕</button>`:''}</div>
     ${l.tur==='Havale'?`<select style="margin-top:6px" onchange="odemeSet(${i},'hesapId',this.value)">${db.hesaplar.map(h=>`<option value="${h.id}" ${l.hesapId===h.id?'selected':''}>${esc(h.ad)}</option>`).join('')}</select>`:''}
     ${l.tur==='Kredi Kartı'?`<div class="infobox" style="margin-top:6px">💳 ≈34 gün sonra hesaba geçer (${dstr(Date.now()+34*86400000)})</div>`:''}
     ${l.tur==='Çek'?`<div class="g2" style="margin-top:6px"><div><label style="margin-top:0">Çek Vadesi</label><input type="date" value="${l.vade?new Date(l.vade).toISOString().slice(0,10):''}" onchange="odemeSet(${i},'vade',this.value)"></div><div><label style="margin-top:0">Çek Resmi</label><div class="odcek" onclick="$('odf-${i}').click()">${l.foto?`<img src="${guvenliSrc(l.foto)}">`:'📷'}</div><input type="file" accept="image/*" id="odf-${i}" style="display:none" onchange="odemeFoto(${i},this)"></div></div>`:''}
@@ -4366,11 +4368,12 @@ function depoEmri(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;
   if(!s.depoCheck)s.depoCheck={};
   const lines=depoLines(s);const toplam=lines.length;const yapilan=lines.filter(l=>s.depoCheck[l.key]).length;
   const bitti=s.depo==='hazir';const pct=toplam?Math.round(yapilan/toplam*100):0;
-  const rows=lines.map(l=>{const done=bitti||s.depoCheck[l.key];
+  const rows=lines.map(l=>{const done=bitti||s.depoCheck[l.key];const eks=(s.depoEksik&&s.depoEksik[l.key]!=null)?s.depoEksik[l.key]:null;
     return `<div class="depoline ${done?'done':''}" ${bitti?'':`onclick="depoTik(${id},'${l.key}')"`}>
       <span class="dchk">${done?'✅':'⬜'}</span>
-      <div class="dmid"><div class="du">${esc(l.urun)}${l.renk?' · '+esc(l.renk):''}</div><div class="dr">📍 RAF ${esc(l.raf)}</div></div>
+      <div class="dmid"><div class="du">${esc(l.urun)}${l.renk?' · '+esc(l.renk):''}</div><div class="dr">📍 RAF ${esc(l.raf)}${eks!=null?` · <span style="color:var(--bad);font-weight:800">⚠️ bulundu ${eks}/${l.mik} (eksik ${l.mik-eks})</span>`:''}</div></div>
       <b class="dmik">${l.mik} ${esc(l.birim)}</b>
+      ${bitti?'':`<button class="btn ghost sm" style="width:auto;margin:0;padding:4px 9px;flex:0 0 auto;font-size:11px;color:var(--bad)" onclick="event.stopPropagation();depoEksikGir(${id},'${l.key}',${l.mik})">eksik</button>`}
     </div>`}).join('');
   open_('📦 Toplama Emri · İrsaliye #'+id,`
     <div class="mini">${esc(s.mus)} · ${tstr(s.tarih)}</div>
@@ -4383,9 +4386,19 @@ function depoEmri(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;
 }
 function depoTik(id,key){const s=db.satislar.find(x=>x.id===id);if(!s||s.depo==='hazir')return;
   if(!s.depoCheck)s.depoCheck={};s.depoCheck[key]=!s.depoCheck[key];save();depoEmri(id)}
+// 📦 Depocu: bir satırda eksik var → rafta bulunan gerçek adedi gir (patron eksikleri görür)
+function depoEksikGir(id,key,istenen){const s=db.satislar.find(x=>x.id===id);if(!s||s.depo==='hazir')return;
+  const mevcut=(s.depoEksik&&s.depoEksik[key]!=null)?s.depoEksik[key]:istenen;
+  const v=window.prompt('Rafta BULUNAN adet (istenen '+istenen+'):',mevcut);
+  if(v===null)return;const b=Math.max(0,+v||0);
+  if(!s.depoEksik)s.depoEksik={};
+  if(b>=istenen)delete s.depoEksik[key];else s.depoEksik[key]=b;
+  s.depoCheck=s.depoCheck||{};s.depoCheck[key]=true; // eksik de olsa bu satır ele alındı → işaretli say
+  save();depoEmri(id);
+}
 function depoHazirla(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;
   const lines=depoLines(s);const eksik=lines.filter(l=>!(s.depoCheck&&s.depoCheck[l.key]));
-  const bitir=()=>{s.depo='hazir';s.depoHazir={t:Date.now(),by:(bulutKul&&bulutKul.ad)||ROL_AD[db.rol]||db.rol||'',rol:db.rol||'',uid:(bulutKul&&bulutKul.uid)||''};save();closeM();render();toast('Sipariş hazırlandı ✓ Patrona bildirildi')};
+  const bitir=()=>{s.depo='hazir';s.depoHazir={t:Date.now(),by:(bulutKul&&bulutKul.ad)||ROL_AD[db.rol]||db.rol||'',rol:db.rol||'',uid:(bulutKul&&bulutKul.uid)||''};const _eksN=s.depoEksik?Object.keys(s.depoEksik).length:0;save();closeM();render();toast(_eksN?('Hazırlandı ✓ · ⚠️ '+_eksN+' eksik kalem patrona bildirildi'):'Sipariş hazırlandı ✓ Patrona bildirildi')};
   if(eksik.length)askConfirm(`${eksik.length} kalem henüz işaretlenmedi (toplam ${lines.length}).\nYine de "hazırlandı" olarak kapatılsın mı?`,bitir,'Yine de kapat');
   else bitir();
 }
