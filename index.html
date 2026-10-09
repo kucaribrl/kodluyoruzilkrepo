@@ -2251,6 +2251,7 @@ function malSipTeslim(id){
   mtSatir=lines.map((l,i)=>({li:i,rows:[{parti:'',mik:Math.max(0,(+l.miktar||0)-(+l.gelen||0))}]}));
   open_('✓ Teslim Al · '+esc(s.ad),`
     <div class="infobox">${kumas?`Depoda <b>tartılan gerçek ${bir}</b>'ı gir. Aynı renkten <b>farklı partiler</b> geldiyse "＋ parti" ile ayrı satır aç, her partinin kendi ${bir}'ını yaz.`:`Gelen <b>gerçek miktarı</b> (${bir}) say ve gir.`}</div>
+    ${kumas?`<label style="margin-top:4px">📋 Bu teslimatın parti / lot no <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub)">— tüm renklere uygulanır</span></label><input id="mt-parti" placeholder="ör. 2451 / A-lot" autocapitalize="characters" value="${esc(s.sonTeslimParti||'')}"><div class="mini" style="margin-top:3px;color:var(--sub)">Boş bıraksan bile bu teslimat <b>ayrı bir partiye</b> yazılır — önceki partiyle karışmaz. Bir renk farklı partiyle geldiyse aşağıda o renge yaz.</div>`:''}
     <div id="mt-wrap"></div>
     <div id="mt-tot" style="margin-top:8px"></div>
     <label class="ckrow" style="margin-top:8px"><input type="checkbox" id="mt-kapat" onchange="malSipTesHesap(${id})"><span>Siparişi kapat — kalan gelmeyecek (fark yalnız bilgi olarak kalır)</span></label>
@@ -2294,10 +2295,15 @@ function kaydetMalSipTeslim(id){
   s.hid=h.id;if(s.fiyat>0){h.alis=+s.fiyat;h.pb=s.pb;}
   const tV=$('mt-tarih')?.value;const gelenTarih=tV?new Date(tV+'T12:00:00').getTime():Date.now();
   const _lotMeta={fiyat:+s.fiyat||0,pb:s.pb||'TL',tarih:gelenTarih,ted:s.ted||''};
+  const _kumas=s.kat==='Kumaş';
+  const _gParti=($('mt-parti')?.value||'').trim();
+  // her teslimat kendi partisine: renk satırında parti yoksa üstteki ortak parti, o da yoksa otomatik ayrı kod (önceki teslimatla karışmasın)
+  const _autoParti=_gParti||('S'+s.id+'·'+new Date(gelenTarih).toLocaleDateString('tr-TR').replace(/\./g,''));
+  if(_kumas)s.sonTeslimParti=_gParti;
   let buParti=0;
   mtSatir.forEach(g=>{const l=lines[g.li];if(!l)return;
     g.rows.forEach(r=>{const inp=Math.max(0,+r.mik||0);if(!(inp>0))return;
-      const pk=(r.parti||'').trim();
+      const pk=(r.parti||'').trim()||(_kumas?_autoParti:'');
       l.gelen=(+l.gelen||0)+inp;buParti+=inp;
       if(pk){l.partiGelen=(l.partiGelen?l.partiGelen+' · ':'')+pk+' '+inp;l.parti=pk;} // gelen geçmişi + son kod
       if(l.renk||pk)malStoklaRenk(h,l.renk||'—',inp,pk,_lotMeta);else malStoklaRenk(h,'',inp,'',_lotMeta);});});
