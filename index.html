@@ -3121,6 +3121,7 @@ function formSatis(pre,editId){
     <div id="s-musinfo"></div>
     <label>Ürün Ekle <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub)">— isim, kod ya da barkod</span></label>
     <div style="display:flex;gap:8px"><input id="s-urun-in" placeholder="Polo yaka... / 2026Y118 / barkod" autocomplete="off" style="flex:1" oninput="urunAra()" onkeydown="if(event.key==='Enter'){event.preventDefault();urunEnter()}"><button type="button" class="btn ghost sm" style="width:auto;padding:0 15px;margin:0;font-size:19px" onclick="kameraTara()" title="Kamerayla barkod tara">📷</button></div>
+    <button type="button" class="btn ghost sm" style="margin-top:8px" onclick="modelSecAc()">🖼️ Modelleri Gör (resimli seç)</button>
     <div id="s-urun-list" class="aclist"></div>
     <div id="s-renkler"></div>
     <div id="s-mikbox" style="display:none"><div style="display:flex;gap:10px;align-items:center;margin-top:10px"><div class="step" id="s-mikwrap"><button class="b" onclick="mik(-1)">−</button><input id="s-mik" type="number" value="1" inputmode="numeric"><button class="b p" onclick="mik(1)">+</button></div><button class="btn ghost sm" style="flex:1" onclick="sepEkle()">+ Sepete Ekle</button></div></div>
@@ -3266,20 +3267,52 @@ function rqCheck(i,stok){const el=$('rq-'+i);if(!el)return;if(+el.value<0)el.val
 function mik(d){const i=$('s-mik');i.value=Math.max(1,(+i.value||1)+d)}
 function setPB(pb){sPB=pb;['TL','USD','EUR'].forEach(x=>$('pb-'+x).classList.toggle('on',x===pb));cizSepet()}
 function setVade(g){sVade=+g;[0,30,60,90].forEach(x=>{const el=$('sv-'+x);if(el)el.classList.toggle('on',x===+g)});const inf=$('s-vade-info');if(inf)inf.textContent=+g?(g+' gün vade → +%'+vadeFarkiYuzde()+' vade farkı eklenir'):'';cizSepet()}
-function satisReset(){sUrunId=0;if($('s-urun-in'))$('s-urun-in').value='';if($('s-renkler'))$('s-renkler').innerHTML='';if($('s-mikbox'))$('s-mikbox').style.display='none';if($('s-urninfo'))$('s-urninfo').textContent='';if($('s-mik'))$('s-mik').value=1}
+function satisReset(){sDuzenleIdx=null;sUrunId=0;if($('s-urun-in'))$('s-urun-in').value='';if($('s-renkler'))$('s-renkler').innerHTML='';if($('s-mikbox'))$('s-mikbox').style.display='none';if($('s-urninfo'))$('s-urninfo').textContent='';if($('s-mik'))$('s-mik').value=1}
+let sDuzenleIdx=null; // sepet satırı düzenleme modu (tıklayınca ayarlanır)
 function sepEkle(){const u=sUrunId?urun(sUrunId):null;if(!u)return toast('Önce ürün seç');
   const fy=($('s-fiyat')&&$('s-fiyat').value!=='')?Math.max(0,+$('s-fiyat').value||0):musUrunFiyat(u.id);
   const objs=renkObjs(u);
+  const duz=(typeof sDuzenleIdx==='number'&&sepet[sDuzenleIdx]&&sepet[sDuzenleIdx].uid===u.id)?sDuzenleIdx:null;
   if(objs.length){
     const rl=[];objs.forEach((r,i)=>{const q=+($('rq-'+i)?.value||0);if(q>0)rl.push({ad:r.ad,mik:q})});
     if(!rl.length)return toast('En az bir renk için adet gir');
+    if(duz!=null){sepet[duz]={uid:u.id,urun:u.ad,mik:rl.reduce((a,x)=>a+x.mik,0),birim:u.birim,fiyat:fy,renkler:rl};sDuzenleIdx=null;satisReset();cizSepet();toast('✏️ Satır güncellendi');return;}
     const exist=sepet.find(k=>k.uid===u.id&&k.renkler);
     if(exist){rl.forEach(nr=>{const f=exist.renkler.find(x=>x.ad===nr.ad);if(f)f.mik+=nr.mik;else exist.renkler.push(nr)});exist.mik=exist.renkler.reduce((a,x)=>a+x.mik,0)}
     else sepet.push({uid:u.id,urun:u.ad,mik:rl.reduce((a,x)=>a+x.mik,0),birim:u.birim,fiyat:fy,renkler:rl});
     satisReset();cizSepet();return;
   }
   const m=+$('s-mik').value;if(!m||m<=0)return toast('Miktar girin');
+  if(duz!=null){sepet[duz]={uid:u.id,urun:u.ad,mik:m,birim:u.birim,fiyat:fy};sDuzenleIdx=null;satisReset();cizSepet();toast('✏️ Satır güncellendi');return;}
   const ex=sepet.find(k=>k.uid===u.id&&!k.renkler);if(ex)ex.mik+=m;else sepet.push({uid:u.id,urun:u.ad,mik:m,birim:u.birim,fiyat:fy});satisReset();cizSepet()}
+// ✏️ Sepet satırını düzenle: ürünü panele yükle, mevcut adetleri doldur, "Sepete Ekle" satırı GÜNCELLER (toplamaz)
+function sepDuzenle(i){const k=sepet[i];if(!k)return;const u=urun(k.uid);if(!u)return toast('Ürün bulunamadı (silinmiş olabilir)');
+  sDuzenleIdx=i; sUrunId=u.id; if($('s-urun-in'))$('s-urun-in').value=u.ad; if($('s-urun-list'))$('s-urun-list').style.display='none';
+  urnBilgi();
+  setTimeout(()=>{
+    const objs=renkObjs(u);
+    if(objs.length&&k.renkler){objs.forEach((r,ix)=>{const f=k.renkler.find(x=>x.ad===r.ad);const el=$('rq-'+ix);if(el)el.value=f?f.mik:0;});}
+    else if($('s-mik')){$('s-mik').value=k.mik;}
+    if($('s-fiyat')&&k.fiyat!=null)$('s-fiyat').value=k.fiyat;
+    const r=$('s-renkler')||$('s-mikbox');if(r&&r.scrollIntoView)r.scrollIntoView({block:'center'});
+    toast('✏️ Adetleri düzelt → "Sepete Ekle"ye bas (satır güncellenir)');
+  },130);
+}
+// 🖼️ Resimli model seçici — tüm ürünleri fotoğraflı göster, tıkla seç (isim ezberlemeye gerek yok)
+function modelSecAc(){
+  if(!db.urunler.some(u=>!u.pasif))return toast('Ürün yok');
+  open_('🖼️ Model Seç',`<input id="msec-ara" placeholder="🔍 ara (isim / kod)" oninput="cizModelSec()" autocomplete="off" style="margin-bottom:10px"><div id="msec-grid" style="max-height:66vh;overflow:auto"></div>`);
+  cizModelSec();
+}
+function cizModelSec(){const g=$('msec-grid');if(!g)return;const q=($('msec-ara')?.value||'').trim().toLowerCase();
+  const list=db.urunler.filter(u=>!u.pasif&&(!q||(u.ad||'').toLowerCase().includes(q)||(u.kod||'').toLowerCase().includes(q)));
+  g.innerHTML=list.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px">`+list.map(u=>{const foto=urunKapak(u);const az=(+u.stok||0)<=(+u.kritik||0);
+    return `<div onclick="modelSecId(${u.id})" style="cursor:pointer;border:1px solid var(--ln);border-radius:12px;overflow:hidden;background:var(--card)">
+      <div style="width:100%;aspect-ratio:1;background:var(--ln2);display:flex;align-items:center;justify-content:center;overflow:hidden">${foto?`<img src="${guvenliSrc(foto)}" style="width:100%;height:100%;object-fit:cover">`:`<span style="font-size:28px">👕</span>`}</div>
+      <div style="padding:5px 6px"><div style="font-size:11px;font-weight:700;line-height:1.2;max-height:2.4em;overflow:hidden">${esc(u.ad)}</div><div class="mini" style="margin-top:2px;color:${az?'var(--bad)':'var(--sub)'}">${(+u.stok||0)} ${esc(u.birim||'')}${az?' · az':''}</div></div>
+    </div>`}).join('')+`</div>`:'<div class="mini" style="text-align:center;padding:20px">Ürün bulunamadı</div>';
+}
+function modelSecId(id){closeM();sUrunId=id;const u=urun(id);if($('s-urun-in'))$('s-urun-in').value=u?u.ad:'';if($('s-urun-list'))$('s-urun-list').style.display='none';urnBilgi();setTimeout(()=>{const r=$('s-renkler')||$('s-mikbox');if(r&&r.scrollIntoView)r.scrollIntoView({block:'center'});},130);}
 function vadeFarkiYuzde(){return sVade?Math.round(sVade/30)*2.5:0}
 /* 🖮 HARİCİ BARKOD TARAYICI (USB/Bluetooth — klavye gibi çok hızlı yazar ve Enter basar)
    Satış formu açıkken, odak bir yazı kutusunda DEĞİLKEN okutulan barkod ürünü bulur:
@@ -3314,7 +3347,7 @@ function cizEkstra(){const b=$('s-ekstra');if(!b)return;
     <button class="del" onclick="ekstraSil(${i})" style="flex:0 0 auto">✕</button></div>`).join('');}
 function cizSepet(){
   const el=$('s-sepet');if(!el)return;
-  el.innerHTML=sepet.map((k,i)=>{const sub=k.renkler&&k.renkler.length?`${k.renkler.map(r=>esc(r.ad)+' ×'+r.mik).join(' · ')} — ${TL(k.fiyat)}/${k.birim}`:`${k.mik} ${esc(k.birim||"")} × ${TL(k.fiyat)}`;return `<div class="li"><div class="lt">${esc(k.urun)}<small>${sub}</small></div><b style="margin-right:8px">${TL(k.mik*k.fiyat)}</b><button class="del" onclick="sepet.splice(${i},1);cizSepet()">✕</button></div>`}).join('')||'<div class="mini">Sepet boş</div>';
+  el.innerHTML=sepet.map((k,i)=>{const sub=k.renkler&&k.renkler.length?`${k.renkler.map(r=>esc(r.ad)+' ×'+r.mik).join(' · ')} — ${TL(k.fiyat)}/${k.birim}`:`${k.mik} ${esc(k.birim||"")} × ${TL(k.fiyat)}`;return `<div class="li"><div class="lt" style="cursor:pointer" onclick="sepDuzenle(${i})">${esc(k.urun)} <span style="color:var(--ind2);font-size:10.5px;font-weight:700">✏️ düzelt</span><small>${sub}</small></div><b style="margin-right:8px">${TL(k.mik*k.fiyat)}</b><button class="del" onclick="sepet.splice(${i},1);cizSepet()">✕</button></div>`}).join('')||'<div class="mini">Sepet boş — ürün seçip adet gir</div>';
   const h=satisHesap();const parts=[];
   if(h.isk)parts.push(`iskonto −%${h.isk}`);
   if(h.vf)parts.push(`vade +%${h.vf}`);
