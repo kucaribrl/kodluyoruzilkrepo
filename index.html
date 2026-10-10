@@ -3517,6 +3517,7 @@ function iadeAl(satisId){const s=db.satislar.find(x=>x.id===satisId);if(!s||s.ti
   open_('↩️ İade Al',`<div class="mini">${esc(s.mus)} · ${tstr(s.tarih)} — iade edilecek ürün/miktarı seç. Mal stoğa geri girer, tutar müşteriye alacak yazılır (veya nakit iade).</div>
     <div id="iade-list" style="margin-top:10px"></div>
     <label style="margin-top:6px;display:flex;align-items:center;gap:8px;font-weight:600"><input type="checkbox" id="iade-nakit" style="width:auto" onchange="iadeCiz()"> 💵 Nakit iade et (kasadan öde)</label>
+    <label style="margin-top:4px;display:flex;align-items:center;gap:8px;font-weight:600;color:var(--bad)"><input type="checkbox" id="iade-defolu" style="width:auto"> ⚠️ Defolu / hatalı — stoğa geri KOYMA (müşteriye yine iade edilir)</label>
     <div id="iade-hesap"></div>
     <div id="iade-ozet" class="total" style="margin-top:10px"></div>
     <button class="btn g" onclick="iadeKaydet()">İadeyi Onayla</button>`);
@@ -3553,11 +3554,12 @@ function iadeKaydet(){const s=db.satislar.find(x=>x.id===_iadeSid);if(!s)return;
   const nakit=$('iade-nakit')?.checked;let hid=nakit?+($('iade-hs')?.value||0):0;
   if(nakit){const hs=hesap(hid)||db.hesaplar[0];if(!hs)return toast('Kasa/hesap tanımlı değil');hid=hs.id;
     if(!kasaHareket(hs.id,'out',h.netTL,'İade',(s.mus||'')+' · iade',s.mid))return;} // yetersizse uyarır ve durur; hiçbir şey değişmez
-  h.kal.forEach(k=>stokUygula(k,1)); // mal stoğa geri
+  const defolu=$('iade-defolu')?.checked;
+  if(!defolu)h.kal.forEach(k=>stokUygula(k,1)); // defolu DEĞİLSE mal satılabilir stoğa geri döner; defoluysa stoğa girmez
   const m=cari(s.mid);
   if(!nakit){if(m)m.bakiye-=h.netTL}
-  db.satislar.push({id:nid('s'),tip:'iade',mid:s.mid,mus:s.mus,tarih:Date.now(),kaynakId:s.id,pb:s.pb,satisKur:h.div,kalemler:h.kal,araToplam:h.araPB,iskonto:s.iskonto||0,kdv:s.kdv||0,kdvTutar:h.kdvPB,tutar:h.netPB,nakit:!!nakit,hesapId:hid});
-  save();closeM();go('satis');toast('İade alındı ✓ '+money(h.netPB,s.pb)+(nakit?' · 💵 nakit ödendi':' · cariye alacak'));
+  db.satislar.push({id:nid('s'),tip:'iade',mid:s.mid,mus:s.mus,tarih:Date.now(),kaynakId:s.id,pb:s.pb,satisKur:h.div,kalemler:h.kal,araToplam:h.araPB,iskonto:s.iskonto||0,kdv:s.kdv||0,kdvTutar:h.kdvPB,tutar:h.netPB,nakit:!!nakit,hesapId:hid,defolu:!!defolu});
+  save();closeM();go('satis');toast((defolu?'Defolu iade ✓ (stoğa girmedi) ':'İade alındı ✓ ')+money(h.netPB,s.pb)+(nakit?' · 💵 nakit ödendi':' · cariye alacak'));
 }
 function iadeFis(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;const kaynak=s.kaynakId?db.satislar.find(x=>x.id===s.kaynakId):null;
   open_('↩️ İade Fişi',`<div class="mini">${esc(s.mus)} · ${tstr(s.tarih)}${kaynak?' · kaynak satış #'+kaynak.id:''}</div>
@@ -3566,11 +3568,12 @@ function iadeFis(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;const k
     ${s.kdv?`<div class="kv"><span class="k">KDV %${s.kdv}</span><span class="v">+${money(+s.kdvTutar||0,s.pb)}</span></div>`:''}
     <div class="total" style="margin-top:10px"><div class="l">İADE TOPLAM</div><div class="v" style="color:var(--bad)">−${money(s.tutar,s.pb)}</div></div>
     <div class="kv"><span class="k">Ödeme</span><span class="v">${s.nakit?'💵 Nakit iade edildi':'Cariye alacak yazıldı'}</span></div>
+    ${s.defolu?'<div class="warnbox" style="margin-top:8px">⚠️ Defolu / hatalı — ürün satılabilir stoğa geri konmadı</div>':''}
     <button class="btn danger" style="margin-top:12px" onclick="iadeSil(${id})">İadeyi Geri Al</button>`);
 }
 function iadeSil(id){const s=db.satislar.find(x=>x.id===id);if(!s||s.tip!=='iade')return;
   askKritik('Bu iade geri alınsın mı? Mal tekrar stoktan düşülür, tutar cari/kasaya iade edilir.',()=>{
-    s.kalemler.forEach(k=>stokUygula(k,-1)); // stok tekrar düş
+    if(!s.defolu)s.kalemler.forEach(k=>stokUygula(k,-1)); // defolu iade stoğa hiç girmemişti → tekrar düşme
     const netTL=(+s.tutar||0)*(s.satisKur||1);const m=cari(s.mid);
     if(s.nakit){const hs=hesap(s.hesapId)||db.hesaplar[0];if(hs)kasaHareket(hs.id,'in',netTL,'İade iptali',(s.mus||'')+' · iade geri',s.mid)}else{if(m)m.bakiye+=netTL}
     db.satislar=db.satislar.filter(x=>x.id!==id);save();closeM();go('satis');toast('İade geri alındı');
