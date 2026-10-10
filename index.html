@@ -2400,7 +2400,7 @@ function urunDetay(id){
     ${karGoster()?`<div class="kv" style="margin-top:8px"><span class="k">Alış / Kâr</span><span class="v">${money(u.alis,pb)} · <span class="pos">${money(kar,pb)} (%${karY})</span></span></div>`:''}
     ${oz.seri>0?`<div class="infobox" style="margin-top:10px;background:var(--good-s);color:var(--good)">📈 Bu üründen <b>${oz.seri} ${u.birim}</b> satıldı${oz.best?` · en çok <b>${esc(oz.best[0])}</b> (${oz.best[1]})`:''}${karGoster()?` · ciro <b>${TL(oz.ciro)}</b>`:''}${oz.sonTarih?` · son ${dstr(oz.sonTarih)}`:''}</div>`:'<div class="mini" style="margin-top:10px">📈 Bu üründen henüz satış yok</div>'}
     <div class="dbox" style="margin-top:12px">${infoRows.map(([k,v])=>`<div class="dline"><span>${k}</span><b>${esc(''+v)}</b></div>`).join('')}</div>
-    ${hasRenkStok(u)?`<div class="sec" style="margin-top:14px">Renk & Stok</div><div class="card" style="padding:6px 12px">${renkObjs(u).map(r=>{const kt=kirikTop(r);return `<div class="renksel"><span class="sw sm" style="background:${r.hex}"></span>${r.foto?`<img src="${guvenliSrc(r.foto)}" style="width:34px;height:34px;border-radius:7px;object-fit:cover">`:''}<span class="rn">${esc(r.ad||'—')}${r.barkod?`<small style="display:block;color:var(--sub);font-weight:600">${esc(r.barkod)}</small>`:''}</span><span class="rs ${r.stok<=0?'bad':''}">${r.stok||0} seri${kt?`<br><span style="color:var(--thr)">+${kt} kırık</span>`:''}</span></div>`}).join('')}</div>`:''}
+    ${hasRenkStok(u)?`<div class="sec" style="margin-top:14px">Renk & Stok</div><div class="card" style="padding:6px 12px">${renkObjs(u).map(r=>{const kt=kirikTop(r);return `<div class="renksel"><span class="sw sm" style="background:${r.hex}"></span>${r.foto?`<img src="${guvenliSrc(r.foto)}" style="width:34px;height:34px;border-radius:7px;object-fit:cover">`:''}<span class="rn">${esc(r.ad||'—')}${r.barkod?`<small style="display:block;color:var(--sub);font-weight:600">${esc(r.barkod)}</small>`:''}</span><span class="rs ${r.stok<=0?'bad':''}">${r.stok||0} seri${kt?`<br><span style="color:var(--thr)">+${kt} kırık</span>`:''}${(+r.defo>0)?`<br><span style="color:var(--bad)">⚠️ ${+r.defo} defolu</span>`:''}</span></div>`}).join('')}</div>${defoTop(u)>0?`<div class="mini" style="margin:4px 3px;color:var(--bad)">⚠️ Toplam ${defoTop(u)} defolu (satılabilir stoğa dahil değil)</div>`:''}`:''}
     ${u.islemler&&u.islemler.length?`<div class="sec" style="margin-top:14px">🧵 İşlem Takibi</div><div class="dbox">${u.islemler.map(it=>`<div class="dline"><span>${esc(it.islem)}</span><b>${esc((cari(it.fasonId)||{}).ad||'—')}</b></div>`).join('')}</div>`:''}
     ${u.not?`<div class="infobox" style="margin-top:12px">📝 ${esc(u.not)}</div>`:''}
     ${(canUrunYaz()||canSee('satis'))?`<div class="g2" style="margin-top:16px">${canUrunYaz()?`<button class="btn ghost sm" onclick="formUrun(${id})">✏️ Düzenle</button>`:''}${canSee('satis')?`<button class="btn sm" onclick="closeM();go('satis');setTimeout(()=>formSatis(${id}),150)">🧾 Satışa Ekle</button>`:''}</div>`:''}
@@ -3382,6 +3382,13 @@ function stokUygula(k,mult){ // mult=-1 satış (düş), +1 iptal (geri)
     syncStok(u);
   }else{u.stok=(+u.stok||0)+mult*k.mik} // renksiz veya eski string-format renk → toplamdan düş
 }
+// ⚠️ Defolu stok: defolu iade gelince ürünün defolu adedi artar (satılabilir stoğa KARIŞMAZ)
+function defoUygula(k,mult){const u=urun(k.uid);if(!u)return;
+  if(k.renkler&&k.renkler.length&&hasRenkStok(u)){
+    k.renkler.forEach(rr=>{let ro=(u.renkler||[]).find(x=>x&&typeof x==='object'&&x.ad===rr.ad);if(ro)ro.defo=Math.max(0,(+ro.defo||0)+mult*(+rr.mik||0));});
+  }else{u.defo=Math.max(0,(+u.defo||0)+mult*(+k.mik||0));}
+}
+function defoTop(u){if(!u)return 0;let t=+u.defo||0;(u.renkler||[]).forEach(r=>{if(r&&typeof r==='object')t+=(+r.defo||0)});return t;}
 function applySatis(s){
   const m=cari(s.mid),div=satisDiv(s);
   s.kalemler.forEach(k=>stokUygula(k,-1));
@@ -3555,7 +3562,8 @@ function iadeKaydet(){const s=db.satislar.find(x=>x.id===_iadeSid);if(!s)return;
   if(nakit){const hs=hesap(hid)||db.hesaplar[0];if(!hs)return toast('Kasa/hesap tanımlı değil');hid=hs.id;
     if(!kasaHareket(hs.id,'out',h.netTL,'İade',(s.mus||'')+' · iade',s.mid))return;} // yetersizse uyarır ve durur; hiçbir şey değişmez
   const defolu=$('iade-defolu')?.checked;
-  if(!defolu)h.kal.forEach(k=>stokUygula(k,1)); // defolu DEĞİLSE mal satılabilir stoğa geri döner; defoluysa stoğa girmez
+  if(!defolu)h.kal.forEach(k=>stokUygula(k,1)); // defolu DEĞİLSE mal satılabilir stoğa geri döner
+  else h.kal.forEach(k=>defoUygula(k,1)); // defoluysa ayrı 'defolu stok'a eklenir (satılabilir stoğa girmez)
   const m=cari(s.mid);
   if(!nakit){if(m)m.bakiye-=h.netTL}
   db.satislar.push({id:nid('s'),tip:'iade',mid:s.mid,mus:s.mus,tarih:Date.now(),kaynakId:s.id,pb:s.pb,satisKur:h.div,kalemler:h.kal,araToplam:h.araPB,iskonto:s.iskonto||0,kdv:s.kdv||0,kdvTutar:h.kdvPB,tutar:h.netPB,nakit:!!nakit,hesapId:hid,defolu:!!defolu});
@@ -3574,6 +3582,7 @@ function iadeFis(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;const k
 function iadeSil(id){const s=db.satislar.find(x=>x.id===id);if(!s||s.tip!=='iade')return;
   askKritik('Bu iade geri alınsın mı? Mal tekrar stoktan düşülür, tutar cari/kasaya iade edilir.',()=>{
     if(!s.defolu)s.kalemler.forEach(k=>stokUygula(k,-1)); // defolu iade stoğa hiç girmemişti → tekrar düşme
+    else s.kalemler.forEach(k=>defoUygula(k,-1)); // defolu stoktan da geri çıkar
     const netTL=(+s.tutar||0)*(s.satisKur||1);const m=cari(s.mid);
     if(s.nakit){const hs=hesap(s.hesapId)||db.hesaplar[0];if(hs)kasaHareket(hs.id,'in',netTL,'İade iptali',(s.mus||'')+' · iade geri',s.mid)}else{if(m)m.bakiye+=netTL}
     db.satislar=db.satislar.filter(x=>x.id!==id);save();closeM();go('satis');toast('İade geri alındı');
