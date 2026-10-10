@@ -1855,7 +1855,7 @@ function rStok(){
   let html='';
   {
     const kats=['Tümü',...new Set(db.urunler.map(u=>u.kat).filter(Boolean))];
-    html+=`<div style="display:flex;gap:8px;align-items:stretch"><input class="search" id="ara-stok" placeholder="🔍 Ürün, kod, marka ara..." oninput="rStokList()" style="flex:1;margin-bottom:10px"><button class="btn ghost" style="width:auto;flex:0 0 auto;padding:0 15px;margin:0 0 10px;font-size:19px" onclick="barkodOkutAra()" title="Kamerayla barkod okut">📷</button></div><div class="segs">`+kats.map(k=>`<div class="seg ${k===stokKat?'on':''}" onclick="stokKat='${esc(jsq(k))}';rStok()">${esc(k)}</div>`).join('')+`</div>${canSayim()?`<button class="btn ghost sm" style="margin-bottom:10px" onclick="depoSayim()">📋 Depo Sayımı Yap</button>`:''}${paraGoster()?`<button class="btn ghost sm" style="margin-bottom:10px" onclick="topluZam()">💹 Toplu Fiyat Güncelle (% zam / indirim)</button>`:''}<div class="card" id="stok-list"></div>`;
+    html+=`<div style="display:flex;gap:8px;align-items:stretch"><input class="search" id="ara-stok" placeholder="🔍 Ürün, kod, marka ara..." oninput="rStokList()" style="flex:1;margin-bottom:10px"><button class="btn ghost" style="width:auto;flex:0 0 auto;padding:0 15px;margin:0 0 10px;font-size:19px" onclick="barkodOkutAra()" title="Kamerayla barkod okut">📷</button></div><div class="segs">`+kats.map(k=>`<div class="seg ${k===stokKat?'on':''}" onclick="stokKat='${esc(jsq(k))}';rStok()">${esc(k)}</div>`).join('')+`</div>${canSayim()?`<button class="btn ghost sm" style="margin-bottom:10px" onclick="depoSayim()">📋 Depo Sayımı Yap</button>`:''}${db.urunler.some(u=>defoTop(u)>0)?`<button class="btn ghost sm" style="margin-bottom:10px;color:var(--bad)" onclick="defoluStokAc()">⚠️ Defolu Stok (${db.urunler.reduce((a,u)=>a+defoTop(u),0)})</button>`:''}${paraGoster()?`<button class="btn ghost sm" style="margin-bottom:10px" onclick="topluZam()">💹 Toplu Fiyat Güncelle (% zam / indirim)</button>`:''}<div class="card" id="stok-list"></div>`;
     $('app').innerHTML=html; rStokList();
 }
 }
@@ -3389,6 +3389,19 @@ function defoUygula(k,mult){const u=urun(k.uid);if(!u)return;
   }else{u.defo=Math.max(0,(+u.defo||0)+mult*(+k.mik||0));}
 }
 function defoTop(u){if(!u)return 0;let t=+u.defo||0;(u.renkler||[]).forEach(r=>{if(r&&typeof r==='object')t+=(+r.defo||0)});return t;}
+// ⚠️ Defolu Stok listesi — hangi üründen ne kadar defolu (salt görüntüleme)
+function defoluStokAc(){
+  const list=db.urunler.filter(u=>!u.pasif&&defoTop(u)>0).sort((a,b)=>defoTop(b)-defoTop(a));
+  if(!list.length)return toast('Defolu ürün yok ✓');
+  const genel=list.reduce((a,u)=>a+defoTop(u),0);
+  open_('⚠️ Defolu Stok',`<div class="mini">Defolu/hatalı iade gelen, satılabilir stoğa dahil OLMAYAN ürünler.</div>
+    <div class="okbox" style="margin:8px 0;background:var(--bad-s);color:var(--bad);font-weight:700">Toplam ${genel} defolu parça · ${list.length} üründe</div>
+    <div class="card" style="padding:4px 6px">`+list.map(u=>{
+      const renkler=(u.renkler||[]).filter(r=>r&&typeof r==='object'&&+r.defo>0).map(r=>esc(r.ad)+' '+(+r.defo)).join(' · ');
+      const d=defoTop(u);
+      return `<div class="row" onclick="closeM();setTimeout(()=>urunDetay(${u.id}),120)"><div class="av gray" style="overflow:hidden;padding:0">${urunKapak(u)?`<img src="${guvenliSrc(urunKapak(u))}" style="width:100%;height:100%;object-fit:cover">`:'👕'}</div><div class="mid"><div class="t">${esc(u.ad)}</div><div class="s" style="color:var(--bad)">${renkler||((+u.defo)?'tek: '+(+u.defo):'')}</div></div><div class="end"><div class="n" style="color:var(--bad)">${d}</div><div class="u">defolu</div></div></div>`;
+    }).join('')+`</div>`);
+}
 function applySatis(s){
   const m=cari(s.mid),div=satisDiv(s);
   s.kalemler.forEach(k=>stokUygula(k,-1));
