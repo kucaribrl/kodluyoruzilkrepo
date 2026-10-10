@@ -2429,7 +2429,13 @@ function depoSayim(){if(!canSayim())return toast('Yetkiniz yok');
 }
 function formSayim(id,fromList){const u=urun(id);if(!u)return;if(!canSayim())return toast('Yetkiniz yok');
   const cols=hasRenkStok(u);
-  const rows=cols?renkObjs(u).map((r,i)=>`<div class="syrow"><span class="sw sm" style="background:${r.hex}"></span><span class="synm">${esc(r.ad||'—')}<small>sistemde ${r.stok||0} ${u.birim}</small></span><input id="sy-${i}" type="number" inputmode="numeric" min="0" value="${r.stok||0}" oninput="sayFark()" class="syin"></div>`).join('')
+  const seriMi=u.birim==='seri'&&u.bedenler&&u.bedenler.length;
+  const bedenAd=seriMi?u.bedenler.map(x=>typeof x==='object'?x.beden:x):[];
+  window._sayKirik={};
+  const rows=cols?renkObjs(u).map((r,i)=>{window._sayKirik[i]={...(r.kirik||{})};const kt0=r.kirik?Object.values(r.kirik).reduce((a,x)=>a+(+x||0),0):0;
+    return `<div class="syrow"><span class="sw sm" style="background:${r.hex}"></span><span class="synm">${esc(r.ad||'—')}<small>sistemde ${r.stok||0} ${u.birim}${kt0?' + '+kt0+' kırık':''}</small></span><input id="sy-${i}" type="number" inputmode="numeric" min="0" value="${r.stok||0}" oninput="sayFark()" class="syin"></div>`+
+    (seriMi?`<div style="padding:0 2px 10px 2px"><div class="rc-kirikh" style="cursor:default;color:var(--thr)">✂️ kırık / tek beden (seri olmayan):</div><div class="rc-kirik">${bedenAd.map(bd=>`<div class="kb"><span>${esc(bd)}</span><input type="number" inputmode="numeric" value="${(r.kirik&&r.kirik[bd])||''}" placeholder="0" oninput="sayKirikSet(${i},'${esc(jsq(bd))}',this.value)"></div>`).join('')}</div></div>`:'');
+  }).join('')
     :`<div class="syrow"><span class="synm">${esc(u.ad)}<small>sistemde ${u.stok||0} ${u.birim}</small></span><input id="sy-0" type="number" inputmode="numeric" min="0" value="${u.stok||0}" oninput="sayFark()" class="syin"></div>`;
   open_('📋 Sayım · '+u.ad,`
     <label>📍 RAF / Depo Yeri</label><input id="sy-raf" value="${esc(u.raf||'')}" placeholder="A-12">
@@ -2446,12 +2452,16 @@ function sayFark(){const u=window._sayU;if(!u)return;const el=$('sy-fark');if(!e
   if(cols)renkObjs(u).forEach((r,i)=>{sis+=(+r.stok||0);say+=Math.max(0,+($('sy-'+i)?.value||0))});
   else{sis=+u.stok||0;say=Math.max(0,+($('sy-0')?.value||0))}
   const f=say-sis;
-  el.innerHTML=`Sistemde <b>${sis}</b> · saydın <b>${say}</b> · fark <b style="color:${f===0?'var(--good)':f<0?'var(--bad)':'var(--thr)'}">${f>0?'+':''}${f}</b>${f?' '+(f<0?'(eksik/kayıp)':'(fazla)'):' ✓'}`;
+  let kt=0;if(window._sayKirik)Object.values(window._sayKirik).forEach(o=>Object.values(o||{}).forEach(x=>kt+=(+x||0)));
+  el.innerHTML=`Sistemde <b>${sis}</b> · saydın <b>${say}</b> · fark <b style="color:${f===0?'var(--good)':f<0?'var(--bad)':'var(--thr)'}">${f>0?'+':''}${f}</b>${f?' '+(f<0?'(eksik/kayıp)':'(fazla)'):' ✓'}${kt?` · <span style="color:var(--thr);font-weight:800">${kt} tek (kırık)</span>`:''}`;
 }
+function sayKirikSet(i,bd,v){if(!window._sayKirik)window._sayKirik={};if(!window._sayKirik[i])window._sayKirik[i]={};const n=+v||0;if(n>0)window._sayKirik[i][bd]=n;else delete window._sayKirik[i][bd];sayFark();}
 function kaydetSayim(id,fromList){const u=urun(id);if(!u)return;
   u.raf=($('sy-raf')?.value||'').trim();
   const cols=hasRenkStok(u);let sis=0,fark=0;
-  if(cols){renkObjs(u).forEach((r,i)=>{sis+=(+r.stok||0);const el=$('sy-'+i);if(el)r.stok=Math.max(0,+el.value||0);/* kutusu olmayan renk sıfırlanmaz */});u.stok=stokTop(u);fark=u.stok-sis}
+  if(cols){renkObjs(u).forEach((r,i)=>{sis+=(+r.stok||0);const el=$('sy-'+i);if(el)r.stok=Math.max(0,+el.value||0);/* kutusu olmayan renk sıfırlanmaz */
+    if(window._sayKirik&&window._sayKirik[i]){const kk=window._sayKirik[i];const clean={};Object.keys(kk).forEach(bd=>{if(+kk[bd]>0)clean[bd]=+kk[bd]});r.kirik=Object.keys(clean).length?clean:null;}
+  });u.stok=stokTop(u);fark=u.stok-sis}
   else{const c=Math.max(0,+($('sy-0')?.value||0));sis=+u.stok||0;fark=c-sis;u.stok=c}
   u.sonSayim=Date.now();save();
   toast(fark===0?'Sayım kaydedildi ✓ fark yok':`Sayım kaydedildi · fark ${fark>0?'+':''}${fark} ${u.birim}`);
