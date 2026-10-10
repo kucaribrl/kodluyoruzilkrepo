@@ -3425,8 +3425,8 @@ function kaydetSatis(){
   const commit=()=>{
     if(old&&satisKilitliCek(old))return toast('⚠️ Bu satışın çeki tahsil/ciro edilmiş — düzenlemek için önce Çekler ekranından işlemi geri al');
     if(old)revertSatis(old);
-    if(sEdit&&old){data.id=old.id;data.tarih=old.tarih;Object.assign(old,data);applySatis(old);save();closeM();go('satis');toast('Satış güncellendi ✓')}
-    else{data.id=nid('s');data.tarih=Date.now();db.satislar.push(data);applySatis(data);save();closeM();go('satis');toast('Satış kaydedildi ✓ '+money(tutar,sPB));
+    if(sEdit&&old){data.id=old.id;data.tarih=old.tarih;Object.assign(old,data);applySatis(old);save();try{musVeriGuncelle(old.mid)}catch(e){}closeM();go('satis');toast('Satış güncellendi ✓')}
+    else{data.id=nid('s');data.tarih=Date.now();db.satislar.push(data);applySatis(data);save();try{musVeriGuncelle(data.mid)}catch(e){}closeM();go('satis');toast('Satış kaydedildi ✓ '+money(tutar,sPB));
       if(db.otoYazdir)try{yaziciyaGonder(data.id,true)}catch(e){}}
   };
   const eskiBorc=old?(old.tutar-old.odenen-(old.kesik||0))*satisDiv(old):0;
@@ -4387,13 +4387,31 @@ function depoEmri(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;
 function depoTik(id,key){const s=db.satislar.find(x=>x.id===id);if(!s||s.depo==='hazir')return;
   if(!s.depoCheck)s.depoCheck={};s.depoCheck[key]=!s.depoCheck[key];save();depoEmri(id)}
 // 📦 Depocu: bir satırda eksik var → rafta bulunan gerçek adedi gir (patron eksikleri görür)
+let _depoEksikCtx=null;
 function depoEksikGir(id,key,istenen){const s=db.satislar.find(x=>x.id===id);if(!s||s.depo==='hazir')return;
+  const line=(depoLines(s)||[]).find(l=>l.key===key);const ad=line?(esc(line.urun)+(line.renk?' · '+esc(line.renk):'')):'';const birim=line?esc(line.birim||''):'';
   const mevcut=(s.depoEksik&&s.depoEksik[key]!=null)?s.depoEksik[key]:istenen;
-  const v=window.prompt('Rafta BULUNAN adet (istenen '+istenen+'):',mevcut);
-  if(v===null)return;const b=Math.max(0,+v||0);
+  _depoEksikCtx={id,key,istenen};
+  if($('sT'))$('sT').textContent='📦 Rafta Bulunan';
+  if($('sB'))$('sB').innerHTML=`
+    <div class="mini" style="line-height:1.6"><b style="font-size:14px">${ad}</b><br>İstenen: <b>${istenen}</b> ${birim} — rafta <b>gerçekte bulduğun</b> adedi gir:</div>
+    <div class="step" style="margin:16px auto;max-width:240px"><button class="b" onclick="depoEksikAdet(-1)">−</button><input id="dpe-adet" type="number" inputmode="numeric" min="0" value="${mevcut}" style="text-align:center;font-size:22px;font-weight:800" oninput="depoEksikFark()"><button class="b p" onclick="depoEksikAdet(1)">+</button></div>
+    <div class="iechips" style="justify-content:center;flex-wrap:wrap;gap:6px">${[0,Math.floor(istenen/2),istenen].filter((v,i,a)=>v>=0&&a.indexOf(v)===i).map(v=>`<div class="c" onclick="document.getElementById('dpe-adet').value=${v};depoEksikFark()">${v===istenen?'Tam ('+v+')':v}</div>`).join('')}</div>
+    <div id="dpe-fark" style="text-align:center;margin:12px 0;font-weight:800;font-size:15px"></div>
+    <button class="btn g" onclick="depoEksikKaydet()">✓ Kaydet</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="document.getElementById('sov').classList.remove('show')">Vazgeç</button>`;
+  const sv=document.getElementById('sov');if(sv)sv.classList.add('show');
+  depoEksikFark();
+}
+function depoEksikAdet(d){const el=$('dpe-adet');if(!el)return;el.value=Math.max(0,(+el.value||0)+d);depoEksikFark();}
+function depoEksikFark(){const el=$('dpe-fark');if(!el||!_depoEksikCtx)return;const b=Math.max(0,+($('dpe-adet')?.value||0));const ist=_depoEksikCtx.istenen;const f=ist-b;
+  el.innerHTML=f>0?`<span style="color:var(--bad)">⚠️ ${f} EKSİK</span> <span class="mini" style="font-weight:600">(istenen ${ist} · bulunan ${b})</span>`:(b>ist?`<span style="color:var(--thr)">+${b-ist} fazla</span>`:`<span style="color:var(--good)">✓ Tam ${ist}</span>`);}
+function depoEksikKaydet(){if(!_depoEksikCtx)return;const{id,key,istenen}=_depoEksikCtx;const s=db.satislar.find(x=>x.id===id);if(!s)return;
+  const b=Math.max(0,+($('dpe-adet')?.value||0));
   if(!s.depoEksik)s.depoEksik={};
   if(b>=istenen)delete s.depoEksik[key];else s.depoEksik[key]=b;
-  s.depoCheck=s.depoCheck||{};s.depoCheck[key]=true; // eksik de olsa bu satır ele alındı → işaretli say
+  s.depoCheck=s.depoCheck||{};s.depoCheck[key]=true;
+  _depoEksikCtx=null;const sv=document.getElementById('sov');if(sv)sv.classList.remove('show');
   save();depoEmri(id);
 }
 function depoHazirla(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;
@@ -4712,7 +4730,7 @@ function kaydetOdeme(id){
   }
   const hitHesap=(tur!=='Çek'&&(isMus?tur!=='Kredi Kartı':true))&&h&&t>0;
   db.hareketler.push({id:nid('hr'),cariId:id,tip:isMus?'tahsilat':'odeme',tutar:t,kesik,tur,tarih:Date.now(),hesapId:hitHesap?h.id:null,yon:hitHesap?(isMus?'in':'out'):null});
-  save();closeM();rCari();toast((isMus?'Tahsilat':'Ödeme')+' kaydedildi ✓ '+TL(t)+(isMus&&kesik>0?' + kesik '+TL(kesik):''));
+  save();try{if(isMus)musVeriGuncelle(id)}catch(e){}closeM();rCari();toast((isMus?'Tahsilat':'Ödeme')+' kaydedildi ✓ '+TL(t)+(isMus&&kesik>0?' + kesik '+TL(kesik):''));
   if(isMus&&t>0&&(c.tel||'').trim())setTimeout(()=>askConfirm('🧾 Tahsilat makbuzu WhatsApp ile gönderilsin mi?',()=>waAc(c.tel,makbuzText(c,t,kesik,tur)),'Gönder'),350);}
 // 🧾 Tahsilat makbuzu metni (WhatsApp)
 function makbuzText(c,t,kesik,tur){const ciz='━━━━━━━━━━━━━━';const n=new Date();
@@ -6254,6 +6272,7 @@ function portalOnay(id,override,force){
   siparisIsle(o);
   db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);
   save();try{canliYazHemen(['satis'])}catch(e){} // onayı ANINDA buluta yaz (sekme kapanmadan)
+  try{musVeriGuncelle(sat.mid)}catch(e){} // müşterinin portaldaki geçmişi hemen güncellensin
   closeM&&closeM();go('portal');toast('Sipariş onaylandı ✓ '+TL(tutar)+' · mal ayrıldı');
 }
 function portalFiyatBelirle(id){const o=db.bekleyenPortal.find(x=>x.id===id);if(!o)return;
@@ -6440,6 +6459,17 @@ function cariKulPaylas(id){const c=cari(id);if(!c||!c.kullanici)return;const url
   if(c.sifreH){c.sifre='';save();setTimeout(()=>cizPortalKul(($('pk-ara')||{}).value||''),400);}}
 // ☁️ Patron, atadığı şifreyle müşteri için BULUT hesabı açar — müşteri her cihazdan telefon+şifre ile girer, verisi bulutta kalır.
 // Patron oturumu bozulmasın diye hesap İKİNCİL Firebase uygulamasında oluşturulur.
+// ☁️ Satış/tahsilat sonrası: 'Buluta taşı' ile bulut hesabı olan müşterinin geçmişini+bakiyesini ANINDA güncelle
+async function musVeriGuncelle(cariId){
+  try{
+    if(typeof bulutGirisli!=='function'||!bulutGirisli())return; // admin bulut girişi yoksa atla (çevrimdışıysa SDK kuyruklar)
+    if(!bulutBaslat()||!_fb)return;
+    const c=cari(cariId); if(!c||!c.bulutUid)return; // yalnız bulut hesabı olan müşteri
+    const gecmis=db.satislar.filter(s=>s.mid===cariId&&s.tip!=='iade').sort((a,b)=>b.tarih-a.tarih).slice(0,20)
+      .map(s=>({tarih:s.tarih,tutar:s.tutar,pb:s.pb||'TL',kalemler:(s.kalemler||[]).map(k=>({urun:k.urun,mik:k.mik,birim:k.birim}))}));
+    await _fb.collection('musteri_veri').doc(c.bulutUid).set({ad:c.ad,bakiye:+c.bakiye||0,limit:+c.limit||0,gecmis,guncelleme:Date.now()});
+  }catch(e){console.warn('musVeriGuncelle',e&&e.code);}
+}
 async function cariBulutHesap(id){
   const c=cari(id); if(!c)return;
   if(!bulutBaslat())return toast('☁️ Bulut ayarlı değil');
