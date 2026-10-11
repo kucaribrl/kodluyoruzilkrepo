@@ -369,6 +369,21 @@
   .iesum h4{font-size:11.5px;color:var(--thr,#d8a24a);font-weight:800;letter-spacing:.4px;margin-bottom:8px}
   .iesum .r{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #ffffff18;font-size:13.5px}
   .iesum .r:last-child{border:none}.iesum .r .k{color:#b9bcc6;font-weight:600}.iesum .r .v{font-weight:800}
+  /* Üretim iş emri fişi */
+  .iehead{display:flex;gap:12px;align-items:center;background:linear-gradient(135deg,#1d2f52,#2a4175);color:#fff;border-radius:16px;padding:13px 15px;margin-bottom:12px}
+  .iehead .ph{width:46px;height:46px;border-radius:11px;background:#ffffff1f;border:1px solid #ffffff33;display:flex;align-items:center;justify-content:center;font-size:23px;flex:0 0 auto}
+  .iehead .ti{flex:1;min-width:0}
+  .iehead .k{font-size:10px;letter-spacing:1.6px;font-weight:800;opacity:.72}
+  .iehead .no{font-size:18px;font-weight:800;margin-top:1px}
+  .iehead .dt{font-size:11.5px;opacity:.82;font-weight:600;margin-top:1px}
+  .iecard{background:var(--card);border:1px solid var(--ln);border-radius:15px;padding:13px 14px;margin-bottom:11px}
+  .iesec2{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:800;letter-spacing:.3px;color:var(--ink);margin:0 0 11px}
+  .iesec2 .no{width:22px;height:22px;border-radius:7px;background:var(--ind-s);color:var(--ind);font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .iesec2::after{content:'';flex:1;height:1px;background:var(--ln2);margin-left:2px}
+  .iepipe{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:11px}
+  .iepipe .st{font-size:11px;font-weight:800;padding:5px 9px;border-radius:8px;background:var(--ind-s);color:var(--ind)}
+  .iepipe .st.next{background:var(--ln2);color:var(--sub)}
+  .iepipe .ar{color:var(--sub);font-weight:800;font-size:11px}
 </style>
 </head>
 <body>
@@ -5490,13 +5505,15 @@ function formIsEmri(){
   const fs=fasonlar();
   const kumaslar=db.hammadde.filter(h=>h.kat==='Kumaş');
   ieMod=kumaslar.length?'kumas':'elle';
-  open_('🏭 Yeni İş Emri',`
+  const ieNo=db.isemirleri.length+1;const bugun=new Date().toLocaleDateString('tr-TR',{day:'2-digit',month:'long',year:'numeric'});
+  open_('Üretim İş Emri',`
     <datalist id="ie-urun-dl">${db.urunler.filter(u=>!u.pasif).map(u=>`<option value="${esc(u.ad)}">`).join('')}</datalist>
     <datalist id="ie-renk-dl">${RENK_LISTE.map(r=>`<option value="${r}">`).join('')}</datalist>
     <datalist id="ie-fason-dl">${fs.map(f=>`<option value="${esc(f.ad)}">`).join('')}</datalist>
     <datalist id="ie-ted-dl">${db.cariler.filter(c=>c.tip==='tedarikci').map(c=>`<option value="${esc(c.ad)}">`).join('')}</datalist>
     <input type="hidden" id="ie-gun" value="15">
-    <div class="iestep"><div class="iesh"><span class="n">1</span><b>Ürün</b><small>ne üretilecek?</small></div>
+    <div class="iehead"><div class="ph">🏭</div><div class="ti"><div class="k">ÜRETİM İŞ EMRİ</div><div class="no">Taslak #${ieNo}</div><div class="dt">📅 ${bugun}</div></div></div>
+    <div class="iecard"><div class="iesec2"><span class="no">1</span>Ürün</div>
       <input id="ie-ad" list="ie-urun-dl" autocomplete="off" placeholder="🔍 Ürün ara / yeni numune..." oninput="ieUrunAra()">
       <input id="ie-kod" placeholder="Ürün kodu (ör. 2026Y500)" oninput="ieKodKontrol()" style="margin-top:8px">
       <div class="mini" id="ie-kod-uyari"></div>
@@ -5504,7 +5521,7 @@ function formIsEmri(){
       <div id="ie-foto-box" style="margin-top:8px"></div>
       <div class="g2" style="margin-top:8px"><div><label>Satış şekli</label><select id="ie-birim" onchange="ieToplamCiz()"><option value="seri">Seri (asorti)</option><option value="adet">Tekli (adet)</option></select></div><div><label>Seri içeriği (adet)</label><input id="ie-seriadet" type="number" inputmode="numeric" value="6" oninput="ieToplamCiz()"></div></div>
     </div>
-    <div class="iestep"><div class="iesh"><span class="n">2</span><b>Kumaş &amp; Renk</b><small>elindeki kumaştan</small></div>
+    <div class="iecard"><div class="iesec2"><span class="no">2</span>Kumaş</div>
       ${kumaslar.length?`<div class="seg2" style="margin-bottom:11px"><div class="o ${ieMod==='kumas'?'on':''}" id="iem-kumas" onclick="ieModSet('kumas')">Kumaştan seç</div><div class="o ${ieMod==='elle'?'on':''}" id="iem-elle" onclick="ieModSet('elle')">Elle gir</div></div>`:''}
       <div id="ie-kumas-wrap" style="display:${ieMod==='kumas'?'':'none'}">
         <label>Hangi kumaş? <span style="font-weight:600;color:var(--sub);text-transform:none">— seç, yaz ya da yeni ekle</span></label>
@@ -5528,18 +5545,21 @@ function formIsEmri(){
           <div class="mini" id="ie-kumas-tuk-info" style="margin-top:5px"></div>
         </div>
       </div>
-      <div id="ie-renk" style="margin-top:6px"></div>
+    </div>
+    <div class="iecard"><div class="iesec2"><span class="no">3</span>Renk / Adet <span style="font-weight:600;color:var(--sub);text-transform:none;font-size:11px;letter-spacing:0">· asorti dağılımı</span></div>
+      <div id="ie-renk" style="margin-top:2px"></div>
       <div id="ie-toplam-box"></div>
     </div>
-    <div class="iestep"><div class="iesh"><span class="n">3</span><b>Termin</b><small>ne zaman bitmeli?</small></div>
-      <div class="iechips" id="ie-termin">${[7,15,30,45].map(d=>`<div class="c ${d===15?'on':''}" onclick="ieTerminSet(${d},this)">${d} gün</div>`).join('')}<div class="c" onclick="ieTerminOzel(this)">Özel</div></div>
-      <div class="mini" id="ie-termin-tarih" style="margin-top:9px"></div>
-    </div>
-    <div class="iestep"><div class="iesh"><span class="n">4</span><b>İlk Durak · Kesim</b><small>mal önce kesime gider</small></div>
+    <div class="iecard"><div class="iesec2"><span class="no">4</span>Üretim Akışı <span style="font-weight:600;color:var(--sub);text-transform:none;font-size:11px;letter-spacing:0">· ilk durak: Kesim</span></div>
       ${fs.length?'':'<div class="okbox" style="margin-bottom:8px">Henüz kayıtlı kesimci/fason yok — kutuya adını <b>yaz</b>, iş emrini açınca otomatik eklenir.</div>'}
       <div class="g2"><div><label>Kesimci (fason)</label><input id="dk-kesim-fas" list="ie-fason-dl" autocomplete="off" placeholder="yaz · seç · yeni ekle" oninput="ieKesimFiyat()"></div><div><label>₺ / adet</label><input id="dk-kesim-uc" type="number" inputmode="numeric" placeholder="0" oninput="ieOzetCiz()"></div></div>
+      <div class="iepipe"><span class="st">✂️ Kesim</span><span class="ar">→</span><span class="st next">🧵 Dikim</span><span class="ar">→</span><span class="st next">👔 Ütü / Paket</span></div>
       <div class="okbox" style="margin-top:8px">🧵 Sonraki aşamalar (nakış, dikim, ütü...) <b>kesim bitince "Durak Ekle"</b> ile eklenir. Kumaş/aksesuarı fason takipçin girer.</div>
       <label style="margin-top:10px">Genel Gider (₺/adet)</label><input id="ie-gg" type="number" inputmode="numeric" value="12" placeholder="10-15" oninput="ieOzetCiz()">
+    </div>
+    <div class="iecard"><div class="iesec2"><span class="no">5</span>Termin</div>
+      <div class="iechips" id="ie-termin">${[7,15,30,45].map(d=>`<div class="c ${d===15?'on':''}" onclick="ieTerminSet(${d},this)">${d} gün</div>`).join('')}<div class="c" onclick="ieTerminOzel(this)">Özel</div></div>
+      <div class="mini" id="ie-termin-tarih" style="margin-top:9px"></div>
     </div>
     <div id="ie-ozet"></div>
     <button class="btn g" style="margin-top:12px" onclick="kaydetIsEmri()">🏭 İş Emrini Aç</button>`);
