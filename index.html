@@ -5274,6 +5274,8 @@ function ieKumasMaliyet(i){return (+i.kumasTukToplam||0)*(+i.kumasFiyat||0)*kurC
 function ieMalMaliyet(i){return (i.malzeme||[]).reduce((a,m)=>a+(+m.tutar||0)*kurCevir(m.pb),0)+ieKumasMaliyet(i);}
 const MAL_BIRIM=['kg','metre','adet','top','paket','düzine'];
 function ieCarpan(i){return i.birim==='seri'?Math.max(1,+i.seriAdet||1):1}
+function ieSeriMi(i){return !!(i&&i.birim==='seri'&&ieCarpan(i)>1)} // seri (takım) işi mi — fason aşamaları parça (adet) sayılır
+function iePc(i,seriVal){return Math.round((+seriVal||0)*(ieCarpan(i)||1))} // seri değerini parça (adet) karşılığına çevir
 function ieFasonMaliyet(i){const c=ieCarpan(i);return (i.duraklar||[]).reduce((a,d)=>a+(+d.ucret||0)*(+d.gelen||0)*c,0)}
 function ieGenelGider(i){return (+i.genelGiderBirim||0)*ieSaglam(i)*ieCarpan(i)}
 function ieAdet(i,seri){return (seri==null?ieSaglam(i):seri)*ieCarpan(i)}
@@ -5327,7 +5329,7 @@ function rUretim(){
   const aktif=db.isemirleri.filter(i=>i.durum!=='tamam');
   const bitmis=db.isemirleri.filter(i=>i.durum==='tamam');
   const wip=[];aktif.forEach(i=>ieFasondaki(i).forEach(d=>wip.push({i,d,x:i.duraklar.indexOf(d)})));
-  const fasondaTop=wip.reduce((a,w)=>a+durakYolda(w.d),0);
+  const fasondaTop=wip.reduce((a,w)=>a+(ieSeriMi(w.i)?iePc(w.i,durakYolda(w.d)):durakYolda(w.d)),0);
   const firmalar=new Set(wip.map(w=>w.d.fasonId).filter(Boolean));
   const geciken=aktif.filter(i=>ieGecikme(i)>0).length;
   let html=`<div class="greet"><div><div class="h">Üretim 🏭</div><div class="d">Malın nerede — canlı takip</div></div></div>`;
@@ -5343,7 +5345,7 @@ function rUretim(){
     html+=wip.map(({i,d,x})=>{const kalan=durakYolda(d);const gun=d.baslama?Math.floor((Date.now()-d.baslama)/86400000):0;const gec=ieGecikme(i);
       const st=gec>0?['bad','var(--bad)',gec+'g geç']:gec>=-1?['low','var(--warn)','termin yakın']:['ok','var(--good)',gun+'g'];
       return `<div class="card" style="padding:10px 11px;margin-bottom:8px;border-left:3px solid ${st[1]}">
-        <div class="row" onclick="uretimDetay(${i.id})" style="cursor:pointer"><div class="av gray">${DURAK_IC[d.ad]||'🏭'}</div><div class="mid"><div class="t">${esc(fasonAd(d)||'firma yok')} · ${esc(d.ad)}</div><div class="s">${esc(i.urun)} · ${kalan} ${esc(i.birim||'ad')}</div></div><span class="pill ${st[0]}">${st[2]}</span></div>
+        <div class="row" onclick="uretimDetay(${i.id})" style="cursor:pointer"><div class="av gray">${DURAK_IC[d.ad]||'🏭'}</div><div class="mid"><div class="t">${esc(fasonAd(d)||'firma yok')} · ${esc(d.ad)}</div><div class="s">${esc(i.urun)} · ${ieSeriMi(i)?iePc(i,kalan)+' adet':kalan+' '+esc(i.birim||'ad')}</div></div><span class="pill ${st[0]}">${st[2]}</span></div>
         <div style="display:flex;gap:6px;margin-top:8px"><button class="btn g sm" style="margin:0;flex:1" onclick="durakTeslimAl(${i.id},${x})">📥 Teslim Al</button>${d.fasonId&&gec>0?`<button class="btn sm" style="margin:0;width:auto;padding:8px 12px;background:var(--bad);color:#fff" onclick="fasonHatirlat(${i.id},${x})">📲</button>`:''}<button class="btn ghost sm" style="margin:0;width:auto;padding:8px 12px" onclick="isEmriPaylas(${i.id},${x})">📤</button></div>
       </div>`;}).join('');}
   // Tüm iş emirleri — kompakt liste (tek tek, hepsi)
@@ -5360,7 +5362,7 @@ function uretimListe(tur){
   const aktif=db.isemirleri.filter(i=>i.durum!=='tamam');let title,items=[];
   if(tur==='fasonda'||tur==='firma'){const wip=[];aktif.forEach(i=>ieFasondaki(i).forEach(d=>wip.push({i,d})));
     title=tur==='firma'?'🏭 Firmadaki Mallar':'🧵 Fasondaki Mallar';
-    items=wip.map(({i,d})=>({id:i.id,ic:DURAK_IC[d.ad]||'🏭',t:(fasonAd(d)||'firma yok')+' · '+d.ad,s:i.urun+' · '+durakYolda(d)+' '+(i.birim||'ad')+' fasonda'}));
+    items=wip.map(({i,d})=>({id:i.id,ic:DURAK_IC[d.ad]||'🏭',t:(fasonAd(d)||'firma yok')+' · '+d.ad,s:i.urun+' · '+(ieSeriMi(i)?iePc(i,durakYolda(d))+' adet':durakYolda(d)+' '+(i.birim||'ad'))+' fasonda'}));
   }else if(tur==='geciken'){title='⏱️ Geciken İşler';
     items=aktif.filter(i=>ieGecikme(i)>0).sort((a,b)=>ieGecikme(b)-ieGecikme(a)).map(i=>{const ad=ieAktifDurak(i);return {id:i.id,ic:'⏱️',t:'#'+i.id+' · '+i.urun,s:ieGecikme(i)+' gün geç · '+(ad?ad.ad+(fasonAd(ad)?' ('+fasonAd(ad)+')':''):'')}});
   }else{title='📋 Aktif İş Emirleri';
@@ -5820,21 +5822,22 @@ function uretimDetay(id){
   if(i.malzemeGeldiBildirim){i.malzemeGeldiBildirim=false;save();} // açınca "malzeme geldi" nudge'ı düşür
   const foto=ieUrunFoto(i);
   const kar=karGoster();const saglam=ieSaglam(i);const birim=ieBirimMaliyet(i);
+  const P=v=>ieSeriMi(i)?iePc(i,v):(+v||0);const _bir=ieSeriMi(i)?'adet':(i.birim||'adet'); // fason aşamaları parça (adet) gösterilir
   const durIc={tamam:'✅',devam:'🔵',bekliyor:'⬜'};
   let html=`<div class="card" style="padding:14px"><div style="display:flex;gap:12px">
       ${foto?`<img src="${guvenliSrc(foto)}" style="width:64px;height:64px;border-radius:10px;object-fit:cover;flex:0 0 auto">`:''}
       <div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="font-weight:800;font-size:16px">${esc(i.urun)}${i.urunId?'':' <span class="pill low" style="vertical-align:middle">numune</span>'}</div><span class="pill ${i.durum==='tamam'?'ok':'low'}">${i.durum==='tamam'?'Tamam':'Devam'}</span></div>
       <div class="mini" style="margin-top:2px">${esc(i.kod||'')} · başladı ${dstr(i.baslangic)} · hedef ${i.hedef} ${esc(i.birim||'adet')}${i.birim==='seri'&&ieCarpan(i)>1?' ('+(i.hedef*ieCarpan(i))+' adet)':''}</div></div></div>
-    ${i.renkDagilim&&i.renkDagilim.length?`<div class="mini" style="margin-top:8px">🎨 ${i.renkDagilim.map(r=>esc(r.ad)+' '+r.adet).join(' · ')}</div>`:''}</div>
+    ${i.renkDagilim&&i.renkDagilim.length?`<div class="mini" style="margin-top:8px">🎨 ${i.renkDagilim.map(r=>esc(r.ad)+' '+P(r.adet)).join(' · ')}${ieSeriMi(i)?' adet':''}</div>`:''}</div>
     <div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="isEmriA4(${id})">📄 İş Emri Formu (A4)</button><button class="btn g sm" onclick="isEmriPaylas(${id})">📤 Fasona Gönder</button></div>`;
   // 📊 İSTENEN vs YAPILAN — planladığın (hedef) ile üretimden çıkan (sağlam) karşılaştırması
-  {const ist=+i.hedef||0;const yap=saglam;const fark=yap-ist;const fire=ieDefo(i);
-   const fc=fark<0?'var(--bad)':fark>0?'var(--ind2)':'var(--good)';const fl=fark===0?'tam':fark>0?'+'+fark+' fazla':fark+' eksik';
+  {const ist=+i.hedef||0;const yap=saglam;const fark=yap-ist;const fire=ieDefo(i);const af=P(Math.abs(fark));
+   const fc=fark<0?'var(--bad)':fark>0?'var(--ind2)':'var(--good)';const fl=fark===0?'tam':fark>0?'+'+af+' fazla':af+' eksik';
    html+=`<div class="card" style="margin-top:10px;padding:11px 13px"><div style="display:flex;justify-content:space-between;text-align:center;gap:6px">
-     <div style="flex:1"><div class="mini">İSTENEN</div><div style="font-weight:800;font-size:17px">${ist}</div></div>
-     <div style="flex:1;border-left:1px solid var(--ln);border-right:1px solid var(--ln)"><div class="mini">YAPILAN</div><div style="font-weight:800;font-size:17px">${yap}</div></div>
+     <div style="flex:1"><div class="mini">İSTENEN</div><div style="font-weight:800;font-size:17px">${P(ist)}</div></div>
+     <div style="flex:1;border-left:1px solid var(--ln);border-right:1px solid var(--ln)"><div class="mini">YAPILAN</div><div style="font-weight:800;font-size:17px">${P(yap)}</div></div>
      <div style="flex:1"><div class="mini">FARK</div><div style="font-weight:800;font-size:17px;color:${fc}">${fl}</div></div>
-   </div>${fire?`<div class="mini" style="text-align:center;margin-top:6px;color:var(--bad)">🔥 ${fire} defo/fire</div>`:''}<div class="mini" style="text-align:center;margin-top:4px;color:var(--sub)">${esc(i.birim||'adet')} · kesim fazla/eksik çıkabilir, "fasonda kaldı" sayılmaz</div></div>`;}
+   </div>${fire?`<div class="mini" style="text-align:center;margin-top:6px;color:var(--bad)">🔥 ${P(fire)} defo/fire</div>`:''}<div class="mini" style="text-align:center;margin-top:4px;color:var(--sub)">${_bir}${ieSeriMi(i)?' · '+ist+' seri hedef':''} · kesim fazla/eksik çıkabilir, "fasonda kaldı" sayılmaz</div></div>`;}
   if(kar){const gg=ieGenelGider(i);html+=`<div class="total" style="margin-top:12px"><div><div class="l">Toplam Maliyet</div><div class="v">${TL(ieToplamMaliyet(i))}</div></div><div style="text-align:right"><div class="l">Birim Maliyet</div><div class="v pos">${birim?TL(birim):'—'} ${birim?'/'+esc(i.birim||'ad'):''}</div></div></div>
     <div class="card" style="margin-top:8px;padding:4px 13px">
       <div class="kv"><span class="k">🧵 Malzeme / Kumaş</span><span class="v">${TL(ieMalMaliyet(i))}</span></div>
@@ -5849,11 +5852,11 @@ function uretimDetay(id){
       <div style="flex:0 0 auto;font-size:22px;line-height:1">${durIc[d.durum]||'⬜'}</div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:14.5px">${x+1}. ${esc(d.ad)}</b>${kar&&tutar?`<span class="mini" style="font-weight:800;color:var(--ink)">${TL(tutar)}</span>`:''}</div>
-        <div class="mini" style="margin-top:2px">${fad?esc(fad):'<span style="color:var(--sub)">fason atanmadı</span>'}${d.gonderilen?` · ${d.gonderilen} gönderildi → ${d.gelen} geldi${d.defolu?' · '+d.defolu+' defo':''}`:''}${d.ucret?` · ₺${d.ucret}/ad`:''}</div>
-        ${(d.renkGelen&&Object.keys(d.renkGelen).length)?`<div class="mini" style="margin-top:2px">🎨 ${Object.keys(durakGonderRenk(i,x)).map(c=>esc(c)+' '+(d.renkGelen[c]||0)+'/'+(durakGonderRenk(i,x)[c]||0)).join(' · ')}</div>`:''}
-        ${durakYolda(d)>0&&d.durum==='devam'?`<div class="mini" style="margin-top:2px;color:var(--thr);font-weight:700">📍 ${durakYolda(d)} ${esc(i.birim||'ad')} hâlâ fasonda</div>`:''}
-        ${d.defolu>0&&d.eksikNeden?`<div class="mini" style="margin-top:2px;color:var(--bad)">⚠️ ${d.defolu} defo · neden: ${esc(d.eksikNeden)}</div>`:''}
-        ${d.teslimatlar&&d.teslimatlar.length>1?`<div class="mini" style="margin-top:2px">Teslimatlar: ${d.teslimatlar.map(t=>t.adet+(t.defo?'/-'+t.defo:'')+' ('+dstr(t.tarih)+')').join(' · ')}</div>`:''}
+        <div class="mini" style="margin-top:2px">${fad?esc(fad):'<span style="color:var(--sub)">fason atanmadı</span>'}${d.gonderilen?` · ${P(d.gonderilen)} gönderildi → ${P(d.gelen)} geldi${d.defolu?' · '+P(d.defolu)+' defo':''}`:''}${d.ucret?` · ₺${d.ucret}/ad`:''}</div>
+        ${(d.renkGelen&&Object.keys(d.renkGelen).length)?`<div class="mini" style="margin-top:2px">🎨 ${Object.keys(durakGonderRenk(i,x)).map(c=>esc(c)+' '+P(d.renkGelen[c]||0)+'/'+P(durakGonderRenk(i,x)[c]||0)).join(' · ')}</div>`:''}
+        ${durakYolda(d)>0&&d.durum==='devam'?`<div class="mini" style="margin-top:2px;color:var(--thr);font-weight:700">📍 ${P(durakYolda(d))} ${_bir} hâlâ fasonda</div>`:''}
+        ${d.defolu>0&&d.eksikNeden?`<div class="mini" style="margin-top:2px;color:var(--bad)">⚠️ ${P(d.defolu)} defo · neden: ${esc(d.eksikNeden)}</div>`:''}
+        ${d.teslimatlar&&d.teslimatlar.length>1?`<div class="mini" style="margin-top:2px">Teslimatlar: ${d.teslimatlar.map(t=>P(t.adet)+(t.defo?'/-'+P(t.defo):'')+' ('+dstr(t.tarih)+')').join(' · ')}</div>`:''}
         ${d.not?`<div class="mini" style="margin-top:2px">📝 ${esc(d.not)}</div>`:''}
         ${(d.kontrol&&d.kontrol.length&&d.durum!=='tamam')?`<div class="kcont"><div class="mini" style="font-weight:800;margin:7px 0 4px">🧾 Kontrol${durakKontrolEksik(d).length?` · <span style="color:var(--bad)">${durakKontrolEksik(d).length} eksik</span>`:` · <span style="color:var(--good)">tam ✓</span>`}</div><div class="kchips">`+d.kontrol.map((k,ki)=>`<span class="kchip ${k.ok?'on':''}" onclick="durakKontrolTik(${id},${x},${ki})">${k.ok?'✅':'⬜'} ${esc(k.ad)}</span>`).join('')+`</div></div>`:''}
         ${d.foto?`<img src="${d.foto}" style="width:70px;height:70px;border-radius:8px;object-fit:cover;margin-top:6px">`:''}
@@ -5862,9 +5865,9 @@ function uretimDetay(id){
   });
   html+=`</div>`;
   if(i.durum!=='tamam'){const sonD=i.duraklar[i.duraklar.length-1];const sonBitti=sonD&&sonD.durum==='tamam';
-    html+=`<button class="btn ${sonBitti?'g':'ghost'} sm" style="margin-top:10px" onclick="formDurakEkle(${id})">➕ Sonraki Durak Ekle${sonBitti?' — mal '+ieSaglam(i)+' '+(i.birim||'ad')+' hazır, nereye?':' (dikim / nakış / baskı / ütü...)'}</button>`;}
+    html+=`<button class="btn ${sonBitti?'g':'ghost'} sm" style="margin-top:10px" onclick="formDurakEkle(${id})">➕ Sonraki Durak Ekle${sonBitti?' — mal '+P(ieSaglam(i))+' '+_bir+' hazır, nereye?':' (dikim / nakış / baskı / ütü...)'}</button>`;}
   html+=`<div class="sec">Malzeme / Kumaş <a onclick="ieMalDuzenle(${id})">${i.durum==='tamam'?'':'+ ekle / düzenle'}</a></div><div class="card" style="padding:4px 13px">`+((i.malzeme&&i.malzeme.length)?i.malzeme.map((m,mi)=>`<div class="kv"><span class="k">${esc(m.ad)}${m.renk?' · <b>'+esc(m.renk)+'</b>':''}${m.durum==='alinacak'?' <span class="pill low">🛒 alınacak</span>':''}${m.fis?` <a onclick="isEmriFisGoster(${id},${mi})" style="color:var(--ind2);font-weight:700;cursor:pointer">🧾 fiş</a>`:''}</span><span class="v">${m.mik?m.mik.toLocaleString('tr-TR')+' '+esc(m.birim||''):''}${kar&&m.tutar?' · '+money(m.tutar,m.pb||'TL'):''}</span></div>`).join(''):'<div class="mini" style="padding:8px 0">Malzeme eklenmedi.</div>')+`</div>`;
-  if(i.durum!=='tamam'){html+=`<button class="btn g" style="margin-top:14px" onclick="isEmriTamamla(${id})">📦 Tamamla → ${saglam||'?'} ${esc(i.birim||'adet')} stoğa al</button>
+  if(i.durum!=='tamam'){html+=`<button class="btn g" style="margin-top:14px" onclick="isEmriTamamla(${id})">📦 Tamamla → ${saglam||'?'} ${esc(i.birim||'adet')}${ieSeriMi(i)?' ('+P(saglam)+' adet)':''} stoğa al</button>
     <button class="btn ghost" style="margin-top:8px;color:var(--bad)" onclick="isEmriIptal(${id})">🗑 İş Emrini İptal Et (kumaş/malzeme geri gelir)</button>`;}
   else{html+=`<div class="okbox" style="margin-top:14px">✅ ${ieSaglam(i)} ${esc(i.birim||'adet')} stoğa girdi${kar?` · birim maliyet ${TL(birim)}`:''}</div>`;
     if(i.urunId&&urun(i.urunId))html+=`<button class="btn" style="margin-top:10px" onclick="closeM();setTimeout(()=>barkodYazdir(${i.urunId}),150)">🏷️ Barkod Etiketi Yazdır</button>`;}
@@ -5924,14 +5927,16 @@ function durakTeslimAl(id,x){
   const renkler=Object.keys(gr);
   _teslimRenk=(d.ad==='Kesim')&&renkler.length>1; // kesimci renk renk sayar
   const kalanTop=renkler.reduce((a,c)=>a+Math.max(0,(gr[c]||0)-(d.renkGelen[c]||0)-(d.renkDefo[c]||0)),0);
-  window._teslimKalan=kalanTop;window._teslimBirim=i.birim||'ad';
+  const carp=ieCarpan(i)||1;const seriMi=ieSeriMi(i);const P=v=>seriMi?Math.round(v*carp):v; // seri → parça (adet)
+  window._teslimKalan=P(kalanTop);window._teslimBirim=seriMi?'adet':(i.birim||'ad');window._teslimCarp=seriMi?carp:1;
   const rows=renkler.map((c,k)=>{const gon=gr[c]||0,gel=d.renkGelen[c]||0,def=d.renkDefo[c]||0,kalan=Math.max(0,gon-gel-def);
-    return `<div class="syrow"><span class="sw sm" style="background:${hexFromAd(c)||'#ccc'}"></span><div style="flex:1;min-width:0"><div class="synm" style="font-size:13px">${esc(c)}</div><div class="mini">gön ${gon} · geldi ${gel} · kalan <b>${kalan}</b></div></div><input id="tr-${k}" data-c="${esc(c)}" type="number" inputmode="numeric" value="${kalan||''}" placeholder="sağlam" class="syin" style="width:62px"><input id="td-${k}" type="number" inputmode="numeric" value="" placeholder="defo" class="syin" style="width:52px"></div>`}).join('');
+    return `<div class="syrow"><span class="sw sm" style="background:${hexFromAd(c)||'#ccc'}"></span><div style="flex:1;min-width:0"><div class="synm" style="font-size:13px">${esc(c)}</div><div class="mini">gön ${P(gon)} · geldi ${P(gel)} · kalan <b>${P(kalan)}</b>${seriMi?' adet':''}</div></div><input id="tr-${k}" data-c="${esc(c)}" type="number" inputmode="numeric" value="${P(kalan)||''}" placeholder="sağlam" class="syin" style="width:62px"><input id="td-${k}" type="number" inputmode="numeric" value="" placeholder="defo" class="syin" style="width:52px"></div>`}).join('');
   open_(d.ad+' · Teslim Al',`
-    <div class="mini">${esc(fasonAd(d)||'Fason')} · fasonda kalan <b>${kalanTop}</b> ${esc(i.birim||'ad')}</div>
-    ${d.ad==='Kesim'?`<div class="infobox" style="margin-top:6px">✂️ Kesimde renk renk say — hangi renkten kaç kesildi.</div>`:''}
+    <div class="mini">${esc(fasonAd(d)||'Fason')} · fasonda kalan <b>${P(kalanTop)}</b> ${seriMi?'adet':esc(i.birim||'ad')}${seriMi?` · ${kalanTop} seri`:''}</div>
+    ${seriMi?`<div class="okbox" style="margin-top:6px">📦 Seri (takım) işi — <b>1 seri = ${carp} adet</b>. Kesilen/gelen miktarı <b>adet (parça)</b> olarak gir; otomatik seriye çevrilir.</div>`:''}
+    ${d.ad==='Kesim'?`<div class="infobox" style="margin-top:6px">✂️ Kesimde renk renk say — hangi renkten kaç <b>adet</b> kesildi.</div>`:''}
     ${!d.ucret?`<label>₺ / adet (anlaşılan ücret)</label><input id="t-uc" type="number" inputmode="numeric" placeholder="0">`:''}
-    <div id="t-simple" style="display:${_teslimRenk?'none':'block'}"><div class="g2" style="margin-top:8px"><div><label>Gelen (sağlam)</label><input id="t-adet" type="number" inputmode="numeric" value="${kalanTop||''}" oninput="teslimHint()"></div><div><label>Defo / fire</label><input id="t-defo" type="number" inputmode="numeric" value="" oninput="teslimHint()"></div></div><div class="mini" id="t-hint" style="margin-top:5px"></div></div>
+    <div id="t-simple" style="display:${_teslimRenk?'none':'block'}"><div class="g2" style="margin-top:8px"><div><label>Gelen (sağlam)${seriMi?' · adet':''}</label><input id="t-adet" type="number" inputmode="numeric" value="${P(kalanTop)||''}" oninput="teslimHint()"></div><div><label>Defo / fire${seriMi?' · adet':''}</label><input id="t-defo" type="number" inputmode="numeric" value="" oninput="teslimHint()"></div></div><div class="mini" id="t-hint" style="margin-top:5px"></div></div>
     <div id="t-renkbox" style="display:${_teslimRenk?'block':'none'}"><div class="card" style="padding:6px 12px;margin-top:8px">${rows}</div></div>
     ${renkler.length>1?`<a id="t-renk-link" onclick="teslimRenkToggle()" style="display:inline-block;margin-top:8px;font-size:12.5px;color:var(--ind2);font-weight:800;cursor:pointer">${_teslimRenk?'↩︎ Tek toplam gir':'🎨 Renk renk gir'}</a>`:''}
     <label style="margin-top:8px">Not</label><input id="t-not" placeholder="ör. lacivert 2 top eksik">
@@ -5954,12 +5959,15 @@ function durakTeslimKaydet(id,x){
   if($('t-uc'))d.ucret=+$('t-uc').value||d.ucret||0;
   d.renkGelen=d.renkGelen||{};d.renkDefo=d.renkDefo||{};
   let tAdet=0,tDefo=0;const bg={},bd={};
-  if(_teslimRenk){ // renk renk elle
-    document.querySelectorAll('#mB #t-renkbox input[id^="tr-"]').forEach(el=>{const c=el.getAttribute('data-c');const adet=Math.max(0,+el.value||0);
-      const di=el.parentElement.querySelector('input[id^="td-"]');const defo=Math.max(0,+((di&&di.value)||0));
+  // Girişler ADET (parça) olarak alınır; seri (takım) işinde seri'ye çevrilir (tam seri değilse en yakına yuvarla + uyar)
+  const carp=ieCarpan(i)||1;const seriMi=ieSeriMi(i);let _artik=false;
+  const toSeri=p=>{p=Math.max(0,+p||0);if(!seriMi)return p;const s=p/carp,r=Math.round(s);if(p>0&&Math.abs(s-r)>0.02)_artik=true;return r;};
+  if(_teslimRenk){ // renk renk elle (adet)
+    document.querySelectorAll('#mB #t-renkbox input[id^="tr-"]').forEach(el=>{const c=el.getAttribute('data-c');const adet=toSeri(el.value);
+      const di=el.parentElement.querySelector('input[id^="td-"]');const defo=toSeri((di&&di.value)||0);
       if(adet){bg[c]=(bg[c]||0)+adet;tAdet+=adet}if(defo){bd[c]=(bd[c]||0)+defo;tDefo+=defo}});
-  }else{ // tek toplam → renk planına göre dağıt
-    tAdet=Math.max(0,+($('t-adet')?.value||0));tDefo=Math.max(0,+($('t-defo')?.value||0));
+  }else{ // tek toplam (adet) → seri'ye çevir, renk planına göre dağıt
+    tAdet=toSeri($('t-adet')?.value);tDefo=toSeri($('t-defo')?.value);
     const kalanW={};Object.keys(gr).forEach(c=>kalanW[c]=Math.max(0,(gr[c]||0)-(d.renkGelen[c]||0)-(d.renkDefo[c]||0)));
     const ag=dagit(tAdet,kalanW),ad=dagit(tDefo,kalanW);
     Object.keys(ag).forEach(c=>{if(ag[c])bg[c]=ag[c]});Object.keys(ad).forEach(c=>{if(ad[c])bd[c]=ad[c]});
@@ -5981,11 +5989,13 @@ function durakTeslimKaydet(id,x){
     const bitti=bittiForce||((d.gelen+d.defolu)>=gonTop);
     if(bitti){d.durum='tamam';d.bittiElle=!!bittiForce;if(x<i.duraklar.length-1){const nx=i.duraklar[x+1];if(nx.durum==='bekliyor'){nx.gonderilenRenk={...d.renkGelen};nx.gonderilen=d.gelen;nx.durum='devam';nx.baslama=Date.now()}}}
     else d.durum='devam';
-    save();closeM();uretimDetay(id);toast(bitti?'Durak tamamlandı ✓':tAdet+' adet teslim alındı ✓');
+    save();closeM();uretimDetay(id);toast(bitti?'Durak tamamlandı ✓':iePc(i,tAdet)+' adet teslim alındı ✓');
+    if(_artik)setTimeout(()=>toast('ℹ️ Girilen adet tam seriye bölünmedi — en yakın seriye yuvarlandı'),1200);
   };
+  const _bir=seriMi?'adet':(i.birim||'adet');const _P=v=>seriMi?iePc(i,v):v;
   const renkAsim=[...new Set([...Object.keys(bg),...Object.keys(bd)])].filter(c=>((d.renkGelen[c]||0)+(d.renkDefo[c]||0)+(bg[c]||0)+(bd[c]||0))>(gr[c]||0)+0.001);
-  if(yeniTop>gonTop+0.001)askConfirm(`Bu durağa ${gonTop} ${i.birim||'adet'} gönderilmişti.\nBu teslimatla toplam ${yeniTop} olacak — ${yeniTop-gonTop} FAZLA.\n\nYine de kaydedilsin mi?`,commit,'Yine de kaydet');
-  else if(renkAsim.length)askConfirm(`Renk bazında fazla giriş var:\n${renkAsim.map(c=>c+': '+((d.renkGelen[c]||0)+(bg[c]||0))+'/'+(gr[c]||0)+' gönderilen').join('\n')}\n\nYine de kaydedilsin mi?`,commit,'Yine de kaydet');
+  if(yeniTop>gonTop+0.001)askConfirm(`Bu durağa ${_P(gonTop)} ${_bir} gönderilmişti.\nBu teslimatla toplam ${_P(yeniTop)} olacak — ${_P(yeniTop-gonTop)} FAZLA.\n\nYine de kaydedilsin mi?`,commit,'Yine de kaydet');
+  else if(renkAsim.length)askConfirm(`Renk bazında fazla giriş var:\n${renkAsim.map(c=>c+': '+_P((d.renkGelen[c]||0)+(bg[c]||0))+'/'+_P(gr[c]||0)+' gönderilen').join('\n')}\n\nYine de kaydedilsin mi?`,commit,'Yine de kaydet');
   else commit();
 }
 /* --- Tamamla → stoğa al --- */
@@ -6091,12 +6101,13 @@ function ieMalKaydet(id){const i=db.isemirleri.find(v=>v.id===id);
 /* --- İş emri paylaşım (WhatsApp) + A4 form --- */
 function ieShareText(i,x){
   const durak=(x!=null&&x>=0&&i.duraklar[x])?i.duraklar[x]:null;
+  const seriMi=ieSeriMi(i);const P=v=>seriMi?iePc(i,v):(+v||0);
   let t=`🏭 *${(db.firma||'ÖZ TEKSTİL').toLocaleUpperCase('tr-TR')} — İŞ EMRİ #${i.id}*\n`;
   t+=`Ürün: *${i.urun}*${i.kod?' ('+i.kod+')':''}\n`;
-  t+=`Adet: *${i.hedef} ${i.birim||'adet'}*\n`;
-  if(i.renkDagilim&&i.renkDagilim.length)t+=`Renk: ${i.renkDagilim.map(r=>r.ad+' '+r.adet).join(' · ')}\n`;
+  t+=`Adet: *${seriMi?P(i.hedef)+' adet ('+i.hedef+' seri × '+ieCarpan(i)+')':i.hedef+' '+(i.birim||'adet')}*\n`;
+  if(i.renkDagilim&&i.renkDagilim.length)t+=`Renk: ${i.renkDagilim.map(r=>r.ad+' '+P(r.adet)+(seriMi?' ad':'')).join(' · ')}\n`;
   if(durak){t+=`\n➡️ *Yapılacak işlem: ${durak.ad}*\n`;
-    if(durak.gonderilen)t+=`Gönderilen: ${durak.gonderilen} adet\n`;
+    if(durak.gonderilen)t+=`Gönderilen: ${P(durak.gonderilen)} adet\n`;
     if(durak.ucret)t+=`Anlaşılan: ₺${durak.ucret}/adet\n`;
     if(durak.not)t+=`Not: ${durak.not}\n`;
     if(durak.kontrol&&durak.kontrol.length)t+=`Kontrol: ${durak.kontrol.map(k=>(k.ok?'✓':'○')+' '+k.ad).join(' · ')}\n`;
@@ -6144,7 +6155,8 @@ function isEmriResimYap(id,x,cb){
     const wrap=(t,font,maxW)=>{mc.font=font;const ws=(''+t).split(/\s+/),out=[];let cur='';ws.forEach(w=>{const tt=cur?cur+' '+w:w;if(mc.measureText(tt).width>maxW&&cur){out.push(cur);cur=w}else cur=tt});if(cur)out.push(cur);return out;};
     const renk=(i.renkDagilim&&i.renkDagilim.length)?i.renkDagilim:[];
     const durakArr=durak?[durak]:(i.duraklar||[]);
-    const toplamAdet=renk.reduce((a,r)=>a+(+r.adet||0),0)||(+i.hedef||0);
+    const _seriMi=ieSeriMi(i);const _pc=v=>_seriMi?iePc(i,v):(+v||0); // fason formu: parça (adet) göster
+    const toplamAdet=_pc(renk.reduce((a,r)=>a+(+r.adet||0),0)||(+i.hedef||0));
     const termin=i.baslangic?dstr(i.baslangic+(+i.gun||0)*86400000):'—';
     const notTxt=(durak&&durak.not)||i.not||'';const notLines=notTxt?wrap(notTxt,'16px sans-serif',W-2*P-28):[];
     // ── ölçüler ── (geçici tuvale çiz, sonda içeriğe göre kırp)
@@ -6187,7 +6199,7 @@ function isEmriResimYap(id,x,cb){
       const rcol=(W-2*P)/3;
       renk.forEach((r,idx)=>{const col=idx%3,row=Math.floor(idx/3),xx=P+col*rcol,yy=y+row*34+18;
         g.fillStyle=r.hex||hexFromAd(r.ad)||'#c9ccd0';g.beginPath();g.arc(xx+11,yy-5,9,0,Math.PI*2);g.fill();g.strokeStyle='rgba(0,0,0,.14)';g.lineWidth=1;g.stroke();
-        g.fillStyle=ink;g.font='700 16px sans-serif';g.textAlign='left';g.fillText(clip((r.ad||'—')+': '+r.adet,'700 16px sans-serif',rcol-34),xx+28,yy);});
+        g.fillStyle=ink;g.font='700 16px sans-serif';g.textAlign='left';g.fillText(clip((r.ad||'—')+': '+_pc(r.adet)+(_seriMi?' ad':''),'700 16px sans-serif',rcol-34),xx+28,yy);});
       y+=renkRows*34+GAP;}
     // ── üretim aşamaları (tablo) ──
     secTitle(durak?'İŞLEM':'ÜRETİM AŞAMALARI',y);y+=8;
@@ -6232,7 +6244,8 @@ async function isEmriResimGonder(id,x){
 }
 function isEmriA4(id){
   const i=db.isemirleri.find(v=>v.id===id);if(!i)return;
-  const renk=(i.renkDagilim&&i.renkDagilim.length)?i.renkDagilim.map(r=>`<span class="ietag">${esc(r.ad)}: <b>${r.adet}</b></span>`).join(''):'—';
+  const seriMi=ieSeriMi(i);const P=v=>seriMi?iePc(i,v):(+v||0);
+  const renk=(i.renkDagilim&&i.renkDagilim.length)?i.renkDagilim.map(r=>`<span class="ietag">${esc(r.ad)}: <b>${P(r.adet)}</b>${seriMi?' ad':''}</span>`).join(''):'—';
   const malRows=(i.malzeme||[]).length?i.malzeme.map(m=>`<tr><td>${esc(m.ad)}${m.durum==='alinacak'?' <i>(alınacak)</i>':''}</td><td class="r">${m.mik?esc(m.mik+' '+(m.birim||'')):''}</td></tr>`).join(''):'<tr><td colspan="2">—</td></tr>';
   const durakRows=i.duraklar.map((d,k)=>`<tr><td>${k+1}. ${esc(d.ad)}</td><td>${esc(fasonAd(d)||'—')}</td><td class="r">${d.ucret?'₺'+d.ucret+'/ad':'—'}</td><td>${esc(d.not||'')}</td></tr>`).join('');
   $('printarea').innerHTML=`<div class="ieA4">
@@ -6240,7 +6253,7 @@ function isEmriA4(id){
     <div class="ieline"></div>
     <table class="iem"><tr><td class="lb">Tarih</td><td>${dstr(i.baslangic)}</td><td class="lb">Termin</td><td>${i.gun||'-'} gün</td></tr>
       <tr><td class="lb">Ürün</td><td><b>${esc(i.urun)}</b></td><td class="lb">Kod</td><td>${esc(i.kod||'-')}</td></tr>
-      <tr><td class="lb">Hedef</td><td><b>${i.hedef} ${esc(i.birim||'adet')}</b></td><td class="lb">Şekil</td><td>${esc(i.birim||'-')}</td></tr></table>
+      <tr><td class="lb">Hedef</td><td><b>${seriMi?P(i.hedef)+' adet ('+i.hedef+' seri)':i.hedef+' '+esc(i.birim||'adet')}</b></td><td class="lb">Şekil</td><td>${esc(i.birim||'-')}${seriMi?' · 1 seri = '+ieCarpan(i)+' adet':''}</td></tr></table>
     ${i.foto?`<div style="text-align:center;margin:10px 0"><img src="${guvenliSrc(i.foto)}" class="ieimg"></div>`:''}
     <div class="iesec">RENK DAĞILIMI</div><div style="margin:5px 0">${renk}</div>
     <div class="iesec">MALZEME / KUMAŞ</div><table class="ietbl">${malRows}</table>
