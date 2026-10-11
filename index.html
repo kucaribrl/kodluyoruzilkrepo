@@ -5204,13 +5204,15 @@ function aksesuarAlimAc(ie){
   return n;
 }
 // 🧶 Elinde olmayan kumaş/renk(ler) için otomatik KUMAŞ alım siparişi (iş emrine bağlı). Teslim alınınca kumaşın renk stoğuna eklenir.
-function kumasAlimAc(ie,kumasAd,hid,satirlar,birim,fiyat,pb){
+function kumasAlimAc(ie,kumasAd,hid,satirlar,birim,fiyat,pb,tedId){
   satirlar=(satirlar||[]).filter(s=>(s.renk||'').trim()||(+s.miktar||0)>0);
   if(!ie||!satirlar.length)return 0;
   let hh=hid?db.hammadde.find(h=>h.id===hid):null;
   if(!hh)hh=db.hammadde.find(h=>h.kat==='Kumaş'&&(h.ad||'').toLowerCase()===(kumasAd||'').trim().toLowerCase());
-  if(!hh){hh={id:nid('h'),ad:(kumasAd||'').trim()||'Kumaş',kat:'Kumaş',birim:birim||'kg',detay:'',stok:0,renkler:[],kritik:0,alis:+fiyat||0,pb:pb||'TL',foto:''};db.hammadde.push(hh);}
-  const o={id:nid('ms'),kat:'Kumaş',ad:hh.ad,hid:hh.id,ted:'',tedId:null,
+  const ted=tedId?cari(tedId):null;
+  if(!hh){hh={id:nid('h'),ad:(kumasAd||'').trim()||'Kumaş',kat:'Kumaş',birim:birim||'kg',detay:'',stok:0,renkler:[],kritik:0,alis:+fiyat||0,pb:pb||'TL',foto:'',ted:ted?ted.ad:'',tedId:tedId||null};db.hammadde.push(hh);}
+  else if(ted&&!hh.tedId){hh.tedId=tedId;hh.ted=ted.ad;} // kumaşçısı yoksa işaretle
+  const o={id:nid('ms'),kat:'Kumaş',ad:hh.ad,hid:hh.id,ted:ted?ted.ad:'',tedId:tedId||null,
     satirlar:satirlar.map(s=>({renk:(s.renk||'').trim(),miktar:+s.miktar||0,gelen:0})),
     miktar:satirlar.reduce((a,s)=>a+(+s.miktar||0),0),birim:birim||hh.birim||'kg',
     fiyat:+fiyat||0,pb:pb||'TL',siparisTarih:Date.now(),beklenen:0,
@@ -5264,6 +5266,8 @@ const MECBURI=['Kesim','Dikim','Ütü / Paket'];
 function fasonlar(){return db.cariler.filter(c=>c.tip==='fason')}
 // İsimden fason carisi çöz: varsa eşleştir, yoksa yeni fason/kesimci oluştur (iş emri formlarında yazılabilir alan için)
 function fasonCoz(ad){ad=(ad||'').trim();if(!ad)return null;let f=db.cariler.find(c=>c.tip==='fason'&&(c.ad||'').toLowerCase()===ad.toLowerCase());if(!f){f={id:nid('c'),tip:'fason',ad,tel:'',bakiye:0,doviz:'TL',olusturma:Date.now()};db.cariler.push(f);try{toast('🧵 Yeni kesimci/fason eklendi: '+ad)}catch(e){}}return f.id;}
+// İsimden tedarikçi/kumaşçı carisi çöz: varsa eşleştir, yoksa yeni tedarikçi oluştur
+function tedarikciCoz(ad){ad=(ad||'').trim();if(!ad)return null;let c=db.cariler.find(x=>x.tip==='tedarikci'&&(x.ad||'').toLowerCase()===ad.toLowerCase());if(!c){c={id:nid('c'),tip:'tedarikci',ad,tel:'',bakiye:0,doviz:'TL',olusturma:Date.now()};db.cariler.push(c);try{toast('🧶 Yeni kumaşçı/tedarikçi eklendi: '+ad)}catch(e){}}return c.id;}
 function fasonAd(d){return (d.fasonId&&cari(d.fasonId))?cari(d.fasonId).ad:(d.firma||'')}
 function kurCevir(pb){return pb==='USD'?(+db.kurUSD||1):pb==='EUR'?(+db.kurEUR||1):1;} // kur 0/tanımsızsa 1'e düş (sessiz 0 yerine)
 function ieKumasMaliyet(i){return (+i.kumasTukToplam||0)*(+i.kumasFiyat||0)*kurCevir(i.kumasPB);}
@@ -5488,6 +5492,7 @@ function formIsEmri(){
     <datalist id="ie-urun-dl">${db.urunler.filter(u=>!u.pasif).map(u=>`<option value="${esc(u.ad)}">`).join('')}</datalist>
     <datalist id="ie-renk-dl">${RENK_LISTE.map(r=>`<option value="${r}">`).join('')}</datalist>
     <datalist id="ie-fason-dl">${fs.map(f=>`<option value="${esc(f.ad)}">`).join('')}</datalist>
+    <datalist id="ie-ted-dl">${db.cariler.filter(c=>c.tip==='tedarikci').map(c=>`<option value="${esc(c.ad)}">`).join('')}</datalist>
     <input type="hidden" id="ie-gun" value="15">
     <div class="iestep"><div class="iesh"><span class="n">1</span><b>Ürün</b><small>ne üretilecek?</small></div>
       <input id="ie-ad" list="ie-urun-dl" autocomplete="off" placeholder="🔍 Ürün ara / yeni numune..." oninput="ieUrunAra()">
@@ -5509,6 +5514,8 @@ function formIsEmri(){
           <div style="display:flex;gap:6px"><input id="ie-kumas-fiyat" type="number" inputmode="decimal" placeholder="0" oninput="ieKumasFiyatCiz()" style="flex:1;min-width:0;margin:0"><select id="ie-kumas-pb" onchange="ieKumasFiyatCiz()" style="width:64px;flex:0 0 auto;margin:0"><option value="TL">₺</option><option value="USD">$</option></select></div>
           <div class="iekfi" id="ie-kumas-fiyat-info" style="margin-top:7px"></div>
           <div id="ie-kumas-yeni"></div>
+          <label style="margin-top:9px">Kumaşçı <span style="font-weight:600;color:var(--sub);text-transform:none">— stokta olmayan kumaş/renk bundan alınır, borcu ona yazılır (opsiyonel)</span></label>
+          <input id="ie-kumasci" list="ie-ted-dl" autocomplete="off" placeholder="kumaşçı / tedarikçi — yaz · seç · yeni ekle">
           <label style="margin-top:9px">Kumaş tüketimi <span style="font-weight:600;color:var(--sub);text-transform:none">— pastaldan; renk renk kg + stoktan düşülür (opsiyonel)</span></label>
           <div class="iechips" id="ie-tuk-mod" style="margin:4px 0 6px">
             <div class="c on" data-m="gram" onclick="ieTukMod('gram')">1 üründe gram</div>
@@ -5560,6 +5567,7 @@ function ieKumasUygula(k,yeniAd){
     if($('ie-kumas-fiyat'))$('ie-kumas-fiyat').value=k.alis>0?k.alis:'';
     if($('ie-kumas-pb'))$('ie-kumas-pb').value=k.pb||'TL';
     ieKumasFiyat=+k.alis||0;ieKumasPB=k.pb||'TL';
+    const _kc=$('ie-kumasci');if(_kc)_kc.value=(k.tedId&&cari(k.tedId))?cari(k.tedId).ad:(k.ted||''); // kayıtlı kumaşçısını getir
     ieKumasFiyatWrap(true);
   }else if(yeniAd){ // stokta olmayan — yeni/alınacak kumaş
     ieKumasId=0;ieKumasAd=yeniAd;ieKumasRenkli=false;
@@ -5786,11 +5794,14 @@ function kaydetIsEmri(){
   const yeniIe={id:nid('ie'),urunId:ieUrunId||null,urun:ad,kod,foto:ieFoto,birim,seriAdet,hedef,renkDagilim,malzeme,duraklar,genelGiderBirim:+$('ie-gg').value||0,kumasId:ieKumasId||null,kumasAd:_kad,kumasFiyat:_kfiyat,kumasPB:_kpb,kumasYeni:(!ieKumasId&&!!_kad),kumasTukBirim:_ktukKg,kumasTukStokParca:_ktuk,kumasTukStokBirim:_cv.birim,kumasTukNot:_cv.not||'',kumasTukToplam:_ktukTop,baslangic:Date.now(),gun,durum:'devam',stoklandi:false};
   db.isemirleri.push(yeniIe);
   const alimN=aksesuarAlimAc(yeniIe); // "alınacak" malzemeler için otomatik alım siparişi
-  // Elinde olmayan kumaş/renk(ler) → otomatik kumaş alım siparişi (kumaşçıya; tedarikçisini sipariş kartından seçersin)
-  const kumasN=_eksikKumas.length?kumasAlimAc(yeniIe,_kad,(_kk?_kk.id:null),_eksikKumas,(_kk?_kk.birim:(_cv.birim||'kg')),_kfiyat,_kpb):0;
+  // Elinde olmayan kumaş/renk(ler) → otomatik kumaş alım siparişi; formda kumaşçı yazıldıysa ona atanır
+  const _kumasciAd=($('ie-kumasci')?.value||'').trim();
+  const _kumasciId=(_eksikKumas.length&&_kumasciAd)?tedarikciCoz(_kumasciAd):null;
+  const kumasN=_eksikKumas.length?kumasAlimAc(yeniIe,_kad,(_kk?_kk.id:null),_eksikKumas,(_kk?_kk.birim:(_cv.birim||'kg')),_kfiyat,_kpb,_kumasciId):0;
   const eksikAd=_eksikKumas.filter(e=>(e.renk||'').trim()).map(e=>e.renk).join(', ');
+  const _kumasciCari=_kumasciId?cari(_kumasciId):null;
   save();closeM();rUretim();toast('İş emri açıldı ✓ · '+hedef+' '+birim+(alimN?' · 🛒 '+alimN+' malzeme alım listesine eklendi':'')+((_kk&&_dusulen>0)?' · '+_dusulen.toLocaleString('tr-TR',{maximumFractionDigits:2})+' '+(_kk.birim||'')+' kumaş düşüldü':''));
-  if(kumasN)setTimeout(()=>toast('🧶 Elinde olmayan kumaş alım listesine eklendi'+(eksikAd?' ('+eksikAd+')':'')+' — kumaşçısını/tedarikçisini sipariş kartından seç'),1600);
+  if(kumasN)setTimeout(()=>toast('🧶 Elinde olmayan kumaş alım listesine eklendi'+(eksikAd?' ('+eksikAd+')':'')+(_kumasciCari?' → '+_kumasciCari.ad:' — kumaşçısını sipariş kartından seç')),1600);
   if(_cv.not&&/⚠️/.test(_cv.not))setTimeout(()=>toast(_cv.not),1500);
 }
 /* --- İş emri detay --- */
