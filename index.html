@@ -384,6 +384,11 @@
   .iepipe .st{font-size:11px;font-weight:800;padding:5px 9px;border-radius:8px;background:var(--ind-s);color:var(--ind)}
   .iepipe .st.next{background:var(--ln2);color:var(--sub)}
   .iepipe .ar{color:var(--sub);font-weight:800;font-size:11px}
+  .asorti{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:2px}
+  .asorti th,.asorti td{padding:5px 7px;border-bottom:1px solid var(--ln2);text-align:left;white-space:nowrap}
+  .asorti thead th{font-size:10px;letter-spacing:.3px;text-transform:uppercase;color:var(--sub);font-weight:800;border-bottom:1.5px solid var(--ln)}
+  .asorti th.r,.asorti td.r{text-align:right}
+  .asorti tr.tot td{border-top:1.5px solid var(--ln);border-bottom:none;font-weight:800;color:var(--ink)}
 </style>
 </head>
 <body>
@@ -5499,9 +5504,10 @@ function maliyetUretimeYolla(id){const m=(db.maliyetler||[]).find(x=>x.id===id);
   toast('💰 Maliyetten dolduruldu — adet/renk gir, aç');
 },160);}
 /* --- Yeni iş emri --- */
-let ieMal=[], ieRenk=[], ieFoto='', ieUrunId=0, ieKumasId=0, ieKumasAd='', ieKumasFiyat=0, ieKumasPB='TL', ieKumasRenkli=false, ieMod='elle';
+let ieMal=[], ieRenk=[], ieFoto='', ieUrunId=0, ieKumasId=0, ieKumasAd='', ieKumasFiyat=0, ieKumasPB='TL', ieKumasRenkli=false, ieMod='elle', ieBeden=[];
 function formIsEmri(){
   ieMal=[];ieRenk=[];ieFoto='';ieUrunId=0;ieKumasId=0;ieKumasAd='';ieKumasFiyat=0;ieKumasPB='TL';ieKumasRenkli=false;
+  ieBeden=[{beden:'S',adet:1},{beden:'M',adet:2},{beden:'L',adet:2},{beden:'XL',adet:1}]; // seri içeriği (beden beden) — varsayılan 6'lı asorti
   const fs=fasonlar();
   const kumaslar=db.hammadde.filter(h=>h.kat==='Kumaş');
   ieMod=kumaslar.length?'kumas':'elle';
@@ -5519,7 +5525,13 @@ function formIsEmri(){
       <div class="mini" id="ie-kod-uyari"></div>
       <div id="ie-prod"></div>
       <div id="ie-foto-box" style="margin-top:8px"></div>
-      <div class="g2" style="margin-top:8px"><div><label>Satış şekli</label><select id="ie-birim" onchange="ieToplamCiz()"><option value="seri">Seri (asorti)</option><option value="adet">Tekli (adet)</option></select></div><div><label>Seri içeriği (adet)</label><input id="ie-seriadet" type="number" inputmode="numeric" value="6" oninput="ieToplamCiz()"></div></div>
+      <label style="margin-top:8px">Satış şekli</label><select id="ie-birim" onchange="ieBirimDegis()" style="margin-bottom:4px"><option value="seri">Seri (asorti)</option><option value="adet">Tekli (adet)</option></select>
+      <input type="hidden" id="ie-seriadet" value="6">
+      <div id="ie-beden-wrap">
+        <label>Seri içeriği <span style="font-weight:600;color:var(--sub);text-transform:none;font-size:11px">— bir seride hangi bedenden kaç adet</span></label>
+        <div style="display:flex;gap:6px;margin-bottom:7px;flex-wrap:wrap"><button type="button" class="btn ghost sm" style="width:auto;padding:6px 10px;margin:0" onclick="ieBedenPreset(['S','M','L','XL','XXL'])">S-XXL</button><button type="button" class="btn ghost sm" style="width:auto;padding:6px 10px;margin:0" onclick="ieBedenPreset(['M','L','XL','2XL','3XL'])">M-3XL</button><button type="button" class="btn ghost sm" style="width:auto;padding:6px 10px;margin:0" onclick="ieBedenPreset(['2XL','3XL','4XL','5XL'])">Büyük</button></div>
+        <div id="ie-beden-box" class="bedenbox"></div>
+      </div>
     </div>
     <div class="iecard"><div class="iesec2"><span class="no">2</span>Kumaş</div>
       ${kumaslar.length?`<div class="seg2" style="margin-bottom:11px"><div class="o ${ieMod==='kumas'?'on':''}" id="iem-kumas" onclick="ieModSet('kumas')">Kumaştan seç</div><div class="o ${ieMod==='elle'?'on':''}" id="iem-elle" onclick="ieModSet('elle')">Elle gir</div></div>`:''}
@@ -5549,6 +5561,7 @@ function formIsEmri(){
     <div class="iecard"><div class="iesec2"><span class="no">3</span>Renk / Adet <span style="font-weight:600;color:var(--sub);text-transform:none;font-size:11px;letter-spacing:0">· asorti dağılımı</span></div>
       <div id="ie-renk" style="margin-top:2px"></div>
       <div id="ie-toplam-box"></div>
+      <div id="ie-asorti" style="margin-top:10px"></div>
     </div>
     <div class="iecard"><div class="iesec2"><span class="no">4</span>Üretim Akışı <span style="font-weight:600;color:var(--sub);text-transform:none;font-size:11px;letter-spacing:0">· ilk durak: Kesim</span></div>
       ${fs.length?'':'<div class="okbox" style="margin-bottom:8px">Henüz kayıtlı kesimci/fason yok — kutuya adını <b>yaz</b>, iş emrini açınca otomatik eklenir.</div>'}
@@ -5563,7 +5576,7 @@ function formIsEmri(){
     </div>
     <div id="ie-ozet"></div>
     <button class="btn g" style="margin-top:12px" onclick="kaydetIsEmri()">🏭 İş Emrini Aç</button>`);
-  ieTukMode='gram';cizIeFoto();cizIeRenk();ieToplamCiz();ieTerminHesap();ieOzetCiz();
+  ieTukMode='gram';cizIeFoto();ieBedenCiz();cizIeRenk();ieToplamCiz();ieTerminHesap();ieOzetCiz();ieAsortiCiz();
 }
 function ieModSet(m){if(ieMod===m)return;ieMod=m;
   $('iem-kumas')&&$('iem-kumas').classList.toggle('on',m==='kumas');$('iem-elle')&&$('iem-elle').classList.toggle('on',m==='elle');
@@ -5671,14 +5684,53 @@ function ieOzetCiz(){const el=$('ie-ozet');if(!el)return;
 function ieToplam(){return ieRenk.reduce((a,r)=>a+(+r.adet||0),0)}
 function ieToplamCiz(){const el=$('ie-toplam-box');if(!el)return;const t=ieToplam();const seri=$('ie-birim')?.value==='seri';const sa=Math.max(1,+($('ie-seriadet')?.value||1));
   el.innerHTML=t>0?`<div class="ietot"><span class="l">TOPLAM ÜRETİM</span><span class="v">${t} ${seri?'seri':'adet'}${seri&&sa>1?' · '+(t*sa)+' adet':''}</span></div>`:'';
-  ieOzetCiz();ieTukCiz();
+  ieOzetCiz();ieTukCiz();try{ieAsortiCiz()}catch(e){}
+}
+/* --- Beden bazında asorti (seri içeriği + renk×beden tablosu) --- */
+function ieBedenToplam(){return ieBeden.filter(b=>(b.beden||'').trim()).reduce((a,b)=>a+Math.max(0,+b.adet||0),0)||1}
+function ieBirimDegis(){const seri=$('ie-birim')?.value==='seri';const w=$('ie-beden-wrap');if(w)w.style.display=seri?'':'none';if(seri)ieBedenSync();else{if($('ie-seriadet'))$('ie-seriadet').value=1;}ieToplamCiz();ieAsortiCiz();}
+function ieBedenSync(){const sa=ieBedenToplam();if($('ie-seriadet'))$('ie-seriadet').value=sa;
+  const t=$('ie-beden-tot');if(t)t.innerHTML=ieBeden.length?`👕 1 seri = <b>${sa}</b> parça · ${ieBeden.filter(x=>x.beden).map(x=>x.beden+((+x.adet||1)>1?'×'+x.adet:'')).join(' + ')}`:'';
+  ieToplamCiz();ieAsortiCiz();}
+function ieBedenCiz(){const b=$('ie-beden-box');if(!b)return;
+  b.innerHTML=ieBeden.map((x,i)=>`<div class="brow"><input class="bn" value="${esc(x.beden)}" oninput="ieBedenSet(${i},'beden',this.value)"><div class="step sm"><button class="b" onclick="ieBAdet(${i},-1)">−</button><input type="number" inputmode="numeric" value="${x.adet}" oninput="ieBedenSet(${i},'adet',this.value)"><button class="b p" onclick="ieBAdet(${i},1)">+</button></div><button class="del" onclick="ieBedenSil(${i})">✕</button></div>`).join('')+`<div style="display:flex;gap:6px;margin-top:8px"><input id="ie-beden-in" class="binp" placeholder="+beden" onkeydown="if(event.key==='Enter'){event.preventDefault();ieBedenEkle()}"><button type="button" class="btn ghost sm" style="width:auto;padding:8px 13px;margin:0" onclick="ieBedenEkle()">Ekle</button></div><div class="mini" id="ie-beden-tot" style="margin-top:7px"></div>`;
+  ieBedenSync();
+}
+function ieBAdet(i,d){if(!ieBeden[i])return;ieBeden[i].adet=Math.max(1,(+ieBeden[i].adet||1)+d);ieBedenCiz();}
+function ieBedenSet(i,f,v){const x=ieBeden[i];if(!x)return;if(f==='adet'){x.adet=Math.max(1,+v||1);ieBedenSync();}else{x.beden=(v||'').toUpperCase();ieAsortiCiz();ieOzetCiz();}}
+function ieBedenEkle(){const el=$('ie-beden-in');const v=((el&&el.value)||'').trim().toUpperCase();if(v&&!ieBeden.some(x=>x.beden===v))ieBeden.push({beden:v,adet:1});if(el)el.value='';ieBedenCiz();const inp=$('ie-beden-in');if(inp)inp.focus();}
+function ieBedenSil(i){ieBeden.splice(i,1);if(!ieBeden.length)ieBeden=[{beden:'STD',adet:1}];ieBedenCiz();}
+function ieBedenPreset(list){ieBeden=list.map(b=>({beden:b,adet:1}));ieBedenCiz();}
+// renkDagilim (seri/renk) × bedenler (seri içeriği) → asorti matrisi
+function asortiHesapla(renkDagilim,bedenler){
+  const rd=(renkDagilim||[]).filter(r=>(r.ad||'').trim()&&+r.adet>0);
+  const bd=(bedenler||[]).filter(b=>(b.beden||'').trim()&&+b.adet>0);
+  if(!rd.length||!bd.length)return null;
+  const sizes=bd.map(b=>b.beden);const per={};bd.forEach(b=>per[b.beden]=+b.adet||0);
+  const sizeTot={};sizes.forEach(s=>sizeTot[s]=0);let grand=0;
+  const rows=rd.map(r=>{const cells=sizes.map(s=>{const a=(+r.adet||0)*per[s];sizeTot[s]+=a;grand+=a;return a});return {ad:r.ad,cells,top:cells.reduce((a,c)=>a+c,0)}});
+  return {sizes,rows,sizeTot,grand};
+}
+function asortiTabloHTML(renkDagilim,bedenler){
+  const A=asortiHesapla(renkDagilim,bedenler);if(!A)return '';
+  const th=A.sizes.map(s=>`<th class="r">${esc(s)}</th>`).join('');
+  const body=A.rows.map(r=>`<tr><td>${esc(r.ad)}</td>${r.cells.map(c=>`<td class="r">${c}</td>`).join('')}<td class="r"><b>${r.top}</b></td></tr>`).join('');
+  const foot=`<tr class="tot"><td>Toplam</td>${A.sizes.map(s=>`<td class="r">${A.sizeTot[s]}</td>`).join('')}<td class="r">${A.grand}</td></tr>`;
+  return `<table class="asorti"><thead><tr><th>Renk</th>${th}<th class="r">Top</th></tr></thead><tbody>${body}${foot}</tbody></table>`;
+}
+function ieAsortiCiz(){const el=$('ie-asorti');if(!el)return;
+  if($('ie-birim')?.value!=='seri'){el.innerHTML='';return;}
+  const h=asortiTabloHTML(ieRenk,ieBeden);
+  el.innerHTML=h?`<div class="mini" style="font-weight:800;margin-bottom:5px">📐 Kesim Asortisi <span style="font-weight:600;color:var(--sub)">· renk × beden (kesilecek adet)</span></div>${h}`:'';
 }
 function ieUrunAra(){const ad=($('ie-ad')?.value||'').trim().toLowerCase();const u=db.urunler.find(x=>!x.pasif&&x.ad.toLowerCase()===ad);
   if(u&&u.id!==ieUrunId){ieUrunId=u.id;if($('ie-kod'))$('ie-kod').value=u.kod||'';if($('ie-birim'))$('ie-birim').value=u.birim||'seri';
     if($('ie-seriadet')&&u.birim==='seri')$('ie-seriadet').value=u.seri||6;
+    // ürünün seri içeriğini (beden beden) asorti için al
+    if(u.birim==='seri'&&u.bedenler&&u.bedenler.length){ieBeden=u.bedenler.map(x=>typeof x==='object'?{beden:x.beden,adet:Math.max(1,+x.adet||1)}:{beden:x,adet:1});}
     ieFoto=urunKapak(u)||ieFoto;
     if(ieMod==='elle'){ieRenk=renkObjs(u).map(r=>({ad:r.ad,adet:0}));cizIeRenk();}
-    cizIeFoto();ieKodKontrol();ieProdCiz();ieToplamCiz();}
+    cizIeFoto();ieKodKontrol();ieProdCiz();ieBirimDegis();ieBedenCiz();ieToplamCiz();}
   else if(!u&&ieUrunId){ieUrunId=0;ieKodKontrol();ieProdCiz();ieOzetCiz();}
   else{ieOzetCiz();}
 }
@@ -5813,7 +5865,8 @@ function kaydetIsEmri(){
     });
   }else if(_kk){ if(_ktukTop>0){_kk.stok=(+_kk.stok||0)-_ktukTop;_dusulen=_ktukTop;} } // renksiz (toplu) kumaş → toplamdan düş
   else if(_kad){ renkDagilim.forEach(r=>{const kg=_ktuk>0?_parcaOf(r)*_ktuk:0;_eksikKumas.push({renk:r.ad,miktar:+kg.toFixed(3)});}); } // kumaş hiç stokta yok → tümü alınacak
-  const yeniIe={id:nid('ie'),urunId:ieUrunId||null,urun:ad,kod,foto:ieFoto,birim,seriAdet,hedef,renkDagilim,malzeme,duraklar,genelGiderBirim:+$('ie-gg').value||0,kumasId:ieKumasId||null,kumasAd:_kad,kumasFiyat:_kfiyat,kumasPB:_kpb,kumasYeni:(!ieKumasId&&!!_kad),kumasTukBirim:_ktukKg,kumasTukStokParca:_ktuk,kumasTukStokBirim:_cv.birim,kumasTukNot:_cv.not||'',kumasTukToplam:_ktukTop,baslangic:Date.now(),gun,durum:'devam',stoklandi:false};
+  const _bedenler=birim==='seri'?ieBeden.filter(b=>(b.beden||'').trim()&&+b.adet>0).map(b=>({beden:b.beden.trim(),adet:Math.max(1,+b.adet||1)})):[];
+  const yeniIe={id:nid('ie'),urunId:ieUrunId||null,urun:ad,kod,foto:ieFoto,birim,seriAdet,bedenler:_bedenler,hedef,renkDagilim,malzeme,duraklar,genelGiderBirim:+$('ie-gg').value||0,kumasId:ieKumasId||null,kumasAd:_kad,kumasFiyat:_kfiyat,kumasPB:_kpb,kumasYeni:(!ieKumasId&&!!_kad),kumasTukBirim:_ktukKg,kumasTukStokParca:_ktuk,kumasTukStokBirim:_cv.birim,kumasTukNot:_cv.not||'',kumasTukToplam:_ktukTop,baslangic:Date.now(),gun,durum:'devam',stoklandi:false};
   db.isemirleri.push(yeniIe);
   const alimN=aksesuarAlimAc(yeniIe); // "alınacak" malzemeler için otomatik alım siparişi
   // Elinde olmayan kumaş/renk(ler) → otomatik kumaş alım siparişi; formda kumaşçı yazıldıysa ona atanır
@@ -5858,6 +5911,8 @@ function uretimDetay(id){
      <div style="flex:1;border-left:1px solid var(--ln);border-right:1px solid var(--ln)"><div class="mini">YAPILAN</div><div style="font-weight:800;font-size:17px">${P(yap)}</div></div>
      <div style="flex:1"><div class="mini">FARK</div><div style="font-weight:800;font-size:17px;color:${fc}">${fl}</div></div>
    </div>${fire?`<div class="mini" style="text-align:center;margin-top:6px;color:var(--bad)">🔥 ${P(fire)} defo/fire</div>`:''}<div class="mini" style="text-align:center;margin-top:4px;color:var(--sub)">${_bir}${ieSeriMi(i)?' · '+ist+' seri hedef':''} · kesim fazla/eksik çıkabilir, "fasonda kaldı" sayılmaz</div></div>`;}
+  {const aH=(ieSeriMi(i)&&i.bedenler&&i.bedenler.length)?asortiTabloHTML(i.renkDagilim,i.bedenler):'';
+   if(aH)html+=`<div class="card" style="margin-top:10px;padding:11px 13px"><div class="mini" style="font-weight:800;margin-bottom:6px">📐 Kesim Asortisi <span style="font-weight:600;color:var(--sub)">· renk × beden</span></div>${aH}</div>`;}
   if(kar){const gg=ieGenelGider(i);html+=`<div class="total" style="margin-top:12px"><div><div class="l">Toplam Maliyet</div><div class="v">${TL(ieToplamMaliyet(i))}</div></div><div style="text-align:right"><div class="l">Birim Maliyet</div><div class="v pos">${birim?TL(birim):'—'} ${birim?'/'+esc(i.birim||'ad'):''}</div></div></div>
     <div class="card" style="margin-top:8px;padding:4px 13px">
       <div class="kv"><span class="k">🧵 Malzeme / Kumaş</span><span class="v">${TL(ieMalMaliyet(i))}</span></div>
@@ -6126,6 +6181,7 @@ function ieShareText(i,x){
   t+=`Ürün: *${i.urun}*${i.kod?' ('+i.kod+')':''}\n`;
   t+=`Adet: *${seriMi?P(i.hedef)+' adet ('+i.hedef+' seri × '+ieCarpan(i)+')':i.hedef+' '+(i.birim||'adet')}*\n`;
   if(i.renkDagilim&&i.renkDagilim.length)t+=`Renk: ${i.renkDagilim.map(r=>r.ad+' '+P(r.adet)+(seriMi?' ad':'')).join(' · ')}\n`;
+  if(seriMi&&i.bedenler&&i.bedenler.length){const _A=asortiHesapla(i.renkDagilim,i.bedenler);if(_A)t+=`Beden: ${_A.sizes.map(s=>s+' '+_A.sizeTot[s]).join(' · ')}\n`;}
   if(durak){t+=`\n➡️ *Yapılacak işlem: ${durak.ad}*\n`;
     if(durak.gonderilen)t+=`Gönderilen: ${P(durak.gonderilen)} adet\n`;
     if(durak.ucret)t+=`Anlaşılan: ₺${durak.ucret}/adet\n`;
@@ -6276,6 +6332,7 @@ function isEmriA4(id){
       <tr><td class="lb">Hedef</td><td><b>${seriMi?P(i.hedef)+' adet ('+i.hedef+' seri)':i.hedef+' '+esc(i.birim||'adet')}</b></td><td class="lb">Şekil</td><td>${esc(i.birim||'-')}${seriMi?' · 1 seri = '+ieCarpan(i)+' adet':''}</td></tr></table>
     ${i.foto?`<div style="text-align:center;margin:10px 0"><img src="${guvenliSrc(i.foto)}" class="ieimg"></div>`:''}
     <div class="iesec">RENK DAĞILIMI</div><div style="margin:5px 0">${renk}</div>
+    ${seriMi&&i.bedenler&&i.bedenler.length&&asortiTabloHTML(i.renkDagilim,i.bedenler)?`<div class="iesec">KESİM ASORTİSİ · renk × beden</div><div style="margin:5px 0">${asortiTabloHTML(i.renkDagilim,i.bedenler)}</div>`:''}
     <div class="iesec">MALZEME / KUMAŞ</div><table class="ietbl">${malRows}</table>
     <div class="iesec">ÜRETİM AŞAMALARI</div><table class="ietbl"><tr><th>İşlem</th><th>Fason</th><th class="r">Ücret</th><th>Not</th></tr>${durakRows}</table>
     <div class="iesign"><div>Teslim eden: ______________</div><div>Teslim alan: ______________</div></div>
