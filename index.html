@@ -1087,7 +1087,7 @@ async function bulutYayinla(){if(!bulutBaslat())return toast('☁️ Bulut ayarl
     // Girişli müşterilere özel veri (bakiye + geçmiş) — yalnız o müşteri okuyabilir (kurallar)
     let mn=0;try{const users=await bulutTumKullanicilar();const jobs=[];
       users.filter(u=>u.rol==='musteri'&&u.onay&&u.cariId).forEach(u=>{const c=cari(u.cariId);if(!c)return;
-        const gecmis=db.satislar.filter(s=>s.mid===u.cariId&&s.tip!=='iade').sort((a,b)=>b.tarih-a.tarih).slice(0,20)
+        const gecmis=db.satislar.filter(s=>s.mid===u.cariId&&s.tip!=='iade'&&!s.iptal).sort((a,b)=>b.tarih-a.tarih).slice(0,20)
           .map(s=>({tarih:s.tarih,tutar:s.tutar,pb:s.pb||'TL',kalemler:(s.kalemler||[]).map(k=>({urun:k.urun,mik:k.mik,birim:k.birim}))}));
         jobs.push(_fb.collection('musteri_veri').doc(u.uid).set({ad:c.ad,bakiye:+c.bakiye||0,limit:+c.limit||0,gecmis,guncelleme:Date.now()}));mn++;});
       await Promise.all(jobs);
@@ -1452,26 +1452,26 @@ function stokDegeri(){return db.urunler.reduce((a,u)=>a+(+u.stok||0)*urunAlisTL(
 // 1 satış biriminde kaç parça var (seri ürünlerde parça fiyatı × seri = seri fiyatı)
 function birimAdet(u){return (u&&u.birim==='seri')?(+u.seri||1):1}
 function bugunSatis(){const b=new Date().setHours(0,0,0,0);
-  const brut=db.satislar.filter(s=>s.tarih>=b&&s.tip!=='iade').reduce((a,s)=>a+(+s.tutar||0)*satisDiv(s),0);
-  const iade=db.satislar.filter(s=>s.tarih>=b&&s.tip==='iade').reduce((a,s)=>a+(+s.tutar||0)*satisDiv(s),0);
+  const brut=db.satislar.filter(s=>s.tarih>=b&&s.tip!=='iade'&&!s.iptal).reduce((a,s)=>a+(+s.tutar||0)*satisDiv(s),0);
+  const iade=db.satislar.filter(s=>s.tarih>=b&&s.tip==='iade'&&!s.iptal).reduce((a,s)=>a+(+s.tutar||0)*satisDiv(s),0);
   return brut-iade}
 // 📊 PANO — günün özeti, en çok satan, gerçek ciro trendi
 function panoGunOzet(){const b=new Date().setHours(0,0,0,0);
-  const sat=db.satislar.filter(s=>s.tarih>=b&&s.tip!=='iade');
-  const iade=db.satislar.filter(s=>s.tarih>=b&&s.tip==='iade');
+  const sat=db.satislar.filter(s=>s.tarih>=b&&s.tip!=='iade'&&!s.iptal);
+  const iade=db.satislar.filter(s=>s.tarih>=b&&s.tip==='iade'&&!s.iptal);
   let tah=0;(db.hareketler||[]).filter(h=>h.tarih>=b&&h.tip==='tahsilat').forEach(h=>tah+=(+h.tutar||0)); // taksitler kendi tarihinde (hareket) sayılır
-  db.satislar.filter(s=>s.tarih>=b&&s.odenen>0).forEach(s=>{const takOd=(s.taksitler||[]).filter(t=>t.odendi).reduce((a,t)=>a+(+t.tutar||0),0);tah+=Math.max(0,(+s.odenen||0)-takOd)*satisDiv(s)});
+  db.satislar.filter(s=>s.tarih>=b&&s.odenen>0&&!s.iptal).forEach(s=>{const takOd=(s.taksitler||[]).filter(t=>t.odendi).reduce((a,t)=>a+(+t.tutar||0),0);tah+=Math.max(0,(+s.odenen||0)-takOd)*satisDiv(s)});
   const yeniSip=(db.bekleyenPortal||[]).filter(o=>(o.tarih||0)>=b).length;
   const iadeTL=iade.reduce((a,s)=>a+(+s.tutar||0)*satisDiv(s),0);
   return {adet:sat.length,ciro:sat.reduce((a,s)=>a+(+s.tutar||0)*satisDiv(s),0)-iadeTL,tahsilat:tah,iade:iade.length,yeniSip};}
 function enCokSatan(gun,n){const since=Date.now()-gun*86400000;const map={};
-  db.satislar.filter(s=>s.tarih>=since&&s.tip!=='iade').forEach(s=>(s.kalemler||[]).forEach(k=>{
+  db.satislar.filter(s=>s.tarih>=since&&s.tip!=='iade'&&!s.iptal).forEach(s=>(s.kalemler||[]).forEach(k=>{
     const m=map[k.uid]||(map[k.uid]={uid:k.uid,ad:k.urun,adet:0,ciro:0});
     m.adet+=(+k.mik||0);m.ciro+=(+k.mik||0)*(+k.fiyat||0);}));
   return Object.values(map).sort((a,b)=>b.adet-a.adet).slice(0,n||5);}
 function ciroSeri(gun){const arr=[];const bugun=new Date().setHours(0,0,0,0);
   for(let i=gun-1;i>=0;i--){const g0=bugun-i*86400000,g1=g0+86400000;
-    arr.push(db.satislar.filter(s=>s.tarih>=g0&&s.tarih<g1&&s.tip!=='iade').reduce((a,s)=>a+(+s.tutar||0)*satisDiv(s),0));}
+    arr.push(db.satislar.filter(s=>s.tarih>=g0&&s.tarih<g1&&s.tip!=='iade'&&!s.iptal).reduce((a,s)=>a+(+s.tutar||0)*satisDiv(s),0));}
   return arr;}
 
 /* Roller ve yetki — merkezi model */
@@ -1701,7 +1701,7 @@ function render(){
 function rPanel(){
   const y=yetki(), para=paraGoster();
   const kritik=db.urunler.filter(u=>stokTop(u)<=u.kritik);
-  const ayrilan=db.satislar.filter(s=>s.teslimDurum==='ayrildi');
+  const ayrilan=db.satislar.filter(s=>s.teslimDurum==='ayrildi'&&!s.iptal);
 
   // BEKLEYEN İŞLER — role göre filtreli
   const bekleyen=[];
@@ -1812,7 +1812,7 @@ function rPanel(){
 function bekAct(i){if(window._bek&&window._bek[i])window._bek[i].act()}
 // 🗓️ Geçen ayın özet rakamları (ay başında panelde gösterilir)
 function gecenAyOzet(){const n=new Date();const b0=new Date(n.getFullYear(),n.getMonth()-1,1).getTime();const b1=new Date(n.getFullYear(),n.getMonth(),1).getTime();
-  const ss=db.satislar.filter(s=>s.tarih>=b0&&s.tarih<b1);
+  const ss=db.satislar.filter(s=>s.tarih>=b0&&s.tarih<b1&&!s.iptal);
   const sat=ss.filter(s=>s.tip!=='iade'),iad=ss.filter(s=>s.tip==='iade');
   const ciro=sat.reduce((a,s)=>a+(+s.tutar||0)*satisDiv(s),0)-iad.reduce((a,s)=>a+(+s.tutar||0)*satisDiv(s),0);
   const adet=sat.reduce((a,s)=>a+s.kalemler.reduce((x,k)=>x+(+k.mik||0),0),0);
@@ -2941,7 +2941,7 @@ function attachSwipe(){
 }
 /* ---- Ürün satış özeti ---- */
 function urunSatisOzet(id){let seri=0,ciro=0,sonTarih=0;const renkSay={};
-  db.satislar.forEach(s=>s.kalemler.forEach(k=>{if(k.uid===id){seri+=k.mik;ciro+=k.mik*k.fiyat;if(s.tarih>sonTarih)sonTarih=s.tarih;if(k.renkler)k.renkler.forEach(r=>{renkSay[r.ad]=(renkSay[r.ad]||0)+r.mik})}}));
+  db.satislar.forEach(s=>{if(s.iptal)return;s.kalemler.forEach(k=>{if(k.uid===id){seri+=k.mik;ciro+=k.mik*k.fiyat;if(s.tarih>sonTarih)sonTarih=s.tarih;if(k.renkler)k.renkler.forEach(r=>{renkSay[r.ad]=(renkSay[r.ad]||0)+r.mik})}})});
   const best=Object.entries(renkSay).sort((a,b)=>b[1]-a[1])[0];
   return {seri,ciro,sonTarih,best};
 }
@@ -3119,18 +3119,22 @@ function topluZamUygula(){const kat=$('tz-kat').value,oran=+($('tz-oran').value|
 let satisFilt='tum';
 function rSatis(){
   let list=[...db.satislar].sort((a,b)=>b.tarih-a.tarih);
-  if(satisFilt==='ayrildi')list=list.filter(s=>s.teslimDurum==='ayrildi');
-  else if(satisFilt==='teslim')list=list.filter(s=>(s.teslimDurum||'teslim')==='teslim');
-  else if(satisFilt==='depo')list=list.filter(s=>s.depo);
-  const ayr=db.satislar.filter(s=>s.teslimDurum==='ayrildi').length;
+  if(satisFilt==='ayrildi')list=list.filter(s=>s.teslimDurum==='ayrildi'&&!s.iptal);
+  else if(satisFilt==='teslim')list=list.filter(s=>(s.teslimDurum||'teslim')==='teslim'&&!s.iptal);
+  else if(satisFilt==='depo')list=list.filter(s=>s.depo&&!s.iptal);
+  else if(satisFilt==='iptal')list=list.filter(s=>s.iptal);
+  const ayr=db.satislar.filter(s=>s.teslimDurum==='ayrildi'&&!s.iptal).length;
+  const iptN=db.satislar.filter(s=>s.iptal).length;
   const depoBek=depoBekleyen().length;
   const tabs=[['tum','Tümü'],['depo','📦 Depo'+(depoBek?' ('+depoBek+')':'')],['ayrildi','🔖 Ayrılan'+(ayr?' ('+ayr+')':'')],['teslim','✓ Teslim']];
+  if(iptN)tabs.push(['iptal','🚫 İptal ('+iptN+')']);
   let html=`<div class="tabs">`+tabs.map(t=>`<div class="tb ${satisFilt===t[0]?'on':''}" onclick="satisFilt='${t[0]}';rSatis()">${t[1]}</div>`).join('')+`</div>`;
   if(satisFilt==='depo')html+=`<div class="mini" style="margin:2px 3px 0">📦 Depocuya gönderilen toplama emirleri. <b>Ayrılıyor</b> = bekliyor, <b>✓ Hazır</b> = depocu ayırdı.</div>`;
   html+=`<div class="sec">Satışlar <a onclick="formSatis()">+ Yeni</a></div><div class="card">`+(list.length?list.slice(0,200).map(s=>{
     const ayrildi=s.teslimDurum==='ayrildi';const teslim=!ayrildi;const odendi=s.odenen>=s.tutar;
     const depoBadge=s.depo==='bekliyor'?'<span class="pill low" style="margin-left:5px">📦 ayrılıyor</span>':s.depo==='hazir'?'<span class="pill ok" style="margin-left:5px">✓ hazır</span>':'';
     if(s.tip==='iade')return `<div class="row" onclick="iadeFis(${s.id})"><div class="svbars"><i class="svbar" style="background:var(--bad)"></i></div><div class="av" style="background:var(--bad-s)">↩️</div><div class="mid"><div class="t">${esc(s.mus)} <span class="pill" style="background:var(--bad-s);color:var(--bad)">İADE</span></div><div class="s">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div></div><div class="end"><div class="n" style="color:var(--bad)">−${money(s.tutar,s.pb)}</div><div class="u">${s.nakit?'💵 nakit iade':'cari alacak'}</div></div></div>`;
+    if(s.iptal)return `<div class="row" onclick="satisFis(${s.id})" style="opacity:.6"><div class="av" style="background:var(--bad-s)">🚫</div><div class="mid"><div class="t" style="text-decoration:line-through">${esc(s.mus)} <span class="pill" style="background:var(--bad-s);color:var(--bad)">İPTAL</span></div><div class="s" style="text-decoration:line-through">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div>${s.iptalTarih?`<div class="mini" style="color:var(--bad)">iptal: ${tstr(s.iptalTarih)}</div>`:''}</div><div class="end"><div class="n" style="text-decoration:line-through">${money(s.tutar,s.pb)}</div><div class="u">iptal</div></div></div>`;
     return `<div class="row" onclick="satisFis(${s.id})"><div class="svbars"><i class="svbar ${teslim?'teslim':''}" title="Teslim edildi"></i><i class="svbar ${odendi?'odendi':''}" title="Parası alındı"></i></div><div class="av ${ayrildi?'o':'g'}">${ayrildi?'🔖':'🧾'}</div><div class="mid"><div class="t">${esc(s.mus)}${depoBadge}</div><div class="s">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div></div><div class="end"><div class="n">${money(s.tutar,s.pb)}</div><div class="u">${ayrildi?'🔖 ayrıldı':teslim?'✓ teslim':''}${odendi?' · 💰':''}</div></div></div>`}).join('')+(list.length>200?`<div class='mini' style='text-align:center;padding:10px'>+${list.length-200} eski kayıt daha — arama ya da tarih filtresi kullan</div>`:''):emp('🧾',satisFilt==='depo'?'Depoda bekleyen sipariş yok.':'Kayıt yok.'))+`</div>`;
   $('app').innerHTML=html;
 }
@@ -3273,7 +3277,7 @@ function satisHesap(){
   const tutar=malPB+kdvPB+tasima+ekstra;   // satış para biriminde
   return {ara,isk,vf,kdv,tasima,ekstra,div,malPB,kdvPB,tutar};
 }
-function sonFiyat(mid,uid){if(!mid)return 0;const ss=db.satislar.filter(s=>s.mid===mid).sort((a,b)=>b.tarih-a.tarih);for(const s of ss){const k=(s.kalemler||[]).find(x=>x.uid===uid);if(k)return k.fiyat}return 0}
+function sonFiyat(mid,uid){if(!mid)return 0;const ss=db.satislar.filter(s=>s.mid===mid&&!s.iptal).sort((a,b)=>b.tarih-a.tarih);for(const s of ss){const k=(s.kalemler||[]).find(x=>x.uid===uid);if(k)return k.fiyat}return 0}
 function urunSatisTL(u){return (+u.satis||0)*birimAdet(u)*((u.pb&&u.pb!=='TL')?(pbKur(u.pb)||1):1)}
 function urunAlisTL(u){return (+u.alis||0)*((u.pb&&u.pb!=='TL')?(pbKur(u.pb)||1):1)}
 function musUrunFiyat(uid){const u=urun(uid);if(!u)return 0;return sonFiyat(sMusId,uid)||urunSatisTL(u)}
@@ -3497,8 +3501,9 @@ function kaydetSatis(){
 function satisFis(id){
   const s=db.satislar.find(x=>x.id===id);if(!s){toast('Satış bulunamadı — başka cihazdan silinmiş olabilir');try{closeM()}catch(e){}return;}
   const durP=s.teslimDurum==='ayrildi'?'<span class="pill low">🔖 Ayrıldı (rezerve)</span>':'<span class="pill ok">✓ Teslim Edildi</span>';
-  open_('Satış Fişi',`
+  open_('Satış Fişi'+(s.iptal?' · 🚫 İPTAL':''),`
     <div class="mini">${esc(s.mus)} · ${tstr(s.tarih)}${s.pb!=='TL'?' · '+s.pb:''}</div>
+    ${s.iptal?`<div class="warnbox" style="margin-top:10px">🚫 <b>Bu satış İPTAL edildi</b>${s.iptalTarih?' · '+tstr(s.iptalTarih):''}.<br>Kayıt geçmiş için çizili olarak saklanıyor; stok, bakiye ve ödemeler geri alındı.</div>`:''}
     <div style="margin-top:12px">${s.kalemler.map(k=>{const sub=k.renkler&&k.renkler.length?`${k.renkler.map(r=>esc(r.ad)+' ×'+r.mik).join(' · ')} — ${TL(k.fiyat)}`:`${k.mik} ${esc(k.birim||"")} × ${TL(k.fiyat)}`;return `<div class="li"><div class="lt">${esc(k.urun)}<small>${sub}</small></div><b>${TL(k.mik*k.fiyat)}</b></div>`}).join('')}</div>
     ${s.iskonto?`<div class="kv"><span class="k">İskonto</span><span class="v neg">%${s.iskonto}</span></div>`:''}
     ${s.vadeFarki?`<div class="kv"><span class="k">Vade farkı</span><span class="v">+%${s.vadeFarki}</span></div>`:''}
@@ -3518,10 +3523,10 @@ function satisFis(id){
     ${(bulutVar()&&bulutGirisli())?`<button class="btn sm" style="margin-top:8px" onclick="yaziciyaGonder(${id})">🖨️ Bilgisayardaki Yazıcıya Gönder</button>`:''}
     <div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="faturaYazdir(${id},false)">🧾 A4 Fatura</button><button class="btn ghost sm" onclick="faturaYazdir(${id},true)">📋 İrsaliye (fiyatsız)</button></div>
     ${s.depo?`<button class="btn ${s.depo==='hazir'?'ghost':'g'} sm" style="margin-top:10px" onclick="closeM();setTimeout(()=>depoEmri(${id}),160)">📦 Toplama Emri${s.depo==='hazir'?' (hazır)':''}</button>`:''}
-    <div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="closeM();setTimeout(()=>formSatis(0,${id}),160)">✏️ Düzenle</button><button class="btn sm" onclick="satisDurum(${id})">${s.teslimDurum==='ayrildi'?'✓ Teslim Et':'🔖 Ayrıldı Yap'}</button></div>
+    ${s.iptal?'':`<div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="closeM();setTimeout(()=>formSatis(0,${id}),160)">✏️ Düzenle</button><button class="btn sm" onclick="satisDurum(${id})">${s.teslimDurum==='ayrildi'?'✓ Teslim Et':'🔖 Ayrıldı Yap'}</button></div>`}
     ${(s.taksitler&&s.taksitler.length)?`<div class="sec" style="margin-top:12px">📆 Ödeme Planı</div>`+s.taksitler.map((t,i)=>`<div class="kv"><span class="k">${i+1}. taksit · ${dstr(t.vade)}${t.odendi?' <span class="pill ok">ödendi</span>':gunFark(t.vade)<0?' <span class="pill low">gecikti</span>':''}</span><span class="v">${money(t.tutar,s.pb)}${!t.odendi?` <button class="btn g sm" style="width:auto;margin:0;padding:4px 9px;display:inline-block" onclick="taksitOde(${id},${i})">tahsil</button>`:''}</span></div>`).join(''):''}
-    <div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="closeM();setTimeout(()=>odemePlaniAc(${id}),160)">📆 Ödeme Planı</button><button class="btn ghost sm" style="color:var(--bad)" onclick="closeM();setTimeout(()=>iadeAl(${id}),160)">↩️ İade Al</button></div>
-    <button class="btn danger" onclick="silSatis(${id})">Satışı İptal Et</button>
+    ${s.iptal?'':`<div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="closeM();setTimeout(()=>odemePlaniAc(${id}),160)">📆 Ödeme Planı</button><button class="btn ghost sm" style="color:var(--bad)" onclick="closeM();setTimeout(()=>iadeAl(${id}),160)">↩️ İade Al</button></div>
+    <button class="btn danger" onclick="silSatis(${id})">Satışı İptal Et</button>`}
   `);
 }
 /* ---------- ÖDEME PLANI (taksit) ---------- */
@@ -3553,7 +3558,7 @@ function taksitOdeKaydet(satisId,idx){const s=db.satislar.find(x=>x.id===satisId
   save();closeM();satisFis(satisId);toast('Taksit tahsil edildi ✓ '+money(t.tutar,s.pb));
 }
 // yaklaşan/geciken taksitler (takvim + panel için)
-function taksitBekleyen(){const arr=[];db.satislar.forEach(s=>{(s.taksitler||[]).forEach((t,i)=>{if(!t.odendi)arr.push({s,t,i,vade:t.vade})})});return arr.sort((a,b)=>a.vade-b.vade)}
+function taksitBekleyen(){const arr=[];db.satislar.forEach(s=>{if(s.iptal)return;(s.taksitler||[]).forEach((t,i)=>{if(!t.odendi)arr.push({s,t,i,vade:t.vade})})});return arr.sort((a,b)=>a.vade-b.vade)}
 /* ---------- İADE ---------- */
 let iadeSel={}, _iadeSid=0;
 function iadeAl(satisId){const s=db.satislar.find(x=>x.id===satisId);if(!s||s.tip==='iade')return;iadeSel={};_iadeSid=satisId;
@@ -4410,9 +4415,9 @@ function satisDurum(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;s.te
   }
   save();closeM();go('satis');toast(s.teslimDurum==='ayrildi'?'Mal ayrıldı (rezerve) 🔖':'Teslim edildi ✓')}
 /* ---- Depo toplama/ayırma emri ---- */
-function depoBekleyen(){return db.satislar.filter(s=>s.depo==='bekliyor').sort((a,b)=>a.tarih-b.tarih)}
+function depoBekleyen(){return db.satislar.filter(s=>s.depo==='bekliyor'&&!s.iptal).sort((a,b)=>a.tarih-b.tarih)}
 // Hazırlanmış (toplanmış) siparişlerin geçmişi — kim/ne zaman hazırladı
-function depoHazirGecmis(){return db.satislar.filter(s=>s.depo==='hazir').sort((a,b)=>((b.depoHazir&&b.depoHazir.t)||b.tarih||0)-((a.depoHazir&&a.depoHazir.t)||a.tarih||0))}
+function depoHazirGecmis(){return db.satislar.filter(s=>s.depo==='hazir'&&!s.iptal).sort((a,b)=>((b.depoHazir&&b.depoHazir.t)||b.tarih||0)-((a.depoHazir&&a.depoHazir.t)||a.tarih||0))}
 /* ---------- 🔄 AZALAN STOK / SİPARİŞ ÖNERİSİ ---------- */
 function depoLines(s){ // rafa göre sıralı, tek tek toplanacak satırlar
   const lines=[];
@@ -4480,10 +4485,11 @@ function depoHazirla(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;
 }
 function silSatis(id){const s0=db.satislar.find(x=>x.id===id);
   if(satisKilitliCek(s0))return toast('⚠️ Çeki tahsil/ciro edilmiş satış iptal edilemez — önce Çekler ekranından işlemi geri al');
-  askKritik('Satış iptal edilsin mi? Stok, bakiye, ödeme ve çek geri alınır.',()=>{
+  if(s0&&s0.iptal)return toast('Bu satış zaten iptal edilmiş');
+  askKritik('Satış iptal edilsin mi? Stok, bakiye, ödeme ve çek geri alınır.\n\nKayıt SİLİNMEZ — listede "İPTAL" olarak üzeri çizili durur.',()=>{
   const s=db.satislar.find(x=>x.id===id);revertSatis(s);
   {const _tak=(s.taksitler||[]).filter(t=>t.odendi).reduce((a,t)=>a+(+t.tutar||0),0);if(_tak>0){const _m=cari(s.mid);if(_m){_m.bakiye-=_tak*satisDiv(s);setTimeout(()=>toast('ℹ️ Ödenmiş taksitler ('+money(_tak,s.pb||'TL')+') müşteri alacağına yazıldı — kasa değişmedi'),900);}}}
-  db.satislar=db.satislar.filter(x=>x.id!==id);save();closeM();go('satis');toast('İptal edildi')},'İptal Et','Satış İptali')}
+  s.iptal=true;s.iptalTarih=Date.now();save();try{musVeriGuncelle(s.mid)}catch(e){}closeM();go('satis');toast('Satış iptal edildi ✓ (çizili olarak duruyor)')},'İptal Et','Satış İptali')}
 
 /* ---------- CARİ ---------- */
 let cariTab='musteri';
