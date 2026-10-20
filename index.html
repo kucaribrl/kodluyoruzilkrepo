@@ -399,6 +399,7 @@
     <div class="logo">🧵</div>
     <div><h1 id="hTitle">IQ Basics</h1><div class="sub" id="hSub">Patron</div></div>
     <button class="role" onclick="genelAra()" title="Ara" style="margin-left:auto;padding:8px 11px">🔍</button>
+    <button class="role" id="lokBtn" onclick="lokSec()" title="Mağaza / depo seç" style="display:none">🏬 ▾</button>
     <button class="role" id="roleBtn" onclick="hesapMenu()">👑 Patron ▾</button>
   </div>
 </header>
@@ -435,6 +436,26 @@
 <script>
 /* =================== VERİ KATMANI =================== */
 const KEY='oztekstil_v2';
+/* ===== ÇOK-LOKASYON (mağaza/depo) ===== */
+const ANA_LOK='L-ana', ANA_DEPO='L-depo';
+let aktifLok=(function(){try{return localStorage.getItem('iq_aktifLok')||ANA_LOK}catch(e){return ANA_LOK}})();
+function lokListe(){return (db.lokasyonlar||[]).filter(l=>l&&!l.pasif)}
+function lokHepsi(){return (db.lokasyonlar||[]).filter(Boolean)}
+function lok(id){return (db.lokasyonlar||[]).find(l=>l&&l.id===id)||null}
+function lokAd(id){const l=lok(id);return l?l.ad:(id===ANA_LOK?'Ana Mağaza':id===ANA_DEPO?'Ana Depo':'—')}
+function lokIc(id){const l=lok(id);return (l&&l.tip==='depo')?'🏭':'🏬'}
+function lokAktif(){return lok(aktifLok)||lok(ANA_LOK)||lokListe()[0]||{id:ANA_LOK,ad:'Ana Mağaza',tip:'magaza'}}
+// loklar = {lokId:adet} doğru kaynak; .stok = AKTİF lokasyon projeksiyonu (v1: yalnız ürün stoğu; malzeme/kırık/defo tek lokasyon)
+function stokProjKaydet(){const put=(o)=>{if(!o)return;if(renkObjs(o).length){o.renkler.forEach(r=>{if(r&&typeof r==='object'){r.loklar=r.loklar||{};r.loklar[aktifLok]=+r.stok||0;}});}else{o.loklar=o.loklar||{};o.loklar[aktifLok]=+o.stok||0;}};(db.urunler||[]).forEach(put);}
+function stokProjYukle(){(db.urunler||[]).forEach(o=>{if(!o)return;if(renkObjs(o).length){o.renkler.forEach(r=>{if(r&&typeof r==='object')r.stok=+((r.loklar||{})[aktifLok])||0;});o.stok=stokTop(o);}else{o.stok=+((o.loklar||{})[aktifLok])||0;}});}
+function lokStokTop(u,id){if(!u)return 0;if(renkObjs(u).length)return u.renkler.reduce((a,r)=>a+(+((r.loklar||{})[id])||0),0);return +((u.loklar||{})[id])||0;}
+function setAktifLok(id){if(!id||id===aktifLok)return;try{stokProjKaydet()}catch(e){}aktifLok=id;try{localStorage.setItem('iq_aktifLok',id)}catch(e){}try{stokProjYukle()}catch(e){}try{render()}catch(e){}}
+// Migrasyon: lokasyon listesi yoksa oluştur, ürün stoklarını loklar'a (Ana Mağaza) taşı — seed & yüklenen veri için tek yer
+function lokMig(d){if(!d)return;
+  if(!d.lokasyonlar||!d.lokasyonlar.length)d.lokasyonlar=[{id:ANA_LOK,ad:'Ana Mağaza',tip:'magaza'}]; // tek lokasyonla başla; depo/2. mağazayı kullanıcı ekler
+  if(!d.transferler)d.transferler=[];
+  (d.urunler||[]).forEach(o=>{if(!o)return;const rl=(o.renkler||[]).filter(r=>r&&typeof r==='object');if(rl.length){rl.forEach(r=>{if(!r.loklar){r.loklar={};r.loklar[ANA_LOK]=+r.stok||0;}});}else if(!o.loklar){o.loklar={};o.loklar[ANA_LOK]=+o.stok||0;}});
+}
 function seed(){return{
   ornek:true, // ÖRNEK/DEMO veri işareti — gerçek veri girilince (nid) temizlenir; buluta ASLA yüklenmez
   firma:'IQ Basics',
@@ -536,7 +557,12 @@ function durakKategori(ad){const s=(ad||'').toLowerCase();
 function durakSablonListe(ad){const k=durakKategori(ad);const t=(typeof db!=='undefined'&&db&&db.durakSablon)||DURAK_SABLON_VARSAYILAN;return (t[k]||[]).slice();}
 function sablonKopya(ad){return durakSablonListe(ad).map(x=>({ad:x,ok:false}));}
 let db=load();
-function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(!d||!d.urunler)return seed();seqFix(d);if(!d.kademe)d.kademe=[{min:20,ind:3},{min:50,ind:6},{min:100,ind:10}];if(!d.portalFav)d.portalFav=[];if(d.minSiparis==null)d.minSiparis=0;if(!d.portalTaslak)d.portalTaslak=[];if(d.kampanya===undefined)d.kampanya=null;if(!d.duzenliGider)d.duzenliGider=[];if(!d.maliyetler)d.maliyetler=[];if(!d.islenenSiparis)d.islenenSiparis=[];if(!d.malSiparis)d.malSiparis=[];if(!d.malKat)d.malKat=[];if(!d.durakSablon)d.durakSablon=JSON.parse(JSON.stringify(DURAK_SABLON_VARSAYILAN));if(!d.rolAyar)d.rolAyar={};if(!d._tomb)d._tomb={};return d}catch(e){return seed()}}
+try{lokMig(db);stokProjYukle()}catch(e){} // açılışta lokasyon migrasyonu + aktif lokasyon stoğunu projekte et
+function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(!d||!d.urunler)return seed();seqFix(d);if(!d.kademe)d.kademe=[{min:20,ind:3},{min:50,ind:6},{min:100,ind:10}];if(!d.portalFav)d.portalFav=[];if(d.minSiparis==null)d.minSiparis=0;if(!d.portalTaslak)d.portalTaslak=[];if(d.kampanya===undefined)d.kampanya=null;if(!d.duzenliGider)d.duzenliGider=[];if(!d.maliyetler)d.maliyetler=[];if(!d.islenenSiparis)d.islenenSiparis=[];if(!d.malSiparis)d.malSiparis=[];if(!d.malKat)d.malKat=[];if(!d.durakSablon)d.durakSablon=JSON.parse(JSON.stringify(DURAK_SABLON_VARSAYILAN));if(!d.rolAyar)d.rolAyar={};if(!d._tomb)d._tomb={};
+  if(!d.lokasyonlar||!d.lokasyonlar.length)d.lokasyonlar=[{id:ANA_LOK,ad:'Ana Mağaza',tip:'magaza'}];
+  if(!d.transferler)d.transferler=[];
+  (d.urunler||[]).forEach(o=>{if(!o)return;if((o.renkler||[]).some(r=>r&&typeof r==='object')){o.renkler.forEach(r=>{if(r&&typeof r==='object'&&!r.loklar){r.loklar={};r.loklar[ANA_LOK]=+r.stok||0;}});}else if(!o.loklar){o.loklar={};o.loklar[ANA_LOK]=+o.stok||0;}}); // mevcut stok Ana Mağaza'ya
+  return d}catch(e){return seed()}}
 function kademeler(){return (db.kademe&&db.kademe.length)?db.kademe.slice().filter(k=>+k.min>0).sort((a,b)=>a.min-b.min):[]}
 function kademeIsk(mik){let ind=0;kademeler().forEach(k=>{if((+mik||0)>=(+k.min||0))ind=+k.ind||0});return ind}
 function portalKalemFiyat(k){const u=urun(k.uid);if(u&&u.fiyatGizli)return {base:0,ind:0,net:0,gizli:true};const base=u?portalFiyat(u):(+k.fiyat||0);
@@ -588,7 +614,7 @@ const CANLI_DOMEN={
   satis:['satislar','bekleyenPortal','islenenSiparis','kuponlar','stokBildirim'],
   cek:['cekler'],
   uretim:['isemirleri','maliyetler'],
-  ayar:['firma','firmaSlogan','firmaAdres','firmaTel','firmaWp','firmaTelegram','firmaLogo','firmaSite','satici','kurUSD','kurEUR','seq','kademe','minSiparis','kampanya','kurTarih','portalFav','portalTaslak','duzenliGider','cldName','cldPreset','waOtoMod','durakSablon'],
+  ayar:['firma','firmaSlogan','firmaAdres','firmaTel','firmaWp','firmaTelegram','firmaLogo','firmaSite','satici','kurUSD','kurEUR','seq','kademe','minSiparis','kampanya','kurTarih','lokasyonlar','portalFav','portalTaslak','duzenliGider','cldName','cldPreset','waOtoMod','durakSablon'],
   yonetim:['rolAyar'] // rol izin matrisi — yalnız admin/ortak yazar (firestore.rules), personel okur
 };
 // Rol → hangi alanları OKUR / YAZAR (veri seviyesinde sınır; arayüz gizlemesiyle birlikte)
@@ -696,6 +722,7 @@ function canliDomenUygula(domen,d){
   if(domen==='satis'){canliSatisUzlas(yIslenen,ySatis);
     // aynı bulut siparişi iki cihazda ayrı id ile eklendiyse tekle (küçük id kalır)
     const gor=new Set();db.bekleyenPortal=(db.bekleyenPortal||[]).sort((a,b)=>(+a.id||0)-(+b.id||0)).filter(o=>{if(!o||!o.bulutId)return !!o;if(gor.has(o.bulutId))return false;gor.add(o.bulutId);return true;});}
+  if(domen==='stok'){try{stokProjYukle()}catch(e){}} // buluttan gelen loklar → aktif lokasyon projeksiyonu
 }
 function canliAl(obj,domen){const o={};CANLI_DOMEN[domen].forEach(k=>{if(obj[k]!==undefined)o[k]=obj[k];});
   if(domen==='ayar'&&obj._ayarM)o._ayarM=obj._ayarM;
@@ -852,7 +879,8 @@ function idbSil(){clearTimeout(_idbYazT);return new Promise(async res=>{try{if(!
 function idbOku(){return new Promise(async res=>{try{if(!_idb)_idb=await idbAc();if(!_idb)return res(null);
   const rq=_idb.transaction('kv','readonly').objectStore('kv').get(KEY);
   rq.onsuccess=()=>res(rq.result||null);rq.onerror=()=>res(null);}catch(e){res(null)}});}
-function save(){try{if(!bulutMusteriMod)_damgala()}catch(e){} // müşteri modunda damgalama/mezar taşı üretilmez
+function save(){try{stokProjKaydet()}catch(e){} // aktif lokasyon stoğunu loklar'a flush et
+  try{if(!bulutMusteriMod)_damgala()}catch(e){} // müşteri modunda damgalama/mezar taşı üretilmez
   db._t=Date.now(); // kayıt zamanı — açılışta localStorage/IndexedDB'den hangisi yeni, ona bakılır
   try{idbYaz()}catch(e){}
   try{localStorage.setItem(KEY,JSON.stringify(db));return true;}catch(e){console.error('save failed',e);
@@ -1529,6 +1557,38 @@ function renderNav(){
   $('nav').innerHTML=navFor().map(([v,ic,ad])=>`<button data-v="${v}" onclick="go('${v}')" class="${cur===v?'on':''}"><span class="i">${ic}</span>${ad}</button>`).join('');
 }
 function back(){go('panel')}
+/* ===== Lokasyon (mağaza/depo) seç & yönet ===== */
+function lokSec(){const ls=lokListe();
+  open_('🏬 Mağaza / Depo Seç',
+    ls.map(l=>`<button class="btn ${l.id===aktifLok?'g':'ghost'}" style="margin-bottom:8px;text-align:left" onclick="closeM();setAktifLok('${l.id}')">${lokIc(l.id)} ${esc(l.ad)} <span style="float:right;opacity:.75;font-weight:600">${l.tip==='depo'?'depo':'mağaza'}${l.id===aktifLok?' ✓':''}</span></button>`).join('')
+    +`<button class="btn ghost sm" style="margin-top:6px" onclick="lokYonet()">⚙️ Lokasyonları Yönet</button>`);
+}
+function lokYonet(){const ls=lokHepsi();
+  open_('📍 Lokasyonlar / Mağazalar',
+    `<div class="mini">Mağaza ve depolarını ekle/düzenle. Silinmez — pasife alınır (geçmiş korunur).</div>`
+    +ls.map(l=>`<div class="card" style="padding:10px 12px;margin-top:8px;${l.pasif?'opacity:.55':''}"><div class="row" style="padding:0"><div class="av gray">${lokIc(l.id)}</div><div class="mid"><div class="t">${esc(l.ad)}${l.pasif?' <span class="pill low">pasif</span>':''}${l.id===aktifLok?' <span class="pill ok">aktif</span>':''}</div><div class="s">${l.tip==='depo'?'Depo':'Mağaza'}${(l.id===ANA_LOK||l.id===ANA_DEPO)?' · varsayılan':''}</div></div></div>
+      <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="lokForm('${l.id}')">✏️ Düzenle</button><button class="btn ghost sm" style="color:${l.pasif?'var(--good)':'var(--bad)'}" onclick="lokPasifToggle('${l.id}')">${l.pasif?'✅ Aktif Et':'🗄️ Pasife Al'}</button></div></div>`).join('')
+    +`<button class="btn g" style="margin-top:12px" onclick="lokForm(0)">＋ Yeni Lokasyon</button>`);
+}
+function lokForm(id){const l=id?lok(id):null;window._lkTip=l?l.tip:'magaza';
+  open_(id?'Lokasyon Düzenle':'Yeni Lokasyon',
+    `<label>Ad</label><input id="lk-ad" value="${l?esc(l.ad):''}" placeholder="ör. Merter Mağaza" autocomplete="off">
+     <label style="margin-top:10px">Tür</label>
+     <div class="seg2" id="lk-tip"><div class="o ${(!l||l.tip!=='depo')?'on':''}" onclick="lkTipSet('magaza')">🏬 Mağaza</div><div class="o ${l&&l.tip==='depo'?'on':''}" onclick="lkTipSet('depo')">🏭 Depo</div></div>
+     <button class="btn g" style="margin-top:14px" onclick="lokKaydet(${id?`'${id}'`:0})">Kaydet</button>`);
+}
+function lkTipSet(t){window._lkTip=t;const seg=$('lk-tip');if(seg)[...seg.children].forEach((c,i)=>c.classList.toggle('on',(i===0)===(t!=='depo')));}
+function lokKaydet(id){const ad=($('lk-ad')?.value||'').trim();if(!ad)return toast('Ad gir');const tip=window._lkTip==='depo'?'depo':'magaza';
+  db.lokasyonlar=db.lokasyonlar||[];
+  if(id){const l=lok(id);if(l){l.ad=ad;l.tip=tip;}}else{db.lokasyonlar.push({id:'L'+Date.now().toString(36)+Math.floor(Math.random()*90+10),ad,tip});}
+  (db._ayarM=db._ayarM||{}).lokasyonlar=Date.now();
+  save();closeM();lokYonet();render();toast('Lokasyon kaydedildi ✓');
+}
+function lokPasifToggle(id){const l=lok(id);if(!l)return;
+  if(!l.pasif&&lokListe().length<=1)return toast('En az bir aktif lokasyon olmalı');
+  if(!l.pasif&&id===aktifLok)return toast('Aktif lokasyonu pasife alamazsın — önce başka lokasyona geç');
+  l.pasif=!l.pasif;(db._ayarM=db._ayarM||{}).lokasyonlar=Date.now();save();lokYonet();render();toast(l.pasif?'Pasife alındı 🗄️':'Aktif edildi ✅');
+}
 // Hesap / oturum menüsü (çıkış buradan)
 function hesapMenu(){
   const bg=(function(){try{return bulutGirisli()}catch(e){return false}})();
@@ -1693,6 +1753,7 @@ function render(){
   $('hTitle').textContent=db.firma;
   $('hSub').textContent=y.ad;
   $('roleBtn').innerHTML=y.ic+' '+y.ad+' ▾';
+  {const lb=$('lokBtn');if(lb){const coklu=lokListe().length>1;lb.style.display=coklu?'':'none';if(coklu){const a=lokAktif();lb.innerHTML=lokIc(a.id)+' '+esc((a.ad||'').length>12?a.ad.slice(0,11)+'…':a.ad)+' ▾';}}}
   const R={panel:rPanel,satis:rSatis,stok:rStok,envanter:rEnvanter,cari:rCari,daha:rDaha,kasa:rKasa,cek:rCek,uretim:rUretim,rapor:rRapor,ayarlar:rAyarlar,portal:rPortal};
   (R[cur]||rPanel)();
 }
@@ -2421,6 +2482,7 @@ function urunDetay(id){
     ${oz.seri>0?`<div class="infobox" style="margin-top:10px;background:var(--good-s);color:var(--good)">📈 Bu üründen <b>${oz.seri} ${u.birim}</b> satıldı${oz.best?` · en çok <b>${esc(oz.best[0])}</b> (${oz.best[1]})`:''}${karGoster()?` · ciro <b>${TL(oz.ciro)}</b>`:''}${oz.sonTarih?` · son ${dstr(oz.sonTarih)}`:''}</div>`:'<div class="mini" style="margin-top:10px">📈 Bu üründen henüz satış yok</div>'}
     <div class="dbox" style="margin-top:12px">${infoRows.map(([k,v])=>`<div class="dline"><span>${k}</span><b>${esc(''+v)}</b></div>`).join('')}</div>
     ${hasRenkStok(u)?`<div class="sec" style="margin-top:14px">Renk & Stok</div><div class="card" style="padding:6px 12px">${renkObjs(u).map(r=>{const kt=kirikTop(r);return `<div class="renksel"><span class="sw sm" style="background:${r.hex}"></span>${r.foto?`<img src="${guvenliSrc(r.foto)}" style="width:34px;height:34px;border-radius:7px;object-fit:cover">`:''}<span class="rn">${esc(r.ad||'—')}${r.barkod?`<small style="display:block;color:var(--sub);font-weight:600">${esc(r.barkod)}</small>`:''}</span><span class="rs ${r.stok<=0?'bad':''}">${r.stok||0} seri${kt?`<br><span style="color:var(--thr)">+${kt} kırık</span>`:''}${(+r.defo>0)?`<br><span style="color:var(--bad)">⚠️ ${+r.defo} defolu</span>`:''}</span></div>`}).join('')}</div>${defoTop(u)>0?`<div class="mini" style="margin:4px 3px;color:var(--bad)">⚠️ Toplam ${defoTop(u)} defolu (satılabilir stoğa dahil değil)</div>`:''}`:''}
+    ${lokListe().length>1?`<div class="sec" style="margin-top:14px">📍 Lokasyon Dağılımı</div><div class="card" style="padding:4px 13px">${lokListe().map(l=>{const n=lokStokTop(u,l.id);return `<div class="kv"><span class="k">${lokIc(l.id)} ${esc(l.ad)}${l.id===aktifLok?' <span class="pill ok">aktif</span>':''}</span><span class="v ${n>0?'pos':''}">${n} ${esc(u.birim||'')}</span></div>`}).join('')}<div class="kv" style="border-top:1px solid var(--ln);font-weight:800"><span class="k">TÜM LOKASYONLAR</span><span class="v">${lokListe().reduce((a,l)=>a+lokStokTop(u,l.id),0)} ${esc(u.birim||'')}</span></div></div>`:''}
     ${u.islemler&&u.islemler.length?`<div class="sec" style="margin-top:14px">🧵 İşlem Takibi</div><div class="dbox">${u.islemler.map(it=>`<div class="dline"><span>${esc(it.islem)}</span><b>${esc((cari(it.fasonId)||{}).ad||'—')}</b></div>`).join('')}</div>`:''}
     ${u.not?`<div class="infobox" style="margin-top:12px">📝 ${esc(u.not)}</div>`:''}
     ${(canUrunYaz()||canSee('satis'))?`<div class="g2" style="margin-top:16px">${canUrunYaz()?`<button class="btn ghost sm" onclick="formUrun(${id})">✏️ Düzenle</button>`:''}${canSee('satis')?`<button class="btn sm" onclick="closeM();go('satis');setTimeout(()=>formSatis(${id}),150)">🧾 Satışa Ekle</button>`:''}</div>`:''}
@@ -7998,6 +8060,7 @@ function rAyarlar(){
   const y=yetki();
   const kisitli=!adminMi(); // yönetici olmayan roller → kullanıcı/rol/yedek/sıfırlama bölümleri gizli
   let html=`<div class="sec">Firma</div><div class="card"><div class="row" onclick="formFirma()"><div class="av" style="background:var(--ind)">🏢</div><div class="mid"><div class="t">${esc(db.firma)}</div><div class="s">${esc(db.firmaSlogan||'firma bilgileri · fişte görünür')}</div></div><span style="color:var(--sub)">›</span></div>
+    <div class="row" onclick="lokYonet()"><div class="av" style="background:var(--ind2)">📍</div><div class="mid"><div class="t">Lokasyonlar / Mağazalar</div><div class="s">${lokListe().map(l=>l.ad).join(' · ')||'Ana Mağaza'}</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="formKur()"><div class="av o">💱</div><div class="mid"><div class="t">Kur</div><div class="s">$ ${db.kurUSD.toFixed(2)} · € ${db.kurEUR.toFixed(2)}</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="yaziciAyar()"><div class="av" style="background:${db.otoYazdir?'var(--good)':'var(--ind2)'}">🖨️</div><div class="mid"><div class="t">Otomatik Yazıcı ${db.otoYazdir?'<span class="pill ok">açık</span>':''}</div><div class="s">bilgisayara bağlı termal yazıcıdan otomatik fiş</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="waOtoAyar()"><div class="av" style="background:${db.waOtoMod==='kuyruk'?'var(--good)':'var(--ind2)'}">🤖</div><div class="mid"><div class="t">WhatsApp Otomasyonu ${db.waOtoMod==='kuyruk'?'<span class="pill ok">açık</span>':''}</div><div class="s">fiş/makbuz/hatırlatma mesajlarını sistem göndersin</div></div><span style="color:var(--sub)">›</span></div>
