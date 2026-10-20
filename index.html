@@ -438,7 +438,7 @@
 const KEY='oztekstil_v2';
 /* ===== ÇOK-LOKASYON (mağaza/depo) ===== */
 const ANA_LOK='L-ana', ANA_DEPO='L-depo';
-let aktifLok=(function(){try{return localStorage.getItem('iq_aktifLok')||ANA_LOK}catch(e){return ANA_LOK}})();
+let aktifLok=ANA_LOK; // gerçek değer db.aktifLok'tan (buluta senkron) — açılışta set edilir
 function lokListe(){return (db.lokasyonlar||[]).filter(l=>l&&!l.pasif)}
 function lokHepsi(){return (db.lokasyonlar||[]).filter(Boolean)}
 function lok(id){return (db.lokasyonlar||[]).find(l=>l&&l.id===id)||null}
@@ -449,10 +449,11 @@ function lokAktif(){return lok(aktifLok)||lok(ANA_LOK)||lokListe()[0]||{id:ANA_L
 function stokProjKaydet(){const put=(o)=>{if(!o)return;if(renkObjs(o).length){o.renkler.forEach(r=>{if(r&&typeof r==='object'){r.loklar=r.loklar||{};r.loklar[aktifLok]=+r.stok||0;}});}else{o.loklar=o.loklar||{};o.loklar[aktifLok]=+o.stok||0;}};(db.urunler||[]).forEach(put);}
 function stokProjYukle(){(db.urunler||[]).forEach(o=>{if(!o)return;if(renkObjs(o).length){o.renkler.forEach(r=>{if(r&&typeof r==='object')r.stok=+((r.loklar||{})[aktifLok])||0;});o.stok=stokTop(o);}else{o.stok=+((o.loklar||{})[aktifLok])||0;}});}
 function lokStokTop(u,id){if(!u)return 0;if(renkObjs(u).length)return u.renkler.reduce((a,r)=>a+(+((r.loklar||{})[id])||0),0);return +((u.loklar||{})[id])||0;}
-function setAktifLok(id){if(!id||id===aktifLok)return;try{stokProjKaydet()}catch(e){}aktifLok=id;try{localStorage.setItem('iq_aktifLok',id)}catch(e){}try{stokProjYukle()}catch(e){}try{render()}catch(e){}}
+function setAktifLok(id){if(!id||id===aktifLok)return;try{stokProjKaydet()}catch(e){}aktifLok=id;db.aktifLok=id;(db._ayarM=db._ayarM||{}).aktifLok=Date.now();try{stokProjYukle()}catch(e){}try{save()}catch(e){}try{render()}catch(e){}}
 // Migrasyon: lokasyon listesi yoksa oluştur, ürün stoklarını loklar'a (Ana Mağaza) taşı — seed & yüklenen veri için tek yer
 function lokMig(d){if(!d)return;
   if(!d.lokasyonlar||!d.lokasyonlar.length)d.lokasyonlar=[{id:ANA_LOK,ad:'Ana Mağaza',tip:'magaza'}]; // tek lokasyonla başla; depo/2. mağazayı kullanıcı ekler
+  if(!d.aktifLok)d.aktifLok=ANA_LOK;
   if(!d.transferler)d.transferler=[];
   (d.urunler||[]).forEach(o=>{if(!o)return;const rl=(o.renkler||[]).filter(r=>r&&typeof r==='object');if(rl.length){rl.forEach(r=>{if(!r.loklar){r.loklar={};r.loklar[ANA_LOK]=+r.stok||0;}});}else if(!o.loklar){o.loklar={};o.loklar[ANA_LOK]=+o.stok||0;}});
 }
@@ -557,7 +558,7 @@ function durakKategori(ad){const s=(ad||'').toLowerCase();
 function durakSablonListe(ad){const k=durakKategori(ad);const t=(typeof db!=='undefined'&&db&&db.durakSablon)||DURAK_SABLON_VARSAYILAN;return (t[k]||[]).slice();}
 function sablonKopya(ad){return durakSablonListe(ad).map(x=>({ad:x,ok:false}));}
 let db=load();
-try{lokMig(db);stokProjYukle()}catch(e){} // açılışta lokasyon migrasyonu + aktif lokasyon stoğunu projekte et
+try{lokMig(db);aktifLok=db.aktifLok||ANA_LOK;stokProjYukle()}catch(e){} // açılışta lokasyon migrasyonu + aktif lokasyon stoğunu projekte et
 function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(!d||!d.urunler)return seed();seqFix(d);if(!d.kademe)d.kademe=[{min:20,ind:3},{min:50,ind:6},{min:100,ind:10}];if(!d.portalFav)d.portalFav=[];if(d.minSiparis==null)d.minSiparis=0;if(!d.portalTaslak)d.portalTaslak=[];if(d.kampanya===undefined)d.kampanya=null;if(!d.duzenliGider)d.duzenliGider=[];if(!d.maliyetler)d.maliyetler=[];if(!d.islenenSiparis)d.islenenSiparis=[];if(!d.malSiparis)d.malSiparis=[];if(!d.malKat)d.malKat=[];if(!d.durakSablon)d.durakSablon=JSON.parse(JSON.stringify(DURAK_SABLON_VARSAYILAN));if(!d.rolAyar)d.rolAyar={};if(!d._tomb)d._tomb={};
   if(!d.lokasyonlar||!d.lokasyonlar.length)d.lokasyonlar=[{id:ANA_LOK,ad:'Ana Mağaza',tip:'magaza'}];
   if(!d.transferler)d.transferler=[];
@@ -614,7 +615,7 @@ const CANLI_DOMEN={
   satis:['satislar','bekleyenPortal','islenenSiparis','kuponlar','stokBildirim'],
   cek:['cekler'],
   uretim:['isemirleri','maliyetler'],
-  ayar:['firma','firmaSlogan','firmaAdres','firmaTel','firmaWp','firmaTelegram','firmaLogo','firmaSite','satici','kurUSD','kurEUR','seq','kademe','minSiparis','kampanya','kurTarih','lokasyonlar','portalFav','portalTaslak','duzenliGider','cldName','cldPreset','waOtoMod','durakSablon'],
+  ayar:['firma','firmaSlogan','firmaAdres','firmaTel','firmaWp','firmaTelegram','firmaLogo','firmaSite','satici','kurUSD','kurEUR','seq','kademe','minSiparis','kampanya','kurTarih','lokasyonlar','aktifLok','portalFav','portalTaslak','duzenliGider','cldName','cldPreset','waOtoMod','durakSablon'],
   yonetim:['rolAyar'] // rol izin matrisi — yalnız admin/ortak yazar (firestore.rules), personel okur
 };
 // Rol → hangi alanları OKUR / YAZAR (veri seviyesinde sınır; arayüz gizlemesiyle birlikte)
@@ -723,6 +724,7 @@ function canliDomenUygula(domen,d){
     // aynı bulut siparişi iki cihazda ayrı id ile eklendiyse tekle (küçük id kalır)
     const gor=new Set();db.bekleyenPortal=(db.bekleyenPortal||[]).sort((a,b)=>(+a.id||0)-(+b.id||0)).filter(o=>{if(!o||!o.bulutId)return !!o;if(gor.has(o.bulutId))return false;gor.add(o.bulutId);return true;});}
   if(domen==='stok'){try{stokProjYukle()}catch(e){}} // buluttan gelen loklar → aktif lokasyon projeksiyonu
+  if(domen==='ayar'&&db.aktifLok&&db.aktifLok!==aktifLok){aktifLok=db.aktifLok;try{stokProjYukle()}catch(e){}} // başka cihaz lokasyon değiştirdi → yeniden projekte et
 }
 function canliAl(obj,domen){const o={};CANLI_DOMEN[domen].forEach(k=>{if(obj[k]!==undefined)o[k]=obj[k];});
   if(domen==='ayar'&&obj._ayarM)o._ayarM=obj._ayarM;
@@ -1561,7 +1563,8 @@ function back(){go('panel')}
 function lokSec(){const ls=lokListe();
   open_('🏬 Mağaza / Depo Seç',
     ls.map(l=>`<button class="btn ${l.id===aktifLok?'g':'ghost'}" style="margin-bottom:8px;text-align:left" onclick="closeM();setAktifLok('${l.id}')">${lokIc(l.id)} ${esc(l.ad)} <span style="float:right;opacity:.75;font-weight:600">${l.tip==='depo'?'depo':'mağaza'}${l.id===aktifLok?' ✓':''}</span></button>`).join('')
-    +`<button class="btn ghost sm" style="margin-top:6px" onclick="lokYonet()">⚙️ Lokasyonları Yönet</button>`);
+    +`<button class="btn ghost" style="margin-top:6px" onclick="closeM();setTimeout(transferListe,100)">🔄 Transfer / Sevk</button>`
+    +`<button class="btn ghost sm" style="margin-top:8px" onclick="lokYonet()">⚙️ Lokasyonları Yönet</button>`);
 }
 function lokYonet(){const ls=lokHepsi();
   open_('📍 Lokasyonlar / Mağazalar',
@@ -1588,6 +1591,71 @@ function lokPasifToggle(id){const l=lok(id);if(!l)return;
   if(!l.pasif&&lokListe().length<=1)return toast('En az bir aktif lokasyon olmalı');
   if(!l.pasif&&id===aktifLok)return toast('Aktif lokasyonu pasife alamazsın — önce başka lokasyona geç');
   l.pasif=!l.pasif;(db._ayarM=db._ayarM||{}).lokasyonlar=Date.now();save();lokYonet();render();toast(l.pasif?'Pasife alındı 🗄️':'Aktif edildi ✅');
+}
+/* ===== Transfer (lokasyonlar arası sevk) ===== */
+let trKalem=[], trUrunId=0;
+function lokStokRenk(u,renk,lokId){if(!u)return 0;if(renk&&renkObjs(u).length){const r=renkObjs(u).find(x=>(x.ad||'').toLocaleLowerCase('tr-TR')===(renk||'').toLocaleLowerCase('tr-TR'));return r?(+((r.loklar||{})[lokId])||0):0;}return +((u.loklar||{})[lokId])||0;}
+function transferStokUygula(kalemler,lokId,yon){(kalemler||[]).forEach(k=>{const u=urun(k.uid);if(!u)return;const ad=+k.adet||0;if(!ad)return;
+  if(k.renk&&renkObjs(u).length){let r=renkObjs(u).find(x=>(x.ad||'').toLocaleLowerCase('tr-TR')===(k.renk||'').toLocaleLowerCase('tr-TR'));if(!r){r={ad:k.renk,hex:hexFromAd(k.renk)||'#ccc',stok:0,loklar:{}};u.renkler.push(r);}r.loklar=r.loklar||{};r.loklar[lokId]=(+((r.loklar||{})[lokId])||0)+yon*ad;}
+  else{u.loklar=u.loklar||{};u.loklar[lokId]=(+((u.loklar||{})[lokId])||0)+yon*ad;}
+});}
+function transferForm(){if(lokListe().length<2)return toast('Transfer için en az 2 lokasyon gerekli — Ayarlar > Lokasyonlar');
+  trKalem=[];trUrunId=0;const trFrom=aktifLok,trTo=(lokListe().find(l=>l.id!==aktifLok)||{}).id||'';
+  const opt=(sel)=>lokListe().map(l=>`<option value="${l.id}" ${l.id===sel?'selected':''}>${lokIc(l.id)} ${esc(l.ad)}</option>`).join('');
+  open_('🔄 Transfer (Sevk)',`
+    <div class="g2"><div><label>Nereden</label><select id="tr-from" onchange="trUrunSec()">${opt(trFrom)}</select></div><div><label>Nereye</label><select id="tr-to">${opt(trTo)}</select></div></div>
+    <label style="margin-top:10px">Ürün ekle</label>
+    <input id="tr-urun" list="tr-urun-dl" autocomplete="off" placeholder="🔍 ürün ara / seç" oninput="trUrunSec()">
+    <datalist id="tr-urun-dl">${db.urunler.filter(u=>!u.pasif).map(u=>`<option value="${esc(u.ad)}">`).join('')}</datalist>
+    <div id="tr-renk" style="margin-top:4px"></div>
+    <div id="tr-liste" style="margin-top:10px"></div>
+    <button class="btn g" style="margin-top:12px" onclick="transferKaydet()">🔄 Transferi Oluştur</button>`);
+  cizTrListe();
+}
+function trUrunSec(){const ad=($('tr-urun')?.value||'').trim().toLowerCase();const u=db.urunler.find(x=>!x.pasif&&(x.ad||'').toLowerCase()===ad);const box=$('tr-renk');if(!box)return;const from=$('tr-from')?.value||aktifLok;
+  if(!u){box.innerHTML='';trUrunId=0;return;}trUrunId=u.id;
+  if(renkObjs(u).length){box.innerHTML=renkObjs(u).map((r,i)=>{const av=+((r.loklar||{})[from])||0;return `<div class="ierow"><span class="iesw" style="background:${r.hex||'#ccc'}"></span><div class="ienm"><b>${esc(r.ad||'—')}</b><span class="iestk ${av<=0?'az':''}">kaynakta ${av}</span></div><div class="iestp"><button type="button" onclick="trAdet(${i},-1)">−</button><input id="tra-${i}" type="number" inputmode="numeric" value="0" style="width:52px"><button type="button" class="p" onclick="trAdet(${i},1)">+</button></div></div>`}).join('')+`<button class="btn ghost sm" style="margin-top:8px" onclick="trEkle()">+ Listeye Ekle</button>`;}
+  else{const av=+((u.loklar||{})[from])||0;box.innerHTML=`<div class="ierow"><div class="ienm"><b>${esc(u.ad)}</b><span class="iestk ${av<=0?'az':''}">kaynakta ${av}</span></div><div class="iestp"><button type="button" onclick="trAdet(0,-1)">−</button><input id="tra-0" type="number" inputmode="numeric" value="0" style="width:52px"><button type="button" class="p" onclick="trAdet(0,1)">+</button></div></div><button class="btn ghost sm" style="margin-top:8px" onclick="trEkle()">+ Listeye Ekle</button>`;}
+}
+function trAdet(i,d){const el=$('tra-'+i);if(!el)return;el.value=Math.max(0,(+el.value||0)+d);}
+function trEkle(){const u=urun(trUrunId);if(!u)return toast('Önce ürün seç');
+  let n=0;if(renkObjs(u).length){renkObjs(u).forEach((r,i)=>{const a=Math.max(0,+($('tra-'+i)?.value||0));if(a>0){trKalem.push({uid:u.id,urun:u.ad,renk:r.ad,adet:a});n++;}});}
+  else{const a=Math.max(0,+($('tra-0')?.value||0));if(a>0){trKalem.push({uid:u.id,urun:u.ad,renk:'',adet:a});n++;}}
+  if(!n)return toast('Adet gir');
+  if($('tr-urun'))$('tr-urun').value='';trUrunId=0;if($('tr-renk'))$('tr-renk').innerHTML='';cizTrListe();
+}
+function cizTrListe(){const b=$('tr-liste');if(!b)return;b.innerHTML=trKalem.length?`<div class="sec">Sevk edilecek (${trKalem.reduce((a,k)=>a+(+k.adet||0),0)} adet)</div><div class="card" style="padding:4px 12px">`+trKalem.map((k,i)=>`<div class="kv"><span class="k">${esc(k.urun)}${k.renk?' · <b>'+esc(k.renk)+'</b>':''}</span><span class="v">${k.adet} <a onclick="trKalem.splice(${i},1);cizTrListe()" style="color:var(--bad);cursor:pointer;font-weight:800">✕</a></span></div>`).join('')+`</div>`:'<div class="mini">Henüz ürün eklenmedi.</div>';}
+function transferKaydet(){const from=$('tr-from')?.value,to=$('tr-to')?.value;
+  if(!from||!to||from===to)return toast('Kaynak ve hedef farklı olmalı');
+  if(!trKalem.length)return toast('Ürün ekle');
+  const eksik=trKalem.filter(k=>k.adet>lokStokRenk(urun(k.uid),k.renk,from));
+  const commit=()=>{transferStokUygula(trKalem,from,-1);
+    const t={id:'T'+Date.now().toString(36)+Math.floor(Math.random()*90+10),fromLok:from,toLok:to,kalemler:trKalem.map(k=>({...k})),tarih:Date.now(),durum:'yolda'};
+    (db.transferler=db.transferler||[]).push(t);stokProjYukle();save();closeM();toast('🔄 Transfer oluşturuldu — '+lokAd(to)+'\'e yolda');transferListe();};
+  if(eksik.length)askConfirm('Bazı ürünlerde kaynak ('+lokAd(from)+') stoğu yetersiz — eksiye düşebilir.\nYine de oluşturulsun mu?',commit,'Yine de');
+  else commit();
+}
+function transferListe(){const ts=[...(db.transferler||[])].sort((a,b)=>b.tarih-a.tarih);
+  open_('🔄 Transferler (Sevk)',
+    `<button class="btn g" style="margin-bottom:10px" onclick="transferForm()">＋ Yeni Transfer</button>`
+    +(ts.length?ts.map(t=>{const top=t.kalemler.reduce((a,k)=>a+(+k.adet||0),0);const ic=t.iptal?'🚫':t.durum==='teslim'?'✅':'🚚';
+      const st=t.iptal?'<span class="pill low">iptal</span>':t.durum==='teslim'?'<span class="pill ok">teslim</span>':'<span class="pill" style="background:var(--thr-s);color:var(--thr)">yolda</span>';
+      return `<div class="card" style="padding:10px 12px;margin-bottom:8px;${t.iptal?'opacity:.6':''}"><div class="row" style="padding:0;cursor:pointer" onclick="transferDetay('${t.id}')"><div class="av gray">${ic}</div><div class="mid"><div class="t" style="${t.iptal?'text-decoration:line-through':''}">${esc(lokAd(t.fromLok))} → ${esc(lokAd(t.toLok))} ${st}</div><div class="s">${tstr(t.tarih)} · ${top} adet · ${t.kalemler.length} kalem</div></div></div>${(t.durum==='yolda'&&!t.iptal)?`<div class="g2" style="margin-top:8px"><button class="btn g sm" onclick="transferTeslim('${t.id}')">📥 Teslim Al</button><button class="btn ghost sm" style="color:var(--bad)" onclick="transferIptal('${t.id}')">İptal</button></div>`:''}</div>`}).join(''):emp('🔄','Transfer yok — ＋ ile sevk oluştur')));
+}
+function transferDetay(id){const t=(db.transferler||[]).find(x=>x.id===id);if(!t)return;
+  open_('🔄 Transfer'+(t.iptal?' · 🚫 İPTAL':''),`<div class="mini">${esc(lokAd(t.fromLok))} → ${esc(lokAd(t.toLok))} · ${tstr(t.tarih)}${t.teslimTarih?' · teslim '+tstr(t.teslimTarih):''}</div>
+    ${t.iptal?`<div class="warnbox" style="margin-top:8px">🚫 <b>İptal edildi</b>${t.iptalTarih?' · '+tstr(t.iptalTarih):''} — mal kaynağa döndü, kayıt çizili saklanıyor.</div>`:''}
+    <div class="card" style="margin-top:10px;padding:4px 12px">${t.kalemler.map(k=>`<div class="kv"><span class="k">${esc(k.urun)}${k.renk?' · <b>'+esc(k.renk)+'</b>':''}</span><span class="v">${k.adet}</span></div>`).join('')}</div>
+    ${(t.durum==='yolda'&&!t.iptal)?`<button class="btn g" style="margin-top:12px" onclick="transferTeslim('${t.id}')">📥 ${esc(lokAd(t.toLok))}'e Teslim Al</button><button class="btn ghost" style="margin-top:8px;color:var(--bad)" onclick="transferIptal('${t.id}')">İptal Et</button>`:''}`);
+}
+function transferTeslim(id){const t=(db.transferler||[]).find(x=>x.id===id);if(!t||t.durum!=='yolda'||t.iptal)return;
+  transferStokUygula(t.kalemler,t.toLok,+1);t.durum='teslim';t.teslimTarih=Date.now();stokProjYukle();save();closeM();toast('📥 '+lokAd(t.toLok)+'\'e teslim alındı ✓');transferListe();}
+function transferIptal(id){const t=(db.transferler||[]).find(x=>x.id===id);if(!t||t.iptal)return;
+  askKritik('Bu transfer iptal edilsin mi? Mal kaynağa geri döner.\n\nKayıt SİLİNMEZ — "İPTAL" olarak çizili durur.',()=>{
+    if(t.durum==='teslim')transferStokUygula(t.kalemler,t.toLok,-1); // hedeften geri çıkar
+    transferStokUygula(t.kalemler,t.fromLok,+1); // kaynağa geri koy
+    t.iptal=true;t.iptalTarih=Date.now();t.durum='iptal';stokProjYukle();save();closeM();toast('Transfer iptal edildi ✓ (çizili duruyor)');transferListe();
+  },'İptal Et','Transfer İptali');
 }
 // Hesap / oturum menüsü (çıkış buradan)
 function hesapMenu(){
@@ -1936,7 +2004,7 @@ function rStok(){
   let html='';
   {
     const kats=['Tümü',...new Set(db.urunler.map(u=>u.kat).filter(Boolean))];
-    html+=`<div style="display:flex;gap:8px;align-items:stretch"><input class="search" id="ara-stok" placeholder="🔍 Ürün, kod, marka ara..." oninput="rStokList()" style="flex:1;margin-bottom:10px"><button class="btn ghost" style="width:auto;flex:0 0 auto;padding:0 15px;margin:0 0 10px;font-size:19px" onclick="barkodOkutAra()" title="Kamerayla barkod okut">📷</button></div><div class="segs">`+kats.map(k=>`<div class="seg ${k===stokKat?'on':''}" onclick="stokKat='${esc(jsq(k))}';rStok()">${esc(k)}</div>`).join('')+`</div>${canSayim()?`<button class="btn ghost sm" style="margin-bottom:10px" onclick="depoSayim()">📋 Depo Sayımı Yap</button>`:''}${db.urunler.some(u=>defoTop(u)>0)?`<button class="btn ghost sm" style="margin-bottom:10px;color:var(--bad)" onclick="defoluStokAc()">⚠️ Defolu Stok (${db.urunler.reduce((a,u)=>a+defoTop(u),0)})</button>`:''}${paraGoster()?`<button class="btn ghost sm" style="margin-bottom:10px" onclick="topluZam()">💹 Toplu Fiyat Güncelle (% zam / indirim)</button>`:''}<div class="card" id="stok-list"></div>`;
+    html+=`<div style="display:flex;gap:8px;align-items:stretch"><input class="search" id="ara-stok" placeholder="🔍 Ürün, kod, marka ara..." oninput="rStokList()" style="flex:1;margin-bottom:10px"><button class="btn ghost" style="width:auto;flex:0 0 auto;padding:0 15px;margin:0 0 10px;font-size:19px" onclick="barkodOkutAra()" title="Kamerayla barkod okut">📷</button></div><div class="segs">`+kats.map(k=>`<div class="seg ${k===stokKat?'on':''}" onclick="stokKat='${esc(jsq(k))}';rStok()">${esc(k)}</div>`).join('')+`</div>${lokListe().length>1?`<div class="okbox" style="margin-bottom:10px;display:flex;align-items:center;gap:8px">${lokIc(aktifLok)} <b>${esc(lokAd(aktifLok))}</b> stoğu<button class="btn ghost sm" style="width:auto;margin:0 0 0 auto;padding:6px 11px" onclick="lokSec()">değiştir</button></div><button class="btn ghost sm" style="margin-bottom:10px" onclick="transferListe()">🔄 Transfer / Sevk</button>`:''}${canSayim()?`<button class="btn ghost sm" style="margin-bottom:10px" onclick="depoSayim()">📋 Depo Sayımı Yap</button>`:''}${db.urunler.some(u=>defoTop(u)>0)?`<button class="btn ghost sm" style="margin-bottom:10px;color:var(--bad)" onclick="defoluStokAc()">⚠️ Defolu Stok (${db.urunler.reduce((a,u)=>a+defoTop(u),0)})</button>`:''}${paraGoster()?`<button class="btn ghost sm" style="margin-bottom:10px" onclick="topluZam()">💹 Toplu Fiyat Güncelle (% zam / indirim)</button>`:''}<div class="card" id="stok-list"></div>`;
     $('app').innerHTML=html; rStokList();
 }
 }
