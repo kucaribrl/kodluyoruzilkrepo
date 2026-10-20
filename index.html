@@ -1471,10 +1471,10 @@ function hasRenkStok(u){return renkObjs(u).length>0}
 function syncStok(u){if(hasRenkStok(u))u.stok=renkObjs(u).reduce((a,r)=>a+(+r.stok||0),0)}
 function dots(r){return '<div class="chips">'+(r||[]).slice(0,6).map(c=>`<span class="chip" style="background:${renkHex(c)}"></span>`).join('')+'</div>'}
 function toplamElimizde(){return db.hesaplar.reduce((a,h)=>a+h.bakiye,0)}
-function kasaHareket(hesapId,yon,tutar,tur,aciklama,cariId){const h=hesap(hesapId);
+function kasaHareket(hesapId,yon,tutar,tur,aciklama,cariId,lokId){const h=hesap(hesapId);
   if(yon==='out'&&h&&h.bakiye<tutar-0.001){toast('⚠️ '+h.ad+' bakiyesi yetersiz ('+TL(h.bakiye)+'). Hesap eksiye düşemez.');return false}
   if(h)h.bakiye+=(yon==='in'?tutar:-tutar);
-  const hid=nid('hr');db.hareketler.push({id:hid,tarih:Date.now(),hesapId,yon,tutar,tur:tur||'',aciklama:aciklama||'',cariId:cariId||null});return hid;} // truthy: hareket id
+  const hid=nid('hr');db.hareketler.push({id:hid,tarih:Date.now(),hesapId,yon,tutar,tur:tur||'',aciklama:aciklama||'',cariId:cariId||null,lokId:lokId||null});return hid;} // truthy: hareket id
 function hesapYeter(hesapId,tutar){const h=hesap(hesapId);return !h||h.bakiye>=tutar-0.001}
 function hesapTurToplam(t){return db.hesaplar.filter(h=>h.tur===t).reduce((a,h)=>a+h.bakiye,0)}
 function toplamAlacak(){return db.cariler.filter(c=>c.tip==='musteri').reduce((a,c)=>a+Math.max(0,c.bakiye),0)}
@@ -1485,6 +1485,7 @@ function bugunSatis(){const b=new Date().setHours(0,0,0,0);
   const brut=db.satislar.filter(s=>s.tarih>=b&&s.tip!=='iade'&&!s.iptal).reduce((a,s)=>a+(+s.tutar||0)*satisDiv(s),0);
   const iade=db.satislar.filter(s=>s.tarih>=b&&s.tip==='iade'&&!s.iptal).reduce((a,s)=>a+(+s.tutar||0)*satisDiv(s),0);
   return brut-iade}
+function bugunCiroLok(lokId){const b=new Date().setHours(0,0,0,0);return db.satislar.filter(s=>s.tarih>=b&&s.tip!=='iade'&&!s.iptal&&(s.lokId||ANA_LOK)===lokId).reduce((a,s)=>a+(+s.tutar||0)*satisDiv(s),0);}
 // 📊 PANO — günün özeti, en çok satan, gerçek ciro trendi
 function panoGunOzet(){const b=new Date().setHours(0,0,0,0);
   const sat=db.satislar.filter(s=>s.tarih>=b&&s.tip!=='iade'&&!s.iptal);
@@ -1900,6 +1901,7 @@ function rPanel(){
         <div><div class="mini">📮 Yeni Portal Sipariş</div><div style="font-size:18px;font-weight:800;color:var(--ind2)">${g.yeniSip}</div></div>
         <div><div class="mini">↩️ İade</div><div style="font-size:18px;font-weight:800;color:${g.iade?'var(--bad)':'var(--sub)'}">${g.iade}</div></div>
       </div></div>`;
+    if(lokListe().length>1)paraHtml+=`<div class="card" style="padding:10px 13px;margin-top:8px"><div class="mini" style="font-weight:800;margin-bottom:5px">🏬 Bugün — mağaza mağaza ciro</div>${lokListe().map(l=>`<div class="kv"><span class="k">${lokIc(l.id)} ${esc(l.ad)}${l.id===aktifLok?' <span class="pill ok">aktif</span>':''}</span><span class="v">${TL(bugunCiroLok(l.id))}</span></div>`).join('')}<div class="kv" style="border-top:1px solid var(--ln);font-weight:800"><span class="k">İŞLETME TOPLAMI</span><span class="v">${TL(g.ciro)}</span></div></div>`;
   }
   if(para&&new Date().getDate()<=3){const ge=gecenAyOzet();
     if(ge.adet>0)paraHtml+=`<div class="sec">🗓️ Geçen Ay Özeti · ${esc(ge.ad)}</div><div class="card" style="padding:12px 14px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -3266,7 +3268,7 @@ function rSatis(){
     if(s.tip==='iade'&&s.iptal)return `<div class="row" onclick="iadeFis(${s.id})" style="opacity:.6"><div class="av" style="background:var(--bad-s)">🚫</div><div class="mid"><div class="t" style="text-decoration:line-through">${esc(s.mus)} <span class="pill" style="background:var(--bad-s);color:var(--bad)">İADE · İPTAL</span></div><div class="s" style="text-decoration:line-through">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div>${s.iptalTarih?`<div class="mini" style="color:var(--bad)">geri alındı: ${tstr(s.iptalTarih)}</div>`:''}</div><div class="end"><div class="n" style="text-decoration:line-through">−${money(s.tutar,s.pb)}</div><div class="u">iptal</div></div></div>`;
     if(s.tip==='iade')return `<div class="row" onclick="iadeFis(${s.id})"><div class="svbars"><i class="svbar" style="background:var(--bad)"></i></div><div class="av" style="background:var(--bad-s)">↩️</div><div class="mid"><div class="t">${esc(s.mus)} <span class="pill" style="background:var(--bad-s);color:var(--bad)">İADE</span></div><div class="s">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div></div><div class="end"><div class="n" style="color:var(--bad)">−${money(s.tutar,s.pb)}</div><div class="u">${s.nakit?'💵 nakit iade':'cari alacak'}</div></div></div>`;
     if(s.iptal)return `<div class="row" onclick="satisFis(${s.id})" style="opacity:.6"><div class="av" style="background:var(--bad-s)">🚫</div><div class="mid"><div class="t" style="text-decoration:line-through">${esc(s.mus)} <span class="pill" style="background:var(--bad-s);color:var(--bad)">İPTAL</span></div><div class="s" style="text-decoration:line-through">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div>${s.iptalTarih?`<div class="mini" style="color:var(--bad)">iptal: ${tstr(s.iptalTarih)}</div>`:''}</div><div class="end"><div class="n" style="text-decoration:line-through">${money(s.tutar,s.pb)}</div><div class="u">iptal</div></div></div>`;
-    return `<div class="row" onclick="satisFis(${s.id})"><div class="svbars"><i class="svbar ${teslim?'teslim':''}" title="Teslim edildi"></i><i class="svbar ${odendi?'odendi':''}" title="Parası alındı"></i></div><div class="av ${ayrildi?'o':'g'}">${ayrildi?'🔖':'🧾'}</div><div class="mid"><div class="t">${esc(s.mus)}${depoBadge}</div><div class="s">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div></div><div class="end"><div class="n">${money(s.tutar,s.pb)}</div><div class="u">${ayrildi?'🔖 ayrıldı':teslim?'✓ teslim':''}${odendi?' · 💰':''}</div></div></div>`}).join('')+(list.length>200?`<div class='mini' style='text-align:center;padding:10px'>+${list.length-200} eski kayıt daha — arama ya da tarih filtresi kullan</div>`:''):emp('🧾',satisFilt==='depo'?'Depoda bekleyen sipariş yok.':'Kayıt yok.'))+`</div>`;
+    return `<div class="row" onclick="satisFis(${s.id})"><div class="svbars"><i class="svbar ${teslim?'teslim':''}" title="Teslim edildi"></i><i class="svbar ${odendi?'odendi':''}" title="Parası alındı"></i></div><div class="av ${ayrildi?'o':'g'}">${ayrildi?'🔖':'🧾'}</div><div class="mid"><div class="t">${esc(s.mus)}${depoBadge}${lokListe().length>1&&s.lokId?` <span class="tag">${lokIc(s.lokId)} ${esc(lokAd(s.lokId))}</span>`:''}</div><div class="s">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div></div><div class="end"><div class="n">${money(s.tutar,s.pb)}</div><div class="u">${ayrildi?'🔖 ayrıldı':teslim?'✓ teslim':''}${odendi?' · 💰':''}</div></div></div>`}).join('')+(list.length>200?`<div class='mini' style='text-align:center;padding:10px'>+${list.length-200} eski kayıt daha — arama ya da tarih filtresi kullan</div>`:''):emp('🧾',satisFilt==='depo'?'Depoda bekleyen sipariş yok.':'Kayıt yok.'))+`</div>`;
   $('app').innerHTML=html;
 }
 let sepet=[], sPB='TL', sVade=0, sEdit=0, sDurum='teslim', sMusId=0, sUrunId=0, sCekFoto='', sOdemeler=[], sDepo=false, sFoto='', sEkstra=[];
@@ -3531,14 +3533,15 @@ function cizSepet(){
   if($('s-odeme-ozet'))odemeOzet();
 }
 function satisDiv(s){return s.satisKur||(s.pb==='USD'?db.kurUSD:s.pb==='EUR'?db.kurEUR:1)}
-function stokUygula(k,mult){ // mult=-1 satış (düş), +1 iptal (geri)
-  const u=urun(k.uid);if(!u)return;
+function stokUygula(k,mult,lokId){ // mult=-1 satış (düş), +1 iptal (geri); lokId: hangi lokasyon (yoksa aktif)
+  const u=urun(k.uid);if(!u)return;const L=lokId||aktifLok, akt=(L===aktifLok);
   if(k.renkler&&k.renkler.length&&hasRenkStok(u)){
     k.renkler.forEach(rr=>{let ro=renkObjs(u).find(x=>x.ad===rr.ad);
-      if(!ro){ro={ad:rr.ad,hex:hexFromAd(rr.ad)||'#ccc',stok:0};u.renkler.push(ro);} // renk yeniden adlandırılmış/eksik → satır aç, stok kaybolmasın
-      ro.stok=(+ro.stok||0)+mult*rr.mik;});
-    syncStok(u);
-  }else{u.stok=(+u.stok||0)+mult*k.mik} // renksiz veya eski string-format renk → toplamdan düş
+      if(!ro){ro={ad:rr.ad,hex:hexFromAd(rr.ad)||'#ccc',stok:0,loklar:{}};u.renkler.push(ro);} // renk yeniden adlandırılmış/eksik → satır aç, stok kaybolmasın
+      ro.loklar=ro.loklar||{};ro.loklar[L]=(+((ro.loklar||{})[L])||0)+mult*rr.mik;
+      if(akt)ro.stok=(+ro.stok||0)+mult*rr.mik;});
+    if(akt)syncStok(u);
+  }else{u.loklar=u.loklar||{};u.loklar[L]=(+((u.loklar||{})[L])||0)+mult*k.mik;if(akt)u.stok=(+u.stok||0)+mult*k.mik;} // renksiz veya eski string-format renk
 }
 // ⚠️ Defolu stok: defolu iade gelince ürünün defolu adedi artar (satılabilir stoğa KARIŞMAZ)
 function defoUygula(k,mult){const u=urun(k.uid);if(!u)return;
@@ -3562,19 +3565,19 @@ function defoluStokAc(){
 }
 function applySatis(s){
   const m=cari(s.mid),div=satisDiv(s);
-  s.kalemler.forEach(k=>stokUygula(k,-1));
+  s.kalemler.forEach(k=>stokUygula(k,-1,s.lokId));
   if(m){s.bakiyeOnce=+m.bakiye||0;m.bakiye+=(s.tutar-s.odenen-(s.kesik||0))*div;s.bakiyeSonra=+m.bakiye||0;} // fişte 'Önceki/Son Bakiye' için satış anı değerleri
   if(m&&s.kesik)m.kesikToplam=(m.kesikToplam||0)+s.kesik*div;
   (s.odemeler||[]).forEach(l=>{const lTL=(+l.tutar||0)*pbKur(l.pb);l._tl=lTL;if(lTL<=0)return;
     if(l.tur==='Çek'){const c={id:nid('cek'),tur:'cek',tip:'alinan',cariId:s.mid,cari:s.mus,tutar:lTL,vade:l.vade||(Date.now()+30*86400000),banka:'—',durum:'portfoyde',foto:l.foto||'',cariIsle:true};db.cekler.push(c);l._cekId=c.id}
     else if(l.tur==='Kredi Kartı'){const c={id:nid('cek'),tur:'kk',tip:'alinan',cariId:s.mid,cari:s.mus,tutar:lTL,vade:l.vade||(Date.now()+34*86400000),banka:'Kredi Kartı POS',durum:'portfoyde',cariIsle:true};db.cekler.push(c);l._cekId=c.id}
     else{let h=l.tur==='Havale'?hesap(l.hesapId):null;if(!h)h=db.hesaplar.find(x=>/nakit|kasa/i.test(x.ad))||db.hesaplar[0];
-      if(h){kasaHareket(h.id,'in',lTL,'Satış Tahsilatı','Satış #'+(s.id||'yeni')+' · '+(s.mus||''),null);l._hesapId=h.id}} // deftere de işlenir (cariId null: ekstre satışta-ödemeyi zaten gösteriyor)
+      if(h){kasaHareket(h.id,'in',lTL,'Satış Tahsilatı','Satış #'+(s.id||'yeni')+' · '+(s.mus||''),null,s.lokId);l._hesapId=h.id}} // deftere de işlenir (cariId null: ekstre satışta-ödemeyi zaten gösteriyor)
   });
 }
 function revertSatis(s){
   const m=cari(s.mid),div=satisDiv(s);
-  s.kalemler.forEach(k=>stokUygula(k,1));
+  s.kalemler.forEach(k=>stokUygula(k,1,s.lokId));
   if(m)m.bakiye-=(s.tutar-s.odenen-(s.kesik||0))*div;
   if(m&&s.kesik)m.kesikToplam=(m.kesikToplam||0)-s.kesik*div;
   if(s.odemeler&&s.odemeler.length){
@@ -3609,7 +3612,7 @@ function kaydetSatis(){
   let kesik=Math.max(0,+($('s-kesik')?.value||0));kesik=Math.min(kesik,Math.max(0,tutar-oden)); // kalanı aşamaz
   const odetur=odemeler.length>1?'Karışık':(odemeler[0]?odemeler[0].tur:'—');
   const old=sEdit?db.satislar.find(x=>x.id===sEdit):null;
-  const data={tip:'satis',mid:m.id,mus:m.ad,kalemler:sepet.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:k.fiyat,renkler:k.renkler?k.renkler.map(r=>({...r})):undefined})),araToplam:h.ara,iskonto:h.isk,vadeFarki:h.vf,vadeGun:sVade,kdv:h.kdv,kdvTutar:h.kdvPB,tasima:h.tasima,sevkiyat:($('s-sevk')?.value||'').trim(),tutar,odenen:oden,kesik,pb:sPB,satisKur:div,durum:'tamam',teslimDurum:sDurum,ekstralar:sEkstra.filter(x=>(x.ad||'').trim()&&+x.tutar>0).map(x=>({ad:x.ad.trim(),tutar:+x.tutar})),depo:$('s-depo')?.checked?((old&&old.depo==='hazir')?'hazir':'bekliyor'):null,foto:sFoto||'',odemeler,odemeTur:odetur};
+  const data={tip:'satis',lokId:(old&&old.lokId)||aktifLok,mid:m.id,mus:m.ad,kalemler:sepet.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:k.fiyat,renkler:k.renkler?k.renkler.map(r=>({...r})):undefined})),araToplam:h.ara,iskonto:h.isk,vadeFarki:h.vf,vadeGun:sVade,kdv:h.kdv,kdvTutar:h.kdvPB,tasima:h.tasima,sevkiyat:($('s-sevk')?.value||'').trim(),tutar,odenen:oden,kesik,pb:sPB,satisKur:div,durum:'tamam',teslimDurum:sDurum,ekstralar:sEkstra.filter(x=>(x.ad||'').trim()&&+x.tutar>0).map(x=>({ad:x.ad.trim(),tutar:+x.tutar})),depo:$('s-depo')?.checked?((old&&old.depo==='hazir')?'hazir':'bekliyor'):null,foto:sFoto||'',odemeler,odemeTur:odetur};
   const commit=()=>{
     if(old&&satisKilitliCek(old))return toast('⚠️ Bu satışın çeki tahsil/ciro edilmiş — düzenlemek için önce Çekler ekranından işlemi geri al');
     if(old)revertSatis(old);
@@ -3633,7 +3636,7 @@ function satisFis(id){
   const s=db.satislar.find(x=>x.id===id);if(!s){toast('Satış bulunamadı — başka cihazdan silinmiş olabilir');try{closeM()}catch(e){}return;}
   const durP=s.teslimDurum==='ayrildi'?'<span class="pill low">🔖 Ayrıldı (rezerve)</span>':'<span class="pill ok">✓ Teslim Edildi</span>';
   open_('Satış Fişi'+(s.iptal?' · 🚫 İPTAL':''),`
-    <div class="mini">${esc(s.mus)} · ${tstr(s.tarih)}${s.pb!=='TL'?' · '+s.pb:''}</div>
+    <div class="mini">${esc(s.mus)} · ${tstr(s.tarih)}${s.pb!=='TL'?' · '+s.pb:''}${lokListe().length>1&&s.lokId?' · '+lokIc(s.lokId)+' '+esc(lokAd(s.lokId)):''}</div>
     ${s.iptal?`<div class="warnbox" style="margin-top:10px">🚫 <b>Bu satış İPTAL edildi</b>${s.iptalTarih?' · '+tstr(s.iptalTarih):''}.<br>Kayıt geçmiş için çizili olarak saklanıyor; stok, bakiye ve ödemeler geri alındı.</div>`:''}
     <div style="margin-top:12px">${s.kalemler.map(k=>{const sub=k.renkler&&k.renkler.length?`${k.renkler.map(r=>esc(r.ad)+' ×'+r.mik).join(' · ')} — ${TL(k.fiyat)}`:`${k.mik} ${esc(k.birim||"")} × ${TL(k.fiyat)}`;return `<div class="li"><div class="lt">${esc(k.urun)}<small>${sub}</small></div><b>${TL(k.mik*k.fiyat)}</b></div>`}).join('')}</div>
     ${s.iskonto?`<div class="kv"><span class="k">İskonto</span><span class="v neg">%${s.iskonto}</span></div>`:''}
@@ -3738,7 +3741,7 @@ function iadeKaydet(){const s=db.satislar.find(x=>x.id===_iadeSid);if(!s)return;
   else h.kal.forEach(k=>defoUygula(k,1)); // defoluysa ayrı 'defolu stok'a eklenir (satılabilir stoğa girmez)
   const m=cari(s.mid);
   if(!nakit){if(m)m.bakiye-=h.netTL}
-  db.satislar.push({id:nid('s'),tip:'iade',mid:s.mid,mus:s.mus,tarih:Date.now(),kaynakId:s.id,pb:s.pb,satisKur:h.div,kalemler:h.kal,araToplam:h.araPB,iskonto:s.iskonto||0,kdv:s.kdv||0,kdvTutar:h.kdvPB,tutar:h.netPB,nakit:!!nakit,hesapId:hid,defolu:!!defolu});
+  db.satislar.push({id:nid('s'),tip:'iade',lokId:aktifLok,mid:s.mid,mus:s.mus,tarih:Date.now(),kaynakId:s.id,pb:s.pb,satisKur:h.div,kalemler:h.kal,araToplam:h.araPB,iskonto:s.iskonto||0,kdv:s.kdv||0,kdvTutar:h.kdvPB,tutar:h.netPB,nakit:!!nakit,hesapId:hid,defolu:!!defolu});
   save();closeM();go('satis');toast((defolu?'Defolu iade ✓ (stoğa girmedi) ':'İade alındı ✓ ')+money(h.netPB,s.pb)+(nakit?' · 💵 nakit ödendi':' · cariye alacak'));
 }
 function iadeFis(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;const kaynak=s.kaynakId?db.satislar.find(x=>x.id===s.kaynakId):null;
@@ -3755,7 +3758,7 @@ function iadeFis(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;const k
 function iadeSil(id){const s=db.satislar.find(x=>x.id===id);if(!s||s.tip!=='iade')return;
   if(s.iptal)return toast('Bu iade zaten geri alınmış');
   askKritik('Bu iade geri alınsın mı? Mal tekrar stoktan düşülür, tutar cari/kasaya iade edilir.\n\nKayıt SİLİNMEZ — "İPTAL" olarak üzeri çizili durur.',()=>{
-    if(!s.defolu)s.kalemler.forEach(k=>stokUygula(k,-1)); // defolu iade stoğa hiç girmemişti → tekrar düşme
+    if(!s.defolu)s.kalemler.forEach(k=>stokUygula(k,-1,s.lokId)); // defolu iade stoğa hiç girmemişti → tekrar düşme
     else s.kalemler.forEach(k=>defoUygula(k,-1)); // defolu stoktan da geri çıkar
     const netTL=(+s.tutar||0)*(s.satisKur||1);const m=cari(s.mid);
     if(s.nakit){const hs=hesap(s.hesapId)||db.hesaplar[0];if(hs)kasaHareket(hs.id,'in',netTL,'İade iptali',(s.mus||'')+' · iade geri',s.mid)}else{if(m)m.bakiye+=netTL}
