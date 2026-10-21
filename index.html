@@ -5913,7 +5913,7 @@ function durakEkleKaydet(id){const i=db.isemirleri.find(v=>v.id===id);if(!i||i.d
   const prev=i.duraklar[i.duraklar.length-1];
   const prevBos=prev&&prev.durum!=='tamam'&&!(+prev.gelen||0); // önceki durak henüz mal vermedi
   const ekle=()=>{
-    const yeni={ad,fasonId:fasonCoz($('de-fas')?.value),ucret:+($('de-uc')?.value||0)||0,gonderilen:0,gelen:0,defolu:0,gonderilenRenk:{},renkGelen:{},renkDefo:{},durum:'bekliyor',borclandi:false,borclanan:0,foto:'',not:'',kontrol:sablonKopya(ad)};
+    const yeni={ad,fasonId:fasonCoz($('de-fas')?.value),ucret:Math.max(0,+($('de-uc')?.value||0)||0),gonderilen:0,gelen:0,defolu:0,gonderilenRenk:{},renkGelen:{},renkDefo:{},durum:'bekliyor',borclandi:false,borclanan:0,foto:'',not:'',kontrol:sablonKopya(ad)};
     i.duraklar.push(yeni);
     if(prev&&prev.durum==='tamam'){yeni.gonderilenRenk={...prev.renkGelen};yeni.gonderilen=prev.gelen;yeni.durum='devam';yeni.baslama=Date.now()}
     save();closeM();uretimDetay(id);toast(ad+' durağı eklendi ✓');
@@ -6000,7 +6000,7 @@ function kaydetIsEmri(){
   const gun=+$('ie-gun').value||15;const birim=$('ie-birim').value||'seri';
   const renkMap={};renkDagilim.forEach(r=>renkMap[r.ad]=r.adet);
   // sadece Kesim ile başla — sonraki duraklar üretim ilerledikçe eklenir
-  const duraklar=[{ad:'Kesim',fasonId:fasonCoz($('dk-kesim-fas')?.value),ucret:+($('dk-kesim-uc')?.value||0)||0,gonderilen:hedef,gelen:0,defolu:0,gonderilenRenk:{...renkMap},renkGelen:{},renkDefo:{},durum:'devam',borclandi:false,borclanan:0,baslama:Date.now(),foto:'',not:'',kontrol:sablonKopya('Kesim')}];
+  const duraklar=[{ad:'Kesim',fasonId:fasonCoz($('dk-kesim-fas')?.value),ucret:Math.max(0,+($('dk-kesim-uc')?.value||0)||0),gonderilen:hedef,gelen:0,defolu:0,gonderilenRenk:{...renkMap},renkGelen:{},renkDefo:{},durum:'devam',borclandi:false,borclanan:0,baslama:Date.now(),foto:'',not:'',kontrol:sablonKopya('Kesim')}];
   const malzeme=ieMal.filter(m=>(m.ad||'').trim()).map(m=>{const h=db.hammadde.find(x=>x.ad.toLowerCase()===m.ad.trim().toLowerCase());return {ad:m.ad.trim(),mik:+m.mik||0,birim:m.birim||(h?h.birim:'kg'),renk:(m.renk||''),tutar:+m.tutar||0,pb:m.pb||'TL',durum:m.durum||'var',hid:h?h.id:null}});
   malzeme.forEach(m=>{if(m.durum==='var'&&m.hid){const h=db.hammadde.find(x=>x.id===m.hid);if(h)malStokUygula(h,m,-1)}});
   const seriAdet=birim==='seri'?Math.max(1,+$('ie-seriadet').value||1):1;
@@ -6025,7 +6025,7 @@ function kaydetIsEmri(){
   }else if(_kk){ if(_ktukTop>0){_kk.stok=(+_kk.stok||0)-_ktukTop;_dusulen=_ktukTop;} } // renksiz (toplu) kumaş → toplamdan düş
   else if(_kad){ renkDagilim.forEach(r=>{const kg=_ktuk>0?_parcaOf(r)*_ktuk:0;_eksikKumas.push({renk:r.ad,miktar:+kg.toFixed(3)});}); } // kumaş hiç stokta yok → tümü alınacak
   const _bedenler=birim==='seri'?ieBeden.filter(b=>(b.beden||'').trim()&&+b.adet>0).map(b=>({beden:b.beden.trim(),adet:Math.max(1,+b.adet||1)})):[];
-  const yeniIe={id:nid('ie'),urunId:ieUrunId||null,urun:ad,kod,foto:ieFoto,birim,seriAdet,bedenler:_bedenler,hedef,renkDagilim,malzeme,duraklar,genelGiderBirim:+$('ie-gg').value||0,kumasId:ieKumasId||null,kumasAd:_kad,kumasFiyat:_kfiyat,kumasPB:_kpb,kumasYeni:(!ieKumasId&&!!_kad),kumasTukBirim:_ktukKg,kumasTukStokParca:_ktuk,kumasTukStokBirim:_cv.birim,kumasTukNot:_cv.not||'',kumasTukToplam:_ktukTop,kumasDusenRenk:_dusenRenk,kumasDusenToplam:_dusulen,baslangic:Date.now(),gun,durum:'devam',stoklandi:false};
+  const yeniIe={id:nid('ie'),urunId:ieUrunId||null,urun:ad,kod,foto:ieFoto,birim,seriAdet,bedenler:_bedenler,hedef,renkDagilim,malzeme,duraklar,genelGiderBirim:Math.max(0,+$('ie-gg').value||0),kumasId:ieKumasId||null,kumasAd:_kad,kumasFiyat:_kfiyat,kumasPB:_kpb,kumasYeni:(!ieKumasId&&!!_kad),kumasTukBirim:_ktukKg,kumasTukStokParca:_ktuk,kumasTukStokBirim:_cv.birim,kumasTukNot:_cv.not||'',kumasTukToplam:_ktukTop,kumasDusenRenk:_dusenRenk,kumasDusenToplam:_dusulen,baslangic:Date.now(),gun,durum:'devam',stoklandi:false};
   db.isemirleri.push(yeniIe);
   const alimN=aksesuarAlimAc(yeniIe); // "alınacak" malzemeler için otomatik alım siparişi
   // Elinde olmayan kumaş/renk(ler) → otomatik kumaş alım siparişi; formda kumaşçı yazıldıysa ona atanır
@@ -6170,7 +6170,7 @@ function durakKaydet(id,x){
   if(fad){let f=db.cariler.find(c=>c.tip==='fason'&&(c.ad||'').toLowerCase()===fad.toLowerCase());
     if(!f){f={id:nid('c'),tip:'fason',ad:fad,tel:'',bakiye:0,doviz:'TL',olusturma:Date.now()};db.cariler.push(f);toast('🧵 Yeni fason eklendi: '+fad);}
     fid=f.id;}
-  d.fasonId=fid;d.ucret=+$('d-uc').value||0;d.not=($('d-not')?.value||'').trim();d.foto=dFoto;
+  d.fasonId=fid;d.ucret=Math.max(0,+$('d-uc').value||0);d.not=($('d-not')?.value||'').trim();d.foto=dFoto;
   ieBorcGuncelle(d,ieCarpan(i));save();closeM();uretimDetay(id);toast('Kaydedildi ✓');
 }
 /* --- Teslimat: varsayılan tek toplam, istenirse renk renk --- */
@@ -6220,7 +6220,7 @@ function teslimHint(){const el=$('t-hint');if(!el||_teslimRenk)return;const a=(+
 }
 function durakTeslimKaydet(id,x){
   const i=db.isemirleri.find(v=>v.id===id);const d=i.duraklar[x];const gr=durakGonderRenk(i,x);
-  if($('t-uc'))d.ucret=+$('t-uc').value||d.ucret||0;
+  if($('t-uc'))d.ucret=Math.max(0,+$('t-uc').value||d.ucret||0);
   d.renkGelen=d.renkGelen||{};d.renkDefo=d.renkDefo||{};
   let tAdet=0,tDefo=0;const bg={},bd={};
   // Girişler ADET (parça) olarak alınır; seri (takım) işinde seri'ye çevrilir (tam seri değilse en yakına yuvarla + uyar)
@@ -6269,7 +6269,15 @@ function isEmriTamamla(id){
   const ds=i.duraklar||[],sonD=ds[ds.length-1];
   if(sonD&&(+sonD.gelen||0)<=0)return toast('⚠️ Son durak ('+(sonD.ad||'')+') henüz mal vermedi. Yarım üretim stoğa alınamaz — önce oradan teslim al.');
   const fasonda=ds.reduce((a,d)=>a+durakYolda(d),0);
-  if(fasonda>0)return askConfirm(`Hâlâ fasonda ${fasonda} adet mal var (teslim alınmadı).\nSadece elindeki ${saglam} adet stoğa alınıp iş emri kapatılacak, kalan takipten düşecek.\n\nYine de tamamlansın mı?`,()=>isEmriTamamlaGoster(id),'Yine de Tamamla');
+  if(fasonda>0)return askConfirm(`Hâlâ fasonda ${fasonda} adet mal var (teslim alınmadı).\nSadece elindeki ${saglam} adet stoğa alınıp iş emri kapatılacak, kalan takipten düşecek.\n\nYine de tamamlansın mı?`,()=>isEmriTamamlaDevam(id),'Yine de Tamamla');
+  isEmriTamamlaDevam(id);
+}
+// Tamamlamadan önce kontrol listesi (QC) kapısı — yalnızca checklist'i kullanıyorsan (en az bir madde tiklenmişse) uyarır
+function isEmriTamamlaDevam(id){
+  const i=db.isemirleri.find(v=>v.id===id);if(!i)return;
+  const kullaniyor=(i.duraklar||[]).some(d=>(d.kontrol||[]).some(k=>k.ok));
+  const eksikK=[];if(kullaniyor)(i.duraklar||[]).forEach(d=>{const e=durakKontrolEksik(d);if(e.length)eksikK.push('• '+d.ad+': '+e.join(', '));});
+  if(eksikK.length)return askConfirm(`🧾 Kontrol listesinde eksik madde var:\n${eksikK.join('\n')}\n\nYine de tamamlanıp stoğa alınsın mı?`,()=>isEmriTamamlaGoster(id),'Yine de Tamamla');
   isEmriTamamlaGoster(id);
 }
 function isEmriTamamlaGoster(id){
@@ -6323,9 +6331,17 @@ function ieKumasMutabaka(i){
 }
 function isEmriStokla(id){
   const i=db.isemirleri.find(v=>v.id===id);if(!i||i.durum==='tamam'||i.stoklandi)return; // çift stoklama koruması
+  const hedefLok=($('ta-lok')&&$('ta-lok').value)||aktifLok;
+  const rowsData=[];document.querySelectorAll('#mB .syrow input[id^="ta-"]').forEach(el=>rowsData.push({ad:el.getAttribute('data-ad')||'',adet:Math.max(0,+el.value||0)})); // negatif girişi kırp
+  const toplam=rowsData.reduce((a,r)=>a+r.adet,0);const saglam=ieSaglam(i);
+  if(toplam<=0)return toast('⚠️ Stoğa girecek adet 0 — en az bir renge adet gir (ya da iş emrini iptal et)');
+  if(toplam>saglam+0.001)return askConfirm(`Girdiğin toplam ${toplam} ${i.birim||'adet'}, üretimden çıkan sağlam ${saglam}'den FAZLA.\nYine de bu kadar stoğa alınsın mı?`,()=>_isEmriStoklaCommit(id,rowsData,hedefLok),'Yine de Al');
+  _isEmriStoklaCommit(id,rowsData,hedefLok);
+}
+function _isEmriStoklaCommit(id,rowsData,hedefLok){
+  const i=db.isemirleri.find(v=>v.id===id);if(!i||i.durum==='tamam'||i.stoklandi)return; // çift stoklama koruması
   const birim=ieBirimMaliyet(i);const birimAd=ieBirimMaliyetAdet(i);const setMal=$('ta-maliyet')?.checked;
-  const hedefLok=($('ta-lok')&&$('ta-lok').value)||aktifLok;const aktifYaz=(hedefLok===aktifLok); // seçilen depo aktif değilse doğrudan loklar'a yaz
-  const rowsData=[];document.querySelectorAll('#mB .syrow input[id^="ta-"]').forEach(el=>rowsData.push({ad:el.getAttribute('data-ad')||'',adet:+el.value||0}));
+  hedefLok=hedefLok||aktifLok;const aktifYaz=(hedefLok===aktifLok); // seçilen depo aktif değilse doğrudan loklar'a yaz
   const toplam=rowsData.reduce((a,r)=>a+r.adet,0);
   let u=i.urunId?urun(i.urunId):null;
   if(!u){ // numune → yeni ürün oluştur
