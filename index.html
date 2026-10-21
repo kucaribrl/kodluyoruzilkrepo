@@ -609,7 +609,7 @@ function seqFix(d){ // id çakışmasını önle: her sıra numarasını mevcut 
    güvenlik (depocu stoku görür, cari/kâr göremez) belge seviyesinde uygulanır.
    save() tek çıkış noktası: yalnız DEĞİŞEN domen buluta yazılır (JSON diff). */
 const CANLI_DOMEN={
-  stok:['urunler','hammadde','malSiparis','malKat'],
+  stok:['urunler','hammadde','malSiparis','malKat','transferler'],
   cari:['cariler'],
   kasa:['hesaplar','hareketler','ortakHarcama'],
   satis:['satislar','bekleyenPortal','islenenSiparis','kuponlar','stokBildirim'],
@@ -645,7 +645,7 @@ function canliIzinHata(e){const c=(e&&e.code)||'';_senk.hata=c||'izin';try{senkR
    Artık id'li listeler kayıt-kayıt birleşir: her kayıt son değişiklik damgası (_m) taşır,
    silinenler mezar taşına (_tomb) yazılır. İki cihaz aynı anda FARKLI kayıtlarda çalışırsa
    hiçbir şey kaybolmaz; AYNI kaydı aynı anda değiştirirlerse son değişiklik kazanır. */
-const MERGE_LISTELER=['satislar','cariler','urunler','hammadde','cekler','isemirleri','malSiparis','hesaplar','hareketler','bekleyenPortal','maliyetler','ortakHarcama'];
+const MERGE_LISTELER=['satislar','cariler','urunler','hammadde','cekler','isemirleri','malSiparis','hesaplar','hareketler','bekleyenPortal','maliyetler','ortakHarcama','transferler'];
 function _recMerge(local,cloud,tomb){local=local||[];cloud=cloud||[];tomb=tomb||{};const by={};
   cloud.forEach(r=>{if(r&&r.id!=null)by[r.id]=r;});
   local.forEach(r=>{if(r&&r.id!=null){const c=by[r.id];if(!c||(+r._m||0)>(+c._m||0))by[r.id]=r;}}); // eşitlikte bulut kazanır (yakınsama)
@@ -657,6 +657,10 @@ function _recMerge(local,cloud,tomb){local=local||[];cloud=cloud||[];tomb=tomb||
 const KUMULATIF={cariler:['bakiye','bakiyeUSD','kesikToplam'],hesaplar:['bakiye'],urunler:['stok'],hammadde:['stok']};
 function _sbAl(L,r){const o={};(KUMULATIF[L]||[]).forEach(f=>o[f]=+r[f]||0);
   if((L==='urunler'||L==='hammadde')&&Array.isArray(r.renkler)){o.renk={};r.renkler.forEach(x=>{if(x&&typeof x==='object'&&x.ad!=null)o.renk[x.ad]=+x.stok||0});}
+  if(L==='urunler'){ // çok-lokasyon: loklar da kümülatif tabana — iki mağaza farklı lokasyonları aynı anda değiştirince kayıp olmaz (LWW yerine lokasyon bazlı toplam)
+    if(r.loklar&&typeof r.loklar==='object'){o.loklar={};for(const lk in r.loklar)o.loklar[lk]=+r.loklar[lk]||0;}
+    if(Array.isArray(r.renkler)){o.renkLok={};r.renkler.forEach(x=>{if(x&&typeof x==='object'&&x.ad!=null&&x.loklar&&typeof x.loklar==='object'){const m={};for(const lk in x.loklar)m[lk]=+x.loklar[lk]||0;o.renkLok[x.ad]=m;}});}
+  }
   return o;}
 function _sbGuncelle(L,arr){if(!KUMULATIF[L])return;db._sb=db._sb||{};const m={};(arr||[]).forEach(r=>{if(r&&r.id!=null)m[r.id]=_sbAl(L,r)});db._sb[L]=m;}
 function _sbYaz(domen,data){(CANLI_DOMEN[domen]||[]).forEach(k=>{if(KUMULATIF[k]&&Array.isArray(data[k]))_sbGuncelle(k,data[k])});}
@@ -672,6 +676,12 @@ function _kumulatifBirlestir(L,yerel,bulut,sonuc){
     if(b.renk&&ys.renk&&cs.renk&&Array.isArray(r.renkler)){let rk=0;
       r.renkler.forEach(x=>{if(!x||typeof x!=='object'||x.ad==null)return;const bv=b.renk[x.ad],yv=ys.renk[x.ad],cv=cs.renk[x.ad];if(bv==null||yv==null||cv==null)return;rk+=uc(+x.stok||0,'stok',bv,yv,cv,v=>{x.stok=v});});
       if(rk){r.stok=+(r.renkler.reduce((a,x)=>a+(+(x&&x.stok)||0),0)).toFixed(3);k+=rk;}}
+    if(L==='urunler'){ // loklar (çok-lokasyon) lokasyon anahtarı bazında kümülatif birleşir — .stok senkron sonrası stokProjYukle ile loklar'dan türetilir
+      const lokMerge=(bl,yl,cl,hedef)=>{if(!bl||!yl||!cl||!hedef)return 0;let kk=0;const keys=new Set([...Object.keys(bl),...Object.keys(yl),...Object.keys(cl),...Object.keys(hedef)]);
+        keys.forEach(lk=>{kk+=uc(+hedef[lk]||0,'lk',+bl[lk]||0,+yl[lk]||0,+cl[lk]||0,v=>{hedef[lk]=v});});return kk;};
+      if(b.loklar&&ys.loklar&&cs.loklar){r.loklar=r.loklar||{};k+=lokMerge(b.loklar,ys.loklar,cs.loklar,r.loklar);}
+      if(b.renkLok&&ys.renkLok&&cs.renkLok&&Array.isArray(r.renkler))r.renkler.forEach(x=>{if(!x||typeof x!=='object'||x.ad==null)return;if(!b.renkLok[x.ad]||!ys.renkLok[x.ad]||!cs.renkLok[x.ad])return;x.loklar=x.loklar||{};k+=lokMerge(b.renkLok[x.ad],ys.renkLok[x.ad],cs.renkLok[x.ad],x.loklar);});
+    }
     if(k){r._m=Date.now();n+=k;} // birleşmiş değer en yeni → buluta geri yayılır
   });
   return n;}
@@ -4771,7 +4781,7 @@ function cariKart(id){
 }
 function cariEkstre(id){
   const c=cari(id);const evs=[];const isMus=c.tip==='musteri';
-  db.satislar.filter(s=>s.mid===id).forEach(s=>{const div=satisDiv(s);
+  db.satislar.filter(s=>s.mid===id&&!s.iptal).forEach(s=>{const div=satisDiv(s);
     if(s.tip==='iade'){if(!s.nakit)evs.push({t:s.tarih,ad:'İade',det:s.kalemler.map(k=>k.urun).join(', ').slice(0,40),alacak:(+s.tutar||0)*div,sid:s.id});return;}
     evs.push({t:s.tarih,ad:'Satış',det:s.kalemler.map(k=>k.urun).join(', ').slice(0,40),borc:s.tutar*div,sid:s.id});
     const takOd=(s.taksitler||[]).filter(tk=>tk.odendi).reduce((a,tk)=>a+(+tk.tutar||0),0);
@@ -4791,10 +4801,10 @@ function cariEkstre(id){
   const devir=(c.bakiye||0)-net;
   return {evs,devir};
 }
-function musUrunGecmis(id){const map={};db.satislar.filter(s=>s.mid===id).sort((a,b)=>a.tarih-b.tarih).forEach(s=>s.kalemler.forEach(k=>{const m=map[k.uid]||(map[k.uid]={uid:k.uid,urun:k.urun,adet:0,sonFiyat:k.fiyat,sonTarih:s.tarih});m.adet+=k.mik;m.sonFiyat=k.fiyat;m.sonTarih=s.tarih}));return Object.values(map).sort((a,b)=>b.sonTarih-a.sonTarih)}
+function musUrunGecmis(id){const map={};db.satislar.filter(s=>s.mid===id&&!s.iptal).sort((a,b)=>a.tarih-b.tarih).forEach(s=>s.kalemler.forEach(k=>{const m=map[k.uid]||(map[k.uid]={uid:k.uid,urun:k.urun,adet:0,sonFiyat:k.fiyat,sonTarih:s.tarih});m.adet+=k.mik;m.sonFiyat=k.fiyat;m.sonTarih=s.tarih}));return Object.values(map).sort((a,b)=>b.sonTarih-a.sonTarih)}
 function musOdemeler(id){const arr=[];
   (db.hareketler||[]).filter(h=>h.cariId===id&&h.tip==='tahsilat'&&h.tutar>0).forEach(h=>arr.push({tarih:h.tarih,tur:h.tur||'Nakit',tutar:h.tutar}));
-  db.satislar.filter(s=>s.mid===id&&s.odenen>0).forEach(s=>{(s.odemeler&&s.odemeler.length?s.odemeler:[{tur:s.odemeTur||'Nakit',tutar:s.odenen,pb:s.pb}]).forEach(l=>{if(+l.tutar>0)arr.push({tarih:s.tarih,tur:l.tur,tutar:(+l.tutar||0)*pbKur(l.pb||s.pb),satis:true})})});
+  db.satislar.filter(s=>s.mid===id&&s.odenen>0&&!s.iptal).forEach(s=>{(s.odemeler&&s.odemeler.length?s.odemeler:[{tur:s.odemeTur||'Nakit',tutar:s.odenen,pb:s.pb}]).forEach(l=>{if(+l.tutar>0)arr.push({tarih:s.tarih,tur:l.tur,tutar:(+l.tutar||0)*pbKur(l.pb||s.pb),satis:true})})});
   return arr.sort((a,b)=>b.tarih-a.tarih);
 }
 function satisBaslat(musId){closeM();go('satis');setTimeout(()=>{formSatis();if(musId){sMusId=musId;const m=cari(musId);if($('s-mus-in'))$('s-mus-in').value=m?m.ad:'';if(m&&m.paraTercih&&m.paraTercih!=='TL')setPB(m.paraTercih);musBilgi()}},170)}
@@ -6684,7 +6694,7 @@ function portalOnay(id,override,force){
     if(son.mik>0)son.fiyat=Math.max(0,Math.round((tutar-dig)/son.mik));
     tutar=kalemler.reduce((a,k)=>a+(+k.fiyat||0)*k.mik,0);
   }
-  const sat={id:nid('s'),tip:'satis',mid:m.id,mus:m.ad,tarih:Date.now(),kalemler,araToplam:tutar,iskonto:0,tutar,odenen:0,kesik:0,pb:'TL',satisKur:1,durum:'tamam',teslimDurum:'ayrildi',odemeler:[],kaynak:'portal',bulutId:o.bulutId||null,portalId:o.id,sipDurum:'onaylandi',sipGecmis:[{k:'onaylandi',t:Date.now()}]};
+  const sat={id:nid('s'),tip:'satis',lokId:aktifLok,mid:m.id,mus:m.ad,tarih:Date.now(),kalemler,araToplam:tutar,iskonto:0,tutar,odenen:0,kesik:0,pb:'TL',satisKur:1,durum:'tamam',teslimDurum:'ayrildi',odemeler:[],kaynak:'portal',bulutId:o.bulutId||null,portalId:o.id,sipDurum:'onaylandi',sipGecmis:[{k:'onaylandi',t:Date.now()}]};
   db.satislar.push(sat);applySatis(sat);
   if(o.bulutId)bulutSiparisDurum(o.bulutId,'onaylandi');
   if(o.kupon&&o.kupon.kod){const kp=(db.kuponlar||[]).find(k=>(k.kod||'').toUpperCase()===(o.kupon.kod||'').toUpperCase());if(kp)kp.kullanim=(+kp.kullanim||0)+1;}
@@ -7837,7 +7847,7 @@ function rapCtx(){
   const toTL=s=>(+s.tutar||0)*satisDiv(s);              // brüt (KDV dahil) — nakit/tahsilat için
   const kdvTLof=s=>(+s.kdvTutar||0)*satisDiv(s);
   const netTL=s=>toTL(s)-kdvTLof(s);                    // KDV hariç ciro (turnover) — ciro/kâr için
-  const filt=r=>db.satislar.filter(s=>s.tip!=='iade'&&r(s.tarih));
+  const filt=r=>db.satislar.filter(s=>s.tip!=='iade'&&!s.iptal&&r(s.tarih)); // iptal (çizili) satışlar ciro/kâr/adet toplamlarına girmez
   const sat=filt(inRange);
   const satOnc=onc?filt(ts=>ts>=onc[0]&&ts<onc[1]):null;
   const ciroOf=arr=>arr.reduce((a,s)=>a+netTL(s),0);    // KDV hariç
@@ -7845,7 +7855,7 @@ function rapCtx(){
   const karTLof=s=>netTL(s)-malOf(s);
   const karOf=arr=>{let m=0;arr.forEach(s=>{m+=malOf(s)});return ciroOf(arr)-m};
   // iadeler (dönem içi) — ciro/kâr/adet netlenir
-  const iadeSat=db.satislar.filter(s=>s.tip==='iade'&&inRange(s.tarih));
+  const iadeSat=db.satislar.filter(s=>s.tip==='iade'&&!s.iptal&&inRange(s.tarih));
   const iadeNetTL=iadeSat.reduce((a,s)=>a+netTL(s),0);
   const iadeMalTL=iadeSat.reduce((a,s)=>a+malOf(s),0);
   const iadeAdet=iadeSat.reduce((a,s)=>a+s.kalemler.reduce((x,k)=>x+(+k.mik||0),0),0);
@@ -7903,7 +7913,7 @@ function rapOzet(R){let h='';
     const kliste=Object.values(km).map(x=>({...x,kar:x.net-x.mal,marj:x.net?Math.round((x.net-x.mal)/x.net*100):0})).sort((a,b)=>b.kar-a.kar);
     if(kliste.length)h+=`<div class="sec">💎 Ürün Kârlılığı · ${R.donemAd}</div><div class="card" style="padding:6px 12px">`+kliste.slice(0,6).map(x=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--ln2);font-size:12.5px"><div style="min-width:0"><b>${esc(x.ad)}</b><div class="mini">${x.adet} adet · marj %${x.marj}</div></div><b style="flex:0 0 auto;color:${x.kar>=0?'var(--good)':'var(--bad)'}">${TL(x.kar)}</b></div>`).join('')+`</div>`;}
   // 🧊 ÖLÜ STOK — 60+ gündür satılmayan, stokta para bağlayan ürünler
-  if(R.kar){const son={};db.satislar.filter(s=>s.tip!=='iade').forEach(s=>s.kalemler.forEach(k=>{if(!son[k.uid]||s.tarih>son[k.uid])son[k.uid]=s.tarih}));
+  if(R.kar){const son={};db.satislar.filter(s=>s.tip!=='iade'&&!s.iptal).forEach(s=>s.kalemler.forEach(k=>{if(!son[k.uid]||s.tarih>son[k.uid])son[k.uid]=s.tarih}));
     const esik=Date.now()-60*86400000;
     const olu=db.urunler.filter(u=>!u.pasif&&stokTop(u)>0&&(son[u.id]||0)<esik).map(u=>({u,g:son[u.id]?Math.floor((Date.now()-son[u.id])/86400000):null,deger:stokTop(u)*urunAlisTL(u)})).sort((a,b)=>b.deger-a.deger);
     if(olu.length){const topD=olu.reduce((a,x)=>a+x.deger,0);
@@ -8057,7 +8067,7 @@ function rapStok(R){let h='';
       if(dusuk.length)h+=`<div class="mini" style="margin:6px 3px">⚠️ Düşük marjlı: ${dusuk.map(x=>esc(x.ad)+' (%'+x.m+')').join(' · ')} — fiyat gözden geçir</div>`;
     }
   }
-  const uSon={};db.satislar.forEach(s=>s.kalemler.forEach(k=>{if(!uSon[k.uid]||s.tarih>uSon[k.uid])uSon[k.uid]=s.tarih}));
+  const uSon={};db.satislar.forEach(s=>{if(s.iptal)return;s.kalemler.forEach(k=>{if(!uSon[k.uid]||s.tarih>uSon[k.uid])uSon[k.uid]=s.tarih})});
   const olu=db.urunler.filter(u=>!u.pasif&&u.stok>0).map(u=>{const son=uSon[u.id]||0;const g=son?Math.floor((Date.now()-son)/86400000):999;return {ad:u.ad,stok:u.stok,birim:u.birim,g,bagli:(+u.stok||0)*urunAlisTL(u)*(u.birim==='seri'?(+u.seri||1):1),son}}).filter(x=>x.g>=45).sort((a,b)=>b.bagli-a.bagli).slice(0,8);
   const oluTop=olu.reduce((a,b)=>a+b.bagli,0);
   if(olu.length)h+=`<div class="sec">Ölü / Yavaş Stok <span class="mini" style="text-transform:none;font-weight:600">45+ gündür satılmayan</span></div><div class="card" style="padding:4px 13px">`+olu.map(x=>`<div class="exrow"><div class="exl"><b>${esc(x.ad)}</b><small>${x.stok} ${esc(x.birim||'adet')} · ${x.son?x.g+' gündür satılmadı':'hiç satılmadı'}</small></div><div class="exb" style="color:var(--warn);font-weight:800">${kisaTL(x.bagli)}</div></div>`).join('')+`<div class="mini" style="padding:8px 0 4px">💤 Bu stoklarda <b style="color:var(--warn)">${TL(oluTop)}</b> bağlı — indirim/kampanya düşünebilirsin</div></div>`;
@@ -8086,7 +8096,7 @@ function rapMusteri(R){let h='';
   const topSik=Object.entries(sikMap).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([ad,v])=>({ad,v,g:v+' sipariş'}));
   if(topSik.length)h+=`<div class="sec">En Sık Alışveriş Yapanlar <span class="mini" style="text-transform:none;font-weight:600">${R.donemAd}</span></div><div class="card" style="padding:14px">${barsHtml(topSik,'linear-gradient(90deg,var(--thr),#e6b06a)')}</div>`;
   // uyuyan
-  const musSon={};db.satislar.forEach(s=>{if(!s.mid)return;if(!musSon[s.mid]||s.tarih>musSon[s.mid])musSon[s.mid]=s.tarih});
+  const musSon={};db.satislar.forEach(s=>{if(!s.mid||s.iptal)return;if(!musSon[s.mid]||s.tarih>musSon[s.mid])musSon[s.mid]=s.tarih});
   const uyuyan=db.cariler.filter(c=>c.tip==='musteri').map(c=>({c,son:musSon[c.id]||0})).filter(x=>x.son&&Math.floor((Date.now()-x.son)/86400000)>=30).map(x=>({ad:x.c.ad,id:x.c.id,gun:Math.floor((Date.now()-x.son)/86400000),bakiye:x.c.bakiye})).sort((a,b)=>b.gun-a.gun).slice(0,8);
   h+=`<div class="sec">Uyuyan Müşteriler <span class="mini" style="text-transform:none;font-weight:600">30+ gündür almayan</span></div><div class="card" style="padding:${uyuyan.length?'4px 13px':'13px'}">`+(uyuyan.length?uyuyan.map(x=>`<div class="exrow" onclick="cariKart(${x.id})" style="cursor:pointer"><div class="exl"><b>${esc(x.ad)}</b><small>${x.gun} gündür sipariş yok${x.bakiye>0.5?' · ₺'+Math.round(x.bakiye).toLocaleString('tr-TR')+' borcu var':''}</small></div><div class="exb" style="color:var(--warn);font-weight:800">${x.gun}g</div></div>`).join(''):`<div class="mini">Herkes aktif — uyuyan müşteri yok 👍</div>`)+`</div>`;
   return h;
@@ -8133,7 +8143,7 @@ function rapUretim(R){let h='';
 function rapSezon(R){let h='';
   const aylar=SEZON_AY[rapSzn];
   const inSzn=ts=>aylar.includes(new Date(ts).getMonth());
-  const sat=db.satislar.filter(s=>s.tip!=='iade'&&inSzn(s.tarih));
+  const sat=db.satislar.filter(s=>s.tip!=='iade'&&!s.iptal&&inSzn(s.tarih));
   const toTL=s=>(+s.tutar||0)*satisDiv(s);
   const ciro=sat.reduce((a,s)=>a+toTL(s),0);
   const adet=sat.reduce((a,s)=>a+s.kalemler.reduce((x,k)=>x+(+k.mik||0),0),0);
