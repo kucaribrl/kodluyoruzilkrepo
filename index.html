@@ -463,6 +463,7 @@ function lokMig(d){if(!d)return;
   if(!d.aktifLok)d.aktifLok=ANA_LOK;
   if(!d.transferler)d.transferler=[];
   (d.hesaplar||[]).forEach(h=>{if(h&&h.lokId===undefined)h.lokId=ANA_LOK}); // mevcut kasa/hesaplar → Ana Mağaza (mağaza bazlı kasa)
+  (d.cekler||[]).forEach(c=>{if(c&&c.lokId===undefined)c.lokId=ANA_LOK}); // mevcut çekler → Ana Mağaza (mağaza bazlı çek)
   (d.urunler||[]).forEach(o=>{if(!o)return;const rl=(o.renkler||[]).filter(r=>r&&typeof r==='object');if(rl.length){rl.forEach(r=>{if(!r.loklar){r.loklar={};r.loklar[ANA_LOK]=+r.stok||0;}});}else if(!o.loklar){o.loklar={};o.loklar[ANA_LOK]=+o.stok||0;}});
 }
 function seed(){return{
@@ -3588,8 +3589,8 @@ function applySatis(s){
   if(m){s.bakiyeOnce=+m.bakiye||0;m.bakiye+=(s.tutar-s.odenen-(s.kesik||0))*div;s.bakiyeSonra=+m.bakiye||0;} // fişte 'Önceki/Son Bakiye' için satış anı değerleri
   if(m&&s.kesik)m.kesikToplam=(m.kesikToplam||0)+s.kesik*div;
   (s.odemeler||[]).forEach(l=>{const lTL=(+l.tutar||0)*pbKur(l.pb);l._tl=lTL;if(lTL<=0)return;
-    if(l.tur==='Çek'){const c={id:nid('cek'),tur:'cek',tip:'alinan',cariId:s.mid,cari:s.mus,tutar:lTL,vade:l.vade||(Date.now()+30*86400000),banka:'—',durum:'portfoyde',foto:l.foto||'',cariIsle:true};db.cekler.push(c);l._cekId=c.id}
-    else if(l.tur==='Kredi Kartı'){const c={id:nid('cek'),tur:'kk',tip:'alinan',cariId:s.mid,cari:s.mus,tutar:lTL,vade:l.vade||(Date.now()+34*86400000),banka:'Kredi Kartı POS',durum:'portfoyde',cariIsle:true};db.cekler.push(c);l._cekId=c.id}
+    if(l.tur==='Çek'){const c={id:nid('cek'),tur:'cek',tip:'alinan',lokId:s.lokId||aktifLok,cariId:s.mid,cari:s.mus,tutar:lTL,vade:l.vade||(Date.now()+30*86400000),banka:'—',durum:'portfoyde',foto:l.foto||'',cariIsle:true};db.cekler.push(c);l._cekId=c.id}
+    else if(l.tur==='Kredi Kartı'){const c={id:nid('cek'),tur:'kk',tip:'alinan',lokId:s.lokId||aktifLok,cariId:s.mid,cari:s.mus,tutar:lTL,vade:l.vade||(Date.now()+34*86400000),banka:'Kredi Kartı POS',durum:'portfoyde',cariIsle:true};db.cekler.push(c);l._cekId=c.id}
     else{let h=l.tur==='Havale'?hesap(l.hesapId):null;const _sl=s.lokId||aktifLok;
       if(!h)h=db.hesaplar.find(x=>/nakit|kasa/i.test(x.ad)&&(x.lokId||ANA_LOK)===_sl)||db.hesaplar.find(x=>/nakit|kasa/i.test(x.ad))||db.hesaplar[0]; // satışın mağazasının nakit kasası; yoksa herhangi biri
       if(h){kasaHareket(h.id,'in',lTL,'Satış Tahsilatı','Satış #'+(s.id||'yeni')+' · '+(s.mus||''),null,s.lokId);l._hesapId=h.id}} // deftere de işlenir (cariId null: ekstre satışta-ödemeyi zaten gösteriyor)
@@ -4946,10 +4947,10 @@ function kaydetOdeme(id){
   if(isMus)kesik=Math.min(kesik,Math.max(0,(+c.bakiye||0)-t)); // kesik borçtan fazla olamaz
   if(isMus&&t>(+c.bakiye||0)+0.5)toast('⚠️ Tahsilat borçtan fazla — fazlası '+c.ad+' alacağına yazıldı');
   if(!isMus&&tur!=='Çek'&&h&&t>0&&!hesapYeter(h.id,t))return toast('⚠️ '+h.ad+' bakiyesi yetersiz. Hesap eksiye düşemez.');
-  if(isMus){c.bakiye-=(t+kesik);if(kesik>0)c.kesikToplam=(c.kesikToplam||0)+kesik;if(t>0){if(tur==='Çek'){db.cekler.push({id:nid('cek'),tur:'cek',tip:'alinan',cariId:c.id,cari:c.ad,tutar:t,vade:Date.now()+30*86400000,banka:'—',durum:'portfoyde',cariIsle:true,islemKur:+db.kurUSD||1,hesapId:h?h.id:null})}else if(tur==='Kredi Kartı'){db.cekler.push({id:nid('cek'),tur:'kk',tip:'alinan',cariId:c.id,cari:c.ad,tutar:t,vade:Date.now()+34*86400000,banka:'Kredi Kartı POS',durum:'portfoyde',cariIsle:true,islemKur:+db.kurUSD||1,hesapId:h?h.id:null})}else if(h){h.bakiye+=t}}}
+  if(isMus){c.bakiye-=(t+kesik);if(kesik>0)c.kesikToplam=(c.kesikToplam||0)+kesik;if(t>0){if(tur==='Çek'){db.cekler.push({id:nid('cek'),tur:'cek',tip:'alinan',lokId:aktifLok,cariId:c.id,cari:c.ad,tutar:t,vade:Date.now()+30*86400000,banka:'—',durum:'portfoyde',cariIsle:true,islemKur:+db.kurUSD||1,hesapId:h?h.id:null})}else if(tur==='Kredi Kartı'){db.cekler.push({id:nid('cek'),tur:'kk',tip:'alinan',lokId:aktifLok,cariId:c.id,cari:c.ad,tutar:t,vade:Date.now()+34*86400000,banka:'Kredi Kartı POS',durum:'portfoyde',cariIsle:true,islemKur:+db.kurUSD||1,hesapId:h?h.id:null})}else if(h){h.bakiye+=t}}}
   else{ // tedarikçi/fason/gider ödeme
     if(c.doviz==='USD'){c.bakiyeUSD=(c.bakiyeUSD||0)-(t/(+db.kurUSD||1))}else{c.bakiye-=t}
-    if(tur==='Çek'){db.cekler.push({id:nid('cek'),tur:'cek',tip:'verilen',cariId:c.id,cari:c.ad,tutar:t,vade:Date.now()+90*86400000,banka:'—',durum:'portfoyde',cariIsle:true,islemKur:+db.kurUSD||1})}else if(h){h.bakiye-=t} // cariIsle: silme/düzenlemede borç geri gelsin
+    if(tur==='Çek'){db.cekler.push({id:nid('cek'),tur:'cek',tip:'verilen',lokId:aktifLok,cariId:c.id,cari:c.ad,tutar:t,vade:Date.now()+90*86400000,banka:'—',durum:'portfoyde',cariIsle:true,islemKur:+db.kurUSD||1})}else if(h){h.bakiye-=t} // cariIsle: silme/düzenlemede borç geri gelsin
   }
   const hitHesap=(tur!=='Çek'&&(isMus?tur!=='Kredi Kartı':true))&&h&&t>0;
   db.hareketler.push({id:nid('hr'),cariId:id,tip:isMus?'tahsilat':'odeme',tutar:t,kesik,tur,tarih:Date.now(),hesapId:hitHesap?h.id:null,yon:hitHesap?(isMus?'in':'out'):null});
@@ -5111,7 +5112,8 @@ function cekRow(c){const g=gunFark(c.vade),D=cekDurBilgi()[c.durum]||['n','—']
   const av=c.durum==='karsiliksiz'?'r':c.durum==='tahsil'?'g':c.durum==='ciro'?'p':g<0?'r':g<=7?'o':'gray';
   const sub=c.durum==='portfoyde'?`${dstr(c.vade)} · ${esc(c.banka||'—')} · ${g<0?Math.abs(g)+' gün geçti':g===0?'bugün!':g+' gün kaldı'}`:(c.durum==='ciro'?`→ ${esc(c.ciroCari||'')} · ${dstr(c.ciroTarih||c.vade)}`:`${dstr(c.vade)} · ${esc(c.banka||'—')}`);
   const kesi=c.kesideci?` <span class="tag" style="background:var(--pur-s);color:var(--pur)">↩ ${esc(c.kesideci)}</span>`:'';
-  return `<div class="row" onclick="cekIslem(${c.id})"><div class="av ${av}">🏷️</div><div class="mid"><div class="t">${esc(c.cari||'—')}${c.kurTakip?' <span style="font-size:10px" title="dövizli">💱</span>':''}${c.foto?' <span style="font-size:11px">📷</span>':''}${kesi}</div><div class="s">${sub}</div></div><div class="end"><div class="n">${TL(c.tutar)}</div><span class="pill ${D[0]}">${D[1]}</span></div></div>`;
+  const lokEt=lokListe().length>1?` <span class="tag" title="${esc(lokAd(c.lokId||ANA_LOK))}">${lokIc(c.lokId||ANA_LOK)}</span>`:'';
+  return `<div class="row" onclick="cekIslem(${c.id})"><div class="av ${av}">🏷️</div><div class="mid"><div class="t">${esc(c.cari||'—')}${lokEt}${c.kurTakip?' <span style="font-size:10px" title="dövizli">💱</span>':''}${c.foto?' <span style="font-size:11px">📷</span>':''}${kesi}</div><div class="s">${sub}</div></div><div class="end"><div class="n">${TL(c.tutar)}</div><span class="pill ${D[0]}">${D[1]}</span></div></div>`;
 }
 function rCek(){
   const al=cekTab==='alinan';
@@ -5123,6 +5125,7 @@ function rCek(){
   let html=`<div class="tabs"><div class="tb ${al?'on':''}" onclick="cekTab='alinan';rCek()">📥 Alınan</div><div class="tb ${!al?'on':''}" onclick="cekTab='verilen';rCek()">📤 Verilen</div></div>
     <div class="tiles"><div class="tile b3" style="grid-column:1/-1"><div class="l">Portföydeki ${al?'Alacak':'Borç'} Çek</div><div class="v">${TL(bakiye)}</div><div class="em">🏷️</div><div style="font-size:11px;opacity:.92;margin-top:4px">${port.length} çek${gecti.length?' · ⏰ '+gecti.length+' vadesi geçti':''}${buHafta.length?' · '+buHafta.length+' bu hafta':''}</div></div></div>`;
   if(gecti.length)html+=`<div class="okbox" style="background:var(--bad-s);color:var(--bad);border:none">⏰ ${gecti.length} ${al?'alacak':'borç'} çekin vadesi geçti — ${TL(gecti.reduce((a,c)=>a+c.tutar,0))}. ${al?'Tahsil etmen':'Ödemen'} gerekiyor.</div>`;
+  if(lokListe().length>1){html+=`<div class="sec">🏬 Mağaza Mağaza Portföy</div><div class="card" style="padding:4px 13px">`+lokListe().map(l=>{const pl=port.filter(c=>(c.lokId||ANA_LOK)===l.id);const t=pl.reduce((a,c)=>a+c.tutar,0);return `<div class="kv" onclick="setAktifLok('${l.id}')" style="cursor:pointer"><span class="k">${lokIc(l.id)} ${esc(l.ad)}${l.id===aktifLok?' <span class="pill ok">aktif</span>':''} <span class="mini">${pl.length} çek</span></span><span class="v">${TL(t)}</span></div>`}).join('')+`<div class="kv" style="border-top:1px solid var(--ln);font-weight:800"><span class="k">İŞLETME TOPLAMI</span><span class="v">${TL(bakiye)}</span></div></div>`;}
   html+=`<button class="btn sm" style="margin-top:10px" onclick="cekEkle()">➕ ${al?'Alınan':'Verilen'} Çek Ekle</button>`;
   html+=`<div class="tabs" style="margin-top:10px"><div class="tb ${cekView==='liste'?'on':''}" onclick="cekView='liste';rCek()">📋 Liste</div><div class="tb ${cekView==='takvim'?'on':''}" onclick="cekView='takvim';rCek()">🗓️ Takvim</div></div>`;
   if(cekView==='takvim'){html+=cekTakvim();$('app').innerHTML=html;return}
@@ -5178,6 +5181,7 @@ function cekForm(editId){
     <div class="g2"><div><label>Tutar (₺)</label><input id="ck-tut" type="number" inputmode="numeric" value="${c?c.tutar:''}" placeholder="0" oninput="cekKurHint()"></div><div><label>Vade</label><input id="ck-vade" type="date" value="${vv}"></div></div>
     <div class="g2"><div><label>Banka</label><input id="ck-banka" list="ck-bankalar" value="${c?esc(c.banka||''):''}" placeholder="Ziraat"><datalist id="ck-bankalar">${CEK_BANKA.map(b=>`<option value="${b}">`).join('')}</datalist></div><div><label>Çek No</label><input id="ck-no" value="${c?esc(c.cekNo||''):''}" placeholder="opsiyonel"></div></div>
     <label>Şube (opsiyonel)</label><input id="ck-sube" value="${c?esc(c.sube||''):''}" placeholder="ör. Laleli">
+    ${lokListe().length>1?`<label>Hangi mağaza/depo?</label><select id="ck-lok">${lokListe().map(l=>`<option value="${l.id}" ${((c?(c.lokId||ANA_LOK):aktifLok)===l.id)?'selected':''}>${lokIc(l.id)} ${esc(l.ad)}</option>`).join('')}</select>`:''}
     <label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-weight:600"><input type="checkbox" id="ck-kur" ${c&&c.kurTakip?'checked':''} onchange="cekKurToggle()" style="width:auto"> 💱 Kur farkı takibi (dövizli çek)</label>
     <div id="ck-kur-box" style="display:${c&&c.kurTakip?'block':'none'};margin-top:6px">
       <div class="g2"><div><label>Döviz</label><select id="ck-kurpb" onchange="cekKurHint()"><option value="USD" ${c&&c.kurPB==='EUR'?'':'selected'}>USD $</option><option value="EUR" ${c&&c.kurPB==='EUR'?'selected':''}>EUR €</option></select></div><div><label>Veriş günü kuru</label><input id="ck-kurv" type="number" step="0.01" value="${c&&c.verilisKur?c.verilisKur:db.kurUSD}" oninput="cekKurHint()"></div></div>
@@ -5242,9 +5246,9 @@ function kaydetCek(editId){
       if(oldC){if(oldC.doviz==='USD')oldC.bakiyeUSD=(oldC.bakiyeUSD||0)+(+c0.tutar||0)/(+c0.islemKur||+db.kurUSD||1);else oldC.bakiye+=(+c0.tutar||0)}
       if(cc){if(cc.doviz==='USD'){c0.islemKur=+db.kurUSD||1;cc.bakiyeUSD=(cc.bakiyeUSD||0)-tut/c0.islemKur}else cc.bakiye-=tut}
     }
-    c0.cariId=cc?cc.id:null;if(cc)c0.cari=cc.ad;c0.kesideci=kesideci;c0.tutar=tut;c0.vade=vade;c0.banka=banka;c0.cekNo=cekNo;c0.sube=sube;c0.foto=ckFotoOn;c0.fotoArka=ckFotoArka;c0.kurTakip=kurTakip;c0.kurPB=kurPB;c0.verilisKur=verilisKur;save();closeM();rCek();return toast('Çek güncellendi ✓')}
+    c0.cariId=cc?cc.id:null;if(cc)c0.cari=cc.ad;c0.kesideci=kesideci;c0.tutar=tut;c0.vade=vade;c0.banka=banka;c0.cekNo=cekNo;c0.sube=sube;c0.foto=ckFotoOn;c0.fotoArka=ckFotoArka;c0.kurTakip=kurTakip;c0.kurPB=kurPB;c0.verilisKur=verilisKur;if($('ck-lok'))c0.lokId=$('ck-lok').value;save();closeM();rCek();return toast('Çek güncellendi ✓')}
   const isle=$('ck-isle')?.checked&&!!cc;
-  const c={id:nid('cek'),tur:'cek',tip:al?'alinan':'verilen',cariId:cc?cc.id:null,cari:cc?cc.ad:(al?'Bilinmeyen':'—'),kesideci,tutar:tut,vade,banka,cekNo,sube,foto:ckFotoOn,fotoArka:ckFotoArka,durum:'portfoyde',cariIsle:isle,kurTakip,kurPB,verilisKur};
+  const c={id:nid('cek'),tur:'cek',tip:al?'alinan':'verilen',lokId:($('ck-lok')&&$('ck-lok').value)||aktifLok,cariId:cc?cc.id:null,cari:cc?cc.ad:(al?'Bilinmeyen':'—'),kesideci,tutar:tut,vade,banka,cekNo,sube,foto:ckFotoOn,fotoArka:ckFotoArka,durum:'portfoyde',cariIsle:isle,kurTakip,kurPB,verilisKur};
   if(isle){if(cc.doviz==='USD'){c.islemKur=+db.kurUSD||1;cc.bakiyeUSD=(cc.bakiyeUSD||0)-tut/c.islemKur}else cc.bakiye-=tut}
   db.cekler.push(c);save();closeM();rCek();toast('Çek eklendi ✓ '+TL(tut));
 }
@@ -5320,11 +5324,12 @@ function cekErken(id){const c=db.cekler.find(x=>x.id===id);if(!c)return;const g=
 function cekTahsil(id){
   const c=db.cekler.find(x=>x.id===id);if(!c)return;let msg;
   if(c.tip==='alinan'){
-    // kk → tahsilatta seçilen (POS) hesap; çek → seçilen hesap ya da nakit kasa
-    const h=(c.hesapId&&hesap(c.hesapId))||(c.tur==='kk'?(db.hesaplar.find(x=>x.tur==='pos')||db.hesaplar.find(x=>/pos|kart/i.test(x.ad))):null)||db.hesaplar.find(x=>x.tur==='nakit')||db.hesaplar.find(x=>/nakit|kasa/i.test(x.ad))||db.hesaplar[0];
+    // kk → tahsilatta seçilen (POS) hesap; çek → seçilen hesap ya da nakit kasa (çekin mağazasının kasası tercih edilir)
+    const _cl=c.lokId||aktifLok;
+    const h=(c.hesapId&&hesap(c.hesapId))||(c.tur==='kk'?(db.hesaplar.find(x=>x.tur==='pos'&&(x.lokId||ANA_LOK)===_cl)||db.hesaplar.find(x=>x.tur==='pos')||db.hesaplar.find(x=>/pos|kart/i.test(x.ad))):null)||db.hesaplar.find(x=>x.tur==='nakit'&&(x.lokId||ANA_LOK)===_cl)||db.hesaplar.find(x=>x.tur==='nakit')||db.hesaplar.find(x=>/nakit|kasa/i.test(x.ad))||db.hesaplar[0];
     if(!h)return toast('⚠️ Tahsilat için bir kasa/hesap tanımlı değil');
     c.durum='tahsil';c.islemTarih=Date.now();c.tahsilHesapId=h.id;
-    kasaHareket(h.id,'in',c.tutar,c.tur==='kk'?'Kredi Kartı Tahsil':'Çek Tahsil',(c.tur==='kk'?'KK':'Çek')+' #'+(c.cekNo||c.id)+' · '+(c.cari||''),null); // cariId yok: cari etkisi çek alınırken işlendi (ekstrede çift sayılmasın)
+    kasaHareket(h.id,'in',c.tutar,c.tur==='kk'?'Kredi Kartı Tahsil':'Çek Tahsil',(c.tur==='kk'?'KK':'Çek')+' #'+(c.cekNo||c.id)+' · '+(c.cari||''),null,c.lokId); // cariId yok: cari etkisi çek alınırken işlendi (ekstrede çift sayılmasın)
     msg='Tahsil edildi ✓ '+TL(c.tutar)+' → '+h.ad}
   else{
     const h=db.hesaplar.find(x=>x.tur==='banka')||db.hesaplar[0];
