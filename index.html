@@ -5116,7 +5116,7 @@ function kaydetHarcama(){const t=+$('oh-t').value;if(!t||t<=0)return toast('Tuta
   db.ortakHarcama.push({id:nid('oh'),ortak:ort,tutar:t,aciklama:ac,hesapId:h?.id,tarih:Date.now(),hareketId:hid});save();closeM();rKasa();toast('Harcama kaydedildi')}
 
 /* ---------- ÇEK ---------- */
-let cekTab='alinan', cekView='liste', cekAyOfset=0, ckFotoOn='', ckFotoArka='', ckCariId=0, ckFormAl=true;
+let cekTab='alinan', cekView='liste', cekAyOfset=0, ckFotoOn='', ckFotoArka='', ckCariId=0, ckFormAl=true, cekLokFilt='hepsi';
 const CEK_BUK=[{t:'🔴 Vadesi Geçti',c:'var(--bad)'},{t:'🟠 Bu Hafta',c:'var(--warn)'},{t:'🟡 Bu Ay',c:'var(--thr)'},{t:'⚪ Sonra',c:'var(--sub)'}];
 function cekBucket(g){return g<0?0:g<=7?1:g<=30?2:3}
 function cekDurBilgi(){return {portfoyde:['n','Portföyde'],tahsil:['ok','Tahsil ✓'],ciro:['p','Ciro edildi'],karsiliksiz:['bad','Karşılıksız']}}
@@ -5129,15 +5129,20 @@ function cekRow(c){const g=gunFark(c.vade),D=cekDurBilgi()[c.durum]||['n','—']
 }
 function rCek(){
   const al=cekTab==='alinan';
-  const all=db.cekler.filter(c=>c.tip===cekTab);
+  const cokLok=lokListe().length>1;
+  const allTum=db.cekler.filter(c=>c.tip===cekTab);
+  const flok=(cokLok&&cekLokFilt!=='hepsi'&&lok(cekLokFilt))?cekLokFilt:null; // seçili mağaza (yoksa tümü)
+  const all=flok?allTum.filter(c=>(c.lokId||ANA_LOK)===flok):allTum;
   const port=all.filter(c=>c.durum==='portfoyde');
   const bakiye=port.reduce((a,c)=>a+c.tutar,0);
   const gecti=port.filter(c=>gunFark(c.vade)<0),buHafta=port.filter(c=>{const g=gunFark(c.vade);return g>=0&&g<=7});
   const karsiliksiz=all.filter(c=>c.durum==='karsiliksiz').reduce((a,c)=>a+c.tutar,0);
+  const portTum=allTum.filter(c=>c.durum==='portfoyde');const bakiyeTum=portTum.reduce((a,c)=>a+c.tutar,0);
   let html=`<div class="tabs"><div class="tb ${al?'on':''}" onclick="cekTab='alinan';rCek()">📥 Alınan</div><div class="tb ${!al?'on':''}" onclick="cekTab='verilen';rCek()">📤 Verilen</div></div>
-    <div class="tiles"><div class="tile b3" style="grid-column:1/-1"><div class="l">Portföydeki ${al?'Alacak':'Borç'} Çek</div><div class="v">${TL(bakiye)}</div><div class="em">🏷️</div><div style="font-size:11px;opacity:.92;margin-top:4px">${port.length} çek${gecti.length?' · ⏰ '+gecti.length+' vadesi geçti':''}${buHafta.length?' · '+buHafta.length+' bu hafta':''}</div></div></div>`;
+    <div class="tiles"><div class="tile b3" style="grid-column:1/-1"><div class="l">Portföydeki ${al?'Alacak':'Borç'} Çek${flok?' · '+esc(lokAd(flok)):''}</div><div class="v">${TL(bakiye)}</div><div class="em">🏷️</div><div style="font-size:11px;opacity:.92;margin-top:4px">${port.length} çek${gecti.length?' · ⏰ '+gecti.length+' vadesi geçti':''}${buHafta.length?' · '+buHafta.length+' bu hafta':''}</div></div></div>`;
   if(gecti.length)html+=`<div class="okbox" style="background:var(--bad-s);color:var(--bad);border:none">⏰ ${gecti.length} ${al?'alacak':'borç'} çekin vadesi geçti — ${TL(gecti.reduce((a,c)=>a+c.tutar,0))}. ${al?'Tahsil etmen':'Ödemen'} gerekiyor.</div>`;
-  if(lokListe().length>1){html+=`<div class="sec">🏬 Mağaza Mağaza Portföy</div><div class="card" style="padding:4px 13px">`+lokListe().map(l=>{const pl=port.filter(c=>(c.lokId||ANA_LOK)===l.id);const t=pl.reduce((a,c)=>a+c.tutar,0);return `<div class="kv" onclick="setAktifLok('${l.id}')" style="cursor:pointer"><span class="k">${lokIc(l.id)} ${esc(l.ad)}${l.id===aktifLok?' <span class="pill ok">aktif</span>':''} <span class="mini">${pl.length} çek</span></span><span class="v">${TL(t)}</span></div>`}).join('')+`<div class="kv" style="border-top:1px solid var(--ln);font-weight:800"><span class="k">İŞLETME TOPLAMI</span><span class="v">${TL(bakiye)}</span></div></div>`;}
+  if(cokLok){html+=`<div class="sec">🏬 Mağaza Mağaza Portföy</div><div class="card" style="padding:4px 13px">`+lokListe().map(l=>{const pl=portTum.filter(c=>(c.lokId||ANA_LOK)===l.id);const t=pl.reduce((a,c)=>a+c.tutar,0);return `<div class="kv" onclick="cekLokFilt='${l.id}';rCek()" style="cursor:pointer"><span class="k">${lokIc(l.id)} ${esc(l.ad)}${l.id===aktifLok?' <span class="pill ok">aktif</span>':''} <span class="mini">${pl.length} çek</span></span><span class="v">${TL(t)}</span></div>`}).join('')+`<div class="kv" style="border-top:1px solid var(--ln);font-weight:800"><span class="k">İŞLETME TOPLAMI</span><span class="v">${TL(bakiyeTum)}</span></div></div>`;
+    html+=`<div class="iechips" style="margin:8px 0 2px"><div class="c ${cekLokFilt==='hepsi'?'on':''}" onclick="cekLokFilt='hepsi';rCek()">Tümü</div>`+lokListe().map(l=>`<div class="c ${cekLokFilt===l.id?'on':''}" onclick="cekLokFilt='${l.id}';rCek()">${lokIc(l.id)} ${esc(l.ad)}</div>`).join('')+`</div>`;}
   html+=`<button class="btn sm" style="margin-top:10px" onclick="cekEkle()">➕ ${al?'Alınan':'Verilen'} Çek Ekle</button>`;
   html+=`<div class="tabs" style="margin-top:10px"><div class="tb ${cekView==='liste'?'on':''}" onclick="cekView='liste';rCek()">📋 Liste</div><div class="tb ${cekView==='takvim'?'on':''}" onclick="cekView='takvim';rCek()">🗓️ Takvim</div></div>`;
   if(cekView==='takvim'){html+=cekTakvim();$('app').innerHTML=html;return}
@@ -5157,7 +5162,8 @@ function cekTakvim(){
   const yy=base.getFullYear(),mm=base.getMonth();
   const AYAD=['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
   const dim=new Date(yy,mm+1,0).getDate(),first=(new Date(yy,mm,1).getDay()+6)%7;
-  const port=db.cekler.filter(c=>c.durum==='portfoyde');
+  const _flok=(lokListe().length>1&&cekLokFilt!=='hepsi'&&lok(cekLokFilt))?cekLokFilt:null;
+  const port=db.cekler.filter(c=>c.durum==='portfoyde'&&(!_flok||(c.lokId||ANA_LOK)===_flok));
   const dayMap={};port.forEach(c=>{const d=new Date(c.vade);if(d.getFullYear()===yy&&d.getMonth()===mm){const k=d.getDate(),m=dayMap[k]=dayMap[k]||{in:0,out:0};if(c.tip==='alinan')m.in+=c.tutar;else m.out+=c.tutar}});
   const t=new Date(),isToday=d=>t.getFullYear()===yy&&t.getMonth()===mm&&t.getDate()===d;
   let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin:12px 2px 8px"><button class="btn ghost sm" style="width:auto;margin:0;padding:6px 14px" onclick="cekAyOfset--;rCek()">‹</button><b style="font-size:15px">${AYAD[mm]} ${yy}</b><button class="btn ghost sm" style="width:auto;margin:0;padding:6px 14px" onclick="cekAyOfset++;rCek()">›</button></div>`;
