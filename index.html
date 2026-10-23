@@ -1894,8 +1894,8 @@ function rPanel(){
       <div class="tile b3"><div class="l">Elimizdeki Para</div><div class="v sm">${TL(toplamElimizde())}</div><div class="em">🏦</div></div>
       <div class="tile b4"><div class="l">Stok Değeri</div><div class="v sm">${TL(stokDegeri())}</div><div class="em">📦</div></div>`;
   }else if(db.rol==='magaza'){
-    tiles=`<div class="tile b2"><div class="l">Bugünkü Satış</div><div class="v">${TL(bugunSatis())}</div><div class="em">🧾</div></div>
-      <div class="tile b3"><div class="l">Müşteri</div><div class="v sm">${db.cariler.filter(c=>c.tip==='musteri').length}</div><div class="em">👥</div></div>`;
+    tiles=`<div class="tile b3"><div class="l">Müşteri</div><div class="v sm">${db.cariler.filter(c=>c.tip==='musteri').length}</div><div class="em">👥</div></div>
+      <div class="tile b1" style="background:linear-gradient(135deg,#b5701a,#d59433)"><div class="l">Kritik Stok</div><div class="v sm">${kritik.length}</div><div class="em">⚠️</div></div>`;
   }else if(db.rol==='depocu'){
     tiles=`<div class="tile b4"><div class="l">Ürün Çeşidi</div><div class="v sm">${db.urunler.length}</div><div class="em">📦</div></div>
       <div class="tile b1" style="background:linear-gradient(135deg,#b5701a,#d59433)"><div class="l">Kritik Stok</div><div class="v sm">${kritik.length}</div><div class="em">⚠️</div></div>`;
@@ -1994,7 +1994,7 @@ function modulListe(){
     {ic:'⚙️',ad:'Ayarlar',v:'ayarlar'},
   ];
   const list=all.filter(m=>canSee(m.v)&&!navVs.includes(m.v)).map(m=>({ic:m.ic,ad:m.ad,bd:m.bd,act:`go('${m.v}')`}));
-  if(db.rol==='depocu')list.unshift({ic:'📋',ad:'Sayım',act:'depoSayim()'});
+  if(db.rol==='depocu'||db.rol==='magaza')list.unshift({ic:'📋',ad:'Sayım',act:'depoSayim()'});
   if(db.rol==='magaza'){list.unshift({ic:'📷',ad:'Barkod Tara',act:'kameraTara()'});list.unshift({ic:'➕',ad:'Yeni Satış',act:'formSatis()'});}
   if(canHammadde())list.unshift({ic:'🗂️',ad:'Envanter',act:'envanterAc()'}); // sadece malzemeler (kumaş/aksesuar...)
   if(paraGoster())list.push({ic:'💰',ad:'Maliyet',act:'maliyetAc()'}); // koleksiyon maliyetleri — üretim dışında da erişim
@@ -2021,7 +2021,7 @@ function genelAra(){open_('🔍 Genel Arama',`<input id="ga-q" placeholder="ür�
 function genelAraCiz(){const q=($('ga-q')&&$('ga-q').value||'').trim().toLowerCase();const el=$('ga-res');if(!el)return;
   if(q.length<2){el.innerHTML='<div class="mini" style="text-align:center;padding:18px">En az 2 harf yaz…</div>';return}
   const nq=q.replace(/\s/g,'');const R=[];
-  db.urunler.filter(u=>!u.pasif&&((u.ad||'').toLowerCase().includes(q)||(u.kod||'').toLowerCase().includes(q)||renkObjs(u).some(r=>(r.barkod||'').toLowerCase()===q))).slice(0,6).forEach(u=>R.push({ic:'👕',bg:'var(--ind)',t:u.ad,s:(u.kod||'')+' · '+stokTop(u)+' '+(u.birim||'')+' · '+money(u.satis,u.pb||'TL'),act:`go('stok');setTimeout(()=>urunDetay(${u.id}),160)`}));
+  db.urunler.filter(u=>!u.pasif&&((u.ad||'').toLowerCase().includes(q)||(u.kod||'').toLowerCase().includes(q)||renkObjs(u).some(r=>(r.barkod||'').toLowerCase()===q))).slice(0,6).forEach(u=>R.push({ic:'👕',bg:'var(--ind)',t:u.ad,s:(u.kod||'')+' · '+stokTop(u)+' '+(u.birim||'')+(paraGoster()?' · '+money(u.satis,u.pb||'TL'):''),act:`go('stok');setTimeout(()=>urunDetay(${u.id}),160)`}));
   if(canSee('cari'))db.cariler.filter(c=>(c.ad||'').toLowerCase().includes(q)||(c.tel||'').replace(/\s/g,'').includes(nq)).slice(0,6).forEach(c=>R.push({ic:c.tip==='musteri'?'🧑':c.tip==='fason'?'🧵':'🏭',bg:'var(--good)',t:c.ad,s:c.tip+(c.tel?' · '+c.tel:'')+' · bakiye '+TL(Math.abs(c.bakiye||0)),act:`go('cari');setTimeout(()=>cariKart(${c.id}),160)`}));
   if(canSee('cek'))db.cekler.filter(c=>(c.cari||'').toLowerCase().includes(q)||(c.cekNo||'').toLowerCase().includes(q)).slice(0,5).forEach(c=>R.push({ic:'🏷️',bg:'var(--thr)',t:c.cari+' · '+TL(c.tutar),s:'çek '+(c.cekNo||'—')+' · '+dstr(c.vade)+' · '+(c.durum||''),act:`go('cek')`}));
   if(canSee('satis'))db.satislar.filter(s=>s.tip!=='iade'&&(s.mus||'').toLowerCase().includes(q)).slice(0,5).forEach(s=>R.push({ic:'🧾',bg:'var(--ind2)',t:s.mus+' · '+money(s.tutar,s.pb),s:tstr(s.tarih)+' · '+s.kalemler.map(k=>k.urun).join(', ').slice(0,38),act:`go('satis');setTimeout(()=>satisFis(${s.id}),160)`}));
@@ -2042,7 +2042,7 @@ function rStokList(){
   const q=($('ara-stok')?.value||'').toLowerCase();
   const list=db.urunler.filter(u=>(stokKat==='Tümü'||u.kat===stokKat)&&((u.ad||"").toLowerCase().includes(q)||(u.kod||"").toLowerCase().includes(q)||(u.marka||'').toLowerCase().includes(q))).sort((a,b)=>(a.pasif?1:0)-(b.pasif?1:0));
   const wip={}; db.isemirleri.filter(i=>i.durum==='devam').forEach(i=>{wip[i.urunId]=(wip[i.urunId]||0)+i.hedef});
-  $('stok-list').innerHTML=list.length?list.map(u=>{const kap=urunKapak(u);return `<div class="row${u.pasif?' pasifrow':''}" data-uid="${u.id}" onclick="urunDetay(${u.id})"><div class="av gray" style="overflow:hidden;padding:0">${kap?`<img src="${guvenliSrc(kap)}" style="width:100%;height:100%;object-fit:cover">`:'👕'}</div><div class="mid"><div class="t">${esc(u.ad)}${u.pasif?'<span class="tag" style="background:var(--bad-s);color:var(--bad)">Pasif</span>':u.marka?`<span class="tag">${esc(u.marka)}</span>`:''}</div><div class="s">${esc(u.kod)} · ${money(u.satis,u.pb||'TL')}/${u.birim}${u.kaynak==='alim'?' · hazır alım':''}</div>${dots(u.renkler)}${wip[u.id]?`<div style="font-size:10px;color:var(--ind2);font-weight:700;margin-top:3px">🏭 +${wip[u.id]} üretimde</div>`:''}</div><div class="end"><div class="n" style="${u.stok<=0?'color:var(--bad)':u.stok<=u.kritik?'color:var(--warn)':''}">${u.stok}</div><div class="u">${u.birim}${u.birim==='seri'?' ×'+u.seri:''}</div>${stokPill(u)}${lokListe().length>1?`<div style="font-size:9.5px;color:var(--sub);font-weight:700;margin-top:2px" title="tüm mağazalar toplamı">Σ ${urunTumStok(u)} toplam</div>`:''}</div></div>`}).join(''):emp('📦','Ürün yok');
+  $('stok-list').innerHTML=list.length?list.map(u=>{const kap=urunKapak(u);return `<div class="row${u.pasif?' pasifrow':''}" data-uid="${u.id}" onclick="urunDetay(${u.id})"><div class="av gray" style="overflow:hidden;padding:0">${kap?`<img src="${guvenliSrc(kap)}" style="width:100%;height:100%;object-fit:cover">`:'👕'}</div><div class="mid"><div class="t">${esc(u.ad)}${u.pasif?'<span class="tag" style="background:var(--bad-s);color:var(--bad)">Pasif</span>':u.marka?`<span class="tag">${esc(u.marka)}</span>`:''}</div><div class="s">${esc(u.kod)}${paraGoster()?' · '+money(u.satis,u.pb||'TL')+'/'+u.birim:''}${u.kaynak==='alim'?' · hazır alım':''}</div>${dots(u.renkler)}${wip[u.id]?`<div style="font-size:10px;color:var(--ind2);font-weight:700;margin-top:3px">🏭 +${wip[u.id]} üretimde</div>`:''}</div><div class="end"><div class="n" style="${u.stok<=0?'color:var(--bad)':u.stok<=u.kritik?'color:var(--warn)':''}">${u.stok}</div><div class="u">${u.birim}${u.birim==='seri'?' ×'+u.seri:''}</div>${stokPill(u)}${lokListe().length>1?`<div style="font-size:9.5px;color:var(--sub);font-weight:700;margin-top:2px" title="tüm mağazalar toplamı">Σ ${urunTumStok(u)} toplam</div>`:''}</div></div>`}).join(''):emp('📦','Ürün yok');
   attachSwipe();
 }
 function emp(i,t){return `<div class="empty"><div class="i">${i}</div><p>${t}</p></div>`}
@@ -2575,7 +2575,7 @@ function urunDetay(id){
   const oz=urunSatisOzet(id);
   open_(u.ad,`
     ${kapak?`<img src="${guvenliSrc(kapak)}" style="width:100%;max-height:230px;object-fit:cover;border-radius:12px;margin-bottom:10px">`:''}
-    <div class="total"><div><div class="l">Satış${u.promosyon?' · promo '+money(u.promosyon,pb):''}</div><div class="v">${money(u.satis,pb)}<span style="font-size:12px;color:var(--sub)">/${u.birim}</span></div></div><div style="text-align:right"><div class="l">Toplam Stok</div><div class="v ${u.stok<=0?'neg':u.stok<=u.kritik?'':'pos'}">${u.stok} ${u.birim}</div></div></div>
+    <div class="total">${paraGoster()?`<div><div class="l">Satış${u.promosyon?' · promo '+money(u.promosyon,pb):''}</div><div class="v">${money(u.satis,pb)}<span style="font-size:12px;color:var(--sub)">/${u.birim}</span></div></div>`:''}<div style="text-align:right"><div class="l">Toplam Stok</div><div class="v ${u.stok<=0?'neg':u.stok<=u.kritik?'':'pos'}">${u.stok} ${u.birim}</div></div></div>
     ${karGoster()?`<div class="kv" style="margin-top:8px"><span class="k">Alış / Kâr</span><span class="v">${money(u.alis,pb)} · <span class="pos">${money(kar,pb)} (%${karY})</span></span></div>`:''}
     ${oz.seri>0?`<div class="infobox" style="margin-top:10px;background:var(--good-s);color:var(--good)">📈 Bu üründen <b>${oz.seri} ${u.birim}</b> satıldı${oz.best?` · en çok <b>${esc(oz.best[0])}</b> (${oz.best[1]})`:''}${karGoster()?` · ciro <b>${TL(oz.ciro)}</b>`:''}${oz.sonTarih?` · son ${dstr(oz.sonTarih)}`:''}</div>`:'<div class="mini" style="margin-top:10px">📈 Bu üründen henüz satış yok</div>'}
     <div class="dbox" style="margin-top:12px">${infoRows.map(([k,v])=>`<div class="dline"><span>${k}</span><b>${esc(''+v)}</b></div>`).join('')}</div>
@@ -2592,7 +2592,7 @@ function urunDetay(id){
 }
 
 /* ---- Depo Sayımı (raf + fiziksel sayım, depocu girer) ---- */
-function canSayim(){return db.rol==='depocu'||canUrunYaz()}
+function canSayim(){return db.rol==='depocu'||db.rol==='magaza'||canUrunYaz()}
 function depoSayim(){if(!canSayim())return toast('Yetkiniz yok');
   const list=[...db.urunler].filter(u=>!u.pasif).sort((a,b)=>(a.sonSayim||0)-(b.sonSayim||0));
   const today=new Date().toDateString();
@@ -2911,7 +2911,14 @@ function cogaltUrun(id){const src=urun(id);if(!src)return;const c=JSON.parse(JSO
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 function code128Bseq(text){const codes=[104];let sum=104;for(let i=0;i<text.length;i++){const v=text.charCodeAt(i)-32;codes.push(v);sum+=v*(i+1)}codes.push(sum%103);codes.push(106);return codes.map(c=>C128[c]).join('')}
 /* ============ 📷 KAMERAYLA BARKOD OKUTMA (native BarcodeDetector) ============ */
-let _tarayici={stream:null,raf:null,detector:null,aktif:false,onFound:null};
+let _tarayici={stream:null,raf:null,detector:null,aktif:false,onFound:null,zxing:null};
+// iOS/Safari BarcodeDetector desteklemez → ZXing yedeğini (CDN) gerektiğinde yükle
+function _zxingYukle(){
+  if(window.ZXing&&window.ZXing.BrowserMultiFormatReader)return Promise.resolve(true);
+  if(window.__zxingP)return window.__zxingP;
+  window.__zxingP=new Promise(res=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';s.onload=()=>res(!!(window.ZXing&&window.ZXing.BrowserMultiFormatReader));s.onerror=()=>{window.__zxingP=null;res(false);};document.head.appendChild(s);});
+  return window.__zxingP;
+}
 async function barkodTara(onFound,baslik){
   if(_tarayici.stream){try{_tarayici.stream.getTracks().forEach(t=>t.stop())}catch(e){}_tarayici.stream=null;} // önceki kamera akışı serbest kalsın (iOS ikinci açılış)
   if(_tarayici.raf){try{cancelAnimationFrame(_tarayici.raf)}catch(e){}_tarayici.raf=null;}
@@ -2926,7 +2933,16 @@ async function barkodTara(onFound,baslik){
     <div style="position:absolute;bottom:34px;left:16px;right:16px;display:flex;gap:8px;max-width:420px;margin:0 auto"><input id="tar-el" placeholder="Barkod / kod elle gir" inputmode="numeric" style="flex:1;padding:13px;border-radius:12px;border:none;font-size:15px" onkeydown="if(event.key==='Enter')barkodTaraElle()"><button onclick="barkodTaraElle()" style="background:linear-gradient(135deg,#c14b47,#d9534f);color:#fff;border:none;border-radius:12px;padding:0 18px;font-weight:800;cursor:pointer">Bul</button></div>`;
   ov.style.display='flex';
   const msg=()=>document.getElementById('tar-msg');
-  if(!('BarcodeDetector' in window)){if(msg())msg().innerHTML='📷 Bu cihaz otomatik okumayı desteklemiyor — barkodu elle gir.';return;}
+  if(!('BarcodeDetector' in window)){ // iOS/Safari → ZXing yedeği
+    if(msg())msg().innerHTML='📷 Okuyucu yükleniyor…';
+    const zok=await _zxingYukle();
+    if(zok){try{_tarayici.zxing=new ZXing.BrowserMultiFormatReader();_tarayici.aktif=true;const v=document.getElementById('tar-video');
+      if(msg())msg().innerHTML=esc(baslik||'Barkodu çerçeveye getir');
+      _tarayici.zxing.decodeFromConstraints({video:{facingMode:{ideal:'environment'}}},v,(res)=>{if(res&&_tarayici.aktif)barkodTaraBulundu(res.getText());});
+      return;
+    }catch(e){if(msg())msg().innerHTML='📷 Kamera açılamadı ('+(e.name||e)+') — barkodu elle gir.';return;}}
+    if(msg())msg().innerHTML='📷 Otomatik okuma yüklenemedi (internet gerekir) — barkodu elle gir.';return;
+  }
   try{_tarayici.detector=new BarcodeDetector({formats:['code_128','ean_13','ean_8','code_39','upc_a','upc_e','itf','qr_code']});}
   catch(e){try{_tarayici.detector=new BarcodeDetector();}catch(e2){if(msg())msg().innerHTML='📷 Okuma başlatılamadı — elle gir.';return;}}
   try{
@@ -2946,7 +2962,7 @@ async function _tarayiciDongu(){
 }
 function barkodTaraBulundu(val){try{if(navigator.vibrate)navigator.vibrate(60)}catch(e){}const fn=_tarayici.onFound;barkodTaraKapat();if(fn)fn((''+val).trim());}
 function barkodTaraElle(){const v=(document.getElementById('tar-el')?.value||'').trim();if(!v)return;barkodTaraBulundu(v);}
-function barkodTaraKapat(){_tarayici.aktif=false;if(_tarayici.raf){cancelAnimationFrame(_tarayici.raf);_tarayici.raf=null;}if(_tarayici.stream){_tarayici.stream.getTracks().forEach(t=>{try{t.stop()}catch(e){}});_tarayici.stream=null;}const ov=document.getElementById('tarayici');if(ov){ov.style.display='none';ov.innerHTML='';}}
+function barkodTaraKapat(){_tarayici.aktif=false;if(_tarayici.raf){cancelAnimationFrame(_tarayici.raf);_tarayici.raf=null;}if(_tarayici.zxing){try{_tarayici.zxing.reset()}catch(e){}_tarayici.zxing=null;}if(_tarayici.stream){_tarayici.stream.getTracks().forEach(t=>{try{t.stop()}catch(e){}});_tarayici.stream=null;}const ov=document.getElementById('tarayici');if(ov){ov.style.display='none';ov.innerHTML='';}}
 // Barkod/kod → ürün + renk bul
 function barkodBul(code){const q=(''+code).trim().toLowerCase();if(!q)return null;
   for(const u of db.urunler){const renkler=renkObjs(u);
@@ -3388,13 +3404,22 @@ function cizOdeme(){const box=$('s-odeme-list');if(!box)return;
   box.innerHTML=sOdemeler.map((l,i)=>`<div class="odrow">
     <div class="odtop"><input class="odt" type="number" inputmode="numeric" min="0" value="${l.tutar||''}" placeholder="${_kalanPH(i,l.pb)}" oninput="odemeSet(${i},'tutar',this.value)"><select class="odpb" onchange="odemeSet(${i},'pb',this.value)">${['TL','USD','EUR'].map(x=>`<option ${l.pb===x?'selected':''}>${x}</option>`).join('')}</select><select class="odtur" onchange="odemeSet(${i},'tur',this.value);cizOdeme()">${ODEME_TUR.map(x=>`<option ${l.tur===x?'selected':''}>${x}</option>`).join('')}</select>${sOdemeler.length>1?`<button class="del" onclick="odemeSil(${i})">✕</button>`:''}</div>
     ${l.tur==='Havale'?`<select style="margin-top:6px" onchange="odemeSet(${i},'hesapId',this.value)">${db.hesaplar.map(h=>`<option value="${h.id}" ${l.hesapId===h.id?'selected':''}>${esc(h.ad)}</option>`).join('')}</select>`:''}
-    ${l.tur==='Kredi Kartı'?`<div class="infobox" style="margin-top:6px">💳 ≈34 gün sonra hesaba geçer (${dstr(Date.now()+34*86400000)})</div>`:''}
+    ${l.tur==='Kredi Kartı'?`<div class="infobox" style="margin-top:6px">💳 ≈34 gün sonra hesaba geçer (${dstr(Date.now()+34*86400000)})</div>
+    <label class="ckrow" style="margin-top:6px;align-items:center;flex-wrap:wrap"><input type="checkbox" ${l.kkFark?'checked':''} onchange="odemeSet(${i},'kkFark',this.checked);kkFarkUygula()"><span>💳 Kredi kartı farkı ekle: %<input type="number" min="0" step="0.5" value="${+db.kkFark||0}" style="width:56px;padding:4px 6px;margin:0 4px;display:inline-block" onclick="event.stopPropagation()" onchange="db.kkFark=Math.max(0,+this.value||0);kkFarkUygula()">${l.kkFark&&sEkstra.find(x=>x._kk)?` → <b>+${money((sEkstra.find(x=>x._kk)||{}).tutar||0,sPB)}</b>`:''}</span></label>`:''}
     ${l.tur==='Çek'?`<div class="g2" style="margin-top:6px"><div><label style="margin-top:0">Çek Vadesi</label><input type="date" value="${l.vade?new Date(l.vade).toISOString().slice(0,10):''}" onchange="odemeSet(${i},'vade',this.value)"></div><div><label style="margin-top:0">Çek Resmi</label><div class="odcek" onclick="$('odf-${i}').click()">${l.foto?`<img src="${guvenliSrc(l.foto)}">`:'📷'}</div><input type="file" accept="image/*" id="odf-${i}" style="display:none" onchange="odemeFoto(${i},this)"></div></div>`:''}
   </div>`).join('');
   odemeOzet();
 }
 function odemeOzet(){const el=$('s-odeme-ozet');if(!el)return;const div=satisHesap().div;const saleTL=satisHesap().tutar*div;const paidTL=odemeToplamTL();const kesikTL=Math.max(0,+($('s-kesik')?.value||0))*div;const kalanTL=saleTL-paidTL-kesikTL;
   el.innerHTML=`Ödenen: <b>${money(paidTL/div,sPB)}</b>${kesikTL?` · Kesik: <b style="color:var(--thr)">${money(kesikTL/div,sPB)}</b>`:''} · Kalan: <b style="${kalanTL>0.5?'color:var(--bad)':'color:var(--good)'}">${money(Math.max(0,kalanTL)/div,sPB)}</b>${kalanTL<-0.5?' <span style="color:var(--thr)">(fazla)</span>':''}`;
+}
+// 💳 Kredi kartı farkı: bir kart ödeme satırında "fark ekle" işaretliyse, oran kadar ekstra ekler (satışa + müşteri ödemesine yansır)
+function kkFarkUygula(){
+  sEkstra=(sEkstra||[]).filter(x=>!x._kk); // eski kart farkını çıkar (temiz hesapla)
+  const istek=sOdemeler.some(l=>l.tur==='Kredi Kartı'&&l.kkFark);
+  const oran=Math.max(0,+db.kkFark||0);
+  if(istek&&oran>0){const h=satisHesap();const fark=Math.round(h.tutar*oran/100);if(fark>0)sEkstra.push({ad:'💳 Kredi Kartı Farkı (%'+oran+')',tutar:fark,_kk:true});}
+  cizSepet();cizOdeme();
 }
 /* --- Müşteri autocomplete --- */
 function musAra(){const q=($('s-mus-in')?.value||'').trim().toLowerCase();const box=$('s-mus-list');if(!box)return;
@@ -4605,7 +4630,13 @@ function fisResimTest(){const W=576,dpr=2,H=220;const c=document.createElement('
   g.fillText('Otomatik baskı hazır',W/2,158);
   g.font='600 13px sans-serif';g.fillText(new Date().toLocaleString('tr-TR'),W/2,192);
   return c.toDataURL('image/png');}
-function satisDurum(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;s.teslimDurum=s.teslimDurum==='ayrildi'?'teslim':'ayrildi';
+function satisDurum(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;
+  const yeniTeslim=s.teslimDurum!=='teslim'; // şu an teslim değilse → teslim YAPILACAK
+  // ⛔ Mal kontrol edilmeden teslim edilemez — toplama emrinden tüm kalemler kontrol edilip "Hazırlandı" denmeli
+  if(yeniTeslim&&db.teslimKontrolZorunlu!==false&&s.depo!=='hazir'){
+    return askConfirm('⚠️ Mal KONTROL EDİLMEDEN teslim edilemez.\n\nÖnce toplama emrinden tüm kalemleri tek tek kontrol et → "✓ Hazırlandı" de. Kontrol eden (depocu/mağaza/patron) kayıt altına alınır.\n\nToplama emrini açayım mı?',()=>{if(!s.depo){s.depo='bekliyor';try{save()}catch(e){}}closeM();setTimeout(()=>depoEmri(id),150);},'Kontrole Git');
+  }
+  s.teslimDurum=yeniTeslim?'teslim':'ayrildi';
   if(s.teslimDurum==='teslim'){if(sipTrackli(s))sipAsamaSet(id,'teslim');} // aşama: teslim → otomatik WhatsApp + "fişi de gönder" uyarısı
   else if(s.sipDurum==='teslim')s.sipDurum='kargoda'; // teslim geri alındı → bir önceki aşamaya düş
   save();closeM();go('satis');toast(s.teslimDurum==='ayrildi'?'Mal ayrıldı (rezerve) 🔖':'Teslim edildi ✓')}

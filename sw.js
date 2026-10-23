@@ -1,5 +1,5 @@
 /* IQ Basics — Service Worker (çevrimdışı çalışma + kurulabilir PWA) */
-const CACHE = 'iqbasics-v151';
+const CACHE = 'iqbasics-v152';
 
 /* Uygulama kabuğu: internet olmasa da açılması gereken dosyalar */
 const SHELL = [
@@ -71,7 +71,7 @@ self.addEventListener('fetch', (e) => {
   // Diğer statik dosyalar (ikon, CDN scriptleri) → önce önbellek, yoksa ağdan çek + sakla
   e.respondWith(
     caches.match(req).then((hit) => hit || fetch(req).then((res) => {
-      if (res && res.status === 200 && (url.origin === location.origin || /gstatic\.com/.test(url.host))) {
+      if (res && res.status === 200 && (url.origin === location.origin || /gstatic\.com/.test(url.host) || /jsdelivr\.net/.test(url.host))) {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
       }
