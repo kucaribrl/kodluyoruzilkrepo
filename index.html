@@ -621,7 +621,7 @@ function seqFix(d){ // id çakışmasını önle: her sıra numarasını mevcut 
 const CANLI_DOMEN={
   stok:['urunler','hammadde','malSiparis','malKat','transferler'],
   cari:['cariler'],
-  kasa:['hesaplar','hareketler','ortakHarcama','gunSonu'],
+  kasa:['hesaplar','hareketler','ortakHarcama','gunSonu','poslar'],
   satis:['satislar','bekleyenPortal','islenenSiparis','kuponlar','stokBildirim'],
   cek:['cekler'],
   uretim:['isemirleri','maliyetler'],
@@ -655,7 +655,7 @@ function canliIzinHata(e){const c=(e&&e.code)||'';_senk.hata=c||'izin';try{senkR
    Artık id'li listeler kayıt-kayıt birleşir: her kayıt son değişiklik damgası (_m) taşır,
    silinenler mezar taşına (_tomb) yazılır. İki cihaz aynı anda FARKLI kayıtlarda çalışırsa
    hiçbir şey kaybolmaz; AYNI kaydı aynı anda değiştirirlerse son değişiklik kazanır. */
-const MERGE_LISTELER=['satislar','cariler','urunler','hammadde','cekler','isemirleri','malSiparis','hesaplar','hareketler','bekleyenPortal','maliyetler','ortakHarcama','transferler','gunSonu'];
+const MERGE_LISTELER=['satislar','cariler','urunler','hammadde','cekler','isemirleri','malSiparis','hesaplar','hareketler','bekleyenPortal','maliyetler','ortakHarcama','transferler','gunSonu','poslar'];
 function _recMerge(local,cloud,tomb){local=local||[];cloud=cloud||[];tomb=tomb||{};const by={};
   cloud.forEach(r=>{if(r&&r.id!=null)by[r.id]=r;});
   local.forEach(r=>{if(r&&r.id!=null){const c=by[r.id];if(!c||(+r._m||0)>(+c._m||0))by[r.id]=r;}}); // eşitlikte bulut kazanır (yakınsama)
@@ -3404,8 +3404,13 @@ function cizOdeme(){const box=$('s-odeme-list');if(!box)return;
   box.innerHTML=sOdemeler.map((l,i)=>`<div class="odrow">
     <div class="odtop"><input class="odt" type="number" inputmode="numeric" min="0" value="${l.tutar||''}" placeholder="${_kalanPH(i,l.pb)}" oninput="odemeSet(${i},'tutar',this.value)"><select class="odpb" onchange="odemeSet(${i},'pb',this.value)">${['TL','USD','EUR'].map(x=>`<option ${l.pb===x?'selected':''}>${x}</option>`).join('')}</select><select class="odtur" onchange="odemeSet(${i},'tur',this.value);cizOdeme()">${ODEME_TUR.map(x=>`<option ${l.tur===x?'selected':''}>${x}</option>`).join('')}</select>${sOdemeler.length>1?`<button class="del" onclick="odemeSil(${i})">✕</button>`:''}</div>
     ${l.tur==='Havale'?`<select style="margin-top:6px" onchange="odemeSet(${i},'hesapId',this.value)">${db.hesaplar.map(h=>`<option value="${h.id}" ${l.hesapId===h.id?'selected':''}>${esc(h.ad)}</option>`).join('')}</select>`:''}
-    ${l.tur==='Kredi Kartı'?`<div class="infobox" style="margin-top:6px">💳 ≈34 gün sonra hesaba geçer (${dstr(Date.now()+34*86400000)})</div>
-    <label class="ckrow" style="margin-top:6px;align-items:center;flex-wrap:wrap"><input type="checkbox" ${l.kkFark?'checked':''} onchange="odemeSet(${i},'kkFark',this.checked);kkFarkUygula()"><span>💳 Kredi kartı farkı ekle: %<input type="number" min="0" step="0.5" value="${+db.kkFark||0}" style="width:56px;padding:4px 6px;margin:0 4px;display:inline-block" onclick="event.stopPropagation()" onchange="db.kkFark=Math.max(0,+this.value||0);kkFarkUygula()">${l.kkFark&&sEkstra.find(x=>x._kk)?` → <b>+${money((sEkstra.find(x=>x._kk)||{}).tutar||0,sPB)}</b>`:''}</span></label>`:''}
+    ${l.tur==='Kredi Kartı'?(()=>{const ps=posListe();const selP=l.posId?pos(l.posId):(ps[0]||null);const kom=(l.komisyon!=null&&l.komisyon!==''?+l.komisyon:(selP?+selP.komisyon:0));const val=(l.valorGun!=null&&l.valorGun!==''?+l.valorGun:(selP?+selP.valorGun:3));const brutTL=(+l.tutar||0)*pbKur(l.pb);const komTL=Math.round(brutTL*kom/100);const vts=Date.now()+val*86400000;const hAd=(selP&&hesap(selP.hesapId))?hesap(selP.hesapId).ad:'';return `<div style="margin-top:6px;border:1px solid var(--ln);border-radius:12px;padding:10px 12px">
+      ${ps.length?`<div class="g2"><div><label style="margin-top:0">POS</label><select onchange="odemeSet(${i},'posId',this.value);odemeSet(${i},'komisyon','');odemeSet(${i},'valorGun','');cizOdeme()">${ps.map(p=>`<option value="${p.id}" ${(selP&&selP.id===p.id)?'selected':''}>${esc(p.ad)}</option>`).join('')}</select></div><div><label style="margin-top:0">Komisyon %</label><input type="number" step="0.1" value="${kom}" onchange="odemeSet(${i},'komisyon',this.value);cizOdeme()"></div></div>
+      <div class="g2" style="margin-top:6px"><div><label style="margin-top:0">Valör (gün)</label><input type="number" value="${val}" onchange="odemeSet(${i},'valorGun',this.value);cizOdeme()"></div><div><label style="margin-top:0">Hesap</label><div style="padding:9px 2px;font-weight:700;font-size:13px">${esc(hAd)||'—'}</div></div></div>
+      <div class="mini" style="margin-top:6px">💳 <b>${dstr(vts)}</b> (T+${val}) · brüt ${money(l.tutar||0,l.pb)}${komTL>0?` − kom ${TL(komTL)}`:``} → <b>net ${TL(brutTL-komTL)}</b>${hAd?' · '+esc(hAd):``}</div>`
+      :`<div class="infobox">💳 ≈34 gün sonra hesaba geçer. <span onclick="posYonet()" style="color:var(--good);font-weight:800;cursor:pointer">POS ekle ›</span> → hangi banka, komisyon, valör.</div>`}
+      <label class="ckrow" style="margin-top:8px;align-items:center;flex-wrap:wrap"><input type="checkbox" ${l.kkFark?'checked':''} onchange="odemeSet(${i},'kkFark',this.checked);kkFarkUygula()"><span>💳 Müşteriden kart farkı al: %<input type="number" min="0" step="0.5" value="${+db.kkFark||0}" style="width:56px;padding:4px 6px;margin:0 4px;display:inline-block" onclick="event.stopPropagation()" onchange="db.kkFark=Math.max(0,+this.value||0);kkFarkUygula()">${l.kkFark&&sEkstra.find(x=>x._kk)?` → <b>+${money((sEkstra.find(x=>x._kk)||{}).tutar||0,sPB)}</b>`:``}</span></label>
+    </div>`;})():''}
     ${l.tur==='Çek'?`<div class="g2" style="margin-top:6px"><div><label style="margin-top:0">Çek Vadesi</label><input type="date" value="${l.vade?new Date(l.vade).toISOString().slice(0,10):''}" onchange="odemeSet(${i},'vade',this.value)"></div><div><label style="margin-top:0">Çek Resmi</label><div class="odcek" onclick="$('odf-${i}').click()">${l.foto?`<img src="${guvenliSrc(l.foto)}">`:'📷'}</div><input type="file" accept="image/*" id="odf-${i}" style="display:none" onchange="odemeFoto(${i},this)"></div></div>`:''}
   </div>`).join('');
   odemeOzet();
@@ -3648,7 +3653,8 @@ function applySatis(s){
   if(m&&s.kesik)m.kesikToplam=(m.kesikToplam||0)+s.kesik*div;
   (s.odemeler||[]).forEach(l=>{const lTL=(+l.tutar||0)*pbKur(l.pb);l._tl=lTL;if(lTL<=0)return;
     if(l.tur==='Çek'){const c={id:nid('cek'),tur:'cek',tip:'alinan',lokId:s.lokId||aktifLok,cariId:s.mid,cari:s.mus,tutar:lTL,vade:l.vade||(Date.now()+30*86400000),banka:'—',durum:'portfoyde',foto:l.foto||'',cariIsle:true};db.cekler.push(c);l._cekId=c.id}
-    else if(l.tur==='Kredi Kartı'){const c={id:nid('cek'),tur:'kk',tip:'alinan',lokId:s.lokId||aktifLok,cariId:s.mid,cari:s.mus,tutar:lTL,vade:l.vade||(Date.now()+34*86400000),banka:'Kredi Kartı POS',durum:'portfoyde',cariIsle:true};db.cekler.push(c);l._cekId=c.id}
+    else if(l.tur==='Kredi Kartı'){const _p=l.posId?pos(l.posId):null;const _val=(l.valorGun!=null&&l.valorGun!==''?+l.valorGun:(_p?+_p.valorGun:null));const _kom=(l.komisyon!=null&&l.komisyon!==''?+l.komisyon:(_p?+_p.komisyon:0));
+      const c={id:nid('cek'),tur:'kk',tip:'alinan',lokId:s.lokId||aktifLok,cariId:s.mid,cari:s.mus,tutar:lTL,vade:(_val!=null?Date.now()+_val*86400000:(l.vade||Date.now()+34*86400000)),banka:_p?('POS · '+_p.ad):'Kredi Kartı POS',posId:_p?_p.id:null,posAd:_p?_p.ad:'',komisyon:_kom||0,valorGun:(_val!=null?_val:34),hesapId:_p?_p.hesapId:null,durum:'portfoyde',cariIsle:true};db.cekler.push(c);l._cekId=c.id}
     else{let h=l.tur==='Havale'?hesap(l.hesapId):null;const _sl=s.lokId||aktifLok;
       if(!h)h=db.hesaplar.find(x=>/nakit|kasa/i.test(x.ad)&&(x.lokId||ANA_LOK)===_sl)||db.hesaplar.find(x=>/nakit|kasa/i.test(x.ad))||db.hesaplar[0]; // satışın mağazasının nakit kasası; yoksa herhangi biri
       if(h){kasaHareket(h.id,'in',lTL,'Satış Tahsilatı','Satış #'+(s.id||'yeni')+' · '+(s.mus||''),null,s.lokId);l._hesapId=h.id}} // deftere de işlenir (cariId null: ekstre satışta-ödemeyi zaten gösteriyor)
@@ -5191,6 +5197,7 @@ function rKasa(){
       <div style="display:flex;gap:8px;text-align:center"><div style="flex:1"><div class="mini">Giren</div><div style="font-weight:800;color:var(--good)">+${TL(ayGiren)}</div></div><div style="flex:1"><div class="mini">Çıkan</div><div style="font-weight:800;color:var(--bad)">−${TL(ayCikan)}</div></div><div style="flex:1"><div class="mini">Net</div><div style="font-weight:800;color:${ayGiren-ayCikan>=0?'var(--good)':'var(--bad)'}">${ayGiren-ayCikan>=0?'+':'−'}${TL(Math.abs(ayGiren-ayCikan))}</div></div></div>
       ${topGider.length?`<div class="mini" style="margin:10px 0 4px;font-weight:700">En çok gider:</div>`+topGider.map(([k,v])=>{const pct=ayCikan?Math.round(v/ayCikan*100):0;return `<div style="margin-top:5px"><div style="display:flex;justify-content:space-between;font-size:12.5px"><span>${esc(k)}</span><b>${TL(v)}</b></div><div style="height:6px;border-radius:5px;background:var(--ln2);overflow:hidden;margin-top:2px"><i style="display:block;height:100%;width:${pct}%;background:var(--bad)"></i></div></div>`}).join(''):''}
     </div>
+    <button class="btn ghost sm" style="margin-bottom:10px" onclick="posBlokeTakvim()">💳 POS / Kart Bloke Takvimi${(()=>{const n=(db.cekler||[]).filter(c=>c.tur==='kk'&&c.durum==='portfoyde').length;return n?' ('+n+' bekleyen)':'';})()}</button>
     <div class="sec">Hesaplar <a onclick="formHesap()">+ Hesap</a></div><div class="card">`+db.hesaplar.map(h=>`<div class="row" onclick="hesapDetay(${h.id})"><div class="av" style="background:${h.tur==='nakit'?'var(--good)':h.tur==='pos'?'var(--thr)':'var(--ind)'}">${h.tur==='nakit'?'💵':h.tur==='pos'?'💳':'🏦'}</div><div class="mid"><div class="t">${esc(h.ad)}</div><div class="s">${h.tur}${lokListe().length>1?' · '+lokIc(h.lokId||ANA_LOK)+' '+esc(lokAd(h.lokId||ANA_LOK)):''}</div></div><div class="end"><div class="n ${h.bakiye<0?'neg':''}">${TL(h.bakiye)}</div></div></div>`).join('')+`</div>`;
   // 🏬 Mağaza bazlı kasa — her mağazanın likit toplamı + işletme toplamı
   if(lokListe().length>1){
@@ -5594,6 +5601,44 @@ function cekIslem(id){
 function cekErken(id){const c=db.cekler.find(x=>x.id===id);if(!c)return;const g=gunFark(c.vade);const al=c.tip==='alinan';
   askConfirm(`Bu çekin vadesine ${g} gün var.\n${al?'Bankaya erken bozdurup (kırdırıp) nakde mi çeviriyorsun?':'Vadesinden önce mi ödüyorsun?'}`,()=>cekTahsil(id),al?'Erken Boz':'Erken Öde');
 }
+/* ====== 💳 POS / Kredi Kartı Bloke Yönetimi ====== */
+function posListe(){return db.poslar||[]}
+function pos(id){return (db.poslar||[]).find(p=>p&&p.id===id)||null}
+function posKomTutar(c){return Math.round((+c.tutar||0)*(+c.komisyon||0)/100);}
+function posNet(c){return Math.max(0,(+c.tutar||0)-posKomTutar(c)-(+c.bozmaMaliyet||0));}
+function posYonet(){const ls=posListe();
+  open_('💳 POS Cihazlarım',`<div class="mini">Her POS kendi bankasının hesabına yatar. Komisyon ve kaç gün sonra (valör) geçeceği burada tanımlanır — kart çekerken hatırlanır, yine de elle değiştirebilirsin.</div>
+  ${ls.map(p=>{const h=hesap(p.hesapId);return `<div class="card" style="padding:10px 12px;margin-top:8px"><div class="row" style="padding:0"><div class="av" style="background:var(--thr)">💳</div><div class="mid"><div class="t">${esc(p.ad)}</div><div class="s">${h?esc(h.ad):'⚠️ hesap seçili değil'} · %${p.komisyon||0} · T+${p.valorGun||0} gün</div></div></div><div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="posForm('${p.id}')">✏️ Düzenle</button><button class="btn ghost sm" style="color:var(--bad)" onclick="posSil('${p.id}')">Sil</button></div></div>`}).join('')||'<div class="mini" style="padding:8px">Henüz POS yok — ＋ ile ekle (QNB, Akbank, Garanti...).</div>'}
+  <button class="btn g" style="margin-top:12px" onclick="posForm(0)">＋ Yeni POS</button>`);
+}
+function posForm(id){const p=id?pos(id):null;
+  open_(p?'POS Düzenle':'Yeni POS',`<label>POS Adı</label><input id="pos-ad" value="${esc(p?p.ad:'')}" placeholder="QNB / Akbank / Garanti">
+  <label style="margin-top:8px">Yattığı Hesap (banka)</label><select id="pos-hesap">${db.hesaplar.map(h=>`<option value="${h.id}" ${p&&p.hesapId===h.id?'selected':''}>${esc(h.ad)}</option>`).join('')}</select>
+  <div class="g2" style="margin-top:8px"><div><label>Komisyon %</label><input id="pos-kom" type="number" step="0.1" value="${p?p.komisyon:3.5}"></div><div><label>Valör (gün)</label><input id="pos-val" type="number" value="${p?p.valorGun:3}"></div></div>
+  <button class="btn g" style="margin-top:12px" onclick="posKaydet('${id||''}')">Kaydet</button>`);
+}
+function posKaydet(id){const ad=($('pos-ad')?.value||'').trim();if(!ad)return toast('POS adı gir');const hesapId=+($('pos-hesap')?.value||0);const komisyon=Math.max(0,+($('pos-kom')?.value||0));const valorGun=Math.max(0,+($('pos-val')?.value||0));
+  db.poslar=db.poslar||[];
+  if(id){const p=pos(id);if(p){p.ad=ad;p.hesapId=hesapId;p.komisyon=komisyon;p.valorGun=valorGun;}}
+  else db.poslar.push({id:'P'+Date.now().toString(36)+Math.floor(Math.random()*90+10),ad,hesapId,komisyon,valorGun});
+  save();try{canliYazHemen(['kasa'])}catch(e){}closeM();posYonet();toast('POS kaydedildi ✓');
+}
+function posSil(id){askConfirm('Bu POS silinsin mi? (Geçmiş kart tahsilatları etkilenmez)',()=>{db.poslar=(db.poslar||[]).filter(p=>p.id!==id);save();try{canliYazHemen(['kasa'])}catch(e){}closeM();posYonet();toast('POS silindi');},'Sil');}
+function posBlokeTakvim(){
+  const ks=(db.cekler||[]).filter(c=>c.tur==='kk'&&c.durum==='portfoyde').sort((a,b)=>(a.vade||0)-(b.vade||0));
+  const topBrut=ks.reduce((a,c)=>a+(+c.tutar||0),0),topNet=ks.reduce((a,c)=>a+posNet(c),0);
+  open_('💳 POS / Kart Bloke Takvimi',`<div class="mini">Hesaba geçmeyi bekleyen kart tahsilatları (vade sırasına göre). Vade gelince "Hesaba Geç" ile <b>net</b> tutar hesabına işlenir; istersen "Erken Boz" ile bugün bozdurursun.</div>
+  <button class="btn ghost sm" style="margin-top:8px" onclick="posYonet()">⚙️ POS Cihazlarım</button>
+  <div class="total" style="margin-top:10px"><div><div class="l">Bekleyen (brüt)</div><div class="v">${TL(topBrut)}</div></div><div style="text-align:right"><div class="l">Net (komisyon sonrası)</div><div class="v pos">${TL(topNet)}</div></div></div>
+  ${ks.length?ks.map(c=>{const g=gunFark(c.vade);const h=hesap(c.hesapId);const kom=posKomTutar(c);return `<div class="card" style="padding:10px 12px;margin-top:8px"><div style="font-weight:800">${esc(c.posAd||c.banka||'Kart')} · ${TL(c.tutar)}${kom>0?` <span class="mini">− kom ${TL(kom)} → net <b>${TL(posNet(c))}</b></span>`:''}</div><div class="mini">${esc(c.cari||'')} · ${h?esc(h.ad):'⚠️ hesap yok'} · ${g<0?'⏰ vadesi geçti':g===0?'bugün geçecek':g+' gün sonra'} (${dstr(c.vade)})</div><div class="g2" style="margin-top:8px"><button class="btn g sm" onclick="cekTahsil(${c.id})">✅ Hesaba Geç</button><button class="btn ghost sm" onclick="posErkenBoz(${c.id})">⚡ Erken Boz</button></div></div>`}).join(''):'<div class="mini" style="padding:10px">Bekleyen kart tahsilatı yok.</div>'}`);
+}
+function posErkenBoz(id){const c=db.cekler.find(x=>x.id===id);if(!c||c.durum!=='portfoyde')return;
+  open_('⚡ Bloke Erken Boz',`<div class="mini">${esc(c.posAd||'Kart')} · brüt ${TL(c.tutar)}${posKomTutar(c)?' · komisyon '+TL(posKomTutar(c)):''}. Bankanın erken bozma kesintisini (maliyet) <b>elle</b> gir — net tutar <b>hemen</b> hesaba geçer.</div>
+  <label style="margin-top:8px">Bloke bozma maliyeti (₺)</label><input id="boz-mal" type="number" min="0" inputmode="numeric" value="0" oninput="(function(){const m=Math.max(0,+(document.getElementById('boz-mal').value||0));const net=Math.max(0,${(+c.tutar||0)}-${posKomTutar(c)}-m);const e=document.getElementById('boz-net');if(e)e.innerHTML='Hesaba geçecek net: <b>'+TL(net)+'</b>';})()">
+  <div class="mini" id="boz-net" style="margin-top:6px">Hesaba geçecek net: <b>${TL(posNet(c))}</b></div>
+  <button class="btn g" style="margin-top:12px" onclick="posErkenBozKaydet(${id})">Bozup Hesaba Geçir</button>`);
+}
+function posErkenBozKaydet(id){const c=db.cekler.find(x=>x.id===id);if(!c||c.durum!=='portfoyde')return;c.bozmaMaliyet=Math.max(0,+($('boz-mal')?.value||0));c.erkenBoz=true;c.vade=Date.now();cekTahsil(id);}
 function cekTahsil(id){
   const c=db.cekler.find(x=>x.id===id);if(!c)return;let msg;
   if(c.tip==='alinan'){
@@ -5603,7 +5648,11 @@ function cekTahsil(id){
     if(!h)return toast('⚠️ Tahsilat için bir kasa/hesap tanımlı değil');
     c.durum='tahsil';c.islemTarih=Date.now();c.tahsilHesapId=h.id;
     kasaHareket(h.id,'in',c.tutar,c.tur==='kk'?'Kredi Kartı Tahsil':'Çek Tahsil',(c.tur==='kk'?'KK':'Çek')+' #'+(c.cekNo||c.id)+' · '+(c.cari||''),null,c.lokId); // cariId yok: cari etkisi çek alınırken işlendi (ekstrede çift sayılmasın)
-    msg='Tahsil edildi ✓ '+TL(c.tutar)+' → '+h.ad}
+    if(c.tur==='kk'){const _kom=posKomTutar(c),_boz=+c.bozmaMaliyet||0; // POS komisyonu + varsa bloke bozma maliyeti hesaptan düşülür → net kalır
+      if(_kom>0)kasaHareket(h.id,'out',_kom,'POS Komisyonu',(c.posAd||'Kart')+' · KK #'+(c.id)+' · %'+(c.komisyon||0),null,c.lokId);
+      if(_boz>0)kasaHareket(h.id,'out',_boz,'Bloke Bozma Maliyeti',(c.posAd||'Kart')+' · KK #'+(c.id),null,c.lokId);
+      msg='Hesaba geçti ✓ net '+TL(posNet(c))+' → '+h.ad+((_kom||_boz)?' (brüt '+TL(c.tutar)+(_kom?' − kom '+TL(_kom):'')+(_boz?' − bozma '+TL(_boz):'')+')':'');}
+    else msg='Tahsil edildi ✓ '+TL(c.tutar)+' → '+h.ad}
   else{
     const h=db.hesaplar.find(x=>x.tur==='banka')||db.hesaplar[0];
     if(!h)return toast('⚠️ Ödeme için bir hesap tanımlı değil');
