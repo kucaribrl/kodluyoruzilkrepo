@@ -3289,6 +3289,7 @@ function rSatis(){
   const tabs=[['tum','Tümü'],['depo','📦 Depo'+(depoBek?' ('+depoBek+')':'')],['ayrildi','🔖 Ayrılan'+(ayr?' ('+ayr+')':'')],['teslim','✓ Teslim']];
   if(iptN)tabs.push(['iptal','🚫 İptal ('+iptN+')']);
   let html=`<div class="tabs">`+tabs.map(t=>`<div class="tb ${satisFilt===t[0]?'on':''}" onclick="satisFilt='${t[0]}';rSatis()">${t[1]}</div>`).join('')+`</div>`;
+  if(db.satisTaslak&&db.satisTaslak.sepet&&db.satisTaslak.sepet.length){const _td=db.satisTaslak;const _mn=_td.musIn||(_td.sMusId&&cari(_td.sMusId)?cari(_td.sMusId).ad:'');html+=`<div class="warnbox" style="margin-top:8px">📝 <b>Yarım kalan sipariş</b> — ${_td.sepet.length} kalem${_mn?' · '+esc(_mn):''} <span onclick="formSatis(0,0,true)" style="color:var(--good);font-weight:800;cursor:pointer">▶️ Devam Et ›</span> <span onclick="satisTaslakSil();rSatis()" style="color:var(--bad);font-weight:700;cursor:pointer;margin-left:10px">✕ Sil</span></div>`;}
   if(satisFilt==='depo')html+=`<div class="mini" style="margin:2px 3px 0">📦 Depocuya gönderilen toplama emirleri. <b>Ayrılıyor</b> = bekliyor, <b>✓ Hazır</b> = depocu ayırdı.</div>`;
   html+=`<div class="sec">Satışlar <a onclick="formSatis()">+ Yeni</a></div><div class="card">`+(list.length?list.slice(0,200).map(s=>{
     const ayrildi=s.teslimDurum==='ayrildi';const teslim=!ayrildi;const odendi=s.odenen>=s.tutar;
@@ -3303,15 +3304,33 @@ let sepet=[], sPB='TL', sVade=0, sEdit=0, sDurum='teslim', sMusId=0, sUrunId=0, 
 function pbKur(pb){return pb==='USD'?db.kurUSD:pb==='EUR'?db.kurEUR:1}
 function setDurum(d){sDurum=d;$('td-teslim').classList.toggle('on',d==='teslim');$('td-ayrildi').classList.toggle('on',d==='ayrildi')}
 let sKurEski=null; // düzenlemede satışın KENDİ kuru (bugünkü kurla yeniden değerleme olmasın)
-function formSatis(pre,editId){
+// 📝 Yarım kalan sipariş taslağı (cihaza özel hafıza — buluta gitmez)
+function satisTaslakAl(){return {sepet:JSON.parse(JSON.stringify(sepet||[])),sMusId,sPB,sVade,sDurum,sDepo,sFoto,sUrunId,sKurEski,sOdemeler:JSON.parse(JSON.stringify(sOdemeler||[])),sEkstra:JSON.parse(JSON.stringify(sEkstra||[])),
+  isk:($('s-isk')||{}).value,kdv:($('s-kdv')||{}).value,tasima:($('s-tasima')||{}).value,sevk:($('s-sevk')||{}).value,kesik:($('s-kesik')||{}).value,musIn:($('s-mus-in')||{}).value||'',t:Date.now()};}
+let _satTaslakT=null;
+function satisTaslakKaydet(){if(sEdit||!(sepet&&sepet.length))return;try{db.satisTaslak=satisTaslakAl()}catch(e){return}clearTimeout(_satTaslakT);_satTaslakT=setTimeout(()=>{try{save()}catch(e){}},600);}
+function satisTaslakSil(){clearTimeout(_satTaslakT);if(db.satisTaslak){delete db.satisTaslak;try{save()}catch(e){}}}
+function formSatis(pre,editId,resume){
+  // Yarım kalan sipariş varsa (yeni sipariş açarken) önce sor
+  if(!pre&&!editId&&!resume&&db.satisTaslak&&db.satisTaslak.sepet&&db.satisTaslak.sepet.length){
+    const d=db.satisTaslak;const mn=d.musIn||(d.sMusId&&cari(d.sMusId)?cari(d.sMusId).ad:'');
+    return open_('📝 Yarım Sipariş Var',`<div class="infobox">Kaldığın <b>${d.sepet.length} kalemlik</b> sipariş${mn?' <b>('+esc(mn)+')</b>':''} hafızada duruyor — silinmedi.</div>
+      <button class="btn g" style="margin-top:12px" onclick="closeM();setTimeout(()=>formSatis(0,0,true),80)">▶️ Kaldığın Yerden Devam Et</button>
+      <button class="btn ghost" style="margin-top:8px" onclick="satisTaslakSil();closeM();setTimeout(()=>formSatis(),80)">🆕 Sıfırla, Yeni Sipariş</button>
+      <button class="btn ghost" style="margin-top:8px" onclick="closeM()">Vazgeç</button>`);
+  }
   sepet=[];sPB='TL';sVade=0;sKurEski=null;sEdit=editId||0;sDurum='teslim';sMusId=0;sUrunId=0;sCekFoto='';sOdemeler=[];sDepo=false;sFoto='';sEkstra=[];
   if(!db.cariler.some(c=>c.tip==='musteri'))return toast('Önce müşteri ekle (Cari)');
   if(!db.urunler.length)return toast('Önce ürün ekle (Stok)');
   let eIsk=0,eKdv=0,eTasima=0,eSevk='',eKesik=0;
   if(editId){const s=db.satislar.find(x=>x.id===editId);if(s){sMusId=s.mid;sPB=s.pb;sDurum=s.teslimDurum||'teslim';eIsk=s.iskonto||0;eKdv=s.kdv||0;eTasima=s.tasima||0;eSevk=s.sevkiyat||'';eKesik=s.kesik||0;sDepo=!!s.depo;sFoto=s.foto||'';sOdemeler=(s.odemeler||(s.odenen>0?[{tur:s.odemeTur||'Nakit',tutar:s.odenen,pb:s.pb,hesapId:s.odemeHesapId||0,vade:s.cekVade||0,foto:s.cekFoto||''}]:[])).map(l=>({...l}));sepet=s.kalemler.map(k=>({uid:k.uid,urun:k.urun,mik:k.mik,birim:k.birim,fiyat:k.fiyat,renkler:k.renkler?k.renkler.map(r=>({...r})):undefined}));sEkstra=(s.ekstralar||[]).map(x=>({...x}));sVade=(+s.vadeGun)||(Math.round((+s.vadeFarki||0)/2.5)*30);sKurEski=(s.pb&&s.pb!=='TL'&&+s.satisKur)?{pb:s.pb,kur:+s.satisKur}:null}}
+  else if(resume&&db.satisTaslak){const d=db.satisTaslak; // 📝 yarım kalan siparişi geri yükle
+    sepet=(d.sepet||[]).map(k=>({...k,renkler:k.renkler?k.renkler.map(r=>({...r})):undefined}));sMusId=d.sMusId||0;sPB=d.sPB||'TL';sVade=+d.sVade||0;sDurum=d.sDurum||'teslim';sDepo=!!d.sDepo;sFoto=d.sFoto||'';sUrunId=d.sUrunId||0;sKurEski=d.sKurEski||null;
+    sOdemeler=(d.sOdemeler||[]).map(l=>({...l}));sEkstra=(d.sEkstra||[]).map(x=>({...x}));
+    eIsk=+d.isk||0;eKdv=+d.kdv||0;eTasima=+d.tasima||0;eSevk=d.sevk||'';eKesik=+d.kesik||0;window._satTaslakMusIn=d.musIn||'';}
   else if(pre){const u=urun(pre);if(u){sMusId=0;if(hasRenkStok(u))sUrunId=u.id;else sepet.push({uid:u.id,urun:u.ad,mik:1,birim:u.birim,fiyat:urunSatisTL(u)})}} // renkli ürün → renk paneli açılır, sepete körlemesine girmez
   if(!sOdemeler.length)sOdemeler=[{tur:'Nakit',tutar:0,pb:sPB,hesapId:(db.hesaplar[0]&&db.hesaplar[0].id)||0,vade:0,foto:''}];
-  const musName=sMusId?(cari(sMusId)?.ad||''):'';
+  const musName=sMusId?(cari(sMusId)?.ad||''):(resume?(window._satTaslakMusIn||''):'');window._satTaslakMusIn='';
   open_(editId?'Satışı Düzenle':'Yeni Satış',`
     <label>Müşteri</label>
     <input id="s-mus-in" placeholder="Müşteri adı yaz..." autocomplete="off" value="${esc(musName)}" oninput="musAra()" onfocus="musAra()">
@@ -3426,7 +3445,12 @@ function musBilgi(){const m=sMusId?cari(sMusId):null;const el=$('s-musinfo');if(
   let ek='';
   if(m.yabanci){ek=`<div class="warnbox" style="margin-top:8px">🌍 Yabancı müşteri${m.ulke?' · '+esc(m.ulke):''}${m.kod?' · kod '+esc(m.kod):''}<br><b>Kargoda gümrük / marka / fatura masrafı çıkabilir — taşımaya ekle.</b></div>`}
   else if(m.adres||m.ambar){ek=`<div class="infobox" style="margin-top:8px">📍 ${esc([m.adres,m.ambar].filter(Boolean).join(' · '))}</div>`}
+  if(m.tip==='musteri'&&telNorm(m.tel).length<10)ek+=`<div class="warnbox" style="margin-top:8px">📞 <b>Telefonu kayıtlı değil</b> — sipariş/durum bildirimleri için numarasını al. <span onclick="musNumaraEkle(${m.id})" style="color:var(--good);font-weight:800;cursor:pointer">+ Numara Ekle ›</span></div>`;
+  if((m.not||'').trim())ek+=`<div class="infobox" style="margin-top:8px">📝 <b>Müşteri notu:</b> ${esc(m.not)}</div>`;
   el.innerHTML=`<div class="${asim?'warnbox':'infobox'}" style="margin-top:8px">${asim?'⚠️':'ℹ️'} Borç: <b>${TL(Math.max(0,m.bakiye))}</b>${m.limit?` / limit ${TL(m.limit)}`:''}${m.grup?` · ${m.grup}${gi?' (−%'+gi+' indirim)':''}`:''}${asim?' · limite yakın!':''}</div>${ek}`}
+// Satışta telefonu olmayan müşteriye hızlı numara ekle
+function musNumaraEkle(id){const c=cari(id);if(!c)return;open_('📞 Telefon Ekle',`<div class="mini">"${esc(c.ad)}" için telefon numarası:</div><label style="margin-top:8px">Telefon</label><input id="mn-tel" type="tel" inputmode="numeric" placeholder="05xx xxx xx xx" value="${esc(c.tel||'')}"><button class="btn g" style="margin-top:12px" onclick="musNumaraKaydet(${id})">Kaydet</button>`);setTimeout(()=>{const e=$('mn-tel');if(e)e.focus()},80);}
+function musNumaraKaydet(id){const c=cari(id);if(!c)return;const t=($('mn-tel')?.value||'').trim();if(telNorm(t).length<10)return toast('Geçerli telefon girin (en az 10 rakam, ör. 0532...)');const dup=cariTelDup(t,c.tip,id);if(dup)return toast('⚠️ Bu numara zaten "'+dup.ad+'" kaydında var');c.tel=t;save();try{canliYazHemen(['cari'])}catch(e){}closeM();try{if(sMusId===id)musBilgi()}catch(e){}toast('📞 Telefon eklendi ✓');}
 function satisHesap(){
   const ara=sepet.reduce((a,k)=>a+k.mik*k.fiyat,0);
   const isk=Math.min(100,Math.max(0,+($('s-isk')?.value||0))), vf=vadeFarkiYuzde(), kdv=Math.max(0,+($('s-kdv')?.value||0)), tasima=Math.max(0,+($('s-tasima')?.value||0));
@@ -3559,6 +3583,7 @@ function cizSepet(){
   if(h.tasima)parts.push(`taşıma +${money(h.tasima,sPB)}`);
   $('s-top').innerHTML=money(h.tutar,sPB)+(parts.length?`<div style="font-size:11px;color:var(--thr);font-weight:700">${parts.join(' · ')}</div>`:'');
   if($('s-odeme-ozet'))odemeOzet();
+  try{satisTaslakKaydet()}catch(e){} // 📝 yarım kalan sipariş hafızaya (yeni satışta)
 }
 function satisDiv(s){return s.satisKur||(s.pb==='USD'?db.kurUSD:s.pb==='EUR'?db.kurEUR:1)}
 function stokUygula(k,mult,lokId){ // mult=-1 satış (düş), +1 iptal (geri); lokId: hangi lokasyon (yoksa aktif)
@@ -3646,7 +3671,7 @@ function kaydetSatis(){
     if(old&&satisKilitliCek(old))return toast('⚠️ Bu satışın çeki tahsil/ciro edilmiş — düzenlemek için önce Çekler ekranından işlemi geri al');
     if(old)revertSatis(old);
     if(sEdit&&old){data.id=old.id;data.tarih=old.tarih;Object.assign(old,data);applySatis(old);save();try{musVeriGuncelle(old.mid)}catch(e){}closeM();go('satis');toast('Satış güncellendi ✓')}
-    else{data.id=nid('s');data.tarih=Date.now();db.satislar.push(data);applySatis(data);save();try{musVeriGuncelle(data.mid)}catch(e){}closeM();go('satis');toast('Satış kaydedildi ✓ '+money(tutar,sPB));
+    else{data.id=nid('s');data.tarih=Date.now();db.satislar.push(data);applySatis(data);save();try{satisTaslakSil()}catch(e){}try{musVeriGuncelle(data.mid)}catch(e){}closeM();go('satis');toast('Satış kaydedildi ✓ '+money(tutar,sPB));
       if(db.otoYazdir)try{yaziciyaGonder(data.id,true)}catch(e){}
       if(db.otoSipTakip!==false){const _m=cari(data.mid);if(_m&&_m.tel)setTimeout(()=>{try{sipTakipBaslat(data.id,{sessiz:true})}catch(e){}},400);}} // telefonu olan müşteri → aşama takibi + ilk WhatsApp
   };
@@ -4831,7 +4856,12 @@ function formCari(tip,id,preAd){
     <button class="btn" onclick="kaydetCari('${t}',${id||0})">Kaydet</button>
     ${id?`<button class="btn danger" onclick="silCari(${id})">Sil</button>`:''}`);
 }
-function kaydetCari(tip,id){const ad=$('c-ad').value.trim();if(!ad)return toast('Ad gerekli');
+// Telefonu karşılaştırma için normalle: son 10 rakam (0/+90/boşluk farkları önemsiz)
+function telNorm(tel){let d=(''+(tel||'')).replace(/\D/g,'');if(d.length>10)d=d.slice(-10);return d;}
+// Aynı telefonlu mevcut cari (aynı tip, kendisi hariç) — mükerrer kaydı önlemek için
+function cariTelDup(tel,tip,haricId){const n=telNorm(tel);if(n.length<10)return null;return db.cariler.find(c=>c&&!c.iptal&&c.id!==haricId&&c.tip===tip&&telNorm(c.tel)===n)||null;}
+let _cariDupCommit=null;
+function kaydetCari(tip,id,override){const ad=$('c-ad').value.trim();if(!ad)return toast('Ad gerekli');
   const _tel=($('c-tel')?.value||'').trim(), _telDig=_tel.replace(/\D/g,'');
   if(tip==='musteri'&&!_tel){$('c-tel')&&$('c-tel').focus();return toast('Telefon gerekli')}
   if(_tel&&_telDig.length<10){$('c-tel')&&$('c-tel').focus();return toast('Geçerli telefon girin (en az 10 rakam, ör. 0532...)')}
@@ -4847,13 +4877,21 @@ function kaydetCari(tip,id){const ad=$('c-ad').value.trim();if(!ad)return toast(
   if($('c-gidkat'))o.gidKat=V('c-gidkat'); if($('c-aylik'))o.aylik=VN('c-aylik'); if($('c-tekrarli'))o.tekrarli=$('c-tekrarli').checked;
   if($('c-doviz'))o.doviz=V('c-doviz'); if($('c-iban'))o.iban=VT('c-iban'); if($('c-not'))o.not=VT('c-not');
   if(o.doviz==='USD'&&!id){o.bakiyeUSD=o.bakiye;o.bakiye=0}
-  if(id){const cx=cari(id);const bakIn=$('c-bak');
-    // #15: bakiye alanı değişmediyse formdaki (açılış anındaki) değer yazılmaz → başka cihazda bu arada işlenen satış/tahsilat ezilmez
-    if(bakIn&&(+bakIn.value||0)===(+bakIn.dataset.ilk||0))delete o.bakiye;
-    Object.assign(cx,o)}else{o.id=nid('c');db.cariler.push(o)}
-  save();
-  if(!id&&_cariReturn){const cb=_cariReturn;_cariReturn=null;$('ov').classList.remove('show');toast(({musteri:'Müşteri',tedarikci:'Tedarikçi',fason:'Fason',gider:'Gider'}[tip]||'Kayıt')+' eklendi ✓');setTimeout(()=>cb(o.id),130);return}
-  closeM();rCari();toast('Kaydedildi ✓')}
+  const commit=()=>{
+    if(id){const cx=cari(id);const bakIn=$('c-bak');
+      // #15: bakiye alanı değişmediyse formdaki (açılış anındaki) değer yazılmaz → başka cihazda bu arada işlenen satış/tahsilat ezilmez
+      if(bakIn&&(+bakIn.value||0)===(+bakIn.dataset.ilk||0))delete o.bakiye;
+      Object.assign(cx,o)}else{o.id=nid('c');db.cariler.push(o)}
+    save();
+    if(!id&&_cariReturn){const cb=_cariReturn;_cariReturn=null;$('ov').classList.remove('show');toast(({musteri:'Müşteri',tedarikci:'Tedarikçi',fason:'Fason',gider:'Gider'}[tip]||'Kayıt')+' eklendi ✓');setTimeout(()=>cb(o.id),130);return}
+    closeM();rCari();toast('Kaydedildi ✓');};
+  // 📞 Mükerrer telefon koruması: aynı numara başka bir kayıtta varsa uyar (yine de ayrı kaydetme seçeneğiyle)
+  if(_tel&&!override){const dup=cariTelDup(_tel,tip,id||0);
+    if(dup){_cariDupCommit=commit;return open_('📞 Bu telefon zaten kayıtlı',`<div class="warnbox">Bu numara zaten <b>${esc(dup.ad)}</b>${dup.sehir?' · '+esc(dup.sehir):''} kaydında var.<br>Mükerrer kayıt oluşturmayalım.</div>
+      <button class="btn g" style="margin-top:12px" onclick="closeM();cariKart(${dup.id})">👤 Mevcut Kaydı Aç</button>
+      <button class="btn ghost" style="margin-top:8px" onclick="(function(){const f=_cariDupCommit;_cariDupCommit=null;if(f)try{f()}catch(e){}})()">Yine de ayrı kaydet</button>
+      <button class="btn ghost" style="margin-top:8px" onclick="closeM()">Vazgeç</button>`);}}
+  commit();}
 function silCari(id){
   const c=cari(id);if(!c)return;
   const satVar=db.satislar.some(s=>s.mid===id);
@@ -6926,7 +6964,7 @@ function portalOnay(id,override,force){
       return askConfirm('⚠️ FİYAT FARKI!\nSiparişte yazan: '+TL(+o.tutar||0)+'\nGüncel katalog: '+TL(beklenen)+(kuponInd?' (kupon −'+TL(kuponInd)+' düşülmüş)':'')+'\n\nGüncel KATALOG fiyatından onaylansın mı?\n(Müşteri tutarını kullanmak için "Fiyat Belirle" ekranını kullan.)',()=>portalOnay(id,beklenen,force),'Katalog Fiyatından');
     }
   }
-  let m=cari(o.mid)||db.cariler.find(c=>c.tip==='musteri'&&(c.ad||"").toLowerCase()===(o.mus||'').toLowerCase());
+  let m=cari(o.mid)||(o.tel?cariTelDup(o.tel,'musteri',0):null)||db.cariler.find(c=>c.tip==='musteri'&&(c.ad||"").toLowerCase()===(o.mus||'').toLowerCase());
   if(!m){m={id:nid('c'),tip:'musteri',lokId:aktifLok,ad:o.mus,bakiye:0,tel:o.tel||'',sehir:o.sehir||'',adres:o.adres||''};db.cariler.push(m)}
   else{if(o.tel&&!m.tel)m.tel=o.tel;if(o.sehir&&!m.sehir)m.sehir=o.sehir;if(o.adres&&!m.adres)m.adres=o.adres}
   const baseT=o.kalemler.reduce((a,k)=>a+k.mik*(+k.fiyat||0),0)||o.tutar||1;
