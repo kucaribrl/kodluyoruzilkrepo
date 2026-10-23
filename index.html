@@ -3647,7 +3647,8 @@ function kaydetSatis(){
     if(old)revertSatis(old);
     if(sEdit&&old){data.id=old.id;data.tarih=old.tarih;Object.assign(old,data);applySatis(old);save();try{musVeriGuncelle(old.mid)}catch(e){}closeM();go('satis');toast('Satış güncellendi ✓')}
     else{data.id=nid('s');data.tarih=Date.now();db.satislar.push(data);applySatis(data);save();try{musVeriGuncelle(data.mid)}catch(e){}closeM();go('satis');toast('Satış kaydedildi ✓ '+money(tutar,sPB));
-      if(db.otoYazdir)try{yaziciyaGonder(data.id,true)}catch(e){}}
+      if(db.otoYazdir)try{yaziciyaGonder(data.id,true)}catch(e){}
+      if(db.otoSipTakip!==false){const _m=cari(data.mid);if(_m&&_m.tel)setTimeout(()=>{try{sipTakipBaslat(data.id,{sessiz:true})}catch(e){}},400);}} // telefonu olan müşteri → aşama takibi + ilk WhatsApp
   };
   const eskiBorc=old?(old.tutar-old.odenen-(old.kesik||0))*satisDiv(old):0;
   const yeniBorc=m.bakiye-eskiBorc+(tutar-oden-kesik)*div;
@@ -3684,6 +3685,7 @@ function satisFis(id){
     <div class="kv"><span class="k">Kalan</span><span class="v ${s.tutar-s.odenen-(s.kesik||0)>0.5?'neg':'pos'}">${money(Math.max(0,s.tutar-s.odenen-(s.kesik||0)),s.pb)}</span></div>
     <div class="kv"><span class="k">Durum</span><span class="v">${durP}</span></div>
     ${s.depo?`<div class="kv"><span class="k">Depo</span><span class="v">${s.depo==='hazir'?'<span class="pill ok">✓ Hazırlandı</span>':'<span class="pill low">📦 Ayrılıyor</span>'}</span></div>`:''}
+    ${(!s.iptal&&sipTrackli(s))?`<div class="sec" style="margin-top:12px">🚚 Sipariş Takibi</div><div class="card" style="padding:12px 13px">${sipStepperHtml(s)}<div class="g2" style="margin-top:12px"><button class="btn ghost sm" onclick="sipBildir(${id})">📱 Durumu Bildir</button>${sipAsamaIx(s)<SIP_ASAMA.length-1?`<button class="btn g sm" onclick="sipAsamaSet(${id},'${SIP_ASAMA[sipAsamaIx(s)+1].k}');closeM();setTimeout(()=>satisFis(${id}),260)">${SIP_ASAMA[sipAsamaIx(s)+1].ic} ${SIP_ASAMA[sipAsamaIx(s)+1].t} ›</button>`:`<span class="mini" style="align-self:center;text-align:center">🎉 tamamlandı</span>`}</div></div>`:((!s.iptal&&((cari(s.mid)||{}).tel))?`<button class="btn ghost sm" style="margin-top:10px" onclick="sipTakipBaslat(${id});closeM();setTimeout(()=>satisFis(${id}),300)">🚚 Sipariş Takibini Başlat (müşteriye aşama bildir)</button>`:'')}
     ${(s.odemeler&&s.odemeler.length)?`<div class="sec" style="margin-top:12px">Ödemeler</div>`+s.odemeler.map(l=>`<div class="kv"><span class="k">${esc(l.tur)}${l.tur==='Çek'&&l.vade?' · vade '+dstr(l.vade):l.tur==='Kredi Kartı'?' · ≈34 gün':''}</span><span class="v pos">${money(l.tutar,l.pb)}</span></div>`).join(''):''}
     ${s.sevkiyat?`<div class="infobox" style="margin-top:12px">📦 <b>Sevkiyat:</b> ${esc(s.sevkiyat)}</div>`:''}
     ${s.foto?`<div class="sec" style="margin-top:12px">📷 Sipariş Fotoğrafı</div><img src="${guvenliSrc(s.foto)}" style="width:100%;max-height:240px;object-fit:cover;border-radius:12px">`:''}
@@ -4579,10 +4581,8 @@ function fisResimTest(){const W=576,dpr=2,H=220;const c=document.createElement('
   g.font='600 13px sans-serif';g.fillText(new Date().toLocaleString('tr-TR'),W/2,192);
   return c.toDataURL('image/png');}
 function satisDurum(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;s.teslimDurum=s.teslimDurum==='ayrildi'?'teslim':'ayrildi';
-  if(s.kaynak==='portal'){ // portal sipariş takip aşamasıyla hizala (çelişki olmasın)
-    if(s.teslimDurum==='teslim'){s.sipDurum='teslim';s.sipGecmis=s.sipGecmis||[];if(!s.sipGecmis.some(g=>g.k==='teslim'))s.sipGecmis.push({k:'teslim',t:Date.now()});}
-    else if(s.sipDurum==='teslim')s.sipDurum='kargoda';
-  }
+  if(s.teslimDurum==='teslim'){if(sipTrackli(s))sipAsamaSet(id,'teslim');} // aşama: teslim → otomatik WhatsApp + "fişi de gönder" uyarısı
+  else if(s.sipDurum==='teslim')s.sipDurum='kargoda'; // teslim geri alındı → bir önceki aşamaya düş
   save();closeM();go('satis');toast(s.teslimDurum==='ayrildi'?'Mal ayrıldı (rezerve) 🔖':'Teslim edildi ✓')}
 /* ---- Depo toplama/ayırma emri ---- */
 function depoBekleyen(){return db.satislar.filter(s=>s.depo==='bekliyor'&&!s.iptal).sort((a,b)=>a.tarih-b.tarih)}
@@ -4649,7 +4649,7 @@ function depoEksikKaydet(){if(!_depoEksikCtx)return;const{id,key,istenen}=_depoE
 }
 function depoHazirla(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;
   const lines=depoLines(s);const eksik=lines.filter(l=>!(s.depoCheck&&s.depoCheck[l.key]));
-  const bitir=()=>{s.depo='hazir';s.depoHazir={t:Date.now(),by:(bulutKul&&bulutKul.ad)||ROL_AD[db.rol]||db.rol||'',rol:db.rol||'',uid:(bulutKul&&bulutKul.uid)||''};const _eksN=s.depoEksik?Object.keys(s.depoEksik).length:0;save();closeM();render();toast(_eksN?('Hazırlandı ✓ · ⚠️ '+_eksN+' eksik kalem patrona bildirildi'):'Sipariş hazırlandı ✓ Patrona bildirildi')};
+  const bitir=()=>{s.depo='hazir';s.depoHazir={t:Date.now(),by:(bulutKul&&bulutKul.ad)||ROL_AD[db.rol]||db.rol||'',rol:db.rol||'',uid:(bulutKul&&bulutKul.uid)||''};const _eksN=s.depoEksik?Object.keys(s.depoEksik).length:0;save();try{if(sipTrackli(s))sipAsamaSet(s.id,'hazirlaniyor')}catch(e){} /* aşama: hazırlandı → müşteriye bildir */ closeM();render();toast(_eksN?('Hazırlandı ✓ · ⚠️ '+_eksN+' eksik kalem patrona bildirildi'):'Sipariş hazırlandı ✓ Patrona bildirildi')};
   if(eksik.length)askConfirm(`${eksik.length} kalem henüz işaretlenmedi (toplam ${lines.length}).\nYine de "hazırlandı" olarak kapatılsın mı?`,bitir,'Yine de kapat');
   else bitir();
 }
@@ -4988,6 +4988,12 @@ function waOtoAyar(){
     <button class="btn ${acik?'danger':'g'}" style="margin-top:12px" onclick="db.waOtoMod='${acik?'kapali':'kuyruk'}';save();try{canliYazHemen(['ayar'])}catch(e){}closeM();waOtoAyar()">${acik?'⏹ Otomasyonu Kapat':'▶️ Otomasyonu Aç'}</button>
     ${acik?`<button class="btn ghost" style="margin-top:8px" onclick="waTestMesaj()">🧪 Test mesajı kuyruğa ekle</button>
     <button class="btn ghost" style="margin-top:8px" onclick="waKuyrukDurum()">📋 Kuyruk durumu (son 8)</button>`:''}
+    <div class="sec" style="margin-top:16px">📦 Sipariş Aşama Bildirimi</div>
+    <div class="mini" style="line-height:1.55">Müşteriye sipariş aşamaları (✅ Onaylandı → 📦 Hazırlandı → 🚚 Kargoda → 🎉 Teslim) WhatsApp'tan otomatik bildirilir. Teslimde "fişi de gönder" uyarısı çıkar.</div>
+    <div class="card" style="margin-top:8px;padding:9px 13px;display:flex;justify-content:space-between;align-items:center"><span>Yeni siparişte otomatik başlat <span class="mini">(telefonu olan müşteri)</span></span><b style="color:${db.otoSipTakip!==false?'var(--good)':'var(--sub)'}">${db.otoSipTakip!==false?'AÇIK':'kapalı'}</b></div>
+    <button class="btn ${db.otoSipTakip!==false?'danger':'g'} sm" style="margin-top:6px" onclick="db.otoSipTakip=${db.otoSipTakip!==false?'false':'true'};save();try{canliYazHemen(['ayar'])}catch(e){}closeM();waOtoAyar()">${db.otoSipTakip!==false?'⏹ Otomatik başlatmayı kapat':'▶️ Otomatik başlatmayı aç'}</button>
+    <div class="card" style="margin-top:10px;padding:9px 13px;display:flex;justify-content:space-between;align-items:center"><span>Aşama değişince otomatik WhatsApp</span><b style="color:${db.otoSipBildir!==false?'var(--good)':'var(--sub)'}">${db.otoSipBildir!==false?'AÇIK':'kapalı'}</b></div>
+    <button class="btn ${db.otoSipBildir!==false?'danger':'g'} sm" style="margin-top:6px" onclick="db.otoSipBildir=${db.otoSipBildir!==false?'false':'true'};save();try{canliYazHemen(['ayar'])}catch(e){}closeM();waOtoAyar()">${db.otoSipBildir!==false?'🔕 Otomatik bildirimi kapat':'🔔 Otomatik bildirimi aç'}</button>
     <div class="mini" style="margin-top:12px;line-height:1.5">⚠️ Bu özellik için Firebase kurallarına <b>wa_kuyruk</b> bölümü eklendi — Console'da <b>firestore.rules</b>'u bir kez daha yayınla.</div>`);
 }
 function waTestMesaj(){const tel=db.firmaWp||db.firmaTel||'';
@@ -6837,7 +6843,7 @@ function rPortal(){
     <div style="display:flex;justify-content:space-between;align-items:center"><div class="v" style="font-size:16px;font-weight:800;color:var(--ind)">${TL(o.tutar)}</div><div style="display:flex;gap:8px"><button class="btn danger sm" onclick="portalRed(${o.id})">Reddet</button><button class="btn ghost sm" onclick="portalFiyatBelirle(${o.id})">Fiyat</button><button class="btn g sm" onclick="portalOnay(${o.id})">✓ Onayla</button></div></div></div>`}).join(''):emp('🛍️','Onay bekleyen sipariş yok');
   html+=`<div class="okbox">✓ Onaylayınca sipariş satışa dönüşür, stok düşer, mal <b>ayrılır</b> (rezerve) ve müşteri carisine işlenir.</div>`;
   // takip: hazırlanan / yoldaki portal siparişleri
-  const aktifSip=db.satislar.filter(s=>s.kaynak==='portal'&&sipAsamaIx(s)<SIP_ASAMA.length-1).sort((a,b)=>b.tarih-a.tarih);
+  const aktifSip=db.satislar.filter(s=>sipTrackli(s)&&sipAsamaIx(s)<SIP_ASAMA.length-1).sort((a,b)=>b.tarih-a.tarih);
   if(aktifSip.length){
     html+=`<div class="sec">🚚 Sipariş Takibi (${aktifSip.length})</div>`+aktifSip.map(s=>{const ix=sipAsamaIx(s),a=SIP_ASAMA[ix],nx=SIP_ASAMA[ix+1];const m=cari(s.mid);
       return `<div class="card" style="padding:12px 13px;margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center"><div style="min-width:0"><b>${esc(s.mus)}</b><div class="mini">${tstr(s.tarih)} · ${TL(s.tutar)}${(m&&m.tel)||s.tel?' · 📞 '+esc((m&&m.tel)||s.tel):''}</div></div><span class="tag" style="background:#e7effb;color:var(--ind2);flex:0 0 auto">${a.ic} ${a.t}</span></div>
@@ -6867,12 +6873,34 @@ function sipAsamaIx(s){const i=SIP_ASAMA.findIndex(a=>a.k===((s&&s.sipDurum)||'o
 function sipStepperHtml(s){const ix=sipAsamaIx(s);return `<div style="display:flex;align-items:flex-start">${SIP_ASAMA.map((a,i)=>{const done=i<=ix;return `<div style="flex:1;text-align:center;position:relative"><div style="width:27px;height:27px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:13px;background:${done?'var(--good)':'var(--ln2)'};color:${done?'#fff':'var(--sub)'}">${done?a.ic:i+1}</div><div class="mini" style="font-size:9.5px;margin-top:4px;line-height:1.1;color:${done?'var(--ink)':'var(--sub)'};font-weight:${i===ix?'800':'500'}">${a.t}</div>${i<SIP_ASAMA.length-1?`<div style="position:absolute;top:13px;left:62%;right:-38%;height:2px;background:${i<ix?'var(--good)':'var(--ln)'}"></div>`:''}</div>`}).join('')}</div>`}
 function sipIlerlet(sid){const s=db.satislar.find(x=>x.id===sid);if(!s)return;const ix=sipAsamaIx(s);if(ix>=SIP_ASAMA.length-1)return;const nx=SIP_ASAMA[ix+1];
   s.sipDurum=nx.k;s.sipGecmis=s.sipGecmis||[];s.sipGecmis.push({k:nx.k,t:Date.now()});if(nx.k==='teslim')s.teslimDurum='teslim';save();rPortal();toast(nx.ic+' '+nx.t+' — müşteriye bildiriliyor');
-  if(db.otoSipBildir!==false)setTimeout(()=>{try{sipBildir(sid)}catch(e){}},250);} // otomatik WhatsApp durum bildirimi
-function sipBildir(sid){const s=db.satislar.find(x=>x.id===sid);if(!s)return;const m=cari(s.mid);const a=SIP_ASAMA[sipAsamaIx(s)];
-  const durum={onaylandi:'onaylandı, hazırlığa alınıyor ✅',hazirlaniyor:'hazırlanıyor 📦',kargoda:'kargoya verildi, yolda 🚚',teslim:'teslim edildi 🎉 teşekkürler'}[a.k]||a.t;
+  if(db.otoSipBildir!==false)setTimeout(()=>{try{sipBildir(sid,true,nx.k)}catch(e){}},250);} // otomatik WhatsApp durum bildirimi
+function sipBildir(sid,oto,asamaKey){const s=db.satislar.find(x=>x.id===sid);if(!s)return;const m=cari(s.mid);const a=(asamaKey&&SIP_ASAMA.find(x=>x.k===asamaKey))||SIP_ASAMA[sipAsamaIx(s)];
+  const durum={onaylandi:'onaylandı, hazırlığa alınıyor ✅',hazirlaniyor:'hazırlandı, kargoya hazırlanıyor 📦',kargoda:'kargoya verildi, yolda 🚚',teslim:'teslim edildi 🎉 teşekkürler'}[a.k]||a.t;
   const kal=(s.kalemler||[]).map(k=>'• '+k.urun+' ×'+k.mik).join('\n');
   const txt=`Merhaba${m?' '+m.ad:''} 👋\n\n*${db.firma||'IQ Basics'}* siparişiniz *${durum}*\n\n🛍️ *Sipariş #${s.id}*\n${kal}\n\n💵 *Toplam: ${TL(s.tutar)}*`;
-  waAc(((m&&m.tel)||s.tel||''),txt);}
+  const tel=((m&&m.tel)||s.tel||'');
+  if(oto&&waTel(tel)&&db.waOtoMod==='kuyruk'&&(function(){try{return bulutGirisli()}catch(e){return false}})()){ // otomatik aşama → modalsız, sessiz kuyruğa
+    waKuyrukEkle(tel,txt,'sipdurum').then(()=>{try{toast('🤖 '+a.ic+' '+a.t+' — müşteriye WhatsApp gönderildi')}catch(e){}}).catch(()=>{try{waAc(tel,txt)}catch(e){}});return;}
+  waAc(tel,txt);}
+// ---- Aşama takibi TÜM siparişlerde (portal + elle) ----
+function sipTrackli(s){return !!(s&&s.sipDurum&&!s.iptal);}
+// Takibi başlat (yeni satışta telefonu olan müşteri → otomatik) + ilk "sipariş alındı" mesajı
+function sipTakipBaslat(sid,opt){opt=opt||{};const s=db.satislar.find(x=>x.id===sid);if(!s||s.iptal||s.sipDurum)return;const m=cari(s.mid);
+  s.sipDurum='onaylandi';s.sipGecmis=[{k:'onaylandi',t:Date.now()}];
+  save();try{canliYazHemen(['satis'])}catch(e){}
+  if(!opt.sessiz){try{render()}catch(e){}try{toast('🚚 Sipariş takibi başladı — müşteriye bildiriliyor')}catch(e){}}
+  if(db.otoSipBildir!==false&&!opt.bildirme&&((m&&m.tel)||s.tel))setTimeout(()=>{try{sipBildir(sid,true,'onaylandi')}catch(e){}},250);
+}
+// Aşamayı İLERİ al (geri gitmez) + otomatik WhatsApp + teslimde "fişi de gönder" uyarısı
+function sipAsamaSet(sid,key,opt){opt=opt||{};const s=db.satislar.find(x=>x.id===sid);if(!s||s.iptal||!s.sipDurum)return;
+  const cur=sipAsamaIx(s),tgt=SIP_ASAMA.findIndex(a=>a.k===key);if(tgt<0||tgt<=cur)return;
+  s.sipDurum=key;s.sipGecmis=s.sipGecmis||[];if(!s.sipGecmis.some(g=>g.k===key))s.sipGecmis.push({k:key,t:Date.now()});
+  if(key==='teslim')s.teslimDurum='teslim';
+  save();try{canliYazHemen(['satis'])}catch(e){}
+  if(db.otoSipBildir!==false&&!opt.bildirme)setTimeout(()=>{try{sipBildir(sid,true,key)}catch(e){}},250);
+  if(key==='teslim'&&!opt.fisYok)setTimeout(()=>{try{askConfirm('🎉 Teslim edildi.\nMüşteriye *teslim fişini* de WhatsApp\'tan gönderelim mi?',()=>{try{waFisPreview(sid)}catch(e){}},'Fişi Gönder')}catch(e){}},750);
+}
+function sipKargoya(sid){sipAsamaSet(sid,'kargoda');} // "Kargoya Ver" kısayolu
 function portalOnay(id,override,force){
   const o=db.bekleyenPortal.find(x=>x.id===id);if(!o)return;
   if(o.bulutId&&((db.islenenSiparis||[]).includes(o.bulutId)||(db.satislar||[]).some(s=>s.bulutId===o.bulutId))){db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);save();try{rPortal()}catch(e){}return toast('Bu sipariş zaten işlenmiş (başka cihazdan) — mükerrer kayıt kaldırıldı');}
