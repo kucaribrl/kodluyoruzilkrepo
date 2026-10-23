@@ -700,6 +700,9 @@ function _kumulatifBildir(L,n){if(Date.now()-_kumToastT<20000)return;_kumToastT=
 function _seqMerge(a,b){const o={...(a||{})};for(const k in (b||{}))o[k]=Math.max(+o[k]||0,+b[k]||0);return o;}
 function _unionDizi(a,b){return Array.from(new Set([...(a||[]),...(b||[])]));}
 function _tombMerge(a,b){const o={...(a||{})};for(const k in (b||{}))o[k]=Math.max(+o[k]||0,+b[k]||0);return o;}
+// 🏬 Lokasyon listesi id bazında BİRLEŞİR — hiçbir mağaza/depo toptan ezilmez (bir cihazda eklenen diğerinde kaybolmaz).
+// Ortak id'lerde alan düzenleri (ad/tür/pasif) daha yeni damgalı tarafa göre; yalnız birinde olan id her hâlükârda korunur.
+function _lokMerge(a,b,bulutYeni){const m={};(a||[]).forEach(l=>{if(l&&l.id!=null)m[l.id]=l;});(b||[]).forEach(l=>{if(!l||l.id==null)return;if(!m[l.id]||bulutYeni)m[l.id]=l;});return Object.values(m);}
 // Değişiklik damgalama: save() sırasında bir önceki durumla kayıt-kayıt kıyaslanır,
 // değişen/eklenen kayda _m vurulur, silinen mezar taşına yazılır.
 let _mSnap={},_aySnap={};
@@ -737,7 +740,9 @@ function canliDomenUygula(domen,d){
     else if(k==='islenenSiparis'||k==='portalFav'){db[k]=_unionDizi(db[k],d[k]);}
     else if(domen==='ayar'){ // alan bazlı: yalnız daha yeni damgalı değer alınır (yerel daha yeniyse korunur → geri yayılır)
       const gm=+((d._ayarM||{})[k]||0),ym=+((db._ayarM||{})[k]||0);
-      if(gm>=ym||db[k]===undefined){db[k]=d[k];(db._ayarM=db._ayarM||{})[k]=Math.max(gm,ym);_aySnap[k]=JSON.stringify(d[k]===undefined?null:d[k]);}}
+      if(k==='lokasyonlar'){ // 🏬 lokasyon listesi ASLA toptan ezilmez — id bazında birleşir (hiçbir mağaza/depo kaybolmaz)
+        db[k]=_lokMerge(db[k],d[k],gm>=ym);(db._ayarM=db._ayarM||{})[k]=Math.max(gm,ym);_aySnap[k]=JSON.stringify(db[k]===undefined?null:db[k]);}
+      else if(gm>=ym||db[k]===undefined){db[k]=d[k];(db._ayarM=db._ayarM||{})[k]=Math.max(gm,ym);_aySnap[k]=JSON.stringify(d[k]===undefined?null:d[k]);}}
     else db[k]=d[k];
   });
   if(domen==='satis'){canliSatisUzlas(yIslenen,ySatis);
