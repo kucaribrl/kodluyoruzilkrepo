@@ -1864,6 +1864,7 @@ function rPanel(){
   if(para){ // patron/ortak
     db.bekleyenPortal.forEach(o=>bekleyen.push({ic:'📮',bg:'var(--thr-s)',t:o.mus+' · portal siparişi',s:o.kalemler.length+' kalem · '+TL(o.tutar),act:()=>portalOnay(o.id)}));
     {const onSip=db.satislar.filter(s=>s.eksikStok&&!s.iptal&&s.teslimDurum==='ayrildi');if(onSip.length)bekleyen.push({ic:'📦',bg:'var(--thr-s)',t:onSip.length+' bekleyen mal (ön sipariş)',s:onSip.slice(0,3).map(s=>s.mus).join(', ')+(onSip.length>3?'…':'')+' · mal gelince teslim et',act:()=>{satisFilt='ayrildi';go('satis')}});}
+    {const eksS=db.satislar.filter(s=>!s.iptal&&satEksikList(s).length);if(eksS.length)bekleyen.push({ic:'⚠️',bg:'var(--bad-s)',t:eksS.length+' siparişte eksik — müşteriyle çözülecek',s:eksS.slice(0,3).map(s=>s.mus).join(', ')+(eksS.length>3?'…':'')+' · renk değiştir / çıkar / bildir',act:()=>eksikCozPanel(eksS[0].id)});}
     db.isemirleri.filter(i=>i.durum==='devam').forEach(i=>{const gec=-gunFark(i.baslangic+i.gun*86400000);if(gec>0)bekleyen.push({ic:'⏱️',bg:'var(--bad-s)',t:'İş Emri #'+i.id+' gecikti',s:i.urun+' · '+gec+' gün geç',act:()=>uretimDetay(i.id)})});
     db.malSiparis.filter(s=>sipAcik(s)&&s.beklenen&&gunFark(s.beklenen)<=3).forEach(s=>{const g=gunFark(s.beklenen);bekleyen.push({ic:'🚚',bg:g<0?'var(--bad-s)':'var(--thr-s)',t:s.ad+' siparişi'+(g<0?' · GECİKTİ '+Math.abs(g)+'g':g===0?' · bugün gelmeli':' · '+g+' gün kaldı'),s:(s.ted?s.ted+' · ':'')+(s.durum==='kismi'?'kalan '+sipKalan(s):(+s.miktar||0))+' '+(s.birim||''),act:()=>malSipDetay(s.id)})});
     db.malSiparis.filter(s=>sipAcik(s)&&s.oto&&s.ieId&&!s.beklenen).forEach(s=>bekleyen.push({ic:'🛒',bg:'var(--warn-s)',t:s.ad+' alınacak',s:'İş Emri #'+s.ieId+(s.ieKod?' ('+s.ieKod+')':'')+' için · '+(+s.miktar||0)+' '+(s.birim||''),act:()=>malSipDetay(s.id)}));
@@ -3668,6 +3669,8 @@ function satisFis(id){
   open_('Satış Fişi'+(s.iptal?' · 🚫 İPTAL':''),`
     <div class="mini">${esc(s.mus)} · ${tstr(s.tarih)}${s.pb!=='TL'?' · '+s.pb:''}${lokListe().length>1&&s.lokId?' · '+lokIc(s.lokId)+' '+esc(lokAd(s.lokId)):''}</div>
     ${(s.eksikStok&&!s.iptal)?`<div class="warnbox" style="margin-top:10px">📦 <b>Bekleyen mal (ön sipariş)</b> — satışta stokta olmayan kalem var:<br>${(s.eksik||[]).map(e=>esc(e.urun)+(e.renk?' · '+esc(e.renk):'')+' <b>'+e.adet+'</b>').join(' · ')||'—'}<br><span class="mini">Mal gelince "🔖 → ✓ Teslim Et" ile tamamla.</span></div>`:''}
+    ${(!s.iptal&&satEksikList(s).length)?`<div class="warnbox" style="margin-top:10px;border-color:var(--bad)">⚠️ <b>Hazırlamada eksik çıkan kalem var</b> — müşteriyle çözülmeli:<br>${satEksikList(s).map(e=>esc(e.urun)+(e.renk?' · '+esc(e.renk):'')+' eksik <b>'+e.eksik+'</b>').join(' · ')}<br><button class="btn g sm" style="margin-top:8px;width:auto;display:inline-block;padding:6px 12px" onclick="closeM();setTimeout(()=>eksikCozPanel(${id}),160)">⚠️ Eksikleri Çöz</button></div>`:''}
+    ${(!s.iptal&&s.eksikCozum&&s.eksikCozum.length)?`<div class="infobox" style="margin-top:8px">🔧 <b>Eksik çözümleri:</b> ${s.eksikCozum.map(c=>esc(c.ozet||'')).join(' · ')}</div>`:''}
     ${s.iptal?`<div class="warnbox" style="margin-top:10px">🚫 <b>Bu satış İPTAL edildi</b>${s.iptalTarih?' · '+tstr(s.iptalTarih):''}.<br>Kayıt geçmiş için çizili olarak saklanıyor; stok, bakiye ve ödemeler geri alındı.</div>`:''}
     <div style="margin-top:12px">${s.kalemler.map(k=>{const sub=k.renkler&&k.renkler.length?`${k.renkler.map(r=>esc(r.ad)+' ×'+r.mik).join(' · ')} — ${TL(k.fiyat)}`:`${k.mik} ${esc(k.birim||"")} × ${TL(k.fiyat)}`;return `<div class="li"><div class="lt">${esc(k.urun)}<small>${sub}</small></div><b>${TL(k.mik*k.fiyat)}</b></div>`}).join('')}</div>
     ${s.iskonto?`<div class="kv"><span class="k">İskonto</span><span class="v neg">%${s.iskonto}</span></div>`:''}
@@ -4649,6 +4652,104 @@ function depoHazirla(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;
   const bitir=()=>{s.depo='hazir';s.depoHazir={t:Date.now(),by:(bulutKul&&bulutKul.ad)||ROL_AD[db.rol]||db.rol||'',rol:db.rol||'',uid:(bulutKul&&bulutKul.uid)||''};const _eksN=s.depoEksik?Object.keys(s.depoEksik).length:0;save();closeM();render();toast(_eksN?('Hazırlandı ✓ · ⚠️ '+_eksN+' eksik kalem patrona bildirildi'):'Sipariş hazırlandı ✓ Patrona bildirildi')};
   if(eksik.length)askConfirm(`${eksik.length} kalem henüz işaretlenmedi (toplam ${lines.length}).\nYine de "hazırlandı" olarak kapatılsın mı?`,bitir,'Yine de kapat');
   else bitir();
+}
+/* ===== 📦 Sipariş Eksik Çözümü — depocu raf eksiğini müşteriyle çöz: başka renk / diğer üründen / çıkar ===== */
+// Satış tutarını kalemlerden YENİDEN hesapla (satisHesap ile birebir ama saf — form state'ine bağlı değil)
+function satTutarYeniden(s){
+  const ara=(s.kalemler||[]).reduce((a,k)=>a+(+k.mik||0)*(+k.fiyat||0),0);
+  const isk=Math.min(100,Math.max(0,+s.iskonto||0)),vf=+s.vadeFarki||0,kdv=Math.max(0,+s.kdv||0),tasima=Math.max(0,+s.tasima||0);
+  const div=+s.satisKur||1;const mal=ara*(1-isk/100)*(1+vf/100);const kdvPB=(mal*kdv/100)/div;
+  const ekstra=(s.ekstralar||[]).reduce((a,x)=>a+(+x.tutar||0),0);
+  return {ara,tutar:mal/div+kdvPB+tasima+ekstra,kdvPB};
+}
+// Satıştaki (depocu) eksik satırları → çözümlenecek liste
+function satEksikList(s){
+  if(!s||!s.depoEksik||s.iptal)return [];
+  const out=[];(depoLines(s)||[]).forEach(l=>{const b=s.depoEksik[l.key];if(b==null)return;const eksik=(+l.mik||0)-(+b||0);if(eksik>0.0001){
+    const ki=+(''+l.key).split('_')[0];const k=s.kalemler[ki];
+    out.push({key:l.key,ki,urun:l.urun,renk:l.renk||'',fiyat:k?(+k.fiyat||0):0,birim:l.birim||'',istenen:+l.mik||0,bulunan:+b||0,eksik:+eksik.toFixed(2)});}});
+  return out;
+}
+// Çözümü uygula: revert → kalemleri düzenle(editFn) → yeniden hesapla → apply (stok+bakiye tutarlı)
+function _eksikCozUygula(s,key,kayit,editFn){
+  if(satisKilitliCek(s)){toast('⚠️ Bu satışın çeki tahsil/ciro edilmiş — önce Çekler ekranından geri al');return false;}
+  const eskiTutar=+s.tutar||0;
+  revertSatis(s);editFn(s);
+  s.kalemler=(s.kalemler||[]).filter(k=>{if(k.renkler&&k.renkler.length){k.renkler=k.renkler.filter(r=>(+r.mik||0)>0.0001);k.mik=k.renkler.reduce((a,r)=>a+(+r.mik||0),0);return k.mik>0.0001;}return (+k.mik||0)>0.0001;});
+  const rec=satTutarYeniden(s);s.araToplam=+rec.ara.toFixed(2);s.tutar=+rec.tutar.toFixed(2);s.kdvTutar=rec.kdvPB;
+  if((+s.kesik||0)>Math.max(0,s.tutar-(+s.odenen||0)))s.kesik=Math.max(0,s.tutar-(+s.odenen||0));
+  applySatis(s);
+  if(key!=null&&s.depoEksik){delete s.depoEksik[key];if(!Object.keys(s.depoEksik).length)delete s.depoEksik;}
+  (s.eksikCozum=s.eksikCozum||[]).push(Object.assign({t:Date.now(),by:(bulutKul&&bulutKul.ad)||ROL_AD[db.rol]||db.rol||'',eskiTutar:+eskiTutar.toFixed(2),yeniTutar:s.tutar},kayit));
+  save();try{canliYazHemen(['satis','stok','cari'])}catch(e){}try{musVeriGuncelle(s.mid)}catch(e){}
+  return true;
+}
+// Kısa renk düşürücü (eksik satırdan qty düş)
+function _eksikRenkDus(s,e,qty){const k=s.kalemler[e.ki];if(!k)return;
+  if(e.renk&&k.renkler&&k.renkler.length){const r=k.renkler.find(x=>x.ad===e.renk);if(r)r.mik=Math.max(0,(+r.mik||0)-qty);}
+  else k.mik=Math.max(0,(+k.mik||0)-qty);}
+// Üründe bir renge qty ekle (yoksa aç)
+function _eksikRenkEkle(s,ki,renkAd,qty){const k=s.kalemler[ki];if(!k)return;const u=urun(k.uid);
+  if(renkAd&&renkObjs(u).length){k.renkler=k.renkler||[];let r=k.renkler.find(x=>x.ad===renkAd);if(!r){const ro=renkObjs(u).find(x=>x.ad===renkAd);r={ad:renkAd,hex:(ro&&ro.hex)||'#ccc',mik:0};k.renkler.push(r);}r.mik=(+r.mik||0)+qty;k.mik=k.renkler.reduce((a,x)=>a+(+x.mik||0),0);}
+  else k.mik=(+k.mik||0)+qty;}
+// Panel
+function eksikCozPanel(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;const list=satEksikList(s);
+  const m=cari(s.mid);
+  let h=`<div class="mini">Depocu hazırlarken rafta eksik bulunan kalemler. Müşteriye bildir, cevabına göre çöz. <b>Hiçbir şey kaybolmaz</b> — çözüm fişe ve ekstreye işlenir.</div>`;
+  if(list.length){h+=`<button class="btn g" style="margin-top:10px" onclick="eksikMusteriBildir(${id})">📲 Müşteriye eksikleri bildir (WhatsApp)</button><div class="sec" style="margin-top:12px">Çözülecek eksikler</div>`;
+    list.forEach(e=>{h+=`<div class="card" style="padding:10px 12px;margin-bottom:8px">
+      <div style="font-weight:800">${esc(e.urun)}${e.renk?' · '+esc(e.renk):''}</div>
+      <div class="mini">istenen ${e.istenen} · bulunan ${e.bulunan} · <b style="color:var(--bad)">eksik ${e.eksik}</b> · değer ${money(e.eksik*e.fiyat,s.pb)}</div>
+      <div class="g2" style="margin-top:8px"><button class="btn ghost sm" onclick="eksikOpt(${id},'${e.key}','renk')">🎨 Başka renk</button><button class="btn ghost sm" onclick="eksikOpt(${id},'${e.key}','urun')">➕ Diğer üründen</button></div>
+      <button class="btn ghost sm" style="margin-top:6px;color:var(--bad)" onclick="eksikOpt(${id},'${e.key}','cik')">➖ İstemiyor — çıkar (bakiyeden düş)</button></div>`;});
+  }else h+=`<div class="infobox" style="margin-top:10px">✓ Bu siparişte çözülecek eksik kalmadı.</div>`;
+  if(s.eksikCozum&&s.eksikCozum.length){h+=`<div class="sec" style="margin-top:12px">Geçmiş çözümler</div><div class="card" style="padding:6px 12px">`+s.eksikCozum.slice().reverse().map(c=>`<div class="kv"><span class="k" style="font-size:12px">${esc(c.ozet||c.tip||'')}</span><span class="v mini">${dstr(c.t)}</span></div>`).join('')+`</div><button class="btn ghost sm" style="margin-top:8px" onclick="eksikCozBildir(${id})">📲 Çözümü müşteriye bildir</button>`;}
+  open_('⚠️ Eksik Çözümü',h);
+}
+function eksikOpt(id,key,tip){const s=db.satislar.find(x=>x.id===id);if(!s)return;const e=satEksikList(s).find(x=>x.key===key);if(!e)return toast('Eksik bulunamadı');
+  const k=s.kalemler[e.ki];const u=urun(k.uid);
+  if(tip==='cik'){askKritik(`${e.urun}${e.renk?' · '+e.renk:''} — ${e.eksik} adet siparişten ÇIKARILSIN mı?\n\nSatış tutarı ${money(e.eksik*e.fiyat,s.pb)} azalır, müşteri bakiyesinden düşer (ödediyse alacağına yazılır).`,()=>{
+    if(_eksikCozUygula(s,key,{tip:'cik',ozet:`${e.urun}${e.renk?' '+e.renk:''} −${e.eksik} çıkarıldı (−${money(e.eksik*e.fiyat,s.pb)})`},(ss)=>_eksikRenkDus(ss,e,e.eksik))){closeM();toast('✓ Eksik çıkarıldı — bakiye güncellendi');setTimeout(()=>eksikCozPanel(id),180);}
+  },'Çıkar','Eksik Çıkar');return;}
+  if(tip==='renk'){const renkler=renkObjs(u).filter(r=>r.ad!==e.renk&&lokStokRenk(u,r.ad,s.lokId)>0);
+    if(!renkler.length)return toast('Bu üründe stokta başka renk yok');
+    open_('🎨 Başka renk ver',`<div class="mini">${esc(e.urun)} · eksik <b>${esc(e.renk)||'—'} ${e.eksik}</b>. Yerine stokta olan renkten ver (fiyat aynı — tutar değişmez):</div>
+      <label style="margin-top:10px">Renk</label><select id="ek-renk">${renkler.map(r=>`<option value="${esc(r.ad)}">${esc(r.ad)} · stok ${lokStokRenk(u,r.ad,s.lokId)}</option>`).join('')}</select>
+      <label style="margin-top:8px">Adet</label><input id="ek-adet" type="number" inputmode="numeric" min="0" value="${e.eksik}">
+      <button class="btn g" style="margin-top:12px" onclick="eksikRenkUygula(${id},'${key}')">Uygula</button>`);return;}
+  if(tip==='urun'){const difler=s.kalemler.map((kk,i)=>({kk,i})).filter(o=>o.i!==e.ki&&(+o.kk.mik||0)>0);
+    open_('➕ Diğer üründen tamamla',`<div class="mini">${esc(e.urun)} · eksik <b>${e.eksik}</b> yerine müşterinin aldığı başka üründen arttır. Eksik çıkarılır, seçtiğin ürün artar; tutar farkı bakiyeye yansır.</div>
+      <label style="margin-top:10px">Hangi ürün</label><select id="ek-hedef" onchange="eksikHedefRenk(${id})">${difler.map(o=>`<option value="${o.i}">${esc(o.kk.urun)} (${money(o.kk.fiyat,s.pb)})</option>`).join('')||'<option value="">— başka ürün yok —</option>'}</select>
+      <div id="ek-hedefrenk" style="margin-top:6px"></div>
+      <label style="margin-top:8px">Eklenecek adet</label><input id="ek-adet" type="number" inputmode="numeric" min="0" value="${e.eksik}">
+      <div class="infobox" style="margin-top:8px">💡 Değeri eşitlemek istersen: eksik değer ${money(e.eksik*e.fiyat,s.pb)}.</div>
+      <button class="btn g" style="margin-top:12px" onclick="eksikUrunUygula(${id},'${key}')">Uygula</button>`);
+    setTimeout(()=>eksikHedefRenk(id),30);return;}
+}
+function eksikHedefRenk(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;const i=+($('ek-hedef')?.value);const k=s.kalemler[i];const box=$('ek-hedefrenk');if(!box||!k){if(box)box.innerHTML='';return;}const u=urun(k.uid);const rk=renkObjs(u).filter(r=>lokStokRenk(u,r.ad,s.lokId)>0);
+  box.innerHTML=rk.length?`<label>Renk</label><select id="ek-hedefrenksel">${rk.map(r=>`<option value="${esc(r.ad)}">${esc(r.ad)} · stok ${lokStokRenk(u,r.ad,s.lokId)}</option>`).join('')}</select>`:'';}
+function eksikRenkUygula(id,key){const s=db.satislar.find(x=>x.id===id);if(!s)return;const e=satEksikList(s).find(x=>x.key===key);if(!e)return;const u=urun(s.kalemler[e.ki].uid);
+  const yeni=$('ek-renk')?.value;const adet=Math.max(0,+($('ek-adet')?.value||0));if(!yeni||!adet)return toast('Renk ve adet gir');
+  const st=lokStokRenk(u,yeni,s.lokId);if(adet>st)return toast('Stok yetersiz — '+yeni+' stok '+st);
+  if(_eksikCozUygula(s,key,{tip:'renk',ozet:`${e.urun}: ${e.renk} ${adet} → ${yeni} ${adet} (renk değişti)`},(ss)=>{_eksikRenkDus(ss,e,adet);_eksikRenkEkle(ss,e.ki,yeni,adet);})){closeM();toast('✓ Renk değiştirildi');setTimeout(()=>eksikCozPanel(id),180);}
+}
+function eksikUrunUygula(id,key){const s=db.satislar.find(x=>x.id===id);if(!s)return;const e=satEksikList(s).find(x=>x.key===key);if(!e)return;
+  const ti=+($('ek-hedef')?.value);const tk=s.kalemler[ti];if(!tk)return toast('Hedef ürün seç');const tu=urun(tk.uid);
+  const trenk=$('ek-hedefrenksel')?.value||'';const adet=Math.max(0,+($('ek-adet')?.value||0));if(!adet)return toast('Adet gir');
+  if(renkObjs(tu).length){if(!trenk)return toast('Hedef renk seç');const st=lokStokRenk(tu,trenk,s.lokId);if(adet>st)return toast('Stok yetersiz — '+trenk+' stok '+st);}
+  if(_eksikCozUygula(s,key,{tip:'urun',ozet:`${e.urun} −${e.eksik} → ${tk.urun}${trenk?' '+trenk:''} +${adet}`},(ss)=>{_eksikRenkDus(ss,e,e.eksik);_eksikRenkEkle(ss,ti,trenk,adet);})){closeM();toast('✓ Diğer üründen tamamlandı — tutar güncellendi');setTimeout(()=>eksikCozPanel(id),180);}
+}
+// Müşteriye eksikleri bildir (WhatsApp — patron gönderir)
+function eksikMusteriBildir(id){const s=db.satislar.find(x=>x.id===id);if(!s)return;const m=cari(s.mid);const list=satEksikList(s);if(!list.length)return toast('Eksik kalem yok');
+  const firma=db.firma||'IQ Basics';
+  const msg=`Merhaba ${m?m.ad:(s.mus||'')} 👋\n*${firma}*\n\nSiparişinizde şu ürünler eksik çıktı:\n`+list.map(e=>`• ${e.urun}${e.renk?' · '+e.renk:''} — eksik *${e.eksik}* adet`).join('\n')+`\n\nNasıl ilerleyelim?\n1️⃣ Başka renk verelim\n2️⃣ Aldığınız başka üründen tamamlayalım\n3️⃣ Sadece mevcudu gönderelim (eksik tutar bakiyenizden düşülür)\n\nBize dönerseniz hemen hallederiz 🙏`;
+  waAc(m?m.tel:'',msg);
+}
+// Çözüm sonrası müşteriye bilgi mesajı
+function eksikCozBildir(id){const s=db.satislar.find(x=>x.id===id);if(!s||!s.eksikCozum||!s.eksikCozum.length)return toast('Çözüm kaydı yok');const m=cari(s.mid);const firma=db.firma||'IQ Basics';
+  const son=s.eksikCozum.slice(-6);
+  const msg=`Merhaba ${m?m.ad:(s.mus||'')} 👋\n*${firma}*\n\nSipariş eksikleriniz şöyle çözüldü:\n`+son.map(c=>`• ${c.ozet||''}`).join('\n')+`\n\nGüncel sipariş tutarı: *${money(s.tutar,s.pb)}*\nGüncel bakiyeniz: *${TL(Math.abs((cari(s.mid)||{}).bakiye||0))}*${((cari(s.mid)||{}).bakiye||0)<0?' (sizin alacağınız)':''}\n\nTeşekkürler 🙏`;
+  waAc(m?m.tel:'',msg);
 }
 function silSatis(id){const s0=db.satislar.find(x=>x.id===id);
   if(satisKilitliCek(s0))return toast('⚠️ Çeki tahsil/ciro edilmiş satış iptal edilemez — önce Çekler ekranından işlemi geri al');
