@@ -456,7 +456,7 @@ function urunTumStok(u){if(!u)return 0;
   if(!u.loklar)return +u.stok||0;return Object.values(u.loklar).reduce((x,v)=>x+(+v||0),0);}
 // Bir lokasyona ait kasa/hesap toplamı (hesap.lokId); lokId null ise "Ortak"
 function lokKasaTop(id){return (db.hesaplar||[]).filter(h=>(h.lokId||ANA_LOK)===id).reduce((a,h)=>a+(+h.bakiye||0),0);}
-function setAktifLok(id){if(!id||id===aktifLok)return;try{stokProjKaydet()}catch(e){}aktifLok=id;db.aktifLok=id;(db._ayarM=db._ayarM||{}).aktifLok=Date.now();try{stokProjYukle()}catch(e){}try{save()}catch(e){}try{render()}catch(e){}}
+function setAktifLok(id){if(!id||id===aktifLok)return;try{stokProjKaydet()}catch(e){}aktifLok=id;db.aktifLok=id;(db._ayarM=db._ayarM||{}).aktifLok=Date.now();try{stokProjYukle()}catch(e){}try{save()}catch(e){}try{canliYazHemen(['ayar'])}catch(e){}try{render()}catch(e){}}
 // Migrasyon: lokasyon listesi yoksa oluştur, ürün stoklarını loklar'a (Ana Mağaza) taşı — seed & yüklenen veri için tek yer
 function lokMig(d){if(!d)return;
   if(!d.lokasyonlar||!d.lokasyonlar.length)d.lokasyonlar=[{id:ANA_LOK,ad:'Ana Mağaza',tip:'magaza'}]; // tek lokasyonla başla; depo/2. mağazayı kullanıcı ekler
@@ -1611,12 +1611,13 @@ function lokKaydet(id){const ad=($('lk-ad')?.value||'').trim();if(!ad)return toa
   db.lokasyonlar=db.lokasyonlar||[];
   if(id){const l=lok(id);if(l){l.ad=ad;l.tip=tip;}}else{db.lokasyonlar.push({id:'L'+Date.now().toString(36)+Math.floor(Math.random()*90+10),ad,tip});}
   (db._ayarM=db._ayarM||{}).lokasyonlar=Date.now();
-  save();closeM();lokYonet();render();toast('Lokasyon kaydedildi ✓');
+  save();try{canliYazHemen(['ayar'])}catch(e){} // lokasyon değişikliği debounce'a bırakılmaz → anında buluta (yarışla kaçmasın)
+  closeM();lokYonet();render();toast('Lokasyon kaydedildi ✓');
 }
 function lokPasifToggle(id){const l=lok(id);if(!l)return;
   if(!l.pasif&&lokListe().length<=1)return toast('En az bir aktif lokasyon olmalı');
   if(!l.pasif&&id===aktifLok)return toast('Aktif lokasyonu pasife alamazsın — önce başka lokasyona geç');
-  l.pasif=!l.pasif;(db._ayarM=db._ayarM||{}).lokasyonlar=Date.now();save();lokYonet();render();toast(l.pasif?'Pasife alındı 🗄️':'Aktif edildi ✅');
+  l.pasif=!l.pasif;(db._ayarM=db._ayarM||{}).lokasyonlar=Date.now();save();try{canliYazHemen(['ayar'])}catch(e){}lokYonet();render();toast(l.pasif?'Pasife alındı 🗄️':'Aktif edildi ✅');
 }
 /* ===== Transfer (lokasyonlar arası sevk) ===== */
 let trKalem=[], trUrunId=0;
