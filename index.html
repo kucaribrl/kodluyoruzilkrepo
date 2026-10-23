@@ -1658,7 +1658,7 @@ function transferKaydet(){const from=$('tr-from')?.value,to=$('tr-to')?.value;
   const eksik=trKalem.filter(k=>k.adet>lokStokRenk(urun(k.uid),k.renk,from));
   const commit=()=>{transferStokUygula(trKalem,from,-1);
     const t={id:'T'+Date.now().toString(36)+Math.floor(Math.random()*90+10),fromLok:from,toLok:to,kalemler:trKalem.map(k=>({...k})),tarih:Date.now(),durum:'yolda'};
-    (db.transferler=db.transferler||[]).push(t);stokProjYukle();save();closeM();toast('🔄 Transfer oluşturuldu — '+lokAd(to)+'\'e yolda');transferListe();};
+    (db.transferler=db.transferler||[]).push(t);stokProjYukle();save();try{canliYazHemen(['stok'])}catch(e){}closeM();toast('🔄 Transfer oluşturuldu — '+lokAd(to)+'\'e yolda');transferListe();};
   if(eksik.length)askConfirm('Bazı ürünlerde kaynak ('+lokAd(from)+') stoğu yetersiz — eksiye düşebilir.\nYine de oluşturulsun mu?',commit,'Yine de');
   else commit();
 }
@@ -1676,12 +1676,12 @@ function transferDetay(id){const t=(db.transferler||[]).find(x=>x.id===id);if(!t
     ${(t.durum==='yolda'&&!t.iptal)?`<button class="btn g" style="margin-top:12px" onclick="transferTeslim('${t.id}')">📥 ${esc(lokAd(t.toLok))}'e Teslim Al</button><button class="btn ghost" style="margin-top:8px;color:var(--bad)" onclick="transferIptal('${t.id}')">İptal Et</button>`:''}`);
 }
 function transferTeslim(id){const t=(db.transferler||[]).find(x=>x.id===id);if(!t||t.durum!=='yolda'||t.iptal)return;
-  transferStokUygula(t.kalemler,t.toLok,+1);t.durum='teslim';t.teslimTarih=Date.now();stokProjYukle();save();closeM();toast('📥 '+lokAd(t.toLok)+'\'e teslim alındı ✓');transferListe();}
+  transferStokUygula(t.kalemler,t.toLok,+1);t.durum='teslim';t.teslimTarih=Date.now();stokProjYukle();save();try{canliYazHemen(['stok'])}catch(e){}closeM();toast('📥 '+lokAd(t.toLok)+'\'e teslim alındı ✓');transferListe();}
 function transferIptal(id){const t=(db.transferler||[]).find(x=>x.id===id);if(!t||t.iptal)return;
   askKritik('Bu transfer iptal edilsin mi? Mal kaynağa geri döner.\n\nKayıt SİLİNMEZ — "İPTAL" olarak çizili durur.',()=>{
     if(t.durum==='teslim')transferStokUygula(t.kalemler,t.toLok,-1); // hedeften geri çıkar
     transferStokUygula(t.kalemler,t.fromLok,+1); // kaynağa geri koy
-    t.iptal=true;t.iptalTarih=Date.now();t.durum='iptal';stokProjYukle();save();closeM();toast('Transfer iptal edildi ✓ (çizili duruyor)');transferListe();
+    t.iptal=true;t.iptalTarih=Date.now();t.durum='iptal';stokProjYukle();save();try{canliYazHemen(['stok'])}catch(e){}closeM();toast('Transfer iptal edildi ✓ (çizili duruyor)');transferListe();
   },'İptal Et','Transfer İptali');
 }
 // Hesap / oturum menüsü (çıkış buradan)
