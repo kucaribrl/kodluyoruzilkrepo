@@ -3728,7 +3728,7 @@ function satisFis(id){
     ${(s.eksikStok&&!s.iptal)?`<div class="warnbox" style="margin-top:10px">📦 <b>Bekleyen mal (ön sipariş)</b> — satışta stokta olmayan kalem var:<br>${(s.eksik||[]).map(e=>esc(e.urun)+(e.renk?' · '+esc(e.renk):'')+' <b>'+e.adet+'</b>').join(' · ')||'—'}<br><span class="mini">Mal gelince "🔖 → ✓ Teslim Et" ile tamamla.</span></div>`:''}
     ${(!s.iptal&&satEksikList(s).length)?`<div class="warnbox" style="margin-top:10px;border-color:var(--bad)">⚠️ <b>Hazırlamada eksik çıkan kalem var</b> — müşteriyle çözülmeli:<br>${satEksikList(s).map(e=>esc(e.urun)+(e.renk?' · '+esc(e.renk):'')+' eksik <b>'+e.eksik+'</b>').join(' · ')}<br><button class="btn g sm" style="margin-top:8px;width:auto;display:inline-block;padding:6px 12px" onclick="closeM();setTimeout(()=>eksikCozPanel(${id}),160)">⚠️ Eksikleri Çöz</button></div>`:''}
     ${(!s.iptal&&s.eksikCozum&&s.eksikCozum.length)?`<div class="infobox" style="margin-top:8px">🔧 <b>Eksik çözümleri:</b> ${s.eksikCozum.map(c=>esc(c.ozet||'')).join(' · ')}</div>`:''}
-    ${s.iptal?`<div class="warnbox" style="margin-top:10px">🚫 <b>Bu satış İPTAL edildi</b>${s.iptalTarih?' · '+tstr(s.iptalTarih):''}.<br>Kayıt geçmiş için çizili olarak saklanıyor; stok, bakiye ve ödemeler geri alındı.</div>`:''}
+    ${s.iptal?`<div class="warnbox" style="margin-top:10px">🚫 <b>Bu satış İPTAL edildi</b>${s.iptalTarih?' · '+tstr(s.iptalTarih):''}.<br>Kayıt geçmiş için çizili olarak saklanıyor; stok, bakiye ve ödemeler geri alındı.<br><button class="btn g sm" style="margin-top:8px;width:auto;display:inline-block;padding:6px 12px" onclick="satisGeriAl(${id})">↺ İptali Geri Al (satışı canlandır)</button></div>`:''}
     <div style="margin-top:12px">${s.kalemler.map(k=>{const sub=k.renkler&&k.renkler.length?`${k.renkler.map(r=>esc(r.ad)+' ×'+r.mik).join(' · ')} — ${TL(k.fiyat)}`:`${k.mik} ${esc(k.birim||"")} × ${TL(k.fiyat)}`;return `<div class="li"><div class="lt">${esc(k.urun)}<small>${sub}</small></div><b>${TL(k.mik*k.fiyat)}</b></div>`}).join('')}</div>
     ${s.iskonto?`<div class="kv"><span class="k">İskonto</span><span class="v neg">%${s.iskonto}</span></div>`:''}
     ${s.vadeFarki?`<div class="kv"><span class="k">Vade farkı</span><span class="v">+%${s.vadeFarki}</span></div>`:''}
@@ -4819,7 +4819,15 @@ function silSatis(id){const s0=db.satislar.find(x=>x.id===id);
   askKritik('Satış iptal edilsin mi? Stok, bakiye, ödeme ve çek geri alınır.\n\nKayıt SİLİNMEZ — listede "İPTAL" olarak üzeri çizili durur.',()=>{
   const s=db.satislar.find(x=>x.id===id);revertSatis(s);
   {const _tak=(s.taksitler||[]).filter(t=>t.odendi).reduce((a,t)=>a+(+t.tutar||0),0);if(_tak>0){const _m=cari(s.mid);if(_m){_m.bakiye-=_tak*satisDiv(s);setTimeout(()=>toast('ℹ️ Ödenmiş taksitler ('+money(_tak,s.pb||'TL')+') müşteri alacağına yazıldı — kasa değişmedi'),900);}}}
-  s.iptal=true;s.iptalTarih=Date.now();save();try{musVeriGuncelle(s.mid)}catch(e){}closeM();go('satis');toast('Satış iptal edildi ✓ (çizili olarak duruyor)')},'İptal Et','Satış İptali')}
+  s.iptal=true;s.iptalTarih=Date.now();save();try{canliYazHemen(['satis','stok','cari','cek','kasa'])}catch(e){}try{musVeriGuncelle(s.mid)}catch(e){}closeM();go('satis');toast('Satış iptal edildi ✓ (çizili olarak duruyor)')},'İptal Et','Satış İptali')}
+// İptal edilmiş satışı tekrar aktifleştir (müşteri siparişi iptal edip yeniden almak isterse) — silSatis'in birebir tersi
+function satisGeriAl(id){const s0=db.satislar.find(x=>x.id===id);
+  if(!s0||!s0.iptal)return toast('Bu satış iptal değil');
+  if(s0.tip==='iade')return toast('Bu bir iade — iade fişindeki düğmeyi kullanın');
+  askKritik('İptal geri alınsın mı? Satış yeniden aktif olur: stok tekrar düşülür, bakiye yüklenir, ödemeler ve çekler yeniden oluşur.',()=>{
+  const s=db.satislar.find(x=>x.id===id);applySatis(s);
+  {const _tak=(s.taksitler||[]).filter(t=>t.odendi).reduce((a,t)=>a+(+t.tutar||0),0);if(_tak>0){const _m=cari(s.mid);if(_m){_m.bakiye+=_tak*satisDiv(s);setTimeout(()=>toast('ℹ️ Ödenmiş taksit alacağı ('+money(_tak,s.pb||'TL')+') geri alındı'),900);}}}
+  s.iptal=false;delete s.iptalTarih;save();try{canliYazHemen(['satis','stok','cari','cek','kasa'])}catch(e){}try{musVeriGuncelle(s.mid)}catch(e){}closeM();go('satis');toast('Satış yeniden aktif ✓')},'Geri Al','İptali Geri Al')}
 
 /* ---------- CARİ ---------- */
 let cariTab='musteri', cariLokFilt='hepsi';
