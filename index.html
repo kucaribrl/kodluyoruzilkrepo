@@ -6010,12 +6010,33 @@ function maliyetUretimeYolla(id){const m=(db.maliyetler||[]).find(x=>x.id===id);
   if($('ie-kod'))$('ie-kod').value=m.kod||'';
   if($('dk-kesim-uc'))$('dk-kesim-uc').value=m.kes||'';if($('ie-gg'))$('ie-gg').value=m.gg||'';
   if(m.foto){ieFoto=m.foto;try{cizIeFoto()}catch(e){}}
-  toast('💰 Maliyetten dolduruldu — adet/renk gir, aç');
+  // sonraki aşama ücretleri — durak eklerken ₺/adet otomatik dolar (tekrar girmeye gerek yok)
+  iePlanUcret={};if(+m.nak>0)iePlanUcret['Nakış']=+m.nak;if(+m.dik>0)iePlanUcret['Dikim']=+m.dik;if(+m.utu>0)iePlanUcret['Ütü / Paket']=+m.utu;
+  iePlanAdet=+m.adet||0;
+  // kumaş fiyatı + tüketimi taşı (2. basamak) — maliyette girildiyse elle tekrar girilmesin
+  if(+m.kumasFiyat>0||+m.kumasGram>0||+m.kumasAdetKg>0||+m.kumasKg>0){try{
+    if(ieMod!=='kumas')ieModSet('kumas');
+    const kw=$('ie-kumas-wrap');if(kw)kw.style.display='';
+    ieKumasFiyatWrap(true);
+    if($('ie-kumas-fiyat'))$('ie-kumas-fiyat').value=m.kumasFiyat||'';
+    if($('ie-kumas-pb'))$('ie-kumas-pb').value=m.kumasPB||'TL';
+    let tmode=m.kumasMod||'gram',tval='';
+    if(tmode==='gram')tval=m.kumasGram||'';
+    else if(tmode==='adetkg')tval=m.kumasAdetKg||'';
+    else{tmode='kg';tval=(+m.adet>0&&+m.kumasKg>0)?+(m.kumasKg/m.adet).toFixed(4):'';} // maliyet toplam kg → iş emri 1 parça kg
+    ieKumasFiyat=+m.kumasFiyat||0;ieKumasPB=m.kumasPB||'TL';
+    ieTukMod(tmode);if($('ie-kumas-tuk'))$('ie-kumas-tuk').value=tval;
+    ieKumasFiyatCiz();ieTukCiz();
+  }catch(e){}}
+  ieOzetCiz();
+  const _n=[+m.nak>0?'nakış':'',+m.dik>0?'dikim':'',+m.utu>0?'ütü':''].filter(Boolean).join('/');
+  toast('💰 Maliyetten dolduruldu — renk/adet gir'+(_n?(' · '+_n+' ücreti durak eklerken gelecek'):''));
 },160);}
 /* --- Yeni iş emri --- */
 let ieMal=[], ieRenk=[], ieFoto='', ieUrunId=0, ieKumasId=0, ieKumasAd='', ieKumasFiyat=0, ieKumasPB='TL', ieKumasRenkli=false, ieMod='elle', ieBeden=[];
+let iePlanUcret={}, iePlanAdet=0; // maliyet kartından taşınan sonraki-aşama ücretleri + planlanan adet
 function formIsEmri(){
-  ieMal=[];ieRenk=[];ieFoto='';ieUrunId=0;ieKumasId=0;ieKumasAd='';ieKumasFiyat=0;ieKumasPB='TL';ieKumasRenkli=false;
+  ieMal=[];ieRenk=[];ieFoto='';ieUrunId=0;ieKumasId=0;ieKumasAd='';ieKumasFiyat=0;ieKumasPB='TL';ieKumasRenkli=false;iePlanUcret={};iePlanAdet=0;
   ieBeden=[{beden:'S',adet:1},{beden:'M',adet:2},{beden:'L',adet:2},{beden:'XL',adet:1}]; // seri içeriği (beden beden) — varsayılan 6'lı asorti
   const fs=fasonlar();
   const kumaslar=db.hammadde.filter(h=>h.kat==='Kumaş');
@@ -6183,13 +6204,17 @@ function ieOzetCiz(){const el=$('ie-ozet');if(!el)return;
   const kad=ieKumasAd||(k?k.ad:'');
   const kf=+($('ie-kumas-fiyat')?.value||0);const kpb=$('ie-kumas-pb')?.value||'TL';const _kur=+db.kurUSD||0;
   let kfStr='';if(kf){kfStr=(kpb==='USD')?`$${kf.toLocaleString('tr-TR')}${_kur?' · '+TL(kf*_kur):''}`:`${TL(kf)}${_kur?' · $'+(kf/_kur).toLocaleString('tr-TR',{maximumFractionDigits:2}):''}`;}
+  const _planKeys=Object.keys(iePlanUcret||{}).filter(x=>+iePlanUcret[x]>0);
+  const _planStr=_planKeys.length?`<div class="r"><span class="k">Sonraki aşama ücretleri</span><span class="v" style="color:#e8c987">${_planKeys.map(x=>esc(x)+' ₺'+iePlanUcret[x]).join(' · ')}</span></div>`:'';
+  const _adetStr=(iePlanAdet>0&&!t)?`<div class="r"><span class="k">Maliyette planlanan</span><span class="v">${iePlanAdet} adet</span></div>`:'';
   el.innerHTML=`<div class="iesum"><h4>📋 ÖZET</h4>
+    ${_adetStr}
     <div class="r"><span class="k">Ürün</span><span class="v">${esc(ad||'—')}</span></div>
     ${kad?`<div class="r"><span class="k">Kumaş${ieKumasId?'':' 🆕 alınacak'}</span><span class="v">${esc(kad)}</span></div>`:''}
     ${kad&&kf?`<div class="r"><span class="k">Kumaş fiyatı</span><span class="v">${kfStr} /birim</span></div>`:''}
     <div class="r"><span class="k">Toplam</span><span class="v">${t} ${seri?'seri':'adet'}${rn?' · '+rn+' renk':''}${seri&&sa>1?' ('+parca+' adet)':''}</span></div>
     <div class="r"><span class="k">Termin</span><span class="v">${g} gün · ${d.toLocaleDateString('tr-TR',{day:'2-digit',month:'short'})}</span></div>
-    <div class="r"><span class="k">Tahmini işçilik</span><span class="v" style="color:#e8c987">${TL(iscilik)}</span></div></div>`;}
+    <div class="r"><span class="k">Tahmini işçilik</span><span class="v" style="color:#e8c987">${TL(iscilik)}</span></div>${_planStr}</div>`;}
 function ieToplam(){return ieRenk.reduce((a,r)=>a+(+r.adet||0),0)}
 function ieToplamCiz(){const el=$('ie-toplam-box');if(!el)return;const t=ieToplam();const seri=$('ie-birim')?.value==='seri';const sa=Math.max(1,+($('ie-seriadet')?.value||1));
   el.innerHTML=t>0?`<div class="ietot"><span class="l">TOPLAM ÜRETİM</span><span class="v">${t} ${seri?'seri':'adet'}${seri&&sa>1?' · '+(t*sa)+' adet':''}</span></div>`:'';
@@ -6255,7 +6280,8 @@ function cizIeFoto(){const b=$('ie-foto-box');if(!b)return;
 function ieFotoSec(input){const f=input.files&&input.files[0];if(!f)return;resimSecYukle(f,d=>{ieFoto=d;cizIeFoto()},1200,0.75)}
 function ieKesimFiyat(){const fad=($('dk-kesim-fas')?.value||'').trim();const uc=$('dk-kesim-uc');if(!uc)return;const f=db.cariler.find(c=>c.tip==='fason'&&(c.ad||'').toLowerCase()===fad.toLowerCase());if(f&&f.fiyatlar&&f.fiyatlar['Kesim']&&!uc.value)uc.value=f.fiyatlar['Kesim'];ieOzetCiz();}
 /* --- Sonraki durak ekle (dinamik pipeline) --- */
-function formDurakEkle(id){const i=db.isemirleri.find(v=>v.id===id);if(!i||i.durum==='tamam')return;const fs=fasonlar();
+let _deIeId=0; // durak ekle penceresinin iş emri — deFiyat plan ücretini buradan okur
+function formDurakEkle(id){const i=db.isemirleri.find(v=>v.id===id);if(!i||i.durum==='tamam')return;_deIeId=id;const fs=fasonlar();
   const secenek=ISTASYON.filter(s=>s!=='Kesim');
   open_('➕ Sonraki Durak Ekle · #'+id,`
     <div class="mini">Mal şimdi nereye gidiyor? İşlemi seç, fasonu ve ücreti gir. Önceki duraktan çıkan mal buraya akar.</div>
@@ -6264,8 +6290,13 @@ function formDurakEkle(id){const i=db.isemirleri.find(v=>v.id===id);if(!i||i.dur
     <div class="g2"><div><label>Fason firma</label><input id="de-fas" list="de-fason-dl" autocomplete="off" placeholder="yaz · seç · yeni ekle" oninput="deFiyat()"><datalist id="de-fason-dl">${fs.map(f=>`<option value="${esc(f.ad)}">`).join('')}</datalist></div><div><label>₺ / adet</label><input id="de-uc" type="number" inputmode="numeric" placeholder="0"></div></div>
     <button class="btn" onclick="durakEkleKaydet(${id})">Durağı Ekle</button>`);
   const sel=$('de-islem');if(sel)sel.onchange=function(){$('de-ozel').style.display=this.value==='__x'?'block':'none';deFiyat()};
+  deFiyat(); // ilk (varsayılan) işlemin ücretini maliyet planından hemen doldur
 }
-function deFiyat(){const fad=($('de-fas')?.value||'').trim();const uc=$('de-uc');const op=$('de-islem')?.value;if(!uc||op==='__x')return;const f=db.cariler.find(c=>c.tip==='fason'&&(c.ad||'').toLowerCase()===fad.toLowerCase());if(f&&f.fiyatlar&&f.fiyatlar[op]&&!uc.value)uc.value=f.fiyatlar[op];}
+function deFiyat(){const fad=($('de-fas')?.value||'').trim();const uc=$('de-uc');const op=$('de-islem')?.value;if(!uc||op==='__x')return;
+  const f=db.cariler.find(c=>c.tip==='fason'&&(c.ad||'').toLowerCase()===fad.toLowerCase());
+  if(f&&f.fiyatlar&&f.fiyatlar[op]&&!uc.value){uc.value=f.fiyatlar[op];return;} // önce fasonun kayıtlı fiyatı
+  const i=_deIeId?db.isemirleri.find(v=>v.id===_deIeId):null; // yoksa maliyet kartından gelen plan ücreti
+  if(i&&i.planUcret&&+i.planUcret[op]>0&&!uc.value)uc.value=i.planUcret[op];}
 function durakEkleKaydet(id){const i=db.isemirleri.find(v=>v.id===id);if(!i||i.durum==='tamam')return;const op=$('de-islem').value;const ad=op==='__x'?($('de-ozel').value||'').trim():op;
   if(!ad)return toast('İşlem adı gir');
   const _lc=s=>(s||'').toLocaleLowerCase('tr-TR');
@@ -6385,7 +6416,7 @@ function kaydetIsEmri(){
   }else if(_kk){ if(_ktukTop>0){_kk.stok=(+_kk.stok||0)-_ktukTop;_dusulen=_ktukTop;} } // renksiz (toplu) kumaş → toplamdan düş
   else if(_kad){ renkDagilim.forEach(r=>{const kg=_ktuk>0?_parcaOf(r)*_ktuk:0;_eksikKumas.push({renk:r.ad,miktar:+kg.toFixed(3)});}); } // kumaş hiç stokta yok → tümü alınacak
   const _bedenler=birim==='seri'?ieBeden.filter(b=>(b.beden||'').trim()&&+b.adet>0).map(b=>({beden:b.beden.trim(),adet:Math.max(1,+b.adet||1)})):[];
-  const yeniIe={id:nid('ie'),urunId:ieUrunId||null,urun:ad,kod,foto:ieFoto,birim,seriAdet,bedenler:_bedenler,hedef,renkDagilim,malzeme,duraklar,genelGiderBirim:Math.max(0,+$('ie-gg').value||0),kumasId:ieKumasId||null,kumasAd:_kad,kumasFiyat:_kfiyat,kumasPB:_kpb,kumasYeni:(!ieKumasId&&!!_kad),kumasTukBirim:_ktukKg,kumasTukStokParca:_ktuk,kumasTukStokBirim:_cv.birim,kumasTukNot:_cv.not||'',kumasTukToplam:_ktukTop,kumasDusenRenk:_dusenRenk,kumasDusenToplam:_dusulen,baslangic:Date.now(),gun,durum:'devam',stoklandi:false};
+  const yeniIe={id:nid('ie'),urunId:ieUrunId||null,urun:ad,kod,foto:ieFoto,birim,seriAdet,bedenler:_bedenler,hedef,renkDagilim,malzeme,duraklar,genelGiderBirim:Math.max(0,+$('ie-gg').value||0),planUcret:(iePlanUcret&&Object.keys(iePlanUcret).length?{...iePlanUcret}:null),kumasId:ieKumasId||null,kumasAd:_kad,kumasFiyat:_kfiyat,kumasPB:_kpb,kumasYeni:(!ieKumasId&&!!_kad),kumasTukBirim:_ktukKg,kumasTukStokParca:_ktuk,kumasTukStokBirim:_cv.birim,kumasTukNot:_cv.not||'',kumasTukToplam:_ktukTop,kumasDusenRenk:_dusenRenk,kumasDusenToplam:_dusulen,baslangic:Date.now(),gun,durum:'devam',stoklandi:false};
   db.isemirleri.push(yeniIe);
   const alimN=aksesuarAlimAc(yeniIe); // "alınacak" malzemeler için otomatik alım siparişi
   // Elinde olmayan kumaş/renk(ler) → otomatik kumaş alım siparişi; formda kumaşçı yazıldıysa ona atanır
