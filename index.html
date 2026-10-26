@@ -1120,6 +1120,9 @@ function _magazaDoc(){
   const kuponlar=(db.kuponlar||[]).filter(k=>k.aktif!==false&&(!k.bitis||k.bitis>=Date.now())).map(k=>({kod:k.kod,tip:k.tip,deger:+k.deger||0,minTutar:+k.minTutar||0,bitis:k.bitis||0})); // limit/kullanım herkese açık belgeye yazılmaz (onayda yeniden hesaplanır)
   return {firma:db.firma||'',firmaLogo:db.firmaLogo||'',firmaWp:db.firmaWp||'',firmaTel:db.firmaTel||'',kademe:db.kademe||[],minSiparis:+db.minSiparis||0,kampanya:db.kampanya||null,kuponlar,urunler,guncelleme:Date.now()};
 }
+// Kayıtlı müşteri telefonlarının HASH izin listesi (gizlilik: numara açık yazılmaz) → {hash:cariId}
+// Müşteri cihazı girdiği numarayı bununla eşler: eşleşirse kayıt olabilir + carisi otomatik bağlanır.
+async function telIzinMapYap(){const map={};try{for(const c of (db.cariler||[])){if(c&&c.tip==='musteri'&&!c.iptal){const n=telNorm(c.tel);if(n.length>=10){const h=(await sifreOzet('tel|'+n)).slice(0,16);map[h]=c.id;}}}}catch(e){}return map;}
 // OTOMATİK yayın: ürün/fiyat/stok/kupon değişince arka planda sessizce katalogu güncelle
 let _otoYayinT=null,_otoYayinBusy=false;
 function otoYayinTetik(){
@@ -1129,7 +1132,7 @@ function otoYayinTetik(){
     if(!db.otoYayin||_otoYayinBusy||bulutMusteriMod)return;
     if(!bulutBaslat()||!bulutGirisli())return;
     _otoYayinBusy=true;
-    try{await _fb.collection('magaza').doc(MAGAZA_ID).set(_magazaDoc());db.yayinSon=Date.now();try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}}
+    try{const _d=_magazaDoc();try{_d.telIzin=await telIzinMapYap()}catch(e){}await _fb.collection('magaza').doc(MAGAZA_ID).set(_d);db.yayinSon=Date.now();try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}}
     catch(e){console.warn('oto-yayın',e&&e.code);}finally{_otoYayinBusy=false;}
   },20000); // son değişiklikten 20 sn sonra
 }
@@ -1137,7 +1140,8 @@ async function bulutYayinla(){if(!bulutBaslat())return toast('☁️ Bulut ayarl
   if(!bulutGirisli())return bulutGirisIste('yayin');
   try{
     const doc0=_magazaDoc();const urunler=doc0.urunler;
-    // Not: müşteri şifreleri GÜVENLİK için buluta yazılmaz — müşteri portalı misafir (ad+telefon) çalışır
+    // Not: müşteri şifreleri GÜVENLİK için buluta yazılmaz. Telefonlar da AÇIK yazılmaz; yalnız HASH izin listesi (kim kayıt olabilir).
+    try{doc0.telIzin=await telIzinMapYap()}catch(e){}
     await _fb.collection('magaza').doc(MAGAZA_ID).set(doc0);db.yayinSon=Date.now();try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}
     // Girişli müşterilere özel veri (bakiye + geçmiş) — yalnız o müşteri okuyabilir (kurallar)
     let mn=0;try{const users=await bulutTumKullanicilar();const jobs=[];
@@ -1160,6 +1164,7 @@ async function bulutKatalogYukle(){if(!bulutBaslat())return false;
     db.kademe=d.kademe||[];db.minSiparis=+d.minSiparis||0;db.kampanya=d.kampanya||null;db.kuponlar=d.kuponlar||[];
     db.urunler=(d.urunler||[]).map(u=>({...u,pasif:false,stok:(u.renkler||[]).reduce((a,r)=>a+(+r.stok||0),0)}));
     db.cariler=[]; // müşteri portalı misafir çalışır (ad+telefon)
+    db.telIzin=d.telIzin||{}; // kayıtlı müşteri telefon hash'leri (kim kayıt olabilir)
     return true;
   }catch(e){console.warn('katalog',e);return false}
 }
@@ -3858,11 +3863,12 @@ function iadeSil(id){const s=db.satislar.find(x=>x.id===id);if(!s||s.tip!=='iade
   },'Geri Al','İade Geri Al');
 }
 // Müşteriye özel pazar-yeri (portal) linki: aldığı ürünler sepete gömülü (#siparis?s=<base64>)
-function fisPortalLink(s){const base0=((db.firmaSite||'').trim()||location.href.split('#')[0]).split('#')[0];
-  try{const arr=(s.kalemler||[]).map(k=>{const o={u:k.uid,m:+k.mik||0};if(k.renkler&&k.renkler.length)o.r=k.renkler.map(r=>({a:r.ad,m:+r.mik||0}));return o;}).filter(x=>x.u&&x.m>0);
-    if(!arr.length)return base0+'#siparis';
-    const enc=btoa(unescape(encodeURIComponent(JSON.stringify(arr)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-    return base0+'#siparis?s='+enc+(s.mid?'&c='+s.mid:'');}catch(e){return base0+'#siparis';}}
+function fisPortalLink(s){
+  const base=((db.firmaSite||'').trim()||location.href).split('#')[0].split('?')[0].replace(/\/index\.html?$/i,'/'); // index.html + query at → kısa
+  try{const arr=(s.kalemler||[]).map(k=>{const r=(k.renkler&&k.renkler.length)?k.renkler.map(x=>[x.ad,+x.mik||0]).filter(x=>x[1]>0):null;return r&&r.length?[k.uid,+k.mik||0,r]:[k.uid,+k.mik||0];}).filter(x=>x[0]&&x[1]>0);
+    if(!arr.length)return base+'#siparis';
+    const enc=btoa(unescape(encodeURIComponent(JSON.stringify(arr)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); // dizi formu → kısa
+    return base+'#siparis?s='+enc;}catch(e){return base+'#siparis';}}
 function fisText(s){
   const _dv=satisDiv(s)||1;
   const ciz='━━━━━━━━━━━━━━';
@@ -7551,6 +7557,11 @@ async function portalBulutKayit(){
   const telD=tel.replace(/\D/g,'');
   if(telD.length<10)return toast('Geçerli telefon girin (en az 10 hane)');
   if(pw.length<6)return toast('En az 6 haneli şifre girin');
+  // 📞 Telefon eşleştirme: izin listesi yayınlandıysa yalnız kayıtlı müşterilerimiz kayıt olabilir; carisi otomatik bağlanır
+  if(rol==='musteri'&&!davetRol){const izin=db.telIzin||{};if(izin&&Object.keys(izin).length){
+    const h=(await sifreOzet('tel|'+telNorm(tel))).slice(0,16);const esCari=izin[h];
+    if(!esCari)return toast('Bu numara kayıtlı müşterimiz değil — sipariş için önce bizimle iletişime geçin.');
+    davetCari=davetCari||esCari;}}
   toast('Hesap oluşturuluyor…');
   // Kimlik = telefon (e-posta opsiyonel); girişte telefonla girecek
   const r=await bulutKayit(mail||tel,pw,ad,tel,rol,davetCari);
@@ -7847,7 +7858,9 @@ function portalSiparislerim(){const g=portalMusteriGiris();
 let _sepetLinkOkundu=false;
 function portalSepetLinkOku(){try{const h=location.hash||'';const m=h.match(/[?&]s=([A-Za-z0-9\-_]+)/);if(!m)return null;
   let b=m[1].replace(/-/g,'+').replace(/_/g,'/');while(b.length%4)b+='=';
-  const arr=JSON.parse(decodeURIComponent(escape(atob(b))));return Array.isArray(arr)?arr:null;}catch(e){return null;}}
+  const raw=JSON.parse(decodeURIComponent(escape(atob(b))));if(!Array.isArray(raw))return null;
+  // yeni kompakt dizi formu [[uid,mik,[[renk,mik]]]] → {u,m,r:[{a,m}]}; eski obje formu da desteklenir
+  return raw.map(x=>Array.isArray(x)?{u:x[0],m:x[1],r:(x[2]||[]).map(y=>({a:y[0],m:y[1]}))}:x);}catch(e){return null;}}
 function portalSepetLinkUygula(){if(_sepetLinkOkundu)return false;const arr=portalSepetLinkOku();if(!arr||!arr.length)return false;
   _sepetLinkOkundu=true;let eklendi=0;
   arr.forEach(it=>{const u=urun(it.u);if(!u)return;
@@ -7985,9 +7998,9 @@ function portalCiz(){
           <label>Telefon <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub)">— giriş için kullanılır</span></label><input id="pb-tel" placeholder="05.." inputmode="tel" autocomplete="tel">
           <label>Kimsiniz?</label><select id="pb-rol" ${davetRol?'disabled style="opacity:.75"':''}><option value="musteri" ${davetRol==='musteri'?'selected':''}>Müşteri (sipariş vermek için)</option><option value="fason" ${davetRol==='fason'?'selected':''}>Fason (üretim)</option>${['ortak','magaza','depocu','fasontakip'].includes(davetRol)?`<option value="${davetRol}" selected>${ROL_AD[davetRol]||davetRol} (davetli)</option>`:''}</select>
           <div class="mini" style="margin-top:3px">Personel hesapları (ortak/mağaza/depocu) yalnız yöneticinin gönderdiği davet linkiyle açılır.</div>`:''}
-          ${t==='giris'?`<label>${L('Telefon veya E-posta')}</label><input id="pb-mail" autocapitalize="off" autocomplete="username" placeholder="05.. veya ornek@mail.com">`:''}
+          ${t==='giris'?`<label>Telefon</label><input id="pb-mail" autocapitalize="off" inputmode="tel" autocomplete="tel" placeholder="05..">`:''}
           <label>${L('Şifre')}</label><input id="pb-pw" type="password" autocomplete="${t==='kayit'?'new-password':'current-password'}" placeholder="••••••" onkeydown="if(event.key==='Enter')${t==='kayit'?'portalBulutKayit()':'portalBulutGiris()'}">
-          ${t==='kayit'?`<label style="margin-top:8px">E-posta <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--sub)">— isteğe bağlı</span></label><input id="pb-mail" type="email" autocapitalize="off" placeholder="varsa ornek@mail.com">`:''}
+          ${t==='kayit'?`<div class="mini" style="margin-top:4px">İlk kez giriyorsanız bir şifre belirleyin — sonraki girişlerde telefon + bu şifreyle gireceksiniz.</div>`:''}
           <button class="btn g" style="margin-top:15px" onclick="${t==='kayit'?'portalBulutKayit()':'portalBulutGiris()'}">${t==='kayit'?L('Hesap Oluştur'):L('Giriş Yap')}</button>
           ${t==='kayit'?`<div class="mini" style="text-align:center;margin-top:12px;line-height:1.5">Kayıttan sonra <b>${esc(db.firma||'firma')}</b> hesabınızı onaylayınca girebilirsiniz.</div>`:''}
         </div>
@@ -8789,6 +8802,16 @@ window.addEventListener('hashchange',()=>{portalHashAc();});
 // Sekme gizlenince/kapanınca bekleyen değişiklikleri ANINDA buluta yaz (onay vb. kaybolmasın)
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){try{canliYazHemen()}catch(e){}}});
 window.addEventListener('pagehide',()=>{try{canliYazHemen()}catch(e){}});
+// 🩹 WhatsApp paylaşımı / yazdırma dönüşünde iOS PWA bazen ekranı beyaz bırakıyor (tıklanmıyor) — geri gelince toparla
+function _ekranToparla(){try{
+  if(document.body.classList.contains('printing')){try{fisPrintTemizle()}catch(e){}}
+  const pov=document.getElementById('pov');const portalda=pov&&pov.style.display==='block';
+  const app=document.getElementById('app');
+  if(!portalda&&app&&app.children.length===0){try{render()}catch(e){try{go(typeof cur!=='undefined'?cur:'panel')}catch(_){}}}
+}catch(e){}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')setTimeout(_ekranToparla,80);});
+window.addEventListener('pageshow',()=>setTimeout(_ekranToparla,80));
+window.addEventListener('focus',()=>setTimeout(_ekranToparla,120));
 // açılışta kur eskiyse (yok veya 3 saatten eski) sessizce güncelle
 if(!db.kurTarih || Date.now()-db.kurTarih > 3*3600000){
   kurCek().then(ok=>{if(ok&&cur==='panel')render()});
