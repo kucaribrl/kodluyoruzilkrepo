@@ -2055,7 +2055,7 @@ function emp(i,t){return `<div class="empty"><div class="i">${i}</div><p>${t}</p
 function envKatIc(kt){return kt==='Kumaş'?'🧵':kt==='Aksesuar'?'🔘':kt==='Etiket'?'🏷️':kt==='Ambalaj'?'📦':'📦'}
 let envMalKat='Tümü', envView='stok';
 function envanterAc(){go('envanter')}
-function malSipBekleyen(){return db.malSiparis.filter(s=>s.durum==='bekliyor')}
+function malSipBekleyen(){return db.malSiparis.filter(s=>s.durum==='bekliyor'&&!s.silindi)}
 function rEnvanter(){
   const bek=malSipBekleyen().length;
   let html=`<div class="seg2" style="margin-bottom:12px"><div class="o ${envView==='stok'?'on':''}" onclick="envView='stok';rEnvanter()">📦 Stokta</div><div class="o ${envView==='siparis'?'on':''}" onclick="envView='siparis';rEnvanter()">🚚 Siparişler${bek?` <span class="miniBadge">${bek}</span>`:''}</div></div>`;
@@ -2088,8 +2088,8 @@ function sipSatirlar(s){if(s.satirlar&&s.satirlar.length)return s.satirlar;retur
 function sipTopMik(s){return sipSatirlar(s).reduce((a,l)=>a+(+l.miktar||0),0);}
 function sipTopGelen(s){return sipSatirlar(s).reduce((a,l)=>a+(+l.gelen||0),0);}
 // Bir malzemeye "yolda" (bekleyen siparişlerden gelecek) miktar
-function malGelecek(h){let t=0;db.malSiparis.forEach(s=>{if(s.durum!=='bekliyor'&&s.durum!=='kismi')return;const m=(s.hid&&s.hid===h.id)||(!s.hid&&s.kat===h.kat&&(s.ad||'').toLowerCase()===(h.ad||'').toLowerCase());if(m)sipSatirlar(s).forEach(l=>t+=Math.max(0,(+l.miktar||0)-(+l.gelen||0)));});return t;}
-function sipAcik(s){return s.durum==='bekliyor'||s.durum==='kismi';}
+function malGelecek(h){let t=0;db.malSiparis.forEach(s=>{if(s.silindi||(s.durum!=='bekliyor'&&s.durum!=='kismi'))return;const m=(s.hid&&s.hid===h.id)||(!s.hid&&s.kat===h.kat&&(s.ad||'').toLowerCase()===(h.ad||'').toLowerCase());if(m)sipSatirlar(s).forEach(l=>t+=Math.max(0,(+l.miktar||0)-(+l.gelen||0)));});return t;}
+function sipAcik(s){return !s.silindi&&(s.durum==='bekliyor'||s.durum==='kismi');}
 function sipKalan(s){return sipSatirlar(s).reduce((a,l)=>a+Math.max(0,(+l.miktar||0)-(+l.gelen||0)),0);}
 // Stoğa renk bazlı ekle
 // 🧵 Kumaş PARTİ (lot) takibi: aynı rengin birden fazla partisi olabilir; partiler arası ton farkı riskine karşı
@@ -2136,6 +2136,7 @@ function malSipRow(s){
   return `<div class="row" onclick="malSipDetay(${s.id})"><div class="av gray">${envKatIc(s.kat)}</div><div class="mid"><div class="t">${esc(s.ad)} <span class="tag">${tot.toLocaleString('tr-TR')} ${esc(s.birim||'')}${rn?' · '+rn+' renk':''}</span>${kismi?` <span class="tag" style="background:var(--thr-s);color:var(--thr)">kısmi</span>`:''}</div><div class="s">${s.ted?'🚚 '+esc(s.ted)+' · ':''}${kismi?`kalan <b>${kalan.toLocaleString('tr-TR')} ${esc(s.birim||'')}</b> · `:''}📅 ${s.beklenen?dstr(s.beklenen):'—'} · ${dur}${fiy}</div></div><span style="color:var(--sub)">›</span></div>`;
 }
 function malSipGecmisRow(s){
+  if(s.silindi)return `<div class="row" onclick="malSipDetay(${s.id})" style="opacity:.55"><div class="av gray">${envKatIc(s.kat)}</div><div class="mid"><div class="t" style="text-decoration:line-through">${esc(s.ad)} <span class="tag" style="background:var(--bad-s);color:var(--bad)">🗑 silindi</span></div><div class="s" style="text-decoration:line-through">${s.ted?esc(s.ted)+' · ':''}${sipTopMik(s)} ${esc(s.birim||'')}</div></div><div class="end"><span class="mini" style="color:var(--good)">↩️ geri al</span></div></div>`;
   if(s.durum==='iptal')return `<div class="row" onclick="malSipDetay(${s.id})"><div class="av gray">${envKatIc(s.kat)}</div><div class="mid"><div class="t">${esc(s.ad)} <span class="tag" style="background:var(--bad-s);color:var(--bad)">iptal</span></div><div class="s">${s.ted?esc(s.ted)+' · ':''}${sipTopMik(s)} ${esc(s.birim||'')}</div></div></div>`;
   const to=sipTopMik(s),tg=sipTopGelen(s);const fark=tg-to;const tam=Math.abs(fark)<0.001;
   const pill=tam?'<span class="pill ok">✓ tam</span>':`<span class="pill low">⚠️ ${fark>0?'+':''}${(+fark.toFixed(2))}</span>`;
@@ -2173,10 +2174,13 @@ function malSipDetay(id){
       <button class="btn ghost" style="margin-top:8px" onclick="malSipPdf(${id})">🧾 İş Emri — Gönder / PDF</button>
       ${s.durum==='bekliyor'?`<button class="btn ghost" style="margin-top:8px" onclick="malSipForm(${id})">✏️ Düzenle</button>`:''}
       <button class="btn ghost" style="margin-top:8px" onclick="malSipIptal(${id})">Siparişi İptal Et</button>`;
+  }else if(s.silindi){
+    h+=`<div class="warnbox" style="margin-top:12px">🗑 <b>Bu sipariş silindi</b>${s.silTarih?' · '+dstr(s.silTarih):''} — çizili olarak saklanıyor; stok ve tedarikçi borcu değişmedi.</div>
+      <button class="btn g" style="margin-top:10px" onclick="malSipGeriAl(${id})">↩️ Geri Al — ${(s.durum==='bekliyor'||s.durum==='kismi')?'Bekleyenlere döner':'Geçmişe döner'}</button>`;
   }else{
-    h+=`${s.durum!=='iptal'?`<button class="btn g" style="margin-top:12px" onclick="malSipTekrar(${id})">🔁 Aynısını Tekrar Sipariş Ver</button>
+    h+=`${s.durum==='iptal'?`<button class="btn g" style="margin-top:12px" onclick="malSipGeriAl(${id})">↩️ İptali Geri Al — Bekleyenlere döner</button>`:`<button class="btn g" style="margin-top:12px" onclick="malSipTekrar(${id})">🔁 Aynısını Tekrar Sipariş Ver</button>
       <button class="btn ghost" style="margin-top:8px" onclick="malSipPdf(${id})">🧾 İş Emri — PDF / Yazdır</button>
-      <button class="btn ghost" style="margin-top:8px" onclick="malSipFisEkle(${id})">📎 Fiş fotoğrafı ekle</button>`:''}
+      <button class="btn ghost" style="margin-top:8px" onclick="malSipFisEkle(${id})">📎 Fiş fotoğrafı ekle</button>`}
       <button class="btn danger" style="margin-top:8px" onclick="malSipSil(${id})">Sil</button>`;
   }
   open_('🚚 Sipariş #'+id,h);
@@ -2530,14 +2534,18 @@ function malSipGonder(id){const s=db.malSiparis.find(x=>x.id===id);if(!s)return;
   waAc(ted?ted.tel:'',t);
   setTimeout(()=>{try{if(cur==='envanter'){envView='siparis';rEnvanter();}}catch(e){}},500);
 }
-function malSipIptal(id){askConfirm('Sipariş iptal edilsin mi?',()=>{const s=db.malSiparis.find(x=>x.id===id);if(s)s.durum='iptal';save();closeM();envView='siparis';rEnvanter();toast('Sipariş iptal edildi');});}
-function malSipSil(id){const s=(db.malSiparis||[]).find(x=>x.id===id);
-  const alinmis=s&&(s.durum==='kismi'||(typeof sipTopGelen==='function'&&sipTopGelen(s)>0));
-  const msg=alinmis?'Bu siparişin KISMİ teslimatı var — silersen gelen miktar kaydı kaybolur. Yine de silinsin mi?':'Sipariş kaydı silinsin mi?';
-  askKritik(msg,()=>{
-    let iptalVar=false;
-    (db.hareketler||[]).filter(x=>x.tip==='alim'&&x.sipId===id).forEach(x=>{const ted=cari(x.cariId);if(!ted)return;const pb=x.pb||'TL',amt=+x.tutarPB||+x.tutar||0;if(pb==='USD')ted.bakiyeUSD=(+ted.bakiyeUSD||0)-amt;else ted.bakiye=(+ted.bakiye||0)-amt;db.hareketler.push({id:nid('hr'),cariId:ted.id,tip:'alim-iptal',tutar:+x.tutar||0,pb,tutarPB:amt,kur:x.kur||1,tarih:Date.now(),hesapId:null,yon:null,aciklama:'Sipariş silindi — alım iptali: '+((s&&s.ad)||'')});iptalVar=true;});
-    db.malSiparis=db.malSiparis.filter(x=>x.id!==id);save();closeM();envView='siparis';rEnvanter();toast('Silindi'+(iptalVar?' · tedarikçi borcu geri alındı':''));},'Sil','Sipariş Sil');}
+// İptal = soft-delete (çizili, geri alınabilir) — durum korunur, geri alınca yerine döner
+function malSipIptal(id){askKritik('Sipariş iptal edilsin mi?\n\nKayıt SİLİNMEZ — "Geçmiş"te çizili durur, istediğinde tek dokunuşla Bekleyenlere geri alırsın.',()=>{const s=db.malSiparis.find(x=>x.id===id);if(s){s.silindi=true;s.silTarih=Date.now();}save();try{canliYazHemen(['stok'])}catch(e){}closeM();envView='siparis';rEnvanter();toast('İptal edildi ✓ (çizili — geri alınabilir)');},'İptal Et','Sipariş İptali');}
+// Sil = soft-delete; stok/borç DEĞİŞMEZ (geri almada tutarlı kalsın diye); çizili durur, geri alınır
+function malSipSil(id){const s=(db.malSiparis||[]).find(x=>x.id===id);if(!s)return;
+  askKritik('Sipariş silinsin mi?\n\nKayıt tamamen KAYBOLMAZ — "Geçmiş"te çizili durur, istediğinde geri alırsın. Stok ve tedarikçi borcuna dokunulmaz.',()=>{
+    s.silindi=true;s.silTarih=Date.now();save();try{canliYazHemen(['stok'])}catch(e){}closeM();envView='siparis';rEnvanter();toast('Silindi ✓ (çizili — geri alınabilir)');},'Sil','Sipariş Sil');}
+// Silinen/iptal edilen siparişi geri al — durumuna göre Bekleyenlere ya da Geçmişe döner
+function malSipGeriAl(id){const s=db.malSiparis.find(x=>x.id===id);if(!s)return;
+  s.silindi=false;delete s.silTarih;
+  if(s.durum==='iptal'){s.durum=s.iptalOnceDurum||'bekliyor';delete s.iptalOnceDurum;} // eski 'iptal' kayıtları için
+  save();try{canliYazHemen(['stok'])}catch(e){}closeM();envView='siparis';rEnvanter();
+  toast((s.durum==='bekliyor'||s.durum==='kismi')?'↩️ Geri alındı — Bekleyenlere döndü':'↩️ Geri alındı — Geçmişe döndü');}
 
 function urunKapak(u){const r=(u.renkler||[]).find(x=>x&&typeof x==='object'&&x.foto);return r?r.foto:''}
 // ürünün tüm görselleri (renk fotoğrafları + genel fotolar) — galeri için
