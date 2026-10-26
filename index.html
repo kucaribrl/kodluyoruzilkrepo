@@ -1456,7 +1456,7 @@ const ii=s=>(s||'?').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUppe
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const guvenliSrc=s=>{s=String(s||'');return /^(https?:|data:image\/|blob:)/i.test(s)?esc(s):'';}; // img src'ye yalnız güvenli şema
 const jsq=s=>(s==null?'':String(s)).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); // onclick içi tek-tırnak güvenliği
-function toast(t){const e=$('toast');e.textContent=t;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),1900)}
+function toast(t,ms){const e=$('toast');e.textContent=t;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),Math.max(1200,+ms||1900))}
 let _cYes=null;
 function askConfirm(msg,onYes,yesLabel){$('cMsg').textContent=msg;$('cYes').textContent=yesLabel||'Evet';_cYes=onYes;$('cov').classList.add('show')}
 $('cYes').onclick=()=>{$('cov').classList.remove('show');const f=_cYes;_cYes=null;if(f)f()};
@@ -3896,6 +3896,7 @@ function saleImages(s){const imgs=[],seen=new Set();
   return imgs;
 }
 function waFisPreview(id){const s=db.satislar.find(x=>x.id===id);if(!s)return toast('Satış bulunamadı');const m=cari(s.mid);
+  const _masaustu=!('ontouchstart' in window)&&(navigator.maxTouchPoints||0)===0; // Mac/PC — dosya doğrudan WhatsApp'a verilemez
   open_('Müşteriye Fiş Gönder',`
     <div class="okbox">📄 <b>En net (vektörel) fiş:</b> aşağıdaki <b>"Net Fiş — Yazdır/PDF"</b> ile aç, çıkan ekranda hedefi <b>"PDF olarak kaydet"</b> seç → PDF'i WhatsApp'tan paylaş. (Metin gerçek yazı, sınırsız net.)</div>
     <button class="btn g" style="margin-top:10px" onclick="closeM();setTimeout(()=>fisTermal(${id}),160)">🖨️ Net Fiş — Yazdır / PDF olarak kaydet</button>
@@ -3905,6 +3906,7 @@ function waFisPreview(id){const s=db.satislar.find(x=>x.id===id);if(!s)return to
     <div class="g2"><button class="btn ghost sm" onclick="musteriFisGonder(${id},'pdf')">📄 PDF (resimli)</button><button class="btn ghost sm" onclick="musteriFisGonder(${id},'jpg')">🖼️ Resim</button></div>
     <button class="btn ghost sm" style="margin-top:8px" onclick="fisWhatsapp(${id})">📝 Düz yazı olarak gönder</button>
     ${(!m||!m.tel)?'<div class="mini" style="margin-top:6px">Müşteri telefonu yok — paylaşımda kişi seçtirir.</div>':''}
+    ${_masaustu?`<div class="okbox" style="margin-top:14px">💻 <b>Bilgisayardasın.</b> Mac/PC tarayıcısı dosyayı WhatsApp'a doğrudan veremiyor (paylaş menüsünde WhatsApp çıkmaz). Yukarıdan <b>PDF/Resim indir</b> → aşağıdan sohbeti aç → indirdiğin dosyayı sohbete <b>sürükle</b> (ya da 📎 ile ekle).<br><span class="mini">📱 Telefondan açarsan tek dokunuşla direkt WhatsApp'a gönderebilirsin.</span></div>${(m&&m.tel)?`<button class="btn g sm" style="margin-top:8px" onclick="window.open('https://wa.me/${waTel(m.tel)}','_blank')">💬 WhatsApp Web'de ${esc(m.ad)} sohbetini aç</button>`:''}`:''}
   `);
   musteriFisResim(s,(blob)=>{const w=$('mfis-wrap');if(!w)return;if(!blob){w.innerHTML='<span class="mini">Önizleme oluşturulamadı</span>';return;}
     const url=URL.createObjectURL(blob);w.innerHTML=`<img src="${url}" style="max-width:100%;border-radius:12px;box-shadow:0 3px 16px rgba(0,0,0,.22)">`;});
@@ -4043,7 +4045,7 @@ async function canvasPdfPaylas(canvas,fname,text){
     try{await navigator.share({files:[file],text:text||''});return;}catch(e){if(e&&e.name==='AbortError')return;}
   }
   const url=URL.createObjectURL(pdf);const a=document.createElement('a');a.href=url;a.download=fname;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);
-  toast('📥 PDF indirildi — WhatsApp\'tan gönderebilirsin');
+  toast('📥 PDF indirildi — bilgisayarda WhatsApp Web sohbetine sürükle (telefondan direkt paylaşılır)',4200);
 }
 async function musteriFisGonder(id,fmt){const s=db.satislar.find(x=>x.id===id);if(!s)return;
   fmt=fmt||'pdf';toast('🧾 Fiş hazırlanıyor…');
@@ -4055,7 +4057,7 @@ async function musteriFisGonder(id,fmt){const s=db.satislar.find(x=>x.id===id);i
     if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){
       try{await navigator.share({files:[file],text:txt});return;}catch(e){if(e&&e.name==='AbortError')return;}}
     const url=URL.createObjectURL(file);const a=document.createElement('a');a.href=url;a.download=fname;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);
-    toast('📥 '+(fmt==='pdf'?'PDF':'Görsel')+' indirildi — WhatsApp\'tan gönderebilirsin');
+    toast('📥 '+(fmt==='pdf'?'PDF':'Görsel')+' indirildi — bilgisayarda WhatsApp Web sohbetine sürükle (telefondan direkt paylaşılır)',4200);
   });
 }
 function dataURLtoFile(durl,name){const arr=durl.split(',');const mime=(arr[0].match(/:(.*?);/)||[])[1]||'image/jpeg';const bstr=atob(arr[1]);let n=bstr.length;const u8=new Uint8Array(n);while(n--)u8[n]=bstr.charCodeAt(n);return new File([u8],name,{type:mime})}
