@@ -3857,6 +3857,12 @@ function iadeSil(id){const s=db.satislar.find(x=>x.id===id);if(!s||s.tip!=='iade
     s.iptal=true;s.iptalTarih=Date.now();save();closeM();go('satis');toast('İade geri alındı ✓ (çizili olarak duruyor)');
   },'Geri Al','İade Geri Al');
 }
+// Müşteriye özel pazar-yeri (portal) linki: aldığı ürünler sepete gömülü (#siparis?s=<base64>)
+function fisPortalLink(s){const base0=((db.firmaSite||'').trim()||location.href.split('#')[0]).split('#')[0];
+  try{const arr=(s.kalemler||[]).map(k=>{const o={u:k.uid,m:+k.mik||0};if(k.renkler&&k.renkler.length)o.r=k.renkler.map(r=>({a:r.ad,m:+r.mik||0}));return o;}).filter(x=>x.u&&x.m>0);
+    if(!arr.length)return base0+'#siparis';
+    const enc=btoa(unescape(encodeURIComponent(JSON.stringify(arr)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+    return base0+'#siparis?s='+enc+(s.mid?'&c='+s.mid:'');}catch(e){return base0+'#siparis';}}
 function fisText(s){
   const _dv=satisDiv(s)||1;
   const ciz='━━━━━━━━━━━━━━';
@@ -3883,10 +3889,16 @@ function fisText(s){
   t+=kalan>0.5?`🔴 *Kalan: ${money(kalan,s.pb)}*\n`:`🟢 *Ödendi ✓*\n`;
   if(s.odemeler&&s.odemeler.length>1){t+=`\n💳 *Ödemeler*\n`;s.odemeler.forEach(l=>{const ek=l.tur==='Çek'&&l.vade?' (vade '+dstr(l.vade)+')':'';t+=`• ${l.tur}${ek}: ${money(l.tutar,l.pb)}\n`})}
   if(s.sevkiyat)t+=`\n📦 Sevkiyat: ${s.sevkiyat}\n`;
+  t+=`\n🛍️ *Tüm modellerimiz + aldıklarınız sepette hazır:*\n${fisPortalLink(s)}\n`;
   t+=`\n🙏 Bizi tercih ettiğiniz için teşekkür ederiz.`;
   if(db.firmaTel)t+=`\n📞 ${db.firmaTel}`;
   return t;
 }
+// Fiş ekranından: katalog linkini (aldıkları sepette) WhatsApp'tan gönder
+function fisKatalogLinkGonder(id){const s=db.satislar.find(x=>x.id===id);if(!s)return toast('Satış bulunamadı');const m=cari(s.mid);
+  const link=fisPortalLink(s);const firma=db.firma||'IQ Basics';
+  const msg=`Merhaba${m?' '+m.ad:''} 👋\n*${firma}* — siparişiniz için teşekkürler! 🙏\n\n🛍️ Tüm modellerimize buradan göz atabilir, *aldığınız ürünler sepetinizde hazır* — dilediğinizi ekleyip tekrar sipariş verebilirsiniz:\n${link}`;
+  waAc(m?m.tel:'',msg);}
 function saleImages(s){const imgs=[],seen=new Set();
   if(s.foto&&!seen.has(s.foto)){seen.add(s.foto);imgs.push({src:s.foto,ad:'Sipariş fotoğrafı'})}
   s.kalemler.forEach(k=>{const u=urun(k.uid);if(!u)return;let added=false;
@@ -3898,7 +3910,8 @@ function saleImages(s){const imgs=[],seen=new Set();
 function waFisPreview(id){const s=db.satislar.find(x=>x.id===id);if(!s)return toast('Satış bulunamadı');const m=cari(s.mid);
   const _masaustu=!('ontouchstart' in window)&&(navigator.maxTouchPoints||0)===0; // Mac/PC — dosya doğrudan WhatsApp'a verilemez
   open_('Müşteriye Fiş Gönder',`
-    <div class="okbox">📄 <b>En net (vektörel) fiş:</b> aşağıdaki <b>"Net Fiş — Yazdır/PDF"</b> ile aç, çıkan ekranda hedefi <b>"PDF olarak kaydet"</b> seç → PDF'i WhatsApp'tan paylaş. (Metin gerçek yazı, sınırsız net.)</div>
+    <div class="card" style="padding:12px 13px;border:1.5px solid var(--good);background:var(--good-s,#eafaf1)"><b>🛍️ Pazar yeri linki</b><div class="mini" style="margin-top:4px;line-height:1.5">Müşteri linke girince <b>tüm modellerinizi</b> görür; <b>aldıkları ürünler sepetinde hazır</b> gelir — dilediğini ekleyip tekrar sipariş verebilir.</div><button class="btn g sm" style="margin-top:9px" onclick="fisKatalogLinkGonder(${id})">🔗 Katalog linkini gönder (sepet dolu)</button></div>
+    <div class="okbox" style="margin-top:12px">📄 <b>En net (vektörel) fiş:</b> aşağıdaki <b>"Net Fiş — Yazdır/PDF"</b> ile aç, çıkan ekranda hedefi <b>"PDF olarak kaydet"</b> seç → PDF'i WhatsApp'tan paylaş. (Metin gerçek yazı, sınırsız net.)</div>
     <button class="btn g" style="margin-top:10px" onclick="closeM();setTimeout(()=>fisTermal(${id}),160)">🖨️ Net Fiş — Yazdır / PDF olarak kaydet</button>
     <div class="sec" style="margin-top:14px">Alternatif — Resimli fiş (fotoğraflı)</div>
     <div class="mini">Aldığı ürünler <b>fotoğrafı, adedi, fiyatıyla</b> tek görselde. Fotoğraf içerdiği için resim kalitesindedir.</div>
@@ -7494,7 +7507,9 @@ let portalGirisId=0, portalPreview=false, portalGKad='', portalGSif='';
 try{const _tok=localStorage.getItem('oz_portal_oturum')||'';const _c=_tok&&!/^\d+$/.test(_tok)?db.cariler.find(x=>x&&x.portalTok&&x.portalTok===_tok):null;portalGirisId=_c?_c.id:0;if(!_c&&_tok)localStorage.removeItem('oz_portal_oturum');}catch(e){}
 try{_pLoginKilit=+localStorage.getItem('oz_portal_kilit')||0}catch(e){}
 function portalMusteriGiris(){return portalGirisId?cari(portalGirisId):null}
-function portalAc(){portalPreview=false;const m=portalMusteriGiris();if(m){portalMusAd=m.ad;portalView='katalog'}else portalView='giris';document.getElementById('pov').style.display='block';window.scrollTo(0,0);portalCiz()}
+function portalAc(){portalPreview=false;const m=portalMusteriGiris();if(m){portalMusAd=m.ad;portalView='katalog'}else portalView='giris';document.getElementById('pov').style.display='block';window.scrollTo(0,0);
+  try{if(portalSepetLinkUygula()&&portalView!=='giris')portalView='sepet';}catch(e){} // fişten gelen link → aldıkları sepette
+  portalCiz()}
 function portalOnizle(){portalPreview=true;portalView='katalog';document.getElementById('pov').style.display='block';window.scrollTo(0,0);portalCiz()}
 let _pLoginHata=0,_pLoginKilit=0;
 async function portalLogin(){const k=(portalGKad||'').trim().toLowerCase(),s=(portalGSif||'');
@@ -7511,7 +7526,8 @@ async function portalLogin(){const k=(portalGKad||'').trim().toLowerCase(),s=(po
   const tok=(()=>{const b=new Uint8Array(16);try{crypto.getRandomValues(b)}catch(e){for(let i=0;i<16;i++)b[i]=Math.random()*256}return 't'+Array.from(b).map(x=>x.toString(16).padStart(2,'0')).join('')})();
   m.portalTok=tok;save();
   try{localStorage.setItem('oz_portal_oturum',tok)}catch(e){}
-  portalView='katalog';portalCiz();toast('Hoş geldin '+m.ad+' 👋');}
+  try{portalSepetLinkUygula()}catch(e){}
+  portalView=(portalSepet&&portalSepet.length&&_sepetLinkOkundu)?'sepet':'katalog';portalCiz();toast('Hoş geldin '+m.ad+' 👋');}
 function portalCikis(){try{const _m=cari(portalGirisId);if(_m&&_m.portalTok){delete _m.portalTok;save();}}catch(e){}portalGirisId=0;portalMusAd='';portalSepet=[];portalTel='';portalSehir='';portalAdres='';try{localStorage.removeItem('oz_portal_oturum')}catch(e){}portalPreview=false;portalView='giris';portalCiz()}
 // --- Bulut (Firebase) portal kimlik akışı ---
 let bulutAuthTab='giris', davetRol='', davetCari=0;
@@ -7827,6 +7843,22 @@ function portalSiparislerim(){const g=portalMusteriGiris();
   const gecmis=db.satislar.filter(s=>s.tip!=='iade'&&((m&&s.mid===m.id)||(s.mus||'').toLowerCase()===ad)).sort((a,b)=>b.tarih-a.tarih);
   const bekleyen=db.bekleyenPortal.filter(o=>(o.mus||'').toLowerCase()===ad).sort((a,b)=>b.tarih-a.tarih);
   return {gecmis,bekleyen};}
+// Fişle gelen linkten (#siparis?s=<base64>) sepeti kur — müşteri cihazında satış kaydı olmadığından ürünler linke gömülüdür
+let _sepetLinkOkundu=false;
+function portalSepetLinkOku(){try{const h=location.hash||'';const m=h.match(/[?&]s=([A-Za-z0-9\-_]+)/);if(!m)return null;
+  let b=m[1].replace(/-/g,'+').replace(/_/g,'/');while(b.length%4)b+='=';
+  const arr=JSON.parse(decodeURIComponent(escape(atob(b))));return Array.isArray(arr)?arr:null;}catch(e){return null;}}
+function portalSepetLinkUygula(){if(_sepetLinkOkundu)return false;const arr=portalSepetLinkOku();if(!arr||!arr.length)return false;
+  _sepetLinkOkundu=true;let eklendi=0;
+  arr.forEach(it=>{const u=urun(it.u);if(!u)return;
+    let renkler=(it.r&&it.r.length)?it.r.map(r=>({ad:r.a,mik:+r.m||0})).filter(r=>r.mik>0):null;
+    const mik=renkler?renkler.reduce((a,r)=>a+r.mik,0):(+it.m||0);if(mik<=0)return;
+    const ex=portalSepet.find(x=>x.uid===it.u);
+    if(ex){if(renkler&&ex.renkler){renkler.forEach(nr=>{const f=ex.renkler.find(x=>x.ad===nr.ad);if(f)f.mik+=nr.mik;else ex.renkler.push({...nr})});ex.mik=ex.renkler.reduce((a,x)=>a+x.mik,0)}else ex.mik=(+ex.mik||0)+mik;}
+    else portalSepet.push({uid:it.u,urun:u.ad,mik,birim:u.birim,fiyat:portalFiyat(u),renkler:renkler||undefined});
+    eklendi++;});
+  if(eklendi){try{portalStokKirp()}catch(e){}return true;}
+  return false;}
 function portalTekrar(sid){const s=db.satislar.find(x=>x.id===sid)||db.bekleyenPortal.find(x=>x.id===sid);if(!s)return;
   (s.kalemler||[]).forEach(k=>{const u=urun(k.uid);if(!u)return;const ex=portalSepet.find(x=>x.uid===k.uid);
     if(ex){if(k.renkler&&ex.renkler){k.renkler.forEach(nr=>{const f=ex.renkler.find(x=>x.ad===nr.ad);if(f)f.mik+=nr.mik;else ex.renkler.push({...nr})});ex.mik=ex.renkler.reduce((a,x)=>a+x.mik,0)}else ex.mik+=k.mik}
@@ -8747,7 +8779,7 @@ function fabAction(){if(cur==='stok'){canUrunYaz()?formUrun():toast('Bu işlem i
 go('panel');
 // Müşteri cihazı: #siparis + bulut ayarlı → katalogu buluttan çek, sipariş moduna geç
 async function musteriBulutAc(){bulutMusteriMod=true;await bulutKatalogYukle();await bulutAuthBekle();await bulutProfilYukle();await bulutRolVerisiYukle();portalAc();}
-function portalHashAc(){const h=location.hash||'';if(h==='#siparis'||h.indexOf('#kayit')===0){portalDavetOku();
+function portalHashAc(){const h=location.hash||'';if(h.indexOf('#siparis')===0||h.indexOf('#kayit')===0){portalDavetOku();
     // patron ekranı flaşını önle: portalı HEMEN göster (yüklenirken splash)
     try{const pov=document.getElementById('pov');if(pov){pov.style.display='block';if(!pov.innerHTML.trim())pov.innerHTML=`<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px">${db.firmaLogo?`<img src="${guvenliSrc(db.firmaLogo)}" style="height:46px;opacity:.9">`:`<div style="font-size:44px">🛍️</div>`}<div style="color:var(--sub);font-size:13px">Katalog yükleniyor…</div></div>`;}}catch(e){}
     // Yönetici/personel cihazı (gerçek veri var) → müşteri moduna GİRME; portal yerel veriyle önizleme olarak açılır
