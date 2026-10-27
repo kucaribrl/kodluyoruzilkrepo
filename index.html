@@ -3306,6 +3306,23 @@ function topluZamUygula(){const kat=$('tz-kat').value,oran=+($('tz-oran').value|
 
 /* ---------- SATIŞ ---------- */
 let satisFilt='tum';
+// Tek satış satırı (4 varyant: iade-iptal / iade / iptal / normal)
+function satisRowHTML(s){
+  const ayrildi=s.teslimDurum==='ayrildi';const teslim=!ayrildi;const odendi=s.odenen>=s.tutar;
+  const depoBadge=s.depo==='bekliyor'?'<span class="pill low" style="margin-left:5px">📦 ayrılıyor</span>':s.depo==='hazir'?'<span class="pill ok" style="margin-left:5px">✓ hazır</span>':'';
+  if(s.tip==='iade'&&s.iptal)return `<div class="row" onclick="iadeFis(${s.id})" style="opacity:.6"><div class="av" style="background:var(--bad-s)">🚫</div><div class="mid"><div class="t" style="text-decoration:line-through">${esc(s.mus)} <span class="pill" style="background:var(--bad-s);color:var(--bad)">İADE · İPTAL</span></div><div class="s" style="text-decoration:line-through">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div>${s.iptalTarih?`<div class="mini" style="color:var(--bad)">geri alındı: ${tstr(s.iptalTarih)}</div>`:''}</div><div class="end"><div class="n" style="text-decoration:line-through">−${money(s.tutar,s.pb)}</div><div class="u">iptal</div></div></div>`;
+  if(s.tip==='iade')return `<div class="row" onclick="iadeFis(${s.id})"><div class="svbars"><i class="svbar" style="background:var(--bad)"></i></div><div class="av" style="background:var(--bad-s)">↩️</div><div class="mid"><div class="t">${esc(s.mus)} <span class="pill" style="background:var(--bad-s);color:var(--bad)">İADE</span></div><div class="s">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div></div><div class="end"><div class="n" style="color:var(--bad)">−${money(s.tutar,s.pb)}</div><div class="u">${s.nakit?'💵 nakit iade':'cari alacak'}</div></div></div>`;
+  if(s.iptal)return `<div class="row" onclick="satisFis(${s.id})" style="opacity:.6"><div class="av" style="background:var(--bad-s)">🚫</div><div class="mid"><div class="t" style="text-decoration:line-through">${esc(s.mus)} <span class="pill" style="background:var(--bad-s);color:var(--bad)">İPTAL</span></div><div class="s" style="text-decoration:line-through">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div>${s.iptalTarih?`<div class="mini" style="color:var(--bad)">iptal: ${tstr(s.iptalTarih)}</div>`:''}</div><div class="end"><div class="n" style="text-decoration:line-through">${money(s.tutar,s.pb)}</div><div class="u">iptal</div></div></div>`;
+  return `<div class="row" onclick="satisFis(${s.id})"><div class="svbars"><i class="svbar ${teslim?'teslim':''}" title="Teslim edildi"></i><i class="svbar ${odendi?'odendi':''}" title="Parası alındı"></i></div><div class="av ${ayrildi?'o':'g'}">${ayrildi?'🔖':'🧾'}</div><div class="mid"><div class="t">${esc(s.mus)}${depoBadge}${s.eksikStok?' <span class="pill" style="background:var(--thr-s);color:var(--thr)">📦 bekleyen</span>':''}${lokListe().length>1&&s.lokId?` <span class="tag">${lokIc(s.lokId)} ${esc(lokAd(s.lokId))}</span>`:''}</div><div class="s">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div></div><div class="end"><div class="n">${money(s.tutar,s.pb)}</div><div class="u">${ayrildi?'🔖 ayrıldı':teslim?'✓ teslim':''}${odendi?' · 💰':''}</div></div></div>`;
+}
+// Tarih kovası: son 7 gün açık, 8-14 gün "Geçen hafta", öncesi aylık — hepsi kapalı
+function satBucket(tarih){const now=Date.now();
+  if(tarih>=now-7*86400000)return {key:'w0',label:'Bu hafta',open:true};
+  if(tarih>=now-14*86400000)return {key:'w1',label:'Geçen hafta',open:false};
+  const d=new Date(tarih);return {key:'m'+d.getFullYear()+'-'+d.getMonth(),label:d.toLocaleDateString('tr-TR',{month:'long',year:'numeric'}),open:false};
+}
+let satGrupAcik=new Set();
+function satGrupTog(k){if(satGrupAcik.has(k))satGrupAcik.delete(k);else satGrupAcik.add(k);rSatis();}
 function rSatis(){
   let list=[...db.satislar].sort((a,b)=>b.tarih-a.tarih);
   if(satisFilt==='ayrildi')list=list.filter(s=>s.teslimDurum==='ayrildi'&&!s.iptal);
@@ -3320,13 +3337,22 @@ function rSatis(){
   let html=`<div class="tabs">`+tabs.map(t=>`<div class="tb ${satisFilt===t[0]?'on':''}" onclick="satisFilt='${t[0]}';rSatis()">${t[1]}</div>`).join('')+`</div>`;
   if(db.satisTaslak&&db.satisTaslak.sepet&&db.satisTaslak.sepet.length){const _td=db.satisTaslak;const _mn=_td.musIn||(_td.sMusId&&cari(_td.sMusId)?cari(_td.sMusId).ad:'');html+=`<div class="warnbox" style="margin-top:8px">📝 <b>Yarım kalan sipariş</b> — ${_td.sepet.length} kalem${_mn?' · '+esc(_mn):''} <span onclick="formSatis(0,0,true)" style="color:var(--good);font-weight:800;cursor:pointer">▶️ Devam Et ›</span> <span onclick="satisTaslakSil();rSatis()" style="color:var(--bad);font-weight:700;cursor:pointer;margin-left:10px">✕ Sil</span></div>`;}
   if(satisFilt==='depo')html+=`<div class="mini" style="margin:2px 3px 0">📦 Depocuya gönderilen toplama emirleri. <b>Ayrılıyor</b> = bekliyor, <b>✓ Hazır</b> = depocu ayırdı.</div>`;
-  html+=`<div class="sec">Satışlar <a onclick="formSatis()">+ Yeni</a></div><div class="card">`+(list.length?list.slice(0,200).map(s=>{
-    const ayrildi=s.teslimDurum==='ayrildi';const teslim=!ayrildi;const odendi=s.odenen>=s.tutar;
-    const depoBadge=s.depo==='bekliyor'?'<span class="pill low" style="margin-left:5px">📦 ayrılıyor</span>':s.depo==='hazir'?'<span class="pill ok" style="margin-left:5px">✓ hazır</span>':'';
-    if(s.tip==='iade'&&s.iptal)return `<div class="row" onclick="iadeFis(${s.id})" style="opacity:.6"><div class="av" style="background:var(--bad-s)">🚫</div><div class="mid"><div class="t" style="text-decoration:line-through">${esc(s.mus)} <span class="pill" style="background:var(--bad-s);color:var(--bad)">İADE · İPTAL</span></div><div class="s" style="text-decoration:line-through">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div>${s.iptalTarih?`<div class="mini" style="color:var(--bad)">geri alındı: ${tstr(s.iptalTarih)}</div>`:''}</div><div class="end"><div class="n" style="text-decoration:line-through">−${money(s.tutar,s.pb)}</div><div class="u">iptal</div></div></div>`;
-    if(s.tip==='iade')return `<div class="row" onclick="iadeFis(${s.id})"><div class="svbars"><i class="svbar" style="background:var(--bad)"></i></div><div class="av" style="background:var(--bad-s)">↩️</div><div class="mid"><div class="t">${esc(s.mus)} <span class="pill" style="background:var(--bad-s);color:var(--bad)">İADE</span></div><div class="s">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div></div><div class="end"><div class="n" style="color:var(--bad)">−${money(s.tutar,s.pb)}</div><div class="u">${s.nakit?'💵 nakit iade':'cari alacak'}</div></div></div>`;
-    if(s.iptal)return `<div class="row" onclick="satisFis(${s.id})" style="opacity:.6"><div class="av" style="background:var(--bad-s)">🚫</div><div class="mid"><div class="t" style="text-decoration:line-through">${esc(s.mus)} <span class="pill" style="background:var(--bad-s);color:var(--bad)">İPTAL</span></div><div class="s" style="text-decoration:line-through">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div>${s.iptalTarih?`<div class="mini" style="color:var(--bad)">iptal: ${tstr(s.iptalTarih)}</div>`:''}</div><div class="end"><div class="n" style="text-decoration:line-through">${money(s.tutar,s.pb)}</div><div class="u">iptal</div></div></div>`;
-    return `<div class="row" onclick="satisFis(${s.id})"><div class="svbars"><i class="svbar ${teslim?'teslim':''}" title="Teslim edildi"></i><i class="svbar ${odendi?'odendi':''}" title="Parası alındı"></i></div><div class="av ${ayrildi?'o':'g'}">${ayrildi?'🔖':'🧾'}</div><div class="mid"><div class="t">${esc(s.mus)}${depoBadge}${s.eksikStok?' <span class="pill" style="background:var(--thr-s);color:var(--thr)">📦 bekleyen</span>':''}${lokListe().length>1&&s.lokId?` <span class="tag">${lokIc(s.lokId)} ${esc(lokAd(s.lokId))}</span>`:''}</div><div class="s">${tstr(s.tarih)} · ${s.kalemler.map(k=>esc(k.urun)).join(', ')}</div></div><div class="end"><div class="n">${money(s.tutar,s.pb)}</div><div class="u">${ayrildi?'🔖 ayrıldı':teslim?'✓ teslim':''}${odendi?' · 💰':''}</div></div></div>`}).join('')+(list.length>200?`<div class='mini' style='text-align:center;padding:10px'>+${list.length-200} eski kayıt daha — arama ya da tarih filtresi kullan</div>`:''):emp('🧾',satisFilt==='depo'?'Depoda bekleyen sipariş yok.':'Kayıt yok.'))+`</div>`;
+  html+=`<div class="sec">Satışlar <a onclick="formSatis()">+ Yeni</a></div><div class="card">`;
+  if(!list.length){html+=emp('🧾',satisFilt==='depo'?'Depoda bekleyen sipariş yok.':'Kayıt yok.');}
+  else{
+    // Tarihe göre grupla: Bu hafta açık; Geçen hafta + aylık kapalı (tıkla aç)
+    const groups=[],idx={};
+    list.forEach(s=>{const b=satBucket(s.tarih);let g=idx[b.key];if(!g){g={key:b.key,label:b.label,open:b.open,rows:[],total:0};idx[b.key]=g;groups.push(g);}g.rows.push(s);if(!s.iptal)g.total+=(s.tip==='iade'?-1:1)*(+s.tutar||0)*satisDiv(s);});
+    groups.forEach(g=>{const acik=g.open||satGrupAcik.has(g.key);
+      if(g.open){
+        html+=`<div class="sec" style="margin:8px 0 2px">${g.label} <span style="font-weight:600;color:var(--sub)">· ${g.rows.length} · ${TL(g.total)}</span></div>`+g.rows.slice(0,200).map(satisRowHTML).join('');
+      }else{
+        html+=`<div class="row" onclick="satGrupTog('${g.key}')" style="cursor:pointer;background:var(--ln2)"><div class="av gray">${acik?'▾':'▸'}</div><div class="mid"><div class="t">${g.label}</div><div class="s">${g.rows.length} satış</div></div><div class="end"><div class="n">${TL(g.total)}</div><div class="u">${acik?'gizle':'aç ›'}</div></div></div>`;
+        if(acik)html+=g.rows.slice(0,200).map(satisRowHTML).join('')+(g.rows.length>200?`<div class='mini' style='text-align:center;padding:8px'>+${g.rows.length-200} daha</div>`:'');
+      }
+    });
+  }
+  html+=`</div>`;
   $('app').innerHTML=html;
 }
 let sepet=[], sPB='TL', sVade=0, sEdit=0, sDurum='teslim', sMusId=0, sUrunId=0, sCekFoto='', sOdemeler=[], sDepo=false, sFoto='', sEkstra=[];
