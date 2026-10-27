@@ -3537,9 +3537,12 @@ function urunAlisTL(u){return (+u.alis||0)*((u.pb&&u.pb!=='TL')?(pbKur(u.pb)||1)
 function musUrunFiyat(uid){const u=urun(uid);if(!u)return 0;return sonFiyat(sMusId,uid)||urunSatisTL(u)}
 function urnBilgi(){const u=sUrunId?urun(sUrunId):null;const info=$('s-urninfo'),rb=$('s-renkler'),box=$('s-mikbox');if(!rb)return;
   if(!u){if(box)box.style.display='none';rb.innerHTML='';if(info)info.textContent='';return}
-  const objs=renkObjs(u);const eski=sonFiyat(sMusId,u.id);const fy=eski||urunSatisTL(u);const pb=u.pb||'TL';
-  const seriNot=(u.birim==='seri'&&birimAdet(u)>1)?` · ${money(u.satis,pb)}/parça × ${u.seri}`:'';
-  const fiyatRow=`<div style="margin:8px 0 2px"><div style="display:flex;gap:8px;align-items:center"><label style="margin:0;flex:0 0 auto">Bu satış fiyatı</label><input id="s-fiyat" type="number" inputmode="numeric" min="0" value="${fy}" style="width:120px;margin:0;padding:9px" oninput="fiyatBilgi()"><span class="mini">/${u.birim} (${pb})${seriNot}</span></div><div class="mini" id="s-fiyat-info" style="margin-top:5px"></div></div>`;
+  const objs=renkObjs(u);const eski=sonFiyat(sMusId,u.id);const fyUnit=eski||urunSatisTL(u);const pb=u.pb||'TL';
+  const _seri=birimAdet(u); // seri ürünlerde 1 seri = kaç parça
+  const fyIn=_seri>1?Math.round((fyUnit/_seri)*100)/100:fyUnit; // GİRİŞ parça başına
+  const _unit=_seri>1?'parça':(u.birim||'adet');
+  const seriNot=(_seri>1)?` · 1 seri = ${u.seri} parça`:'';
+  const fiyatRow=`<div style="margin:8px 0 2px"><div style="display:flex;gap:8px;align-items:center"><label style="margin:0;flex:0 0 auto">Parça fiyatı</label><input id="s-fiyat" type="number" inputmode="decimal" min="0" value="${fyIn}" style="width:120px;margin:0;padding:9px" oninput="fiyatBilgi()"><span class="mini">/${_unit} (${pb})${seriNot}</span></div><div class="mini" id="s-fiyat-info" style="margin-top:5px"></div></div>`;
   if(objs.length){
     if(box)box.style.display='none';if(info)info.textContent='';
     rb.innerHTML=`<div class="mini" style="margin:10px 0 2px">🎨 <b>${esc(u.ad)}</b> — renk renk adet gir:</div>`+fiyatRow+objs.map((r,i)=>`<div class="renksel"><span class="sw sm" style="background:${r.hex}"></span><span class="rn">${esc(r.ad||'—')}</span><span class="rs ${r.stok<=0?'bad':''}">stok ${r.stok||0}</span><div class="step sm"><button class="b" onclick="rq(${i},-1)">−</button><input id="rq-${i}" type="number" value="0" inputmode="numeric" min="0" oninput="rqCheck(${i},${r.stok||0})"><button class="b p" onclick="rq(${i},1,${r.stok||0})">+</button></div></div>`).join('')+`<button type="button" class="btn ghost sm" style="margin-top:9px" onclick="sepEkle()">+ Sepete Ekle</button>`;
@@ -3549,10 +3552,14 @@ function urnBilgi(){const u=sUrunId?urun(sUrunId):null;const info=$('s-urninfo')
   }
   fiyatBilgi();
 }
-function fiyatBilgi(){const u=sUrunId?urun(sUrunId):null;const el=$('s-fiyat-info');if(!u||!el)return;const pb=u.pb||'TL';const fy=+($('s-fiyat')?.value)||0;const eski=sonFiyat(sMusId,u.id);const maliyet=urunAlisTL(u)*birimAdet(u);const kar=fy-maliyet;const ky=maliyet?Math.round(kar/maliyet*100):0;
+function fiyatBilgi(){const u=sUrunId?urun(sUrunId):null;const el=$('s-fiyat-info');if(!u||!el)return;const pb=u.pb||'TL';const _seri=birimAdet(u);
+  const fy=+($('s-fiyat')?.value)||0; // parça fiyatı
+  const eski=sonFiyat(sMusId,u.id); // birim(seri) fiyatı
+  const maliyet=urunAlisTL(u); // parça maliyeti
+  const kar=fy-maliyet;const ky=maliyet?Math.round(kar/maliyet*100):0;
   const parts=[];
-  if(karGoster())parts.push(`maliyet <b>${TL(maliyet)}</b>${u.birim==='seri'&&birimAdet(u)>1?'<span class="mini">/seri</span>':''} · kâr <b class="${kar>=0?'pos':'neg'}">${TL(kar)}${maliyet?' (%'+ky+')':''}</b>`);
-  if(eski)parts.push(`<span style="color:var(--ind2);font-weight:700">🧠 müşteri en son ${money(eski,pb)} aldı</span>`);
+  if(karGoster())parts.push(`maliyet <b>${TL(maliyet)}</b><span class="mini">/parça</span> · kâr <b class="${kar>=0?'pos':'neg'}">${TL(kar)}${maliyet?' (%'+ky+')':''}</b>${_seri>1?` · <span class="mini">seri ${TL(fy*_seri)}</span>`:''}`);
+  if(eski)parts.push(`<span style="color:var(--ind2);font-weight:700">🧠 müşteri en son ${money(_seri>1?eski/_seri:eski,pb)}/parça aldı</span>`);
   el.innerHTML=parts.join(' · ');
 }
 function rq(i,d,stok){const el=$('rq-'+i);if(!el)return;let v=Math.max(0,(+el.value||0)+d);el.value=v;if(stok!=null&&v>stok)toast('📦 Stokta '+stok+' var — fazlası ön sipariş (bekleyen mal) olur')}
@@ -3563,7 +3570,9 @@ function setVade(g){sVade=+g;[0,30,60,90].forEach(x=>{const el=$('sv-'+x);if(el)
 function satisReset(){sDuzenleIdx=null;sUrunId=0;if($('s-urun-in'))$('s-urun-in').value='';if($('s-renkler'))$('s-renkler').innerHTML='';if($('s-mikbox'))$('s-mikbox').style.display='none';if($('s-urninfo'))$('s-urninfo').textContent='';if($('s-mik'))$('s-mik').value=1}
 let sDuzenleIdx=null; // sepet satırı düzenleme modu (tıklayınca ayarlanır)
 function sepEkle(){const u=sUrunId?urun(sUrunId):null;if(!u)return toast('Önce ürün seç');
-  const fy=($('s-fiyat')&&$('s-fiyat').value!=='')?Math.max(0,+$('s-fiyat').value||0):musUrunFiyat(u.id);
+  const _seri=birimAdet(u);
+  const fyPiece=($('s-fiyat')&&$('s-fiyat').value!=='')?Math.max(0,+$('s-fiyat').value||0):(musUrunFiyat(u.id)/_seri);
+  const fy=fyPiece*_seri; // parça fiyatı → birim(seri) fiyatı olarak saklanır (alt akış değişmez)
   const objs=renkObjs(u);
   const duz=(typeof sDuzenleIdx==='number'&&sepet[sDuzenleIdx]&&sepet[sDuzenleIdx].uid===u.id)?sDuzenleIdx:null;
   if(objs.length){
@@ -3586,7 +3595,7 @@ function sepDuzenle(i){const k=sepet[i];if(!k)return;const u=urun(k.uid);if(!u)r
     const objs=renkObjs(u);
     if(objs.length&&k.renkler){objs.forEach((r,ix)=>{const f=k.renkler.find(x=>x.ad===r.ad);const el=$('rq-'+ix);if(el)el.value=f?f.mik:0;});}
     else if($('s-mik')){$('s-mik').value=k.mik;}
-    if($('s-fiyat')&&k.fiyat!=null)$('s-fiyat').value=k.fiyat;
+    if($('s-fiyat')&&k.fiyat!=null){const _s=birimAdet(u);$('s-fiyat').value=_s>1?Math.round((k.fiyat/_s)*100)/100:k.fiyat;}
     const r=$('s-renkler')||$('s-mikbox');if(r&&r.scrollIntoView)r.scrollIntoView({block:'center'});
     toast('✏️ Adetleri düzelt → "Sepete Ekle"ye bas (satır güncellenir)');
   },130);
@@ -3644,7 +3653,11 @@ function cizEkstra(){const b=$('s-ekstra');if(!b)return;
     <button class="del" onclick="ekstraSil(${i})" style="flex:0 0 auto">✕</button></div>`).join('');}
 function cizSepet(){
   const el=$('s-sepet');if(!el)return;
-  el.innerHTML=sepet.map((k,i)=>{const sub=k.renkler&&k.renkler.length?`${k.renkler.map(r=>esc(r.ad)+' ×'+r.mik).join(' · ')} — ${TL(k.fiyat)}/${k.birim}`:`${k.mik} ${esc(k.birim||"")} × ${TL(k.fiyat)}`;return `<div class="li"><div class="lt" style="cursor:pointer" onclick="sepDuzenle(${i})">${esc(k.urun)} <span style="color:var(--ind2);font-size:10.5px;font-weight:700">✏️ düzelt</span><small>${sub}</small></div><b style="margin-right:8px">${TL(k.mik*k.fiyat)}</b><button class="del" onclick="sepet.splice(${i},1);cizSepet()">✕</button></div>`}).join('')||'<div class="mini">Sepet boş — ürün seçip adet gir</div>';
+  el.innerHTML=sepet.map((k,i)=>{const _u=urun(k.uid);const _s=_u?birimAdet(_u):1;const _pf=_s>1?k.fiyat/_s:k.fiyat;
+    const sub=k.renkler&&k.renkler.length
+      ?`${k.renkler.map(r=>esc(r.ad)+' ×'+r.mik).join(' · ')} — ${TL(_pf)}/parça${_s>1?' · '+(k.mik*_s)+' parça':''}`
+      :(_s>1?`${k.mik} seri · ${k.mik*_s} parça × ${TL(_pf)}/parça`:`${k.mik} ${esc(k.birim||"")} × ${TL(k.fiyat)}`);
+    return `<div class="li"><div class="lt" style="cursor:pointer" onclick="sepDuzenle(${i})">${esc(k.urun)} <span style="color:var(--ind2);font-size:10.5px;font-weight:700">✏️ düzelt</span><small>${sub}</small></div><b style="margin-right:8px">${TL(k.mik*k.fiyat)}</b><button class="del" onclick="sepet.splice(${i},1);cizSepet()">✕</button></div>`}).join('')||'<div class="mini">Sepet boş — ürün seçip adet gir</div>';
   const h=satisHesap();const parts=[];
   if(h.isk)parts.push(`iskonto −%${h.isk}`);
   if(h.vf)parts.push(`vade +%${h.vf}`);
