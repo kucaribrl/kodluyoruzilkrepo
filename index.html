@@ -2002,6 +2002,7 @@ function modulListe(){
   if(db.rol==='depocu'||db.rol==='magaza')list.unshift({ic:'📋',ad:'Sayım',act:'depoSayim()'});
   if(db.rol==='magaza'){list.unshift({ic:'📷',ad:'Barkod Tara',act:'kameraTara()'});list.unshift({ic:'➕',ad:'Yeni Satış',act:'formSatis()'});}
   if(canHammadde())list.unshift({ic:'🗂️',ad:'Envanter',act:'envanterAc()'}); // sadece malzemeler (kumaş/aksesuar...)
+  if(paraGoster())list.push({ic:'📋',ad:'Maliyet Listesi',act:'maliyetListesi()'}); // tüm ürünlerin maliyet/kâr tablosu
   if(paraGoster())list.push({ic:'💰',ad:'Maliyet',act:'maliyetAc()'}); // koleksiyon maliyetleri — üretim dışında da erişim
   return list;
 }
@@ -2039,7 +2040,7 @@ function rStok(){
   let html='';
   {
     const kats=['Tümü',...new Set(db.urunler.map(u=>u.kat).filter(Boolean))];
-    html+=`<div style="display:flex;gap:8px;align-items:stretch"><input class="search" id="ara-stok" placeholder="🔍 Ürün, kod, marka ara..." oninput="rStokList()" style="flex:1;margin-bottom:10px"><button class="btn ghost" style="width:auto;flex:0 0 auto;padding:0 15px;margin:0 0 10px;font-size:19px" onclick="barkodOkutAra()" title="Kamerayla barkod okut">📷</button></div><div class="segs">`+kats.map(k=>`<div class="seg ${k===stokKat?'on':''}" onclick="stokKat='${esc(jsq(k))}';rStok()">${esc(k)}</div>`).join('')+`</div>${lokListe().length>1?`<div class="okbox" style="margin-bottom:10px;display:flex;align-items:center;gap:8px">${lokIc(aktifLok)} <b>${esc(lokAd(aktifLok))}</b> stoğu<button class="btn ghost sm" style="width:auto;margin:0 0 0 auto;padding:6px 11px" onclick="lokSec()">değiştir</button></div><button class="btn ghost sm" style="margin-bottom:10px" onclick="transferListe()">🔄 Transfer / Sevk</button>`:''}${canSayim()?`<button class="btn ghost sm" style="margin-bottom:10px" onclick="depoSayim()">📋 Depo Sayımı Yap</button>`:''}${db.urunler.some(u=>defoTop(u)>0)?`<button class="btn ghost sm" style="margin-bottom:10px;color:var(--bad)" onclick="defoluStokAc()">⚠️ Defolu Stok (${db.urunler.reduce((a,u)=>a+defoTop(u),0)})</button>`:''}${paraGoster()?`<button class="btn ghost sm" style="margin-bottom:10px" onclick="topluZam()">💹 Toplu Fiyat Güncelle (% zam / indirim)</button>`:''}<div class="card" id="stok-list"></div>`;
+    html+=`<div style="display:flex;gap:8px;align-items:stretch"><input class="search" id="ara-stok" placeholder="🔍 Ürün, kod, marka ara..." oninput="rStokList()" style="flex:1;margin-bottom:10px"><button class="btn ghost" style="width:auto;flex:0 0 auto;padding:0 15px;margin:0 0 10px;font-size:19px" onclick="barkodOkutAra()" title="Kamerayla barkod okut">📷</button></div><div class="segs">`+kats.map(k=>`<div class="seg ${k===stokKat?'on':''}" onclick="stokKat='${esc(jsq(k))}';rStok()">${esc(k)}</div>`).join('')+`</div>${lokListe().length>1?`<div class="okbox" style="margin-bottom:10px;display:flex;align-items:center;gap:8px">${lokIc(aktifLok)} <b>${esc(lokAd(aktifLok))}</b> stoğu<button class="btn ghost sm" style="width:auto;margin:0 0 0 auto;padding:6px 11px" onclick="lokSec()">değiştir</button></div><button class="btn ghost sm" style="margin-bottom:10px" onclick="transferListe()">🔄 Transfer / Sevk</button>`:''}${canSayim()?`<button class="btn ghost sm" style="margin-bottom:10px" onclick="depoSayim()">📋 Depo Sayımı Yap</button>`:''}${db.urunler.some(u=>defoTop(u)>0)?`<button class="btn ghost sm" style="margin-bottom:10px;color:var(--bad)" onclick="defoluStokAc()">⚠️ Defolu Stok (${db.urunler.reduce((a,u)=>a+defoTop(u),0)})</button>`:''}${paraGoster()?`<button class="btn ghost sm" style="margin-bottom:10px" onclick="maliyetListesi()">💰 Maliyet Listesi (tüm ürünlerin maliyet / kârı)</button>`:''}${paraGoster()?`<button class="btn ghost sm" style="margin-bottom:10px" onclick="topluZam()">💹 Toplu Fiyat Güncelle (% zam / indirim)</button>`:''}<div class="card" id="stok-list"></div>`;
     $('app').innerHTML=html; rStokList();
 }
 }
@@ -5976,6 +5977,83 @@ function maliyetHesapla(m){
   const fasonPU=(+m.kes||0)+(+m.nak||0)+(+m.dik||0)+(+m.utu||0);const ggPU=+m.gg||0;
   const perStarted=kumasPU+malPU+fasonPU+ggPU;const toplam=perStarted*adet;const birim=toplam/saglam;const satis=birim*(1+(+m.kar||0)/100);
   return {saglam,kumasKg:+m.kumasKg||0,kumasFiyat:+m.kumasFiyat||0,kumasPB:m.kumasPB||'TL',kumasKur,kumasToplam,kumasPU,malPU,fasonPU,ggPU,toplam,birim,satis};
+}
+/* ===== 💰 MALİYET LİSTESİ — tüm ürünlerin maliyet/kâr durumu tek ekranda ===== */
+let mlQ='', mlSort='karAz', mlKat='Tümü';
+function mlVeri(u){const kur=(u.pb&&u.pb!=='TL')?(pbKur(u.pb)||1):1;
+  const maliyetP=urunAlisTL(u);                       // parça başı maliyet (TL)
+  const satisP=(+u.satis||0)*kur;                     // parça başı satış (TL)
+  const karP=satisP-maliyetP;
+  const yuzde=maliyetP>0?(karP/maliyetP*100):null;    // maliyet yoksa % hesaplanamaz
+  const seri=birimAdet(u);const stok=stokTop(u);
+  const bagli=stok*maliyetP*seri;                      // stokta bağlı maliyet değeri
+  return {maliyetP,satisP,karP,yuzde,seri,stok,bagli,eksik:maliyetP<=0,zarar:maliyetP>0&&karP<0};
+}
+function maliyetListesi(){mlQ='';mlSort='karAz';mlKat='Tümü';
+  open_('💰 Maliyet Listesi',
+    `<div class="mini">Tüm ürünlerin parça başına maliyeti, satışı ve kârı. Bir satıra dokunup maliyeti düzenleyebilirsin.</div>
+     <div id="ml-ozet"></div>
+     <input class="search" id="ml-q" placeholder="🔍 Ürün, kod, marka ara..." autocomplete="off" oninput="mlQ=this.value;maliyetListesiCiz()" style="margin:10px 0 8px">
+     <div class="segs" id="ml-kat"></div>
+     <div class="segs" style="margin-top:4px">
+       <div class="seg ${mlSort==='karAz'?'on':''}" data-s="karAz" onclick="mlSetSort('karAz')">📉 Düşük kâr</div>
+       <div class="seg ${mlSort==='malYuk'?'on':''}" data-s="malYuk" onclick="mlSetSort('malYuk')">💸 Pahalı</div>
+       <div class="seg ${mlSort==='bagliYuk'?'on':''}" data-s="bagliYuk" onclick="mlSetSort('bagliYuk')">📦 Bağlı para</div>
+       <div class="seg ${mlSort==='eksik'?'on':''}" data-s="eksik" onclick="mlSetSort('eksik')">🔴 Maliyeti yok</div>
+       <div class="seg ${mlSort==='ad'?'on':''}" data-s="ad" onclick="mlSetSort('ad')">🔤 A-Z</div>
+     </div>
+     <div class="card" id="ml-list" style="margin-top:10px"></div>`);
+  maliyetListesiCiz();
+}
+function mlSetSort(s){mlSort=s;document.querySelectorAll('#ov .seg[data-s]').forEach(e=>e.classList.toggle('on',e.getAttribute('data-s')===s));maliyetListesiCiz();}
+function maliyetListesiCiz(){
+  const liste=db.urunler.filter(u=>!u.pasif);
+  // kategori çipleri
+  const katEl=$('ml-kat');if(katEl){const kats=['Tümü',...new Set(liste.map(u=>u.kat).filter(Boolean))];
+    katEl.innerHTML=kats.map(k=>`<div class="seg ${k===mlKat?'on':''}" onclick="mlKat='${esc(jsq(k))}';maliyetListesiCiz()">${esc(k)}</div>`).join('');}
+  // özet (tüm aktif ürünler üzerinden)
+  const ozetEl=$('ml-ozet');if(ozetEl){const n=liste.length;const eksik=liste.filter(u=>mlVeri(u).eksik).length;const zarar=liste.filter(u=>mlVeri(u).zarar).length;
+    const kaOk=liste.map(mlVeri).filter(v=>v.yuzde!=null&&v.satisP>0);const ortKar=kaOk.length?Math.round(kaOk.reduce((a,v)=>a+v.yuzde,0)/kaOk.length):0;
+    const toplamBagli=liste.reduce((a,u)=>a+mlVeri(u).bagli,0);
+    ozetEl.innerHTML=`<div class="envtot" style="margin-top:10px"><span>👕 ${n} ürün · ort. kâr <b style="color:#d8ffe0">%${ortKar}</b></span><b>${TL(toplamBagli)}</b></div>
+      <div style="display:flex;gap:7px;margin-top:7px">${eksik?`<button class="btn ghost sm" style="margin:0;flex:1;color:var(--bad)" onclick="mlSort='eksik';mlSetSort('eksik')">🔴 ${eksik} maliyeti yok</button>`:''}${zarar?`<button class="btn ghost sm" style="margin:0;flex:1;color:var(--bad)">⚠️ ${zarar} zararına</button>`:''}</div>`;}
+  // filtre
+  const q=mlQ.toLowerCase();
+  let arr=liste.filter(u=>(mlKat==='Tümü'||u.kat===mlKat)&&((u.ad||'').toLowerCase().includes(q)||(u.kod||'').toLowerCase().includes(q)||(u.marka||'').toLowerCase().includes(q)));
+  // sıralama
+  const col=u=>mlVeri(u);
+  if(mlSort==='ad')arr.sort((a,b)=>(a.ad||'').localeCompare(b.ad||'','tr'));
+  else if(mlSort==='malYuk')arr.sort((a,b)=>col(b).maliyetP-col(a).maliyetP);
+  else if(mlSort==='bagliYuk')arr.sort((a,b)=>col(b).bagli-col(a).bagli);
+  else if(mlSort==='eksik')arr=arr.filter(u=>col(u).eksik).concat(arr.filter(u=>!col(u).eksik));
+  else /*karAz*/ arr.sort((a,b)=>{const va=col(a),vb=col(b);const ka=va.yuzde==null?-1e9:va.yuzde;const kb=vb.yuzde==null?-1e9:vb.yuzde;return ka-kb;});
+  const el=$('ml-list');if(!el)return;
+  if(!arr.length){el.innerHTML=emp('📦','Ürün bulunamadı');return;}
+  el.innerHTML=arr.map(u=>{const v=mlVeri(u);const kap=urunKapak(u);
+    const pb=u.pb||'TL';const seriNot=v.seri>1?` · seri ${money(v.maliyetP*v.seri,'TL')}`:'';
+    const karRenk=v.eksik?'var(--sub)':v.karP<0?'var(--bad)':v.yuzde<10?'var(--warn)':'var(--good)';
+    const karTxt=v.eksik?'—':(v.yuzde==null?'—':`%${Math.round(v.yuzde)}`);
+    const sol=v.eksik?'border-left:3px solid var(--bad)':v.zarar?'border-left:3px solid var(--bad)':'';
+    return `<div class="row" style="${sol}" onclick="maliyetDuzenleHizli(${u.id})"><div class="av gray" style="overflow:hidden;padding:0">${kap?`<img src="${guvenliSrc(kap)}" style="width:100%;height:100%;object-fit:cover">`:'👕'}</div>
+      <div class="mid"><div class="t">${esc(u.ad)}${u.marka?`<span class="tag">${esc(u.marka)}</span>`:''}</div>
+      <div class="s">${esc(u.kod||'')}${v.eksik?' · <span style="color:var(--bad);font-weight:700">maliyet girilmemiş</span>':` · mal. <b>${money(v.maliyetP,'TL')}</b>/parça${seriNot} · sat. ${money(v.satisP,'TL')}`}</div></div>
+      <div class="end"><div class="n" style="color:${karRenk};font-size:17px">${karTxt}</div><div class="u">${v.eksik?'dokun→gir':v.karP<0?'zarar':'kâr'}</div></div></div>`;
+  }).join('');
+}
+function maliyetDuzenleHizli(id){const u=urun(id);if(!u)return;const pb=u.pb||'TL';const v=mlVeri(u);const seri=birimAdet(u);
+  open_('💰 Maliyet · '+esc(u.ad),
+    `<div class="mini">${esc(u.kod||'')}${seri>1?` · 1 seri = ${seri} parça`:''}</div>
+     <label style="margin-top:10px">Parça başı maliyet (${pb==='TL'?'₺':pb==='USD'?'$':'€'})</label>
+     <input id="ml-alis" type="number" inputmode="decimal" value="${+u.alis||''}" placeholder="0" autocomplete="off" style="font-size:20px">
+     <div id="ml-duz-info" class="mini" style="margin-top:8px"></div>
+     <div class="g2" style="margin-top:14px"><button class="btn ghost" onclick="maliyetListesi()">← Listeye dön</button><button class="btn g" onclick="maliyetDuzenleKaydet(${u.id})">Kaydet</button></div>`);
+  const inp=$('ml-alis');const ciz=()=>{const al=+($('ml-alis')?.value||0);const kur=(pb!=='TL')?(pbKur(pb)||1):1;const malTL=al*kur;const satP=(+u.satis||0)*kur;const kar=satP-malTL;const yz=malTL>0?Math.round(kar/malTL*100):null;
+    $('ml-duz-info').innerHTML=malTL>0?`Parça: maliyet <b>${TL(malTL)}</b> · satış ${TL(satP)} · kâr <b style="color:${kar<0?'var(--bad)':'var(--good)'}">${TL(kar)} (${yz==null?'—':'%'+yz})</b>${seri>1?`<br>Seri: maliyet ${TL(malTL*seri)} · satış ${TL(satP*seri)}`:''}`:'<span style="color:var(--sub)">Maliyeti gir, kâr otomatik hesaplanır.</span>';};
+  if(inp){inp.oninput=ciz;ciz();setTimeout(()=>inp.focus(),80);}
+}
+function maliyetDuzenleKaydet(id){const u=urun(id);if(!u)return;const val=$('ml-alis')?.value;const al=Math.max(0,+val||0);
+  u.alis=al;save();try{canliYazHemen(['stok'])}catch(e){}
+  toast('Maliyet güncellendi ✓');maliyetListesi();
 }
 function maliyetAc(){
   const list=(db.maliyetler||[]).slice().sort((a,b)=>(b.tarih||0)-(a.tarih||0));
