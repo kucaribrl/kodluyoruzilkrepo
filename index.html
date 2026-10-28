@@ -4235,7 +4235,7 @@ function fisHTML(s){
     (k.renkler||[]).forEach(rr=>{r+=`<tr style="font-weight:600;font-size:.78em"><td></td><td style="padding-left:.6em">${esc(rr.ad||'—')}</td><td style="text-align:right">${+rr.mik||0}</td><td></td><td></td></tr>`;});
     return r;}).join('');
   const odeme=(s.odemeler&&s.odemeler.length)?s.odemeler:(s.odenen>0?[{tur:'Nakit',tutar:s.odenen,pb}]:[]);
-  const qtext=db.firmaTelegram?('https://t.me/'+String(db.firmaTelegram).replace(/^\//,'')):((db.firmaSite||'').trim()||((db.firma||'IQ Basics')+' · Fiş #'+s.id));
+  const qtext=fisPortalLink(s); // müşteriye özel pazar-yeri linki — aldıkları sepette hazır
   const qr=fisQR(qtext,300);
   const logo=db.firmaLogo?`<img src="${guvenliSrc(db.firmaLogo)}" style="max-width:72%;max-height:4.6em;object-fit:contain">`:`<div style="font-size:2em;font-weight:800;letter-spacing:.5px">${esc((db.firma||'IQ BASICS').toLocaleUpperCase('tr-TR'))}</div>`;
   return `<div class="fisdoc" style="font-size:15px;line-height:1.34;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;color:#000;background:#fff;padding:1em 1.1em;box-sizing:border-box">
@@ -4367,8 +4367,7 @@ function fisResimData(s,termal){
   const notTxt=(s.not||'').trim();const nbTop=y;g.textAlign='left';g.font='700 16px sans-serif';g.fillText('Not:'+(notTxt?' '+clip(notTxt,'700 16px sans-serif',W-2*P-70):''),P+8,y+16);dbox(P,nbTop,W-2*P,notTxt?48:30);y+=(notTxt?48:30)+16;
   // ===== QR =====
   if(window.qrcode){try{
-    // Ekran/paylaşım görseli → müşteriye ÖZEL sepet-dolu link; termal (kağıt) → kısa link (tarama güvenilirliği)
-    const qtext=termal?(db.firmaTelegram?('https://t.me/'+String(db.firmaTelegram).replace(/^\//,'')):((db.firmaSite||'').trim()||((db.firma||'IQ Basics')+' · Fiş #'+s.id+' · '+fmt(s.tutar)))):fisPortalLink(s);
+    const qtext=fisPortalLink(s); // ekran/paylaşım + termal: hepsi müşteriye ÖZEL sepet-dolu link
     const qr=window.qrcode(0,'M');qr.addData(qtext);qr.make();const n=qr.getModuleCount();const qs=Math.max(4,Math.floor(230/n));const qpx=n*qs;const qx=Math.round(CX-qpx/2),qy=y+8;
     g.fillStyle='#fff';g.fillRect(qx-10,qy-10,qpx+20,qpx+20);g.fillStyle='#000';
     for(let r=0;r<n;r++)for(let cc=0;cc<n;cc++){if(qr.isDark(r,cc))g.fillRect(qx+cc*qs,qy+r*qs,qs,qs);}
@@ -4552,7 +4551,7 @@ function fisEscPosText(s){
   const notTxt=(s.not||s.sevkiyat||'').trim();line('Not:'+(notTxt?' '+notTxt:''));
   div();
   // QR — yazıcının DONANIM QR komutu (GS ( k) → net
-  try{const qtext=db.firmaTelegram?('https://t.me/'+String(db.firmaTelegram).replace(/^\//,'')):((db.firmaSite||'').trim()||((db.firma||'IQ Basics')+' Fis #'+s.id));
+  try{const qtext=fisPortalLink(s); // müşteriye özel pazar-yeri linki (saf ASCII — donanım QR net basar)
     align(1);
     raw(0x1D,0x28,0x6B,0x04,0x00,0x31,0x41,0x32,0x00); // model 2
     raw(0x1D,0x28,0x6B,0x03,0x00,0x31,0x43,0x06);       // modül boyutu 6
