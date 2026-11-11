@@ -58,11 +58,12 @@ T('K5: kasa 1.000 → +500 & +200 = 1.700', c3 === 1700, c3);
 
 // 4) Ürün renk stoğu: iki cihaz aynı renkten sattı
 const c4 = await ev(() => {
-  const now = Date.now();
-  db.urunler.push({ id: 9004, ad: 'Ortak Polo', kod: 'OP', kat: 'X', birim: 'adet', stok: 50, renkler: [{ ad: 'Siyah', stok: 30 }, { ad: 'Beyaz', stok: 20 }], _m: now - 100000 });
+  const now = Date.now(); const L = aktifLok; // çok-lokasyon: gerçek stok renk.loklar'da, .stok ondan türetilir
+  db.urunler.push({ id: 9004, ad: 'Ortak Polo', kod: 'OP', kat: 'X', birim: 'adet', stok: 50, renkler: [{ ad: 'Siyah', stok: 30, loklar: { [L]: 30 } }, { ad: 'Beyaz', stok: 20, loklar: { [L]: 20 } }], _m: now - 100000 });
   _sbGuncelle('urunler', db.urunler);
-  const y = db.urunler.find(u => u.id === 9004); y.renkler[0].stok = 28; y.stok = 48; y._m = now - 1000;   // yerel 2 sattı
-  canliDomenUygula('stok', { urunler: [{ id: 9004, ad: 'Ortak Polo', kod: 'OP', kat: 'X', birim: 'adet', stok: 45, renkler: [{ ad: 'Siyah', stok: 25 }, { ad: 'Beyaz', stok: 20 }], _m: now }], hammadde: [], malSiparis: [], malKat: [] }); // bulut 5 sattı
+  const y = db.urunler.find(u => u.id === 9004); y.renkler[0].stok = 28; y.renkler[0].loklar[L] = 28; y.stok = 48; y._m = now - 1000;   // yerel 2 sattı
+  canliDomenUygula('stok', { urunler: [{ id: 9004, ad: 'Ortak Polo', kod: 'OP', kat: 'X', birim: 'adet', stok: 45, renkler: [{ ad: 'Siyah', stok: 25, loklar: { [L]: 25 } }, { ad: 'Beyaz', stok: 20, loklar: { [L]: 20 } }], _m: now }], hammadde: [], malSiparis: [], malKat: [] }); // bulut 5 sattı
+
   const r = db.urunler.find(u => u.id === 9004); return { s: r.renkler[0].stok, b: r.renkler[1].stok, tot: r.stok };
 });
 T('K5: Siyah 30 → −2 & −5 = 23, toplam 43', c4.s === 23 && c4.b === 20 && c4.tot === 43, c4);

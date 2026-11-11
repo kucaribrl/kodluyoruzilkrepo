@@ -22,6 +22,8 @@ const T = (n, c, x) => { if (c) { ok++; console.log('PASS ' + n); } else { fail+
 const ev = (fn, a) => page.evaluate(fn, a);
 const wait = ms => page.waitForTimeout(ms);
 const evet = async () => { await wait(150); await ev(() => document.getElementById('cYes').click()); await wait(250); };
+// Kritik işlem onayı (askKritik): PIN yoksa "SİL" yazılıp onaylanır
+const kritik = async () => { await wait(150); await ev(() => { const t = document.getElementById('kk-txt'); if (t) t.value = 'SİL'; }); await ev(() => kritikOnayla()); await wait(300); };
 
 // ---- Y7: bosBaslat sonrası hesap id çakışması yok ----
 await ev(() => bosBaslat()); await evet();
@@ -68,8 +70,9 @@ T('Y15: satışa bağlı çek silinmedi (onay bile çıkmadı)', await ev(() => 
 
 // ---- Y22: taksiti ödenmiş satış iptali → müşteri alacağı ----
 await ev(() => { db.cariler.find(c => c.id === 5001).bakiye = 20000; db.satislar.push({ id: 8003, tip: 'satis', mid: 5001, mus: 'Faz B Müşteri', tarih: Date.now(), kalemler: [], tutar: 30000, odenen: 10000, kesik: 0, pb: 'TL', satisKur: 1, odemeler: [], taksitler: [{ tutar: 10000, vade: 1, odendi: true }, { tutar: 10000, vade: 2 }, { tutar: 10000, vade: 3 }] }); save(); silSatis(8003); });
-await evet();
-T('Y22: iptal sonrası bakiye −10.000 (ödenen taksit alacak oldu)', await ev(() => Math.abs(db.cariler.find(c => c.id === 5001).bakiye - (-10000)) < 1 && !db.satislar.some(s => s.id === 8003)), await ev(() => db.cariler.find(c => c.id === 5001).bakiye));
+await kritik();
+T('Y22: iptal sonrası bakiye −10.000 (ödenen taksit alacak oldu), satış çizili (iptal) kalır', await ev(() => Math.abs(db.cariler.find(c => c.id === 5001).bakiye - (-10000)) < 1 && (db.satislar.find(s => s.id === 8003) || {}).iptal === true), await ev(() => db.cariler.find(c => c.id === 5001).bakiye));
+
 
 // ---- Y17: üretim rengi üründe yoksa ayrı satır + doğru prefill ----
 await ev(() => { db.isemirleri.push({ id: 9101, urun: 'Renkli Polo', kod: 'RP1', urunId: 6001, hedef: 100, birim: 'adet', durum: 'devam', duraklar: [{ ad: 'Dikim', gelen: 100, renkGelen: { siyah: 60, 'Lacivert Melanj': 40 } }], malzeme: [] }); save(); isEmriTamamlaGoster(9101); });

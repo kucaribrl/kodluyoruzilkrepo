@@ -55,7 +55,8 @@ const out = await page.evaluate(async () => {
     ok('Y4: defter kaydı oluştu (in 1000)', hrk && hrk.yon === 'in' && Math.abs(hrk.tutar - 1000) < 0.5, JSON.stringify(hrk || {}));
     ok('Y4: hesap bakiyesi 1000 (çift sayma yok)', Math.abs(db.hesaplar[0].bakiye - 1000) < 0.5, db.hesaplar[0].bakiye);
     // iptal → out kaydı
-    silSatis(sN.id); await sleep(150); document.getElementById('cYes').click(); await sleep(200);
+    silSatis(sN.id); await sleep(150); { const t = document.getElementById('kk-txt'); if (t) t.value = 'SİL'; } await kritikOnayla(); await sleep(200); // kritik onay: "SİL"
+
     const hrkOut = (db.hareketler || []).find(h => h.tur === 'Satış İptali');
     ok('Y4: iptal defter kaydı (out)', hrkOut && hrkOut.yon === 'out' && Math.abs(db.hesaplar[0].bakiye) < 0.5, 'bak=' + db.hesaplar[0].bakiye);
 

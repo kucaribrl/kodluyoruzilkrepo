@@ -43,7 +43,9 @@ const out = await page.evaluate(async () => {
     inps[1].value = '4512B'; inps[1].dispatchEvent(new Event('input'));
     inps[2].value = '150'; inps[2].dispatchEvent(new Event('input'));
     inps[3].value = '6'; inps[3].dispatchEvent(new Event('input'));
+    { const ac = document.getElementById('h-acilis'); if (ac) ac.checked = true; } // tedarikçi zorunlu → test "Açılış stoğu" ile kaydeder
     kaydetHammadde(0);
+
     await new Promise(r => setTimeout(r, 100));
     const h = db.hammadde.find(x => x.ad === 'Stok Süprem');
     const b = h && h.renkler.find(r => r.ad === 'Beyaz');
@@ -71,7 +73,8 @@ const out = await page.evaluate(async () => {
     const rowS = document.getElementById('ham-renk-box').querySelectorAll('input.rad')[1].closest('div').querySelectorAll('input');
     ok('çok parti: kutu boş, placeholder "2 parti"', rowS[1].value === '' && rowS[1].placeholder === '2 parti');
     const htmlB = document.getElementById('ham-renk-box').innerHTML;
-    ok('çok parti: kırılım satırı görünüyor', htmlB.includes('7801 50') && htmlB.includes('7802 30'));
+    ok('çok parti: kırılım satırı görünüyor', htmlB.includes('7801 · <b>50</b>') && htmlB.includes('7802 · <b>30</b>')); // kırılım satırı artık "kod · miktar · fiyat · tarih" biçiminde
+
     kaydetHammadde(h.id);
     await new Promise(r => setTimeout(r, 100));
     const sy = db.hammadde.find(x => x.id === h.id).renkler.find(r => r.ad === 'Siyah');

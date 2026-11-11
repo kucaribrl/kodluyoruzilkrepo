@@ -49,10 +49,12 @@ T('kurulum: Siyah −10, Beyaz −10, etiket 800 (düşülmüş)', once.s === -1
 await ev(() => { uretimDetay(7101); });
 await wait(250);
 T('detayda "İş Emrini İptal Et" butonu var', await ev(() => document.getElementById('mB').innerHTML.includes('isEmriIptal(7101)')));
-await ev(() => isEmriIptal(7101)); await evet();
-const sonra = await ev(() => { const k = db.hammadde.find(h => h.id === 7001); return { s: k.renkler.find(r => r.ad === 'Siyah').stok, b: k.renkler.find(r => r.ad === 'Beyaz').stok, tot: k.stok, e: db.hammadde.find(h => h.id === 7002).stok, ie: !!db.isemirleri.find(x => x.id === 7101), oto: db.malSiparis.find(s => s.id === 7201).durum }; });
+await ev(() => isEmriIptal(7101)); await wait(150);
+await ev(() => { const t = document.getElementById('kk-txt'); if (t) t.value = 'SİL'; }); await ev(() => kritikOnayla()); await wait(300); // kritik onay (askKritik: "SİL")
+const sonra = await ev(() => { const k = db.hammadde.find(h => h.id === 7001); return { s: k.renkler.find(r => r.ad === 'Siyah').stok, b: k.renkler.find(r => r.ad === 'Beyaz').stok, tot: k.stok, e: db.hammadde.find(h => h.id === 7002).stok, ie: (db.isemirleri.find(x => x.id === 7101) || {}).iptal === true, oto: db.malSiparis.find(s => s.id === 7201).durum }; });
 T('iptal: kumaş Siyah 50 / Beyaz 30 (metre) geri geldi, toplam 80', sonra.s === 50 && sonra.b === 30 && Math.abs(sonra.tot - 80) < 0.001, sonra);
-T('iptal: etiket 900\'e döndü, iş emri silindi, oto alım siparişi iptal', sonra.e === 900 && !sonra.ie && sonra.oto === 'iptal', sonra);
+T('iptal: etiket 900\'e döndü, iş emri iptal (çizili kayıt kalır), oto alım siparişi iptal', sonra.e === 900 && sonra.ie && sonra.oto === 'iptal', sonra);
+
 
 // ---- üretim başlamışsa iptal engellenir ----
 await ev(() => { db.isemirleri.push({ id: 7102, urun: 'Başlamış', kod: 'B1', birim: 'adet', hedef: 10, renkDagilim: [], duraklar: [{ ad: 'Kesim', gelen: 5, durum: 'devam' }], malzeme: [], durum: 'devam' }); save(); isEmriIptal(7102); });

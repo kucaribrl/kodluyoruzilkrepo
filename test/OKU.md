@@ -25,6 +25,7 @@ node test/11-isemri-iptal-metre.test.mjs
 node test/12-kumulatif-birlesim.test.mjs
 node test/13-pin-pbkdf2.test.mjs
 node test/14-foto-storage.test.mjs
+node test/15-pb-onsiparis-kirik.test.mjs
 ```
 Hepsi birden:
 ```bash
@@ -53,6 +54,8 @@ PLAYWRIGHT_CHROMIUM=/usr/bin/chromium node test/01-hata-duzeltmeleri.test.mjs
 | 13 | PIN güvenliği: tuzlu PBKDF2 özeti, eski djb2 kaydın yükseltilmesi, 5 yanlışta 30 sn kilit, kilit/yönetici dönüşü/tutar gösterme akışları |
 | 14 | Fotoğraf deposu: Cloudinary → Firebase Storage → cihaz önceliği, izin hatasında base64'e düşüş, cihazdaki fotoğrafları toplu buluta taşıma |
 | 07 | Envanter malzeme siparişi: gramaj/en/foto/kartela+renk kodu, tüm türlerde çeşit satırları, teslimde çoklu parti + fiş foto + kapat, iş emri önizleme/yazdır, tekrar sipariş, sade bekleyen ekranı, WA dönüşü |
+| 15 | Satış ekranında ₺ → $ / € değişince yazılı tutarların (parça fiyatı, taşıma, ek ücret, kesik, ödeme satırı) kura göre çevrilmesi + POS kaydı; ön sipariş kilidi (mal stoğa girmeden teslim/toplama/kargo yok, FIFO açılma, portal); toplama emrinde kırık seri ekle/düzenle/kaldır (tutar, bakiye, stok, seri bozma ve birebir geri alma) |
+
 
 > Not: Para birimi modeli — `kalem.fiyat` her zaman TL, satışın `tutar` alanı satış
 > para birimindedir; `satisDiv(s)` PB→TL çarpanıdır. Hesap değiştiren her
