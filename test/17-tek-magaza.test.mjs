@@ -65,6 +65,19 @@ await page.reload(); await page.waitForFunction(() => typeof db !== 'undefined' 
 T('TM10: uygulama yeniden açılınca bu cihazın seçimi (Merter) kalır', await ev(() => aktifLok === 'L-mer'));
 T('TM11: yeniden açılışta GERÇEK veri yüklenir (örnek veriye düşmez — ID_SIRA açılış hatası)', await ev(() => !db.ornek && db.cariler.some(c => c.ad === 'Merter Müşteri') && db.lokasyonlar.length === 2));
 
+// 5) depo ≠ mağaza: depoda çek / müşteri tutulmaz
+await ev(() => { db.lokasyonlar.push({ id: 'L-dep', ad: 'Ana Depo', tip: 'depo' }); save(); setAktifLok('L-dep'); });
+const dp = await ev(() => {
+  const s = { id: 9701, tip: 'satis', lokId: 'L-dep', mid: 5502, mus: 'Merter Müşteri', tarih: Date.now(), kalemler: [], tutar: 500, odenen: 500, kesik: 0, pb: 'TL', satisKur: 1, durum: 'tamam', teslimDurum: 'teslim', odemeler: [{ tur: 'Çek', tutar: 500, pb: 'TL', vade: Date.now() + 864e5 }] };
+  db.satislar.push(s); applySatis(s); save();
+  const c = db.cekler.find(x => x.cariId === 5502);
+  go('cari'); const carTxt = $('app').textContent;
+  return { cekLok: c && c.lokId, magazalar: magazaListe().map(l => l.id).join(','), car: /Güngören Müşteri/.test(carTxt) && /Merter Müşteri/.test(carTxt) };
+});
+T('TM12: depodaki satışın çeki depoya değil mağazaya yazılır', dp.cekLok === 'L-ana' || dp.cekLok === 'L-mer', dp);
+T('TM13: çek/müşteri mağaza seçiminde depo çıkmaz', dp.magazalar === 'L-ana,L-mer', dp);
+T('TM14: depodayken müşteri listesi boş kalmaz (müşteriler mağazalara ait)', dp.car, dp);
+
 T('sayfa hatası yok', errs.length === 0, errs);
 console.log(`\n${ok} geçti, ${fail} kaldı`);
 await br.close(); srv.close();
