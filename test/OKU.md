@@ -29,6 +29,7 @@ node test/15-pb-onsiparis-kirik.test.mjs
 node test/16-tekrar-uret.test.mjs
 node test/17-tek-magaza.test.mjs
 node test/18-gunsonu-portal-geri.test.mjs
+node test/19-git-guvenlik-hook.test.mjs   # tarayıcı gerektirmez
 ```
 Hepsi birden:
 ```bash
@@ -60,6 +61,7 @@ PLAYWRIGHT_CHROMIUM=/usr/bin/chromium node test/01-hata-duzeltmeleri.test.mjs
 | 18 | Gün sonu kanal kanal sayım (nakit ₺/$/€, POS slip, havale, çek) + kayıt; portalda adet başı fiyat; tükenmiş üründe geri düğmesi; soldan sağa kaydırınca geri |
 | 17 | Tek mağaza görünümü: açılışta mağaza seçimi, sadece seçili mağazanın satış/cari/çek/rapor verisi, mağaza mağaza satırlar gizli, Ayarlar'da 'Tüm mağazaları göster', seçim cihaza özel; yeniden açılışta gerçek veri yüklenmesi |
 | 16 | 🏭 Tekrar Üret: ürün kartından / bitmiş iş emrinden, ürün seçili + son (ya da seçilen) iş emrinin kumaş, tüketim, renk dağılımı, kesimci-ücret, genel gider, sonraki aşama ücretleri ve termini dolu iş emri; önceki iş emri yoksa sadece ürün; depocuda buton yok |
+| 19 | Git güvenlik Hook'u (`.claude/hooks/git-guvenlik-kontrolu.mjs`): korunan dala (main, master, canlı yayın dalı) push ve force push → DENY; dal belirtilmeyen push'ta push.default / remote.<ad>.push / remote.pushDefault / mirror etkisi; HEAD, HEAD:main, refs/heads/main, git -C/-c, bileşik komutlar; bash -c / eval / değişkenli komutlar → ASK; tırnak içi metin ve heredoc'ta geçen 'git push' → karar yok; riskli yerel işlemler → ASK; GitHub MCP ile korunan dala yazma ve merge → DENY; Hook asla 'allow' vermez. Yalnızca geçici, yalıtılmış git depolarında çalışır |
 | 15 | Satış ekranında
  ₺ → $ / € değişince yazılı tutarların (parça fiyatı, taşıma, ek ücret, kesik, ödeme satırı) kura göre çevrilmesi + POS kaydı; ön sipariş kilidi (mal stoğa girmeden teslim/toplama/kargo yok, FIFO açılma, portal); toplama emrinde kırık seri ekle/düzenle/kaldır (tutar, bakiye, stok, seri bozma ve birebir geri alma) |
 
@@ -67,3 +69,22 @@ PLAYWRIGHT_CHROMIUM=/usr/bin/chromium node test/01-hata-duzeltmeleri.test.mjs
 > Not: Para birimi modeli — `kalem.fiyat` her zaman TL, satışın `tutar` alanı satış
 > para birimindedir; `satisDiv(s)` PB→TL çarpanıdır. Hesap değiştiren her
 > geliştirmeden sonra en az 01 ve 02 koşulmalıdır (TL + USD senaryoları içerir).
+
+## Git güvenlik Hook'u — güvenlik sınırları
+`.claude/hooks/git-guvenlik-kontrolu.mjs`, Claude Code'un `PreToolUse` olayında Bash ve
+`mcp__github__*` araç çağrılarını inceler. Kararları yalnızca **deny**, **ask** ya da
+"karar yok"tur; **asla allow vermez**, yani mevcut izinleri yalnızca sıkılaştırır.
+
+- **Hook başlatılamazsa koruma yoktur.** Claude Code belgesine göre Hook başlatılamazsa
+  (Node kurulu değil, dosya yok), 0/2 dışı kodla çıkarsa, geçersiz JSON basarsa veya zaman
+  aşımına uğrarsa bu *engellemeyen hata*dır ve araç çağrısı **çalışır**. Bunu kapatmak için
+  ayarda `"onFailure": "block"` kullanılmalıdır (Claude Code ≥ 2.1.295). Betik içindeki
+  hatalar betik tarafından yakalanır ve **ask**'e çevrilir.
+- Yalnızca Claude Code araç çağrılarını görür: kendi terminaliniz, GitHub web arayüzü,
+  `gh` CLI, CI ve bu ayar dosyası olmayan makineler korunmaz.
+- Metin çözümlemesi kazaları önler; kasıtlı gizlemeye (ör. betik dosyası içinden push,
+  `$(echo gi)t push`) karşı tam koruma değildir.
+- Dal belirtilmeyen push'ta hedef Git ayarları okunarak belirlenir; emin olunamazsa **ask**.
+- Kesin koruma için GitHub'da `main` ve canlı yayın dalına **branch protection** açılmalıdır.
+- Hook, `.claude/settings.json` içinde tanımlanana kadar **etkin değildir**.
+
