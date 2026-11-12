@@ -1085,7 +1085,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-165'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-166'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -2606,6 +2606,7 @@ function urunDetay(id){
     ${(canUrunYaz()||canSee('satis'))?`<div class="g2" style="margin-top:16px">${canUrunYaz()?`<button class="btn ghost sm" onclick="formUrun(${id})">✏️ Düzenle</button>`:''}${canSee('satis')?`<button class="btn sm" onclick="closeM();go('satis');setTimeout(()=>formSatis(${id}),150)">🧾 Satışa Ekle</button>`:''}</div>`:''}
     ${canUrunYaz()?`<button class="btn ghost sm" style="margin-top:8px" onclick="urunFotoYonet(${id})">📷 Fotoğraflar — ekle / değiştir</button>`:''}
     ${canSayim()?`<button class="btn ghost sm" style="margin-top:10px" onclick="closeM();setTimeout(()=>formSayim(${id}),120)">📋 Sayım / Raf Gir</button>`:''}
+    ${(canSee('uretim')&&!u.pasif)?`<button class="btn ghost sm" style="margin-top:8px" onclick="tekrarUret(${id})">🏭 Tekrar Üret — iş emri aç${tekrarUretKaynak(u)?' (son üretimin bilgileriyle)':''}</button>`:''}
     ${canUrunYaz()?`<div class="g2" style="margin-top:10px"><button class="btn ghost sm" onclick="cogaltUrun(${id})">📄 Çoğalt</button>${hasRenkStok(u)?`<button class="btn ghost sm" onclick="barkodYazdir(${id})">🏷️ Barkod Yazdır</button>`:''}</div>
     <button class="btn ghost sm" style="margin-top:10px;color:${u.pasif?'var(--good)':'var(--bad)'}" onclick="urunAktifToggle(${id});closeM()">${u.pasif?'✅ Aktif Et':'🗄️ Pasife Al (arşivle)'}</button>`:''}
   `);
@@ -6363,6 +6364,53 @@ function maliyetUretimeYolla(id){const m=(db.maliyetler||[]).find(x=>x.id===id);
   const _n=[+m.nak>0?'nakış':'',+m.dik>0?'dikim':'',+m.utu>0?'ütü':''].filter(Boolean).join('/');
   toast('💰 Maliyetten dolduruldu — renk/adet gir'+(_n?(' · '+_n+' ücreti durak eklerken gelecek'):''));
 },160);}
+/* --- 🏭 Tekrar Üret: eldeki (kayıtlı) ürünü yeniden üretmek için iş emri — ürün seçili gelir, SON iş emrinin
+   (ya da seçilen iş emrinin) kumaş / tüketim / kesimci-ücret / renk dağılımı / sonraki aşama ücretleri / termini dolu gelir --- */
+function tekrarUretKaynak(u){if(!u)return null;const lc=x=>(''+(x||'')).toLocaleLowerCase('tr-TR');
+  return (db.isemirleri||[]).filter(i=>i&&!i.iptal&&(i.urunId===u.id||(!i.urunId&&((u.kod&&lc(i.kod)===lc(u.kod))||lc(i.urun)===lc(u.ad))))).sort((a,b)=>(b.baslangic||0)-(a.baslangic||0))[0]||null;}
+function tekrarUret(uid,ieId){const u=urun(uid);if(!u)return toast('Ürün bulunamadı');
+  if(!canSee('uretim'))return toast('Yetkiniz yok');
+  if(u.pasif)return toast('Ürün pasif (arşivde) — önce ürün kartından ✅ Aktif Et');
+  const kay=(ieId&&db.isemirleri.find(x=>x.id===ieId&&!x.iptal))||tekrarUretKaynak(u);
+  try{closeM()}catch(e){}
+  go('uretim');
+  setTimeout(()=>{formIsEmri();setTimeout(()=>{try{_tekrarUretDoldur(u,kay)}catch(e){console.error(e);toast('Ürün seçildi — bilgileri kontrol et')}},140);},90);
+}
+function _tekrarUretDoldur(u,i){
+  const inp=$('ie-ad');if(!inp)return;inp.value=u.ad;ieUrunAra(u); // ürünün kendisi (aynı adlı başka ürün karışmasın)
+  if(!i){toast('🏭 '+u.ad+' seçildi — bu ürünün önceki iş emri yok, kumaş ve adetleri gir',3000);return;}
+  const lc=x=>(''+(x||'')).toLocaleLowerCase('tr-TR');
+  if(i.birim==='seri'&&!(u.bedenler||[]).length&&(i.bedenler||[]).length){ieBeden=i.bedenler.map(b=>({beden:b.beden,adet:Math.max(1,+b.adet||1)}));try{ieBedenCiz()}catch(e){}} // ürünün seri içeriği yoksa son asorti
+  // kumaş (kart hâlâ varsa stoktaki renkleriyle seçilir; silinmişse "alınacak kumaş" olarak yazılır)
+  const kk=i.kumasId?db.hammadde.find(h=>h.id===i.kumasId):null;
+  const dag=(i.renkDagilim||[]).filter(r=>(r.ad||'').trim()&&(+r.adet||0)>0);
+  if(kk||(i.kumasAd||'').trim()){
+    if(ieMod!=='kumas')ieModSet('kumas');
+    const kw=$('ie-kumas-wrap');if(kw)kw.style.display='';
+    if(kk)ieKumasSecId(kk.id);
+    else{const ka=$('ie-kumas-ad');if(ka){ka.value=i.kumasAd;ieKumasYaz();}if($('ie-kumas-fiyat')&&+i.kumasFiyat>0)$('ie-kumas-fiyat').value=i.kumasFiyat;if($('ie-kumas-pb'))$('ie-kumas-pb').value=i.kumasPB||'TL';try{ieKumasFiyatCiz()}catch(e){}}
+    const kc=$('ie-kumasci');if(kc&&!kc.value.trim()){const s=(db.malSiparis||[]).find(x=>x.oto&&x.ieId===i.id&&x.tedId&&cari(x.tedId));if(s)kc.value=cari(s.tedId).ad;}
+    if(+i.kumasTukBirim>0&&$('ie-kumas-tuk')){ieTukMod('gram');$('ie-kumas-tuk').value=Math.round(i.kumasTukBirim*10000)/10;ieTukCiz();} // 1 üründe gram
+  }else if(ieMod!=='elle')ieModSet('elle');
+  // renk / adet: son üretimdeki dağılım (değiştirilebilir); stokta kalmayan renk "alınacak" satırı olur
+  if(dag.length){
+    if(ieRenkDuzenlenir())ieRenk=dag.map(r=>({ad:r.ad,adet:+r.adet||0}));
+    else{ieRenk.forEach(r=>{const d=dag.find(x=>lc(x.ad)===lc(r.ad));r.adet=d?(+d.adet||0):0;});
+      dag.forEach(d=>{if(!ieRenk.some(r=>lc(r.ad)===lc(d.ad)))ieRenk.push({ad:d.ad,adet:+d.adet||0,yok:true});});}
+    cizIeRenk();ieToplamCiz();
+  }
+  // kesimci + ücret, genel gider, sonraki aşamaların ücretleri (durak eklerken kendiliğinden gelir)
+  const kes=(i.duraklar||[])[0];
+  if(kes){const fa=fasonAd(kes);if(fa&&$('dk-kesim-fas'))$('dk-kesim-fas').value=fa;if(+kes.ucret>0&&$('dk-kesim-uc'))$('dk-kesim-uc').value=kes.ucret;}
+  if($('ie-gg')&&i.genelGiderBirim!=null&&i.genelGiderBirim!=='')$('ie-gg').value=i.genelGiderBirim;
+  iePlanUcret={...(i.planUcret||{})};(i.duraklar||[]).slice(1).forEach(d=>{if(d&&d.ad&&+d.ucret>0&&iePlanUcret[d.ad]==null)iePlanUcret[d.ad]=+d.ucret;});
+  // termin
+  const g=Math.round(+i.gun||0);if(g>0){const cs=[...document.querySelectorAll('#ie-termin .c')];const c=cs.find(x=>(x.textContent||'').trim()===g+' gün');
+    if(c)ieTerminSet(g,c);else{const oz=cs[cs.length-1];if(oz)oz.textContent=g+' gün';ieTerminSet(g,oz);}}
+  try{ieOzetCiz();ieAsortiCiz();}catch(e){}
+  const pu=Object.keys(iePlanUcret);
+  toast('🔁 Son iş emri #'+i.id+' ('+dstr(i.baslangic)+') bilgileri dolduruldu'+(pu.length?' · '+pu.join(' / ')+' ücreti durak eklerken gelir':'')+' — adetleri kontrol et',3800);
+}
 /* --- Yeni iş emri --- */
 let ieMal=[], ieRenk=[], ieFoto='', ieUrunId=0, ieKumasId=0, ieKumasAd='', ieKumasFiyat=0, ieKumasPB='TL', ieKumasRenkli=false, ieMod='elle', ieBeden=[];
 let iePlanUcret={}, iePlanAdet=0; // maliyet kartından taşınan sonraki-aşama ücretleri + planlanan adet
@@ -6588,7 +6636,7 @@ function ieAsortiCiz(){const el=$('ie-asorti');if(!el)return;
   const h=asortiTabloHTML(ieRenk,ieBeden);
   el.innerHTML=h?`<div class="mini" style="font-weight:800;margin-bottom:5px">📐 Kesim Asortisi <span style="font-weight:600;color:var(--sub)">· renk × beden (kesilecek adet)</span></div>${h}`:'';
 }
-function ieUrunAra(){const ad=($('ie-ad')?.value||'').trim().toLowerCase();const u=db.urunler.find(x=>!x.pasif&&x.ad.toLowerCase()===ad);
+function ieUrunAra(zorlaU){const ad=($('ie-ad')?.value||'').trim().toLowerCase();const u=(zorlaU&&zorlaU.ad&&!zorlaU.pasif&&zorlaU.ad.toLowerCase()===ad)?zorlaU:db.urunler.find(x=>!x.pasif&&x.ad.toLowerCase()===ad);
   if(u&&u.id!==ieUrunId){ieUrunId=u.id;if($('ie-kod'))$('ie-kod').value=u.kod||'';if($('ie-birim'))$('ie-birim').value=u.birim||'seri';
     if($('ie-seriadet')&&u.birim==='seri')$('ie-seriadet').value=u.seri||6;
     // ürünün seri içeriğini (beden beden) asorti için al
@@ -6841,7 +6889,9 @@ function uretimDetay(id){
   if(i.durum!=='tamam'){html+=`<button class="btn g" style="margin-top:14px" onclick="isEmriTamamla(${id})">📦 Tamamla → ${saglam||'?'} ${esc(i.birim||'adet')}${ieSeriMi(i)?' ('+P(saglam)+' adet)':''} stoğa al</button>
     <button class="btn ghost" style="margin-top:8px;color:var(--bad)" onclick="isEmriIptal(${id})">🗑 İş Emrini İptal Et (kumaş/malzeme geri gelir)</button>`;}
   else{html+=`<div class="okbox" style="margin-top:14px">✅ ${ieSaglam(i)} ${esc(i.birim||'adet')} stoğa girdi${kar&&birimAd?` · adet maliyeti ${TL(birimAd)}`:''}</div>`;
-    if(i.urunId&&urun(i.urunId))html+=`<button class="btn" style="margin-top:10px" onclick="closeM();setTimeout(()=>barkodYazdir(${i.urunId}),150)">🏷️ Barkod Etiketi Yazdır</button>`;}
+    if(i.urunId&&urun(i.urunId)){html+=`<button class="btn" style="margin-top:10px" onclick="closeM();setTimeout(()=>barkodYazdir(${i.urunId}),150)">🏷️ Barkod Etiketi Yazdır</button>`;
+      if(canSee('uretim')&&!urun(i.urunId).pasif)html+=`<button class="btn ghost" style="margin-top:8px" onclick="tekrarUret(${i.urunId},${id})">🔁 Bu Ürünü Tekrar Üret (bu iş emrinin bilgileriyle)</button>`;}}
+
   open_('İş Emri #'+i.id,html);
 }
 /* --- Durak güncelle --- */
