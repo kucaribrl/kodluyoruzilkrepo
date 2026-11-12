@@ -73,6 +73,15 @@ await ev(() => { const T0 = (x) => new Touch({ identifier: 1, target: document.b
   document.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [T0(380)] })); }); await wait(150);
 T('KG4: ekranın ortasından kaydırma geri GİTMEZ (sadece sol kenardan)', await ev(() => cur === 'stok'));
 
+// ===== Sadeleştirme: tek Maliyet kutusu, örnek veri sıfırlama yok =====
+await ev(() => { db.rol = 'patron'; go('panel'); }); await wait(150);
+const pn = await ev(() => $('app').textContent);
+T('SD1: Panel\'de tek "Maliyet" kutusu ("Maliyet Listesi" kutusu yok)', /Maliyet/.test(pn) && !/Maliyet Listesi/.test(pn), pn.slice(0, 200));
+await ev(() => maliyetListesi()); await wait(150);
+T('SD2: Maliyet ekranında iki sekme (Ürün Maliyetleri · Yeni Model Hesabı) ve sekme geçişi', await ev(() => { const a = /Ürün Maliyetleri/.test($('mB').textContent) && /Yeni Model Hesabı/.test($('mB').textContent); maliyetAc(); return a && /Yeni Maliyet Hesabı/.test($('mB').textContent); }));
+await ev(() => { closeM(); go('ayarlar'); }); await wait(150);
+T('SD3: Ayarlar\'da "Örnek verilere sıfırla" yok', await ev(() => !/Örnek verilere sıfırla/.test($('app').textContent) && typeof sifirla === 'undefined'));
+
 T('sayfa hatası yok', errs.length === 0, errs);
 console.log(`\n${ok} geçti, ${fail} kaldı`);
 await br.close(); srv.close();

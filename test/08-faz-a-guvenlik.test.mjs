@@ -36,7 +36,7 @@ T('setRol("patron"): mağaza kendini yükseltemez (PIN/yönetici istenir)', awai
 await ev(() => { try { closeM() } catch (e) {} go('ayarlar'); });
 await wait(250);
 T('Ayarlar (mağaza): Kullanıcılar & Roller / Veri Güvenliği gizli', await ev(() => { const h = document.getElementById('app').innerHTML; return !h.includes('Kullanıcılar &amp; Roller') && !h.includes('Kullanıcılar & Roller') && !h.includes('sifirla()') && !h.includes('bosBaslat()'); }));
-T('topluZam/sifirla/bosBaslat/guvenliCikis (mağaza) → engellenir', await ev(() => { let n = 0; const ov = document.getElementById('ov'); const before = (db.urunler || []).length; topluZam(); if (!ov.classList.contains('show')) n++; sifirla(); if ((db.urunler || []).length === before && db.rol === 'magaza') n++; bosBaslat(); if ((db.urunler || []).length === before) n++; return n === 3; }));
+T('topluZam/bosBaslat/guvenliCikis (mağaza) → engellenir', await ev(() => { let n = 0; const ov = document.getElementById('ov'); const before = (db.urunler || []).length; topluZam(); if (!ov.classList.contains('show')) n++; bosBaslat(); if ((db.urunler || []).length === before) n++; return n === 2; }));
 await ev(() => { db.personelMod = true; setRol('depocu'); });
 T('personel modunda setRol değişmez', await ev(() => db.rol === 'magaza'));
 await ev(() => { db.personelMod = false; setRol('patron', true); });
@@ -45,9 +45,6 @@ T('rolAyar ayrı "yonetim" domeninde, ayar belgesinde değil', await ev(() => CA
 
 // ---- K1: sıfırla mezar taşı üretmez, senkron bayrağı kapanır ----
 await ev(() => { db.urunler.push({ id: 777001, ad: 'Gerçek Ürün', kod: 'GR1', kat: 'X', renkler: [{ ad: 'Siyah', stok: 3 }], stok: 3, fiyat: 10, alis: 5 }); db.cariler.push({ id: 777002, ad: 'Gerçek Cari', tip: 'musteri', bakiye: 0 }); save(); });
-await ev(() => sifirla()); await evet();
-T('sifirla: mezar taşı YOK, demo verisi, canliBulut=false', await ev(() => (!db._tomb || Object.keys(db._tomb).length === 0) && db.ornek === true && db.canliBulut === false));
-T('sifirla sonrası save(): yine mezar taşı yok', await ev(() => { save(); return !db._tomb || Object.values(db._tomb).every(o => !o || Object.keys(o).length === 0); }));
 T('otoSenkron: canliBulut=false iken bağlanmaz', await ev(async () => (await otoSenkron()) === false));
 
 // ---- K2: IndexedDB silme ----

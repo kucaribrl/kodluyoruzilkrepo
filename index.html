@@ -1068,7 +1068,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-170'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-171'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1415,7 +1415,6 @@ function siparisDinleMusteri(){
 }
 function siparisMusDur(){if(_sipMusUnsub){try{_sipMusUnsub()}catch(e){}_sipMusUnsub=null;}}
 
-function sifirla(){if(!adminMi())return toast('Yetkiniz yok');askConfirm('Tüm veriler örnek verilere sıfırlansın mı?'+(typeof canliAcik!=='undefined'&&canliAcik?'\n\n⚠️ Canlı senkron açık: önce yedek alınır ve senkron durdurulur — buluttaki gerçek veri EZİLMEZ.':''),()=>{try{autoYedek('sıfırlamadan önce')}catch(e){}try{if(typeof canliAcik!=='undefined'&&canliAcik)canliDur()}catch(e){}db=seed();db.canliBulut=false;delete db._tomb;try{_mSnapInit()}catch(e){}save();go('panel');toast('Sıfırlandı — örnek veriye dönüldü')})}
 // 🧹 Test/örnek verileri temizle — sıfırdan boş başla (firma bilgisi + kur + roller + PIN korunur)
 function bosBaslat(){
   if(!adminMi())return toast('Yetkiniz yok');
@@ -1985,8 +1984,7 @@ function modulListe(){
   if(db.rol==='depocu'||db.rol==='magaza')list.unshift({ic:'📋',ad:'Sayım',act:'depoSayim()'});
   if(db.rol==='magaza'){list.unshift({ic:'📷',ad:'Barkod Tara',act:'kameraTara()'});list.unshift({ic:'➕',ad:'Yeni Satış',act:'formSatis()'});}
   if(canHammadde())list.unshift({ic:'🗂️',ad:'Envanter',act:'envanterAc()'}); // sadece malzemeler (kumaş/aksesuar...)
-  if(paraGoster())list.push({ic:'📋',ad:'Maliyet Listesi',act:'maliyetListesi()'}); // tüm ürünlerin maliyet/kâr tablosu
-  if(paraGoster())list.push({ic:'💰',ad:'Maliyet',act:'maliyetAc()'}); // koleksiyon maliyetleri — üretim dışında da erişim
+  if(paraGoster())list.push({ic:'💰',ad:'Maliyet',act:'maliyetListesi()'}); // tek kutu: ürün maliyet listesi + yeni model hesabı (sekmeli)
   return list;
 }
 
@@ -6155,8 +6153,8 @@ function mlVeri(u){const kur=(u.pb&&u.pb!=='TL')?(pbKur(u.pb)||1):1;
   return {maliyetP,satisP,karP,yuzde,seri,stok,bagli,eksik:maliyetP<=0,zarar:maliyetP>0&&karP<0};
 }
 function maliyetListesi(){mlQ='';mlSort='karAz';mlKat='Tümü';
-  open_('💰 Maliyet Listesi',
-    `<div class="mini">Tüm ürünlerin parça başına maliyeti, satışı ve kârı. Bir satıra dokunup maliyeti düzenleyebilirsin.</div>
+  open_('💰 Maliyet',
+    `${maliyetSekme('liste')}<div class="mini">Tüm ürünlerin parça başına maliyeti, satışı ve kârı. Bir satıra dokunup maliyeti düzenleyebilirsin.</div>
      <div id="ml-ozet"></div>
      <input class="search" id="ml-q" placeholder="🔍 Ürün, kod, marka ara..." autocomplete="off" oninput="mlQ=this.value;maliyetListesiCiz()" style="margin:10px 0 8px">
      <div class="segs" id="ml-kat"></div>
@@ -6220,9 +6218,11 @@ function maliyetDuzenleKaydet(id){const u=urun(id);if(!u)return;const val=$('ml-
   u.alis=al;save();try{canliYazHemen(['stok'])}catch(e){}
   toast('Maliyet güncellendi ✓');maliyetListesi();
 }
+// 💰 Maliyet tek kutu: iki sekme — ürünlerin maliyet/kâr listesi · koleksiyon (yeni model) maliyet hesapları
+function maliyetSekme(a){return `<div class="seg2" style="margin-bottom:10px"><div class="o ${a==='liste'?'on':''}" onclick="${a==='liste'?'':'maliyetListesi()'}">📋 Ürün Maliyetleri</div><div class="o ${a==='koleksiyon'?'on':''}" onclick="${a==='koleksiyon'?'':'maliyetAc()'}">📚 Yeni Model Hesabı</div></div>`;}
 function maliyetAc(){
   const list=(db.maliyetler||[]).slice().sort((a,b)=>(b.tarih||0)-(a.tarih||0));
-  let h=`<div class="mini">Sezon/koleksiyon için ürün maliyetlerini hesapla ve sakla. Hazır olunca içinden seçip <b>üretime yolla</b>.</div>
+  let h=`${maliyetSekme('koleksiyon')}<div class="mini">Sezon/koleksiyon için ürün maliyetlerini hesapla ve sakla. Hazır olunca içinden seçip <b>üretime yolla</b>.</div>
     <button class="btn g" style="margin-top:10px" onclick="maliyetForm(0)">＋ Yeni Maliyet Hesabı</button>`;
   if(list.length){h+=`<div class="sec">📚 Koleksiyon · ${list.length}</div>`+list.map(m=>{const r=maliyetHesapla(m);
     return `<div class="card" style="padding:10px 11px;margin-bottom:8px"><div class="row"><div class="av gray" style="overflow:hidden;padding:0">${m.foto?`<img src="${guvenliSrc(m.foto)}" style="width:100%;height:100%;object-fit:cover">`:'👕'}</div><div class="mid"><div class="t">${esc(m.ad||'(isimsiz)')}${m.kod?' · '+esc(m.kod):''}</div><div class="s">birim <b>${TL(r.birim)}</b> · satış ${TL(r.satis)}</div></div><span class="pill low">${m.adet||0} ad</span></div>
@@ -9073,7 +9073,6 @@ function rAyarlar(){
     <div class="row" onclick="yedekAl()"><div class="av g">💾</div><div class="mid"><div class="t">Yedek Al (indir)</div><div class="s">tüm verini dosya olarak kaydet</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="$('yedekFile').click()"><div class="av" style="background:var(--ind2)">📂</div><div class="mid"><div class="t">Yedekten Yükle</div><div class="s">daha önce aldığın yedeği geri yükle</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="bosBaslat()"><div class="av" style="background:var(--warn)">🧹</div><div class="mid"><div class="t">Test verilerini temizle (sıfırdan başla)</div><div class="s">örnek ürün/cari/satışları siler · firma+roller kalır</div></div><span style="color:var(--sub)">›</span></div>
-    <div class="row" onclick="sifirla()"><div class="av r">🔄</div><div class="mid"><div class="t">Örnek verilere sıfırla</div></div></div>
   </div><input type="file" id="yedekFile" accept="application/json" style="display:none" onchange="yedekYukle(this)">
   <div class="mini" style="margin:8px 3px">💡 Veriler telefonunun tarayıcısında saklanır. Önemli verini ara sıra <b>yedek al</b> — tarayıcı geçmişini silsen bile kaybolmaz.</div>`;
   html+=`<div style="text-align:center;margin-top:18px"><button class="btn ghost sm" style="width:auto;display:inline-block" onclick="uygulamayiGuncelle()">🔄 Uygulamayı Güncelle (son sürüm)</button></div>`;
