@@ -27,6 +27,7 @@ node test/13-pin-pbkdf2.test.mjs
 node test/14-foto-storage.test.mjs
 node test/15-pb-onsiparis-kirik.test.mjs
 node test/16-tekrar-uret.test.mjs
+node test/17-tek-magaza.test.mjs
 ```
 Hepsi birden:
 ```bash
@@ -55,6 +56,7 @@ PLAYWRIGHT_CHROMIUM=/usr/bin/chromium node test/01-hata-duzeltmeleri.test.mjs
 | 13 | PIN güvenliği: tuzlu PBKDF2 özeti, eski djb2 kaydın yükseltilmesi, 5 yanlışta 30 sn kilit, kilit/yönetici dönüşü/tutar gösterme akışları |
 | 14 | Fotoğraf deposu: Cloudinary → Firebase Storage → cihaz önceliği, izin hatasında base64'e düşüş, cihazdaki fotoğrafları toplu buluta taşıma |
 | 07 | Envanter malzeme siparişi: gramaj/en/foto/kartela+renk kodu, tüm türlerde çeşit satırları, teslimde çoklu parti + fiş foto + kapat, iş emri önizleme/yazdır, tekrar sipariş, sade bekleyen ekranı, WA dönüşü |
+| 17 | Tek mağaza görünümü: açılışta mağaza seçimi, sadece seçili mağazanın satış/cari/çek/rapor verisi, mağaza mağaza satırlar gizli, Ayarlar'da 'Tüm mağazaları göster', seçim cihaza özel; yeniden açılışta gerçek veri yüklenmesi |
 | 16 | 🏭 Tekrar Üret: ürün kartından / bitmiş iş emrinden, ürün seçili + son (ya da seçilen) iş emrinin kumaş, tüketim, renk dağılımı, kesimci-ücret, genel gider, sonraki aşama ücretleri ve termini dolu iş emri; önceki iş emri yoksa sadece ürün; depocuda buton yok |
 | 15 | Satış ekranında
  ₺ → $ / € değişince yazılı tutarların (parça fiyatı, taşıma, ek ücret, kesik, ödeme satırı) kura göre çevrilmesi + POS kaydı; ön sipariş kilidi (mal stoğa girmeden teslim/toplama/kargo yok, FIFO açılma, portal); toplama emrinde kırık seri ekle/düzenle/kaldır (tutar, bakiye, stok, seri bozma ve birebir geri alma) |
