@@ -1046,7 +1046,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-167'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-168'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1988,7 +1988,7 @@ function rStok(){
   let html='';
   {
     const kats=['Tümü',...new Set(db.urunler.map(u=>u.kat).filter(Boolean))];
-    html+=`<div style="display:flex;gap:8px;align-items:stretch"><input class="search" id="ara-stok" placeholder="🔍 Ürün, kod, marka ara..." oninput="rStokList()" style="flex:1;margin-bottom:10px"><button class="btn ghost" style="width:auto;flex:0 0 auto;padding:0 15px;margin:0 0 10px;font-size:19px" onclick="barkodOkutAra()" title="Kamerayla barkod okut">📷</button></div><div class="segs">`+kats.map(k=>`<div class="seg ${k===stokKat?'on':''}" onclick="stokKat='${esc(jsq(k))}';rStok()">${esc(k)}</div>`).join('')+`</div>${lokListe().length>1?`<div class="okbox" style="margin-bottom:10px;display:flex;align-items:center;gap:8px">${lokIc(aktifLok)} <b>${esc(lokAd(aktifLok))}</b> stoğu<button class="btn ghost sm" style="width:auto;margin:0 0 0 auto;padding:6px 11px" onclick="lokSec()">değiştir</button></div><button class="btn ghost sm" style="margin-bottom:10px" onclick="transferListe()">🔄 Transfer / Sevk</button>`:''}${canSayim()?`<button class="btn ghost sm" style="margin-bottom:10px" onclick="depoSayim()">📋 Depo Sayımı Yap</button>`:''}${db.urunler.some(u=>defoTop(u)>0)?`<button class="btn ghost sm" style="margin-bottom:10px;color:var(--bad)" onclick="defoluStokAc()">⚠️ Defolu Stok (${db.urunler.reduce((a,u)=>a+defoTop(u),0)})</button>`:''}${paraGoster()?`<button class="btn ghost sm" style="margin-bottom:10px" onclick="maliyetListesi()">💰 Maliyet Listesi (tüm ürünlerin maliyet / kârı)</button>`:''}${paraGoster()?`<button class="btn ghost sm" style="margin-bottom:10px" onclick="topluZam()">💹 Toplu Fiyat Güncelle (% zam / indirim)</button>`:''}<div class="card" id="stok-list"></div>`;
+    html+=`<div style="display:flex;gap:8px;align-items:stretch"><input class="search" id="ara-stok" placeholder="🔍 Ürün, kod, marka ara..." oninput="rStokList()" style="flex:1;margin-bottom:10px"><button class="btn ghost" style="width:auto;flex:0 0 auto;padding:0 15px;margin:0 0 10px;font-size:19px" onclick="barkodOkutAra()" title="Kamerayla barkod okut">📷</button></div><div class="segs">`+kats.map(k=>`<div class="seg ${k===stokKat?'on':''}" onclick="stokKat='${esc(jsq(k))}';rStok()">${esc(k)}</div>`).join('')+`</div>${lokListe().length>1?`<div class="okbox" style="margin-bottom:10px;display:flex;align-items:center;gap:8px">${lokIc(aktifLok)} <b>${esc(lokAd(aktifLok))}</b> stoğu<button class="btn ghost sm" style="width:auto;margin:0 0 0 auto;padding:6px 11px" onclick="lokSec()">değiştir</button></div>`:''}${stokKisayol()}<div class="card" id="stok-list"></div>`;
     $('app').innerHTML=html; rStokList();
 }
 }
@@ -2554,6 +2554,14 @@ function urunDetay(id){
   `);
 }
 
+// Stok ekranı kısayolları — üst üste uzun butonlar yerine tek sırada küçük düğmeler (liste yukarıda başlasın)
+function stokKisayol(){const k=[];
+  if(lokListe().length>1)k.push(['transferListe()','🔄 Transfer']);
+  if(canSayim())k.push(['depoSayim()','📋 Sayım']);
+  if(db.urunler.some(u=>defoTop(u)>0))k.push(['defoluStokAc()','⚠️ Defolu ('+db.urunler.reduce((a,u)=>a+defoTop(u),0)+')',1]);
+  if(paraGoster()){k.push(['maliyetListesi()','💰 Maliyet']);k.push(['topluZam()','💹 Toplu Fiyat']);}
+  if(!k.length)return '';
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">${k.map(([f,ad,kirmizi])=>`<button class="btn ghost sm" style="width:auto;flex:1 1 auto;margin:0;padding:8px 10px;font-size:12.5px${kirmizi?';color:var(--bad)':''}" onclick="${f}">${ad}</button>`).join('')}</div>`;}
 /* ---- Depo Sayımı (raf + fiziksel sayım, depocu girer) ---- */
 function canSayim(){return db.rol==='depocu'||db.rol==='magaza'||canUrunYaz()}
 function depoSayim(){if(!canSayim())return toast('Yetkiniz yok');
