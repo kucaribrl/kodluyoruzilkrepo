@@ -31,7 +31,6 @@
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0}
   body{background:var(--bg);color:var(--ink);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;min-height:100vh;padding-bottom:96px;font-size:15px;line-height:1.5;overflow-x:hidden}
-  .tnum{font-variant-numeric:tabular-nums}
   h1,h2,h3,h4{margin:0}
   button{font-family:inherit}
 
@@ -43,11 +42,8 @@
   header .sub{font-size:11px;opacity:.85;margin-top:1px}
   header .role{margin-left:auto;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.22);color:#fff;border-radius:20px;padding:6px 11px;font-size:11.5px;font-weight:700;cursor:pointer}
   header .bkbtn{background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:0 6px 0 0;display:none}
-  header.sub-view .bkbtn{display:block}
-  header.sub-view .logo{display:none}
 
   main{max-width:820px;margin:0 auto;padding:14px}
-  .hide{display:none!important}
 
   /* generic */
   .card{background:var(--card);border:1px solid var(--ln);border-radius:14px;box-shadow:var(--sh);overflow:hidden}
@@ -174,29 +170,18 @@
   .step .b{width:34px;height:34px;border-radius:9px;background:var(--ln2);color:var(--ind);border:none;font-size:19px;font-weight:800;cursor:pointer}.step .b.p{background:var(--ind);color:#fff}
   .step input{width:60px;text-align:center;padding:9px}
   .step.sm{gap:5px}.step.sm .b{width:28px;height:28px;font-size:16px;border-radius:7px}.step.sm input{width:44px;padding:6px}
-  .renkrow{display:flex;align-items:center;gap:8px;margin-top:8px}
   .sw{width:30px;height:30px;flex:0 0 30px;border-radius:8px;border:1px solid rgba(0,0,0,.15);cursor:pointer}
   .sw.sm{width:20px;height:20px;flex:0 0 20px;cursor:default}
-  .renkrow .rad{flex:1;margin:0}.renkrow .rst{width:66px;flex:0 0 66px;margin:0;text-align:center}
   .renksel{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px dashed var(--ln)}
   .renksel .rn{font-size:14px;font-weight:700;flex:1}.renksel .rs{font-size:11px;color:var(--sub);font-weight:700;text-align:right}.renksel .rs.bad{color:var(--bad)}
   .bedenbox{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-  .bchip{display:inline-flex;align-items:center;gap:5px;background:var(--ind);color:#fff;font-size:12.5px;font-weight:800;padding:6px 8px 6px 11px;border-radius:9px}
-  .bchip i{cursor:pointer;font-style:normal;opacity:.75;font-size:11px}
   .binp{width:70px!important;padding:8px 10px!important;margin:0!important}
   .brow{display:flex;align-items:center;gap:8px;margin-top:7px}
   .brow .bn{flex:1;margin:0;font-weight:700}
-  .renkcard{border:1px solid var(--ln);border-radius:13px;padding:11px;margin-top:10px;background:#fbfcfe}
-  .rc-top{display:flex;align-items:center;gap:8px}.rc-top .rad{flex:1;margin:0}
-  .rc-body{display:flex;gap:10px;margin-top:0}
-  .rc-foto{width:72px;height:72px;flex:0 0 72px;border:1px dashed var(--ln);border-radius:11px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px;color:var(--sub);font-weight:700;cursor:pointer;overflow:hidden;background:#fff}
-  .rc-foto img{width:100%;height:100%;object-fit:cover}
-  .rc-fields{flex:1;min-width:0}.rc-fields label{margin:9px 0 4px}.rc-fields input{padding:9px 11px}
   .rc-kirikh{margin-top:10px;font-size:12.5px;font-weight:800;color:var(--ind2);cursor:pointer;user-select:none}
   .rc-kirik{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}
   .kb{display:flex;flex-direction:column;align-items:center;gap:3px;width:52px}
   .kb span{font-size:11px;font-weight:800;color:var(--sub)}.kb input{width:52px;text-align:center;padding:7px 4px}
-  .islemrow{display:flex;gap:7px;align-items:center;margin-top:8px}.islemrow select{flex:1;padding:10px}
   .aclist{display:none;border:1px solid var(--ln);border-radius:11px;margin-top:4px;overflow:hidden;max-height:260px;overflow-y:auto}
   .acitem{display:flex;align-items:center;gap:8px;padding:11px 13px;font-size:14px;font-weight:700;cursor:pointer;border-top:1px solid var(--ln2)}
   .acitem:first-child{border-top:none}.acitem:active{background:var(--ln2)}
@@ -238,19 +223,15 @@
   .svbar{width:5px;height:40px;border-radius:3px;background:var(--ln2)}
   .svbar.teslim{background:var(--ind2)}.svbar.odendi{background:var(--bad)}
   .bkrow{display:flex;gap:11px;align-items:center;padding:11px 0;border-bottom:1px dashed var(--ln)}
-  .bksvg{flex:0 0 130px;background:#fff;border:1px solid var(--ln);border-radius:8px;padding:5px}.bkinfo{flex:1}
   .pasifrow{opacity:.5}
   #printarea{display:none}
   @media print{
     body.printing>*{display:none!important}
     body.printing #printarea{display:flex!important;flex-wrap:wrap;gap:6px;padding:6px}
     body.printing .lbl{border:1px solid #000;border-radius:5px;padding:7px 8px;width:210px;text-align:center;page-break-inside:avoid;color:#000}
-    body.printing .lbl .l-ad{font-size:12px;font-weight:800;line-height:1.3;margin-bottom:2px}
-    body.printing .lbl .l-line{font-size:10px;font-weight:700;line-height:1.4}
     body.printing .lbl svg{margin-top:4px}
-    /* Barkod etiketi: barlar saf siyah ve keskin bassın (tarayıcı okusun) */
-    body.printing .tl-tbl,body.printing .tl-r,body.printing .lbl{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color:#000!important}
-    body.printing .tl-bar svg,body.printing .lbl svg{shape-rendering:crispEdges;image-rendering:pixelated}
+    body.printing .lbl{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color:#000!important}
+    body.printing .lbl svg{shape-rendering:crispEdges;image-rendering:pixelated}
     body.printing .ieA4{display:block!important;color:#000;font-family:ui-sans-serif,system-ui,sans-serif;font-size:12.5px;width:100%}
   }
   .ieA4{color:#000}
@@ -272,8 +253,6 @@
   .warnbox{background:var(--bad-s);color:var(--bad);border-radius:11px;padding:10px 13px;font-size:12px;font-weight:700;margin-top:10px}
   .infobox{background:var(--thr-s);color:var(--thr);border-radius:11px;padding:10px 13px;font-size:12px;font-weight:700;margin-top:10px}
   .okbox{background:var(--good-s);color:var(--good);border-radius:11px;padding:10px 13px;font-size:12px;font-weight:700;margin-top:10px}
-  .depoitem{display:flex;justify-content:space-between;align-items:center;padding:5px 0;font-size:13.5px;border-top:1px dashed var(--ln)}
-  .depoitem:first-child{border-top:none}.depoitem span{color:var(--tx)}.depoitem b{font-weight:800}
   .depoline{display:flex;align-items:center;gap:10px;padding:11px 12px;border-top:1px solid var(--ln);cursor:pointer;-webkit-tap-highlight-color:transparent}
   .depoline:first-child{border-top:none}
   .depoline .dchk{font-size:22px;flex:0 0 auto;line-height:1}
@@ -297,15 +276,8 @@
   .satfoto .ph{color:var(--sub);font-weight:700;font-size:13px}
   .satfoto img{width:100%;max-height:220px;object-fit:cover;display:block}
   .satfoto .rm{position:absolute;top:7px;right:7px;background:rgba(0,0,0,.6);color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800}
-  .wagal{display:flex;gap:8px;overflow-x:auto;margin-top:8px;padding-bottom:4px}
-  .wathumb{flex:0 0 auto;width:96px;text-align:center}
-  .wathumb img{width:96px;height:96px;object-fit:cover;border-radius:10px;border:1px solid var(--ln)}
-  .wathumb span{display:block;font-size:10px;color:var(--sub);font-weight:700;margin-top:3px;line-height:1.2;white-space:normal}
-  .ietoplam{display:flex;justify-content:space-between;align-items:center;background:var(--ind-s,#e8eefb);color:var(--ind);border-radius:11px;padding:10px 14px;margin-top:8px;font-weight:800;font-size:14px}
-  .ietoplam b{font-size:16px}
   .kv{display:flex;justify-content:space-between;padding:7px 0;font-size:13.5px;border-bottom:1px solid var(--ln)}
   .kv:last-child{border-bottom:none}.kv .k{color:var(--sub)}.kv .v{font-weight:800}
-  .matrix{overflow-x:auto;border:1px solid var(--ln);border-radius:12px}
   table.mx{border-collapse:collapse;width:100%}
   table.mx th{background:var(--ln2);font-size:11px;font-weight:800;color:var(--sub);padding:8px 4px;text-align:center}
   table.mx th.c{text-align:left;padding-left:10px;min-width:74px}
@@ -313,7 +285,6 @@
   table.mx td:first-child{border-left:none}
   table.mx th:first-child{text-align:left;padding-left:10px}
   table.mx tbody th{background:var(--card);text-align:left;padding:8px 10px;font-size:12px;white-space:nowrap;border-top:1px solid var(--ln)}
-  .mcell-in{width:100%;border:none;background:none;text-align:center;padding:9px 2px;font-size:13px;font-weight:700;color:var(--ink)}
   .sw{display:inline-block;width:11px;height:11px;border-radius:4px;margin-right:5px;vertical-align:-1px;border:1px solid rgba(0,0,0,.15)}
   .cov{position:fixed;inset:0;background:rgba(15,25,40,.55);z-index:80;display:none;align-items:center;justify-content:center;padding:24px}
   .cov.show{display:flex}
@@ -326,12 +297,6 @@
   .bar{display:flex;align-items:center;gap:9px}.bar .nm{font-size:12px;font-weight:700;width:96px;flex:0 0 96px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .bar .tr{flex:1;height:20px;background:var(--ln2);border-radius:6px;overflow:hidden}.bar .tr i{display:block;height:100%}
   .bar .am{font-size:12px;font-weight:800;width:64px;text-align:right}
-  /* Yeni İş Emri — adımlı form */
-  .iestep{background:var(--card);border:1px solid var(--ln);border-radius:16px;padding:14px;margin-bottom:12px}
-  .iesh{display:flex;align-items:center;gap:9px;margin-bottom:11px}
-  .iesh .n{width:24px;height:24px;border-radius:8px;background:var(--ind);color:#fff;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
-  .iesh b{font-size:14px;font-weight:800}
-  .iesh small{color:var(--sub);font-weight:600;font-size:11px;margin-left:auto}
   .ieprod{display:flex;gap:11px;align-items:center;background:var(--ind-s);border-radius:12px;padding:10px;margin-top:8px}
   .ieprod .ph{width:52px;height:52px;border-radius:10px;background:#1d2f52;color:#fff;font-size:22px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:0 0 auto}
   .ieprod .ph img{width:100%;height:100%;object-fit:cover}
@@ -357,10 +322,6 @@
   .iekc.on span{color:var(--ind)}
   .ieyeni{font-size:11.5px;color:var(--thr,#d8a24a);font-weight:800;background:var(--thr-s,#f7efe0);border-radius:9px;padding:7px 10px;margin-top:8px}
   .iekfi{font-size:12.5px;font-weight:700}
-  .envkpi{display:flex;gap:10px;margin-bottom:4px}
-  .envkpi .ek{flex:1;min-width:0;background:var(--card);border:1px solid var(--ln);border-radius:14px;padding:13px;cursor:pointer}
-  .ek .ekic{font-size:22px;line-height:1}.ek .ekt{font-size:11px;color:var(--sub);font-weight:800;margin-top:5px;text-transform:uppercase;letter-spacing:.3px}
-  .ek .ekv{font-size:23px;font-weight:800;margin-top:2px;white-space:nowrap}.ek .ekv small{font-size:12px;color:var(--sub);font-weight:700}
   .ek .eks{font-size:11.5px;color:var(--sub);font-weight:700;margin-top:3px}
   .envtot{display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,#2b2c34,#3d3f4a);color:#fff;border-radius:14px;padding:13px 16px;margin-top:12px;font-size:13px;font-weight:700}
   .envtot b{font-size:19px;font-weight:800;color:var(--thr,#d8a24a)}
@@ -1085,7 +1046,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-166'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-167'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
@@ -1262,12 +1223,6 @@ async function bulutProfilYukle(){
 async function bulutCikisPortal(){try{siparisDinlemeDur();siparisMusDur();}catch(e){}try{await firebase.auth().signOut()}catch(e){}bulutKul=null;}
 function bulutAdminMi(){return !!(bulutKul&&bulutKul.rol==='admin')}
 // Admin: onay bekleyen kullanıcılar
-async function bulutOnayBekleyen(){
-  if(!bulutBaslat())return [];
-  try{const snap=await _fb.collection('kullanicilar').where('onay','==',false).get();
-    const arr=[];snap.forEach(d=>arr.push({uid:d.id,...d.data()}));return arr;
-  }catch(e){console.warn('onaybekleyen',e);return []}
-}
 async function bulutTumKullanicilar(){
   if(!bulutBaslat())return [];
   try{const snap=await _fb.collection('kullanicilar').get();const arr=[];snap.forEach(d=>arr.push({uid:d.id,...d.data()}));return arr;}
@@ -1541,12 +1496,12 @@ function ciroSeri(gun){const arr=[];const bugun=new Date().setHours(0,0,0,0);
 
 /* Roller ve yetki — merkezi model */
 const ROLLER={
-  patron:{ad:'Patron',ic:'👑',kar:true,para:true,urunYaz:true,hammadde:true,views:'panel,satis,stok,cari,kasa,cek,uretim,portal,rapor,ayarlar,daha'},
-  ortak:{ad:'Ortak',ic:'🤝',kar:true,para:true,urunYaz:true,hammadde:true,views:'panel,satis,stok,cari,kasa,cek,uretim,portal,rapor,ayarlar,daha'},
-  magaza:{ad:'Mağaza Elemanı',ic:'🏪',kar:false,para:false,urunYaz:false,hammadde:false,views:'panel,satis,stok,cari,ayarlar,daha'},
-  depocu:{ad:'Depocu',ic:'📦',kar:false,para:false,urunYaz:false,hammadde:false,views:'panel,stok,ayarlar,daha'},
-  fason:{ad:'Fasoncu (Üretim)',ic:'🧵',kar:false,para:false,urunYaz:false,hammadde:true,views:'panel,uretim,stok,cari,ayarlar,daha'},
-  fasontakip:{ad:'Fason Takipçi',ic:'🧵',kar:false,para:false,urunYaz:false,hammadde:true,views:'panel,uretim,stok,ayarlar,daha'},
+  patron:{ad:'Patron',ic:'👑',kar:true,para:true,urunYaz:true,hammadde:true,views:'panel,satis,stok,cari,kasa,cek,uretim,portal,rapor,ayarlar'},
+  ortak:{ad:'Ortak',ic:'🤝',kar:true,para:true,urunYaz:true,hammadde:true,views:'panel,satis,stok,cari,kasa,cek,uretim,portal,rapor,ayarlar'},
+  magaza:{ad:'Mağaza Elemanı',ic:'🏪',kar:false,para:false,urunYaz:false,hammadde:false,views:'panel,satis,stok,cari,ayarlar'},
+  depocu:{ad:'Depocu',ic:'📦',kar:false,para:false,urunYaz:false,hammadde:false,views:'panel,stok,ayarlar'},
+  fason:{ad:'Fasoncu (Üretim)',ic:'🧵',kar:false,para:false,urunYaz:false,hammadde:true,views:'panel,uretim,stok,cari,ayarlar'},
+  fasontakip:{ad:'Fason Takipçi',ic:'🧵',kar:false,para:false,urunYaz:false,hammadde:true,views:'panel,uretim,stok,ayarlar'},
 };
 // Rolün EFEKTİF yetkisi: koddaki varsayılan + patronun Ayarlar'dan yaptığı değişiklik (db.rolAyar)
 function rolYetki(rol){
@@ -1558,7 +1513,7 @@ function rolYetki(rol){
   ['kar','para','urunYaz','hammadde'].forEach(k=>{if(ov[k]!=null)y[k]=!!ov[k];});
   const set=new Set(base.views.split(','));
   if(ov.views)Object.keys(ov.views).forEach(v=>{if(ov.views[v])set.add(v);else set.delete(v);});
-  ['panel','ayarlar','daha'].forEach(v=>set.add(v)); // bu üçü kapatılamaz
+  ['panel','ayarlar'].forEach(v=>set.add(v)); // bu ikisi kapatılamaz
   y.views=[...set].join(',');
   return y;
 }
@@ -1858,7 +1813,7 @@ function render(){
   $('hSub').textContent=y.ad;
   $('roleBtn').innerHTML=y.ic+' '+y.ad+' ▾';
   {const lb=$('lokBtn');if(lb){const coklu=lokListe().length>1;lb.style.display=coklu?'':'none';if(coklu){const a=lokAktif();lb.innerHTML=lokIc(a.id)+' '+esc((a.ad||'').length>12?a.ad.slice(0,11)+'…':a.ad)+' ▾';}}}
-  const R={panel:rPanel,satis:rSatis,stok:rStok,envanter:rEnvanter,cari:rCari,daha:rDaha,kasa:rKasa,cek:rCek,uretim:rUretim,rapor:rRapor,ayarlar:rAyarlar,portal:rPortal};
+  const R={panel:rPanel,satis:rSatis,stok:rStok,envanter:rEnvanter,cari:rCari,kasa:rKasa,cek:rCek,uretim:rUretim,rapor:rRapor,ayarlar:rAyarlar,portal:rPortal};
   (R[cur]||rPanel)();
 }
 
@@ -2014,19 +1969,6 @@ function modulListe(){
 }
 
 /* ---------- DAHA ---------- */
-function rDaha(){
-  const items=[
-    {ic:'🏦',ad:'Kasa & Hesaplar',s:'çok hesap · toplam',v:'kasa'},
-    {ic:'🏷️',ad:'Çek Portföyü',s:'vade · durum',v:'cek'},
-    {ic:'🏭',ad:'Üretim / Fason',s:'iş emri · durak',v:'uretim'},
-    {ic:'🛍️',ad:'Müşteri Portalı',s:'gelen siparişler',v:'portal'},
-    {ic:'📊',ad:'Raporlar',s:'ciro · kâr · kaçak',v:'rapor'},
-    {ic:'⚙️',ad:'Ayarlar',s:'kur · rol · hesap',v:'ayarlar'},
-  ].filter(i=>canSee(i.v));
-  $('app').innerHTML=`<div class="sec">Daha Fazlası</div><div class="card">`+items.map(i=>`<div class="row" onclick="go('${i.v}')"><div class="av" style="background:var(--ind)">${i.ic}</div><div class="mid"><div class="t">${i.ad}</div><div class="s">${i.s}</div></div><span style="color:var(--sub)">›</span></div>`).join('')+`</div>
-    ${adminMi()?`<div class="sec">Uygulama</div><div class="card"><div class="row" onclick="sifirla()"><div class="av r">🔄</div><div class="mid"><div class="t">Örnek verilere sıfırla</div><div class="s">test için</div></div></div></div>`:''}
-    <div class="mini" style="text-align:center;margin-top:20px">${esc(db.firma||'IQ Basics')} · Toptan Yönetim 🧵</div>`;
-}
 
 /* ---------- GENEL ARAMA ---------- */
 function genelAra(){open_('🔍 Genel Arama',`<input id="ga-q" placeholder="ürün · müşteri · çek no · kod · telefon" autocomplete="off" oninput="genelAraCiz()"><div id="ga-res" style="margin-top:10px;max-height:62vh;overflow:auto"></div>`);setTimeout(()=>{const e=$('ga-q');if(e)e.focus()},60);genelAraCiz()}
@@ -3071,7 +3013,6 @@ function etiketResimData(u,r,enMM,boyMM,tur){const S=8;const W=Math.max(8,Math.r
   const c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
   if(tur==='art')etiketCizArt(g,W,H,u,r,S);else etiketCizAna(g,W,H,u,r,S);
   return c.toDataURL('image/png');}
-function seriStr(u){if(u.birim!=='seri')return 'Tekli ürün';if(u.bedenler&&u.bedenler.length)return 'Seri: '+u.bedenler.map(x=>typeof x==='object'?x.beden+(x.adet>1?'×'+x.adet:''):x).join('·')+' ('+u.seri+')';return u.seri+"'li seri"}
 function etiketBedenStr(u){if(u.bedenler&&u.bedenler.length)return u.bedenler.map(x=>typeof x==='object'?x.beden:x).join('-');return u.birim==='seri'?(u.seri+"'li seri"):'Tekli';}
 function barkodYap(id){const u=urun(id);const renkler=renkObjs(u).filter(r=>r.barkod);if(!renkler.length)return toast('Barkodlu renk yok');
   const d=etiketDims();db.etiketBoy=d.sel;save();
@@ -4192,7 +4133,6 @@ async function fisWhatsapp(id){const s=db.satislar.find(x=>x.id===id);if(!s)retu
   }catch(e){if(e&&e.name==='AbortError')return}}
   waLink(ph,txt);
 }
-function fisYazdir(id){faturaYazdir(id,false)}
 // Profesyonel A4 Fatura (fiyatlı) / İrsaliye (fiyatsız)
 function faturaYazdir(id,irsaliye){const s=db.satislar.find(x=>x.id===id);if(!s)return;const m=cari(s.mid);
   const pf=x=>money(x,s.pb);
@@ -5268,7 +5208,6 @@ function cariEkstre(id){
   const devir=(c.bakiye||0)-net;
   return {evs,devir};
 }
-function musUrunGecmis(id){const map={};db.satislar.filter(s=>s.mid===id&&!s.iptal).sort((a,b)=>a.tarih-b.tarih).forEach(s=>s.kalemler.forEach(k=>{const m=map[k.uid]||(map[k.uid]={uid:k.uid,urun:k.urun,adet:0,sonFiyat:k.fiyat,sonTarih:s.tarih});m.adet+=k.mik;m.sonFiyat=k.fiyat;m.sonTarih=s.tarih}));return Object.values(map).sort((a,b)=>b.sonTarih-a.sonTarih)}
 function musOdemeler(id){const arr=[];
   (db.hareketler||[]).filter(h=>h.cariId===id&&h.tip==='tahsilat'&&h.tutar>0).forEach(h=>arr.push({tarih:h.tarih,tur:h.tur||'Nakit',tutar:h.tutar}));
   db.satislar.filter(s=>s.mid===id&&s.odenen>0&&!s.iptal).forEach(s=>{(s.odemeler&&s.odemeler.length?s.odemeler:[{tur:s.odemeTur||'Nakit',tutar:s.odenen,pb:s.pb}]).forEach(l=>{if(+l.tutar>0)arr.push({tarih:s.tarih,tur:l.tur,tutar:(+l.tutar||0)*pbKur(l.pb||s.pb),satis:true})})});
@@ -6043,7 +5982,6 @@ function durakSablonMaddeEkle(cat){const el=$(dsId(cat));const v=((el&&el.value)
   db.durakSablon[cat].push(v);save();cizDurakSablon();}
 function durakSablonMaddeSil(cat,i){if(!db.durakSablon||!db.durakSablon[cat])return;db.durakSablon[cat].splice(i,1);save();cizDurakSablon();}
 function durakSablonSifirla(){askConfirm('Durak kontrol listeleri varsayılan maddelere dönsün mü?',()=>{db.durakSablon=JSON.parse(JSON.stringify(DURAK_SABLON_VARSAYILAN));save();cizDurakSablon();toast('Varsayılanlara dönüldü ✓');},'Sıfırla');}
-const MECBURI=['Kesim','Dikim','Ütü / Paket'];
 function fasonlar(){return db.cariler.filter(c=>c.tip==='fason')}
 // İsimden fason carisi çöz: varsa eşleştir, yoksa yeni fason/kesimci oluştur (iş emri formlarında yazılabilir alan için)
 function fasonCoz(ad){ad=(ad||'').trim();if(!ad)return null;let f=db.cariler.find(c=>c.tip==='fason'&&(c.ad||'').toLowerCase()===ad.toLowerCase());if(!f){f={id:nid('c'),tip:'fason',ad,tel:'',bakiye:0,doviz:'TL',olusturma:Date.now()};db.cariler.push(f);try{toast('🧵 Yeni kesimci/fason eklendi: '+ad)}catch(e){}}return f.id;}
@@ -7441,7 +7379,6 @@ function sipAsamaSet(sid,key,opt){opt=opt||{};const s=db.satislar.find(x=>x.id==
   if(db.otoSipBildir!==false&&!opt.bildirme)setTimeout(()=>{try{sipBildir(sid,true,key)}catch(e){}},250);
   if(key==='teslim'&&!opt.fisYok)setTimeout(()=>{try{askConfirm('🎉 Teslim edildi.\nMüşteriye *teslim fişini* de WhatsApp\'tan gönderelim mi?',()=>{try{waFisPreview(sid)}catch(e){}},'Fişi Gönder')}catch(e){}},750);
 }
-function sipKargoya(sid){sipAsamaSet(sid,'kargoda');} // "Kargoya Ver" kısayolu
 function portalOnay(id,override,force){
   const o=db.bekleyenPortal.find(x=>x.id===id);if(!o)return;
   if(o.bulutId&&((db.islenenSiparis||[]).includes(o.bulutId)||(db.satislar||[]).some(s=>s.bulutId===o.bulutId))){db.bekleyenPortal=db.bekleyenPortal.filter(x=>x.id!==id);save();try{rPortal()}catch(e){}return toast('Bu sipariş zaten işlenmiş (başka cihazdan) — mükerrer kayıt kaldırıldı');}
@@ -8159,7 +8096,6 @@ function portalTaslakYukle(){const t=portalTaslakVar();if(!t)return;portalSepet=
 function portalTaslakSil(){const ad=(portalMusAd||'').trim().toLowerCase();db.portalTaslak=(db.portalTaslak||[]).filter(t=>(t.ad||'').toLowerCase()!==ad);save();portalCiz()}
 // katalogda son siparişi hızlı tekrarla
 function portalSonSiparis(){const g=portalSiparislerim().gecmis;return g.length?g[0]:null}
-function portalStokBildir(uid){portalIstek(uid)}
 function portalIstek(uid){const u=urun(uid);if(!u)return;db.stokBildirim=db.stokBildirim||[];
   const ad=(portalMusAd||'').trim();
   if(!ad)return open_('🔔 İstek Oluştur',`<div class="mini">Bu ürün üretilince/gelince size haber verelim. İletişim bilginizi bırakın.</div><label>Adınız / Firmanız</label><input id="ist-ad" placeholder="ör. Yılmaz Tekstil"><label>Telefon</label><input id="ist-tel" type="tel" placeholder="0532..."><button class="btn" onclick="portalIstekKaydet(${uid})">İstek Oluştur</button>`);
