@@ -30,6 +30,7 @@ node test/16-tekrar-uret.test.mjs
 node test/17-tek-magaza.test.mjs
 node test/18-gunsonu-portal-geri.test.mjs
 node test/19-git-guvenlik-hook.test.mjs   # tarayıcı gerektirmez
+node test/20-stok-transfer.test.mjs      # GÖZLEM testi: riskler CI'ı kırmaz
 ```
 Hepsi birden:
 ```bash
@@ -62,6 +63,7 @@ PLAYWRIGHT_CHROMIUM=/usr/bin/chromium node test/01-hata-duzeltmeleri.test.mjs
 | 17 | Tek mağaza görünümü: açılışta mağaza seçimi, sadece seçili mağazanın satış/cari/çek/rapor verisi, mağaza mağaza satırlar gizli, Ayarlar'da 'Tüm mağazaları göster', seçim cihaza özel; yeniden açılışta gerçek veri yüklenmesi |
 | 16 | 🏭 Tekrar Üret: ürün kartından / bitmiş iş emrinden, ürün seçili + son (ya da seçilen) iş emrinin kumaş, tüketim, renk dağılımı, kesimci-ücret, genel gider, sonraki aşama ücretleri ve termini dolu iş emri; önceki iş emri yoksa sadece ürün; depocuda buton yok |
 | 19 | Git güvenlik Hook'u (`.claude/hooks/git-guvenlik-kontrolu.mjs`): korunan dala (main, master, canlı yayın dalı) push ve force push → DENY; dal belirtilmeyen push'ta push.default / remote.<ad>.push / remote.pushDefault / mirror etkisi; HEAD, HEAD:main, refs/heads/main, git -C/-c, bileşik komutlar; bash -c / eval / değişkenli komutlar → ASK; tırnak içi metin ve heredoc'ta geçen 'git push' → karar yok; riskli yerel işlemler → ASK; GitHub MCP ile korunan dala yazma ve merge → DENY; Hook asla 'allow' vermez. Yalnızca geçici, yalıtılmış git depolarında çalışır |
+| 20 | Stok transferi GÖZLEM testi (S1–S8, ERP v171 mevcut davranışı): PASS/FAIL yalnız altyapı + bugün doğru olan temel akışlar (oluştur/teslim, renkli ürün, yoldayken iptal, iptal kaydı korunur). Riskler `GÖZLEM` satırlarıyla [RİSK GÖZLENDİ]/[İŞ KURALINA AYKIRI] etiketli basılır ve çıkış kodunu etkilemez: teslim sonrası iptal, iki cihazda çift teslim, teslim+iptal çakışması, onay penceresi açıkken uzaktan güncelleme, aynı ürün iki satır, açık transferli ürünün silinmesi, yetersiz stok. İki cihaz tek sayfada `canliDomenUygula` ile simüle edilir — gerçek Firestore sırası/transaction'ı kanıtlamaz. localhost dışı tüm istekler engellenir |
 | 15 | Satış ekranında
  ₺ → $ / € değişince yazılı tutarların (parça fiyatı, taşıma, ek ücret, kesik, ödeme satırı) kura göre çevrilmesi + POS kaydı; ön sipariş kilidi (mal stoğa girmeden teslim/toplama/kargo yok, FIFO açılma, portal); toplama emrinde kırık seri ekle/düzenle/kaldır (tutar, bakiye, stok, seri bozma ve birebir geri alma) |
 
