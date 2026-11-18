@@ -1196,7 +1196,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-173'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-174'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(!_kurtarmaYazabilir())return false; /* R2.2b.4: kurtarma tamamlanmadan bulut YOK */
@@ -9595,7 +9595,11 @@ function geriGit(){
     if(dx>70&&dy<dx*0.6&&Date.now()-t0<800)geriGit();},{passive:true});
 })(); // çok mağazada açılışta "hangi mağazadasın?"
 // Müşteri cihazı: #siparis + bulut ayarlı → katalogu buluttan çek, sipariş moduna geç
-async function musteriBulutAc(){bulutMusteriMod=true;await bulutKatalogYukle();await bulutAuthBekle();await bulutProfilYukle();await bulutRolVerisiYukle();portalAc();}
+// R2.2b.4: önce kurtarma kararı beklenir; 'tamam' değilse (kilit) müşteri modu ve bulut BAŞLATILMAZ (kilit ekranı açık kalır).
+var _musBulutBekliyor=false;
+async function musteriBulutAc(){if(_musBulutBekliyor||bulutMusteriMod)return;_musBulutBekliyor=true;let k;try{k=await _kurtarma.hazir;}finally{_musBulutBekliyor=false;}
+  if(k!=='tamam'||bulutMusteriMod)return; /* kilit: bulut/katalog/oturum işlemi yok; tekrar çağrılırsa (hashchange) yine çıkar */
+  bulutMusteriMod=true;await bulutKatalogYukle();await bulutAuthBekle();await bulutProfilYukle();await bulutRolVerisiYukle();portalAc();}
 function portalHashAc(){const h=location.hash||'';if(h.indexOf('#siparis')===0||h.indexOf('#kayit')===0){portalDavetOku();
     // patron ekranı flaşını önle: portalı HEMEN göster (yüklenirken splash)
     try{const pov=document.getElementById('pov');if(pov){pov.style.display='block';if(!pov.innerHTML.trim())pov.innerHTML=`<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px">${db.firmaLogo?`<img src="${guvenliSrc(db.firmaLogo)}" style="height:46px;opacity:.9">`:`<div style="font-size:44px">🛍️</div>`}<div style="color:var(--sub);font-size:13px">Katalog yükleniyor…</div></div>`;}}catch(e){}

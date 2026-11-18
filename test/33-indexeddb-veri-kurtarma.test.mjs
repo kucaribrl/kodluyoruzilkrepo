@@ -401,6 +401,41 @@ S = await ac({ ls: js(eski()), idb: js(yeni()), init: [YEDEK_BOZUK] }); d = awai
 T('K72 yedek yazıldı görünüp geri okunduğunda bozuksa (doğrulama başarısız) kurtarma BAŞLAMAZ: localStorage eski, uygulama kilitli', d.lsHam === js(eski()) && kilitli(d), { kd: d.kd, ls: d.ls });
 await S.ctx.close();
 
+// ===== 20. Müşteri portalı bulut açılışı (musteriBulutAc, #siparis) kurtarma kararını bekler (Ders 49 kararı) =====
+// Gerçek Firebase YOK: bulut adımları (katalog / oturum / profil / müşteri verisi / portal) çağrı sırasını kaydeden sahte fonksiyonlarla değiştirilir.
+const MUS_SAHTE = () => { window.__musCag = []; const s = (ad) => async () => { window.__musCag.push(ad); return true; };
+  bulutKatalogYukle = s('katalog'); bulutAuthBekle = s('auth'); bulutProfilYukle = s('profil'); bulutRolVerisiYukle = s('rol'); portalAc = () => { window.__musCag.push('portalAc'); }; };
+const MUS_SIRA = 'katalog,auth,profil,rol,portalAc';
+// Normal açılış (karar 'tamam')
+S = await ac({ ls: js(eski()), idb: js(eski()), init: [SAHTE_FB] });
+let hataOnceMus = errs.length;
+const m1 = await S.ev(async (sahte) => { (0, eval)('(' + sahte + ')')(); await musteriBulutAc(); const ilk = { kd: kurtarmaDurumu.durum, mod: bulutMusteriMod, cag: window.__musCag.slice() };
+  window.__musCag = []; await musteriBulutAc(); return { ilk, ikinci: window.__musCag.slice() }; }, MUS_SAHTE.toString());
+T('K73 normal açılışta (karar tamam) müşteri bulut açılışı eskisi gibi sırayla çalışır (katalog → oturum → profil → müşteri verisi → portal), müşteri modu açılır', m1.ilk && m1.ilk.kd === 'tamam' && m1.ilk.mod === true && m1.ilk.cag.join(',') === MUS_SIRA, m1);
+T('K74 müşteri modu açıkken tekrar çağrı (ör. hashchange) açılışı yeniden başlatmaz', m1.ikinci && m1.ikinci.length === 0, m1.ikinci);
+await S.ctx.close();
+// Karar beklenirken: hiçbir bulut adımı yok; art arda iki çağrı karar gelince TEK kez devam eder
+S = await ac({ ls: js(eski()), idb: js(eski()), init: [SAHTE_FB] });
+const m2 = await S.ev(async (sahte) => { (0, eval)('(' + sahte + ')')(); _kurtarma.hazir = new Promise(r => { window.__musCoz = r; });
+  const a = musteriBulutAc(), b = musteriBulutAc(); await new Promise(r => setTimeout(r, 300));
+  const once = { cag: window.__musCag.slice(), mod: bulutMusteriMod }; window.__musCoz('tamam'); await a; await b;
+  return { once, sonra: window.__musCag.slice(), mod: bulutMusteriMod }; }, MUS_SAHTE.toString());
+T('K75 kurtarma kararı beklenirken müşteri bulut açılışı bekler: hiçbir bulut adımı çalışmaz, müşteri modu kapalı', m2.once && m2.once.cag.length === 0 && m2.once.mod === false, m2.once);
+T('K76 beklerken art arda iki çağrı: karar tamam olunca açılış yalnız BİR kez ve sırayla devam eder', m2.sonra && m2.sonra.join(',') === MUS_SIRA && m2.mod === true, m2);
+await S.ctx.close();
+// Kilitli durum (farklı yönlerde ilerlemiş kopyalar → belirsiz): bulut işlemi başlatılmaz; kilit sonrası tekrar çağrı da başlatmaz
+S = await ac({ ls: js(dal()), idb: js(yeni()), init: [SAHTE_FB] });
+const m3 = await S.ev(async (sahte) => { (0, eval)('(' + sahte + ')')(); await musteriBulutAc(); const ilk = { cag: window.__musCag.slice(), mod: bulutMusteriMod };
+  await musteriBulutAc(); await new Promise(r => setTimeout(r, 300));
+  return { kd: kurtarmaDurumu.durum, ilk, sonra: window.__musCag.slice(), mod: bulutMusteriMod, fb: _fb === null, apps: firebase.apps.length, yazim: (window.__bulut || []).length,
+    ekran: !!(document.getElementById('kurtarma-ekran') && document.getElementById('kurtarma-ekran').style.display !== 'none') }; }, MUS_SAHTE.toString());
+T('K77 kilitli durumda (belirsiz kopyalar) uygulama kilitli kalır', m3.kd === 'kilitli', m3.kd);
+T('K78 kilitte müşteri bulut açılışı HİÇBİR adım başlatmaz (katalog / oturum / profil / portal yok), müşteri modu açılmaz', m3.ilk && m3.ilk.cag.length === 0 && m3.ilk.mod === false, m3.ilk);
+T('K79 kilit sonrası tekrar çağrı da bulut işlemi başlatmaz (müşteri modu kapalı, adım yok)', m3.sonra && m3.sonra.length === 0 && m3.mod === false, m3);
+T('K80 kilitte Firebase kurulmaz, buluta yazım yok ve kilit ekranı açık kalır', m3.fb === true && m3.apps === 0 && m3.yazim === 0 && m3.ekran === true, m3);
+await S.ctx.close();
+T('K81 müşteri bulut açılışı senaryolarında sayfa hatası yok', errs.length === hataOnceMus, errs.slice(hataOnceMus, hataOnceMus + 5));
+
 // ===== 15. Kaynak sözleşmesi (yalnız ek kanıt) + Ders 48 + genel =====
 const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 const idbSatir = html.indexOf('let _idb='), kurtarmaSatir = html.indexOf('IndexedDB güvence kopyasından kurtar');

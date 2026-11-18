@@ -286,8 +286,6 @@ const TABAN = {
   _recMerge: '7fb79bbce540700e',
   _sbAl: 'db73110a61d221b3',
   _kumulatifBirlestir: 'b844992000bd5e8e',
-  canliYazHemen: 'dc535a57daefc302',
-  save: 'c6a60f309421e221',
   kasaHareket: 'a1cd577175e87b48',
   satisKilitliCek: '35bd950dd68909bc',
 };
@@ -306,7 +304,8 @@ T('T40 satış düzenleme değişmez (revertSatis + applySatis: 3→5 adet, stok
 T('T41 transfer değişmez (davranış + parmak izi)', yan.transfer && JSON.stringify(yan.transfer) === '[3,2]' && fark(['transferStokUygula', 'lokStokRenk']).length === 0, yan.transfer);
 T('T42 üretim değişmez (_isEmriStoklaCommit parmak izi)', fark(['_isEmriStoklaCommit']).length === 0, null);
 T('T43 portal değişmez (portalOnay parmak izi)', fark(['portalOnay']).length === 0, null);
-T('T44 senkron değişmez (_recMerge davranışı + canliDomenUygula/_sbAl/_kumulatifBirlestir/canliYazHemen/save parmak izi)', yan.senkron === '1:y' && fark(['canliDomenUygula', '_recMerge', '_sbAl', '_kumulatifBirlestir', 'canliYazHemen', 'save']).length === 0, { s: yan.senkron, f: fark(['canliYazHemen', 'save', 'canliDomenUygula', '_recMerge', '_sbAl', '_kumulatifBirlestir']) });
+/* Ders 49: save ve canliYazHemen kurtarma kapısıyla (R2.2b.4) bilinçli değişti → parmak izi listesinden çıkarıldı; davranışları test 33'te. */
+T('T44 senkron değişmez (_recMerge davranışı + canliDomenUygula/_sbAl/_kumulatifBirlestir parmak izi)', yan.senkron === '1:y' && fark(['canliDomenUygula', '_recMerge', '_sbAl', '_kumulatifBirlestir']).length === 0, { s: yan.senkron, f: fark(['canliDomenUygula', '_recMerge', '_sbAl', '_kumulatifBirlestir']) });
 T('T45 finansın normal akışı değişmez (kasaHareket davranışı + parmak izi)', yan.finans && yan.finans[0] === 1050 && yan.finans[1] === 1 && fark(['kasaHareket', 'satisKilitliCek']).length === 0, yan.finans);
 T('T45b motor değişmez; index.html motor kopyası içermez; renkCoz tek çağrı noktası', !/function renkCoz\b|function globalRidTara\b/.test(html) && (html.match(/renkCoz\(/g) || []).length === 1, null);
 await S2.ctx.close();
