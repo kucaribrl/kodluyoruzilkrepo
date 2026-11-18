@@ -225,14 +225,22 @@ G('S5', 'onay penceresi açıkken uzaktan teslim', {
 console.log(`   ek        : senkron kaydı yeni nesneyle değiştirdi mi: ${!s5.senkSonrasi.ayniNesne}; onay çalıştı: ${s5.onaylandi}`);
 
 // ================= S6 =================
+// S6/S8 v172'de güncellendi (negatif stok engeli). v171 gözlemleri için bkz. test/OKU.md.
 const s6 = await ev(async () => {
   TX.kur([{ id: 9109, ad: 'Polo S6', loklar: { 'L-depo': 10, 'L-ana': 0 } }]);
-  const o = await TX.olustur([{ ad: 'Polo S6', adetler: [8] }, { ad: 'Polo S6', adetler: [8] }]);
-  const t = TX.t(o.id);
-  return { o, satir: t ? t.kalemler.length : 0, ...TX.durum(9109) };
+  transferForm(); $('tr-from').value = TX.D; $('tr-to').value = TX.M;
+  TX.ekle('Polo S6', [8]); TX.ekle('Polo S6', [8]);
+  const listeSatir = trKalem.length, listeAdet = trKalem.reduce((a, k) => a + (+k.adet || 0), 0);
+  const ekleUyari = /yetersiz/i.test($('toast').textContent);   // ekleme anındaki uyarı
+  $('toast').textContent = '';                                   // kaydetme mesajı ayrı ölçülsün
+  const once = db.transferler.length;
+  transferKaydet();
+  const kayitEngelMesaji = /oluşturulamaz/i.test($('toast').textContent);   // kaydetme anındaki engel mesajı
+  const yineDe = $('cov').classList.contains('show'); if (yineDe) $('cYes').onclick(); // "Yine de" çıkarsa seçilir
+  return { listeSatir, listeAdet, yineDe, ekleUyari, kayitEngelMesaji, olustu: db.transferler.length > once, ...TX.durum(9109) };
 });
-G('S6', 'aynı ürün iki satır (8 + 8, kaynakta 10)', { baslangic: 'D=10', islemler: '8 ekle, 8 ekle, oluştur', tahmin: { uyari: false, satir: 2, D: -6 }, gozlenen: { uyari: s6.o.uyari, satir: s6.satir, D: s6.D }, risk: s6.D < 0 && !s6.o.uyari, kural: s6.satir === 1 && s6.D >= 0 });
-console.log('   not       : Kural 1 (eksi stok engel) ve 5 (aynı stok kimliği birleşir) açısından değerlendirildi.');
+G('S6', 'aynı ürün iki satır (8 + 8, kaynakta 10)', { baslangic: 'D=10', islemler: '8 ekle, 8 ekle, kaydet ("Yine de" çıkarsa seç)', tahmin: { listeSatir: 1, listeAdet: 16, ekleUyari: true, kayitEngelMesaji: true, yineDeSecenegi: false, olustu: false, D: 10 }, gozlenen: { listeSatir: s6.listeSatir, listeAdet: s6.listeAdet, ekleUyari: s6.ekleUyari, kayitEngelMesaji: s6.kayitEngelMesaji, yineDeSecenegi: s6.yineDe, olustu: s6.olustu, D: s6.D }, risk: s6.olustu || s6.D < 0, kural: s6.listeSatir === 1 && !s6.olustu && s6.D === 10 });
+console.log('   not       : Kural 1 (eksi stok engel) ve 5 (aynı stok kimliği birleşir): satırlar birleşmeli, kayıt oluşmamalı, D=10 kalmalı.');
 
 // ================= S7 =================
 const s7 = await ev(async () => {
@@ -251,11 +259,18 @@ console.log('   not       : Kural 4 (açık transferli ürün silinmez). Silinir
 // ================= S8 =================
 const s8 = await ev(async () => {
   TX.kur([{ id: 9111, ad: 'Polo S8', loklar: { 'L-depo': 5, 'L-ana': 0 } }]);
-  const o = await TX.olustur([{ ad: 'Polo S8', adetler: [8] }]);
-  return { o, ...TX.durum(9111) };
+  transferForm(); $('tr-from').value = TX.D; $('tr-to').value = TX.M;
+  TX.ekle('Polo S8', [8]);
+  const ekleUyari = /yetersiz/i.test($('toast').textContent);   // ekleme anındaki uyarı
+  $('toast').textContent = '';                                   // kaydetme mesajı ayrı ölçülsün
+  const once = db.transferler.length;
+  transferKaydet();
+  const kayitEngelMesaji = /oluşturulamaz/i.test($('toast').textContent);   // kaydetme anındaki engel mesajı
+  const yineDe = $('cov').classList.contains('show'); if (yineDe) $('cYes').onclick(); // "Yine de" çıkarsa seçilir
+  return { yineDe, ekleUyari, kayitEngelMesaji, olustu: db.transferler.length > once, ...TX.durum(9111) };
 });
-G('S8', 'yetersiz stokla oluşturma (kaynak 5, transfer 8)', { baslangic: 'D=5', islemler: 'oluştur 8 → uyarıda "Yine de"', tahmin: { uyari: true, olustu: true, D: -3 }, gozlenen: { uyari: s8.o.uyari, olustu: s8.o.olustu, D: s8.D }, risk: s8.D < 0, kural: !s8.o.olustu || s8.D >= 0 });
-console.log('   not       : Kural 1 (eksi stok engellenecek) — bugün yalnızca uyarı var.');
+G('S8', 'yetersiz stokla oluşturma (kaynak 5, transfer 8)', { baslangic: 'D=5', islemler: '8 ekle, kaydet ("Yine de" çıkarsa seç)', tahmin: { ekleUyari: true, kayitEngelMesaji: true, yineDeSecenegi: false, olustu: false, D: 5 }, gozlenen: { ekleUyari: s8.ekleUyari, kayitEngelMesaji: s8.kayitEngelMesaji, yineDeSecenegi: s8.yineDe, olustu: s8.olustu, D: s8.D }, risk: s8.olustu || s8.D < 0, kural: !s8.olustu && s8.D === 5 });
+console.log('   not       : Kural 1 (eksi stok engellenecek): uyarı gösterilebilir, kayıt oluşmamalı, D=5 kalmalı.');
 
 // ---- Genel ----
 T('altyapı: sayfa hatası yok', errs.length === 0, errs);

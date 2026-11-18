@@ -1,5 +1,5 @@
 /* IQ Basics — Service Worker (çevrimdışı çalışma + kurulabilir PWA) */
-const CACHE = 'iqbasics-v171';
+const CACHE = 'iqbasics-v173';
 
 /* Uygulama kabuğu: internet olmasa da açılması gereken dosyalar */
 const SHELL = [
@@ -18,11 +18,19 @@ const SHELL = [
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js'
 ];
 
+/* KRİTİK dosyalar: önbelleğe alınamazsa kurulum BAŞARISIZ olur (yeni sürüm hazır sayılmaz, eski sürüm çalışmaya devam eder).
+   Renk motoru index.html ile aynı sürümde olmalı; HTTP önbelleği atlanır (eski motor yeni önbelleğe girmesin). */
+const KRITIK = ['./js/renk-cozumleme.mjs'];
+
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE).then((c) =>
-      // tek tek ekle: biri düşse bile kurulum bozulmasın
-      Promise.all(SHELL.map((u) => c.add(u).catch(() => null)))
+      Promise.all([
+        // tek tek ekle: biri düşse bile kurulum bozulmasın
+        ...SHELL.map((u) => c.add(u).catch(() => null)),
+        // kritik: hata yutulmaz
+        ...KRITIK.map((u) => c.add(new Request(u, { cache: 'reload' })))
+      ])
     )
   );
 });

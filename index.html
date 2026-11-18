@@ -397,6 +397,14 @@
 <script>
 /* =================== VERİ KATMANI =================== */
 const KEY='oztekstil_v2';
+/* R2.2b.4 KURTARMA KAPISI — durum en başta kurulur (TDZ yok): 'bekliyor' (karar verilene kadar hiçbir depoya/buluta yazılmaz),
+   'tamam' (normal), 'kilitli' (salt okunur). IndexedDB okuması betiğin en başında başlar; karar _kurtarmaBaslat() içinde verilir. */
+let _idb=null,_idbYazT=null;
+var _kurtarma={durum:'bekliyor',neden:'',nesil:0,sonKayit:null,bekleyenKayit:false,hazir:null,coz:null,kanal:null};
+_kurtarma.hazir=new Promise(r=>{_kurtarma.coz=r;});
+try{_kurtarma.nesil=+localStorage.getItem('iq_nesil')||0;}catch(e){}
+try{_kurtarma.lsHam=localStorage.getItem(KEY);}catch(e){_kurtarma.lsHam=null;}
+_kurtarma.idbIlk=_kIdbAl(KEY);_kurtarma.kbIlk=_kIdbAl('kurtarma_bekleyen');
 /* ===== ÇOK-LOKASYON (mağaza/depo) ===== */
 const ANA_LOK='L-ana', ANA_DEPO='L-depo';
 let aktifLok=ANA_LOK; // gerçek değer db.aktifLok'tan (buluta senkron) — açılışta set edilir
@@ -740,18 +748,135 @@ function canliAl(obj,domen){const o={};CANLI_DOMEN[domen].forEach(k=>{if(obj[k]!
   if(Object.keys(tb).length)o._tomb=tb;return o;}
 function canliRef(domen){return _fb.collection('isletme').doc(MAGAZA_ID).collection('veri').doc(domen);}
 try{_mSnapInit()}catch(e){} // açılışta mevcut kayıtlar taban alınır (toplu yanlış damga olmasın)
-// localStorage boş/bozuksa IndexedDB güvence kopyasından kurtar (async — hazır olunca ekranı tazeler)
-(async()=>{try{
-  const mevcut=(()=>{try{const d=JSON.parse(localStorage.getItem(KEY));return d&&d.urunler?d:null}catch(e){return null}})();
-  if(!mevcut&&localStorage.getItem('iq_oturumKilit'))return; // cihaz temizlendi/kilitli → eski kopya geri yüklenmez
-  const v=await idbOku();if(!v)return;const d=JSON.parse(v);if(!d||!d.urunler)return;
-  // yerel sağlam ve IndexedDB kopyasından yeni (ya da eşit) → dokunma; IDB daha yeniyse (kota dolu kalmış işlemler) onu al
-  if(mevcut&&!((+d._t||0)>(+mevcut._t||0)+1000))return;
-  try{localStorage.setItem(KEY,v)}catch(e){} // kota doluysa en azından bellekte çalış
-  db=d;try{_mSnapInit()}catch(e){}
-  try{if(typeof render==='function')render()}catch(e){}
-  toast('💾 Veriler IndexedDB güvence kopyasından geri yüklendi ✓');
-}catch(e){}})();
+// localStorage boş/bozuksa IndexedDB güvence kopyasından kurtar — R2.2b.4 KURTARMA KAPISI (Ders 49).
+/* Karar: içerik aynıysa hiçbir şey yapılmaz. IndexedDB, localStorage'ın kayıt bazında (_m/_tomb) İLERİ uzantısıysa (ya da localStorage
+   boş / bozuk / demo ise) kurtarılır: önce mevcut localStorage metni IndexedDB "yedek_ls_<zaman>" anahtarına, kurtarılacak veri
+   "kurtarma_bekleyen" anahtarına yazılıp GERİ OKUNARAK doğrulanır; sonra nesil (iq_nesil) artırılır, diğer sekmeler kilitlenir,
+   localStorage yazılıp doğrulanır ve sayfa normal load() yolundan yeniden açılır. Yalnız zamana bakılmaz.
+   Farklı yönlerde ilerlemiş / kota dolu / yedek alınamıyor / okunamıyor → otomatik üzerine yazma YOK, uygulama KİLİTLİ (salt okunur):
+   save() belleği son kayda geri alıp KurtarmaKilidiHatasi fırlatır; idbYaz, bulut ve senkron kapalı; kilit ekranı neden, güvence
+   kopyasını indirme ve kontrollü yedek geri yükleme sunar. Kilit her açılışta yeniden değerlendirilir; normal işlemlerle kaldırılamaz. */
+function KurtarmaKilidiHatasi(neden){const e=new Error('Kurtarma tamamlanmadı — kayıt yapılamaz ('+(neden||'kilit')+')');e.name='KurtarmaKilidiHatasi';e.kurtarmaKilidi=true;e.neden=neden||'';return e;}
+function _kIdbAl(k){return new Promise(async res=>{try{if(!_idb)_idb=await idbAc();if(!_idb)return res({hata:true});
+  const g=_idb.transaction('kv','readonly').objectStore('kv').get(k);g.onsuccess=()=>res({ham:g.result===undefined?null:g.result});g.onerror=()=>res({hata:true});}catch(e){res({hata:true})}});}
+function _kIdbKoy(k,v){return new Promise(async res=>{try{if(!_idb)_idb=await idbAc();if(!_idb)return res(false);
+  const t=_idb.transaction('kv','readwrite');t.objectStore('kv').put(v,k);t.oncomplete=()=>res(true);t.onerror=()=>res(false);t.onabort=()=>res(false);}catch(e){res(false)}});}
+async function _kIdbKoyDogrula(k,v){if(!(await _kIdbKoy(k,v)))return false;const r=await _kIdbAl(k);return !r.hata&&r.ham===v;}
+function _kIdbSil(k){return new Promise(async res=>{try{if(!_idb)_idb=await idbAc();if(!_idb)return res(false);const t=_idb.transaction('kv','readwrite');t.objectStore('kv').delete(k);t.oncomplete=()=>res(true);t.onerror=()=>res(false);}catch(e){res(false)}});}
+async function _kYeniAnahtar(on){let k=on+Date.now(),n=0;while(true){const r=await _kIdbAl(k);if(r.hata||r.ham===null)return k;k=on+Date.now()+'_'+(++n);}}
+function _kParse(h){if(typeof h!=='string')return null;try{const d=JSON.parse(h);return d&&typeof d==='object'&&Array.isArray(d.urunler)?d:null}catch(e){return null}}
+function _kIcerik(d){const c=Object.assign({},d);delete c._t;delete c._nesil;delete c.seq;return JSON.stringify(c);} /* geçici alanlar (zaman, nesil, sayaç) içerik sayılmaz */
+/* Aynı sürüm mü? Her listede kayıt kimlikleri ve değişiklik damgaları (_m) birebir aynı, mezar taşları aynı. (İçerik farkı yalnız damgasız
+   normalleştirmeden — ör. açılış taşıması — gelebilir; bu, IndexedDB'nin daha yeni olduğuna kanıt değildir.) */
+function _kAyniSurum(a,b){const iz=d=>JSON.stringify(MERGE_LISTELER.map(L=>(Array.isArray(d[L])?d[L]:[]).filter(r=>r&&r.id!=null).map(r=>String(r.id)+'@'+(+r._m||0)).sort()));
+  return iz(a)===iz(b)&&JSON.stringify(a._tomb||{})===JSON.stringify(b._tomb||{});}
+/* b, a'nın İLERİ uzantısı mı? Her kayıt b'de aynı ya da daha yeni damgayla var (ya da b'de daha sonra silinmiş); en az bir fark ileri yönde.
+   Liste dışı alanlarda yalnız ayar damgası (_ayarM) olan farklar yön belirtir; damgasız farklar yön göstermez. */
+function _kIleri(a,b){let fark=false;
+  for(const L of MERGE_LISTELER){const A=Array.isArray(a[L])?a[L]:[],B=Array.isArray(b[L])?b[L]:[];const bm={};B.forEach(r=>{if(r&&r.id!=null)bm[r.id]=r;});const am={};
+    for(const r of A){if(!r||r.id==null)continue;am[r.id]=1;const x=bm[r.id],ma=+r._m||0;
+      if(!x){const t=+(((b._tomb||{})[L]||{})[r.id])||0;if(t>0&&t>=ma){fark=true;continue;}return false;}
+      const mb=+x._m||0;if(mb<ma)return false;if(mb===ma){if(JSON.stringify(x)!==JSON.stringify(r))return false;}else fark=true;}
+    for(const id in bm){if(!am[id]){const t=+(((a._tomb||{})[L]||{})[id])||0;if(t>=(+bm[id]._m||0)&&t>0)return false;fark=true;}}}
+  const an=new Set([...Object.keys(a),...Object.keys(b)]);
+  for(const k of an){if(MERGE_LISTELER.includes(k)||['_t','_tomb','_ayarM','_nesil','seq','ornek'].includes(k))continue;
+    if(JSON.stringify(a[k])!==JSON.stringify(b[k])){const ta=+((a._ayarM||{})[k])||0,tb=+((b._ayarM||{})[k])||0;if(tb>ta)fark=true;else if(ta>tb)return false;}}
+  return fark;}
+function _kKarar(lsHam,idb){const ls=_kParse(lsHam),lsBozuk=lsHam!=null&&!ls,iD=idb&&!idb.hata?_kParse(idb.ham):null,idbBozuk=!!(idb&&!idb.hata&&idb.ham!=null&&!iD);
+  if(!iD||iD.ornek){if(lsBozuk)return {eylem:'kilit',neden:'okunamadi'};return {eylem:'tamam',uyari:idbBozuk?'idb-bozuk':''};}
+  if(lsHam==null){try{if(localStorage.getItem('iq_oturumKilit'))return {eylem:'tamam'};}catch(e){}return {eylem:'kurtar',neden:'ls-bos'};}
+  if(lsBozuk)return {eylem:'kurtar',neden:'ls-bozuk'};
+  if(_kIcerik(ls)===_kIcerik(iD))return {eylem:'tamam',esit:true};
+  if(ls.ornek)return {eylem:'kurtar',neden:'ls-demo'};
+  if(_kIleri(ls,iD))return {eylem:'kurtar',neden:'idb-ileri'};
+  if(_kIleri(iD,ls))return {eylem:'tamam'};
+  if(_kAyniSurum(ls,iD))return {eylem:'tamam'}; /* aynı sürüm (damgalar aynı), yalnız damgasız farklar → ana kopya (localStorage) geçerli */
+  return {eylem:'kilit',neden:'belirsiz'};}
+const _K_NEDEN={belirsiz:'İki kayıt kopyası farklı yönlerde ilerlemiş (belirsiz / çatışma) — hangisinin doğru olduğu güvenle belirlenemedi; otomatik seçim yapılmadı.',
+  kota:'Cihaz depolaması dolu (kota) — kurtarılan veri yazılamadı. Yer açıp yeniden dene.',yedek:'Mevcut verinin yedeği alınamadı — güvenlik için kurtarma yapılmadı.',
+  okunamadi:'Yerel veri okunamadı (bozuk) ve güvence kopyasına (IndexedDB) ulaşılamıyor.',bekleyen:'Tamamlanmamış bir veri kurtarması var (korumalı kopya bekliyor).',
+  sekme:'Veriler başka bir sekmede kurtarıldı ya da değişti — bu sekmeyi yenileyin (eski veriyle kayıt yapılamaz).',yazma:'Kurtarılan veri yazıldıktan sonra doğrulanamadı.',
+  dongu:'Kurtarma tekrar tekrar denendi ve tamamlanamadı.'};
+function _kurtarmaYazabilir(){if(_kurtarma.durum!=='tamam')return false;let n=0;try{n=+localStorage.getItem('iq_nesil')||0;}catch(e){}
+  if(n!==_kurtarma.nesil){_kKilitle('sekme');return false;}return true;}
+function _kUyar(){try{toast('🔒 Kurtarma tamamlanmadı — uygulama salt okunur. '+(_K_NEDEN[_kurtarma.neden]||''),5000);}catch(e){}}
+function _kGeriAl(){try{if(_kurtarma.sonKayit){db=JSON.parse(_kurtarma.sonKayit);try{stokProjYukle()}catch(e){}try{_mSnapInit()}catch(e){}try{if(typeof render==='function')render()}catch(e){}}}catch(e){}}
+/* save() girişinde: karar beklenirken kayıt ertelenir (karar 'tamam' olunca yapılır); kilitte bellek son kayda döner ve özel hata fırlar. */
+function _kurtarmaKayitEngeli(){if(_kurtarma.durum==='bekliyor'){_kurtarma.bekleyenKayit=true;return true;}
+  _kGeriAl();_kUyar();throw KurtarmaKilidiHatasi(_kurtarma.neden);}
+function _kKilitle(neden){if(_kurtarma.durum==='kilitli'&&_kurtarma.neden)return;_kurtarma.durum='kilitli';_kurtarma.neden=neden;_kurtarma.bekleyenKayit=false;
+  clearTimeout(_idbYazT);try{clearTimeout(_canliYazT)}catch(e){}
+  try{(_canliUnsub||[]).forEach(u=>{try{u()}catch(e){}});_canliUnsub=[];canliAcik=false;}catch(e){} /* canlı dinleyiciler localStorage'a YAZMADAN durur */
+  try{if(_fb&&_fb.disableNetwork)_fb.disableNetwork().catch(()=>{});}catch(e){}
+  try{_kEkran();}catch(e){}try{_kurtarma.coz('kilitli');}catch(e){}}
+function _kBildir(tur){try{if(_kurtarma.kanal)_kurtarma.kanal.postMessage({tur,nesil:_kurtarma.nesil});}catch(e){}}
+async function _kKurtar(kaynakHam,lsHam){
+  if(lsHam!=null){const k=await _kYeniAnahtar('yedek_ls_');if(!(await _kIdbKoyDogrula(k,lsHam)))return _kKilitle('yedek');}
+  const kb=await _kIdbAl('kurtarma_bekleyen');if(kb.hata||kb.ham!==kaynakHam){if(!(await _kIdbKoyDogrula('kurtarma_bekleyen',kaynakHam)))return _kKilitle('yedek');}
+  let dn=0;try{dn=+(sessionStorage.getItem('iq_kurtarmaDeneme')||0);}catch(e){}if(dn>=2)return _kKilitle('dongu');
+  const yn=_kurtarma.nesil+1;try{localStorage.setItem('iq_nesil',String(yn));}catch(e){return _kKilitle('kota');}
+  _kurtarma.nesil=yn;_kBildir('kurtariliyor');await new Promise(r=>setTimeout(r,300)); /* diğer sekmelerin yarım kalmış kayıtları biter, sonrakiler nesil ile reddedilir */
+  try{localStorage.setItem(KEY,kaynakHam);}catch(e){return _kKilitle('kota');}
+  let geri=null;try{geri=localStorage.getItem(KEY);}catch(e){}if(geri!==kaynakHam)return _kKilitle('yazma');
+  try{sessionStorage.setItem('iq_kurtarmaDeneme',String(dn+1));sessionStorage.setItem('iq_kurtarmaBilgi','1');}catch(e){}
+  _kurtarma.durum='bekliyor';location.reload();}
+async function _kurtarmaBaslat(){
+  try{if('BroadcastChannel' in window){_kurtarma.kanal=new BroadcastChannel('iqbasics-kurtarma');_kurtarma.kanal.onmessage=ev=>{const m=ev&&ev.data||{};if(m.nesil!==_kurtarma.nesil)_kKilitle('sekme');};}}catch(e){}
+  try{window.addEventListener('storage',e=>{if(e.key==='iq_nesil'&&(+e.newValue||0)!==_kurtarma.nesil)_kKilitle('sekme');});}catch(e){}
+  const idb=await _kurtarma.idbIlk,kb=await _kurtarma.kbIlk,lsHam=_kurtarma.lsHam;
+  _kurtarma.sonKayit=JSON.stringify(db);
+  if(_kurtarma.durum==='kilitli')return; /* başka sekme bu arada kilitlediyse */
+  let r;
+  if(kb&&!kb.hata&&kb.ham!=null){ /* tamamlanmamış kurtarma: korumalı kopya, localStorage ile aynıysa çözülmüştür */
+    if(lsHam===kb.ham||(_kParse(lsHam)&&_kParse(kb.ham)&&_kIcerik(_kParse(lsHam))===_kIcerik(_kParse(kb.ham)))){
+      const ak=await _kYeniAnahtar('kurtarma_arsiv_');if(await _kIdbKoyDogrula(ak,kb.ham))await _kIdbSil('kurtarma_bekleyen');
+      await _kIdbKoyDogrula(KEY,lsHam);r={eylem:'tamam'};}
+    else{r=_kKarar(lsHam,{ham:kb.ham});if(r.eylem!=='kurtar')r={eylem:'kilit',neden:r.neden==='belirsiz'?'belirsiz':'bekleyen'};else{await _kKurtar(kb.ham,lsHam);return;}}}
+  else r=_kKarar(lsHam,idb);
+  if(r.eylem==='kurtar'){await _kKurtar(idb.ham,lsHam);return;}
+  if(r.eylem==='kilit'){if(idb&&!idb.hata&&_kParse(idb.ham)&&!(kb&&kb.ham)){const v=await _kIdbAl('kurtarma_bekleyen');if(v.hata||v.ham!==idb.ham)await _kIdbKoyDogrula('kurtarma_bekleyen',idb.ham);}
+    _kKilitle(r.neden);return;}
+  _kurtarma.durum='tamam';_kurtarma.neden='';
+  let bilgi=null;try{bilgi=sessionStorage.getItem('iq_kurtarmaBilgi');sessionStorage.removeItem('iq_kurtarmaBilgi');sessionStorage.removeItem('iq_kurtarmaDeneme');}catch(e){}
+  try{if(bilgi)toast('💾 Veriler IndexedDB güvence kopyasından geri yüklendi ✓ (önceki hâl yedeklendi)',4500);else if(r.uyari==='idb-bozuk')toast('⚠️ Güvence kopyası (IndexedDB) okunamadı — yerel veri kullanılıyor',4500);}catch(e){}
+  _kurtarma.coz('tamam');
+  if(_kurtarma.bekleyenKayit){_kurtarma.bekleyenKayit=false;try{save();}catch(e){}}}
+/* Kilit ekranı: neden + güvence kopyasını indir + kontrollü yedek geri yükleme + yeniden dene. (#cov onay penceresinin ALTINDA) */
+function _kEkran(){let el=document.getElementById('kurtarma-ekran');
+  if(!el){el=document.createElement('div');el.id='kurtarma-ekran';el.setAttribute('style','position:fixed;inset:0;z-index:78;background:linear-gradient(150deg,#2a2a33,#121216);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;overflow:auto');document.body.appendChild(el);}
+  const b='margin-top:12px;border:none;border-radius:13px;padding:13px 18px;font-weight:800;font-size:15px;min-width:260px';
+  el.innerHTML='<div style="font-size:44px">🛟</div><div style="font-weight:900;font-size:21px;margin-top:6px">Veri kurtarma gerekiyor</div>'
+    +'<div id="kurtarma-neden" style="opacity:.9;font-size:14px;margin-top:8px;max-width:520px"></div>'
+    +'<div style="opacity:.75;font-size:12.5px;margin-top:8px;max-width:520px">Uygulama SALT OKUNUR: satış, iptal, tahsilat, transfer ve senkron kapalı. Verilerin korunuyor; hiçbir kopya üzerine yazılmadı.</div>'
+    +'<button style="'+b+';background:#2f6fde;color:#fff" onclick="_kIndirSor()">⬇️ Güvence kopyasını indir</button>'
+    +'<label style="'+b+';background:#3a3a46;color:#fff;cursor:pointer;display:inline-block">📂 Yedek dosyasından kurtar<input id="kurtarma-dosya" type="file" accept="application/json,.json" style="display:none" onchange="_kDosyaSecildi(this)"></label>'
+    +'<button style="'+b+';background:transparent;color:#fff;border:1px solid #fff4" onclick="location.reload()">🔄 Yeniden dene</button>';
+  el.querySelector('#kurtarma-neden').textContent=_K_NEDEN[_kurtarma.neden]||'Kurtarma tamamlanmadı.';el.style.display='flex';}
+function _kIndirSor(){askConfirm('⚠️ Güvence kopyası HASSAS bilgiler içerir: müşteri (cari) bilgileri, satışlar, kasa, çek ve diğer finans kayıtları. Dosyayı yalnız güvendiğin bir yerde sakla ve kimseyle paylaşma. Dosya yalnız bu cihaza indirilir, hiçbir sunucuya gönderilmez.\n\nİndirilsin mi?',_kIndir,'İndir');}
+async function _kIndir(){let r=await _kIdbAl('kurtarma_bekleyen');if(r.hata||!r.ham)r=await _kIdbAl(KEY);if(r.hata||!r.ham)return toast('⛔ Güvence kopyası okunamadı');
+  const t=new Date(),p=n=>String(n).padStart(2,'0');const ad='iqbasics-guvence-'+t.getFullYear()+'-'+p(t.getMonth()+1)+'-'+p(t.getDate())+'_'+p(t.getHours())+'-'+p(t.getMinutes())+'-'+p(t.getSeconds())+'.json';
+  const url=URL.createObjectURL(new Blob([r.ham],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=ad;document.body.appendChild(a);a.click();setTimeout(()=>{try{URL.revokeObjectURL(url);a.remove();}catch(e){}},1500);toast('⬇️ Güvence kopyası indirildi: '+ad,4000);}
+function _kDosyaSecildi(inp){const f=inp&&inp.files&&inp.files[0];if(!f)return;const rd=new FileReader();
+  rd.onload=()=>{const ham=String(rd.result||'');try{inp.value='';}catch(e){}const d=_kParse(ham);
+    if(!d||d.ornek)return toast('⛔ Geçersiz yedek dosyası (okunamadı ya da IQ Basics verisi değil) — hiçbir şey değişmedi',5000);
+    const say=L=>(Array.isArray(d[L])?d[L].length:0);let mm=0;MERGE_LISTELER.forEach(L=>(d[L]||[]).forEach(x=>{const m=+(x&&x._m)||0;if(m>mm)mm=m;}));
+    askConfirm('📂 Yedek özeti: '+say('urunler')+' ürün · '+say('satislar')+' satış · '+say('cariler')+' cari · '+say('cekler')+' çek · '+say('hareketler')+' kasa hareketi\nKayıt zamanı: '+(d._t?new Date(d._t).toLocaleString('tr-TR'):'bilinmiyor')+' · en yeni değişiklik: '+(mm?new Date(mm).toLocaleString('tr-TR'):'bilinmiyor')+'\n\nMevcut veriler ÖNCE yedeklenip korunacak. Bu yedek geri yüklensin mi?',()=>{_kDosyaUygula(ham);},'Geri Yükle');};
+  rd.onerror=()=>toast('⛔ Yedek dosyası okunamadı — hiçbir şey değişmedi');rd.readAsText(f);}
+async function _kDosyaUygula(ham){const dur=m=>{toast('⛔ '+m+' — geri yükleme yapılmadı, kilit sürüyor',5000);};
+  let ls=null;try{ls=localStorage.getItem(KEY);}catch(e){}
+  if(ls!=null){const k=await _kYeniAnahtar('yedek_ls_');if(!(await _kIdbKoyDogrula(k,ls)))return dur('Mevcut yerel veri yedeklenemedi');}
+  const ana=await _kIdbAl(KEY);if(!ana.hata&&ana.ham&&ana.ham!==ham){const ak=await _kYeniAnahtar('kurtarma_arsiv_');if(!(await _kIdbKoyDogrula(ak,ana.ham)))return dur('Güvence kopyası korunamadı');}
+  const kb=await _kIdbAl('kurtarma_bekleyen');if(!kb.hata&&kb.ham&&kb.ham!==ham){const ak=await _kYeniAnahtar('kurtarma_arsiv_');if(!(await _kIdbKoyDogrula(ak,kb.ham)))return dur('Korumalı kopya korunamadı');}
+  if(!(await _kIdbKoyDogrula('kurtarma_bekleyen',ham)))return dur('Seçilen yedek korunamadı');
+  const yn=_kurtarma.nesil+1;try{localStorage.setItem('iq_nesil',String(yn));}catch(e){return dur('Depolama dolu');}
+  _kurtarma.nesil=yn;_kBildir('kurtariliyor');await new Promise(r=>setTimeout(r,300));
+  try{localStorage.setItem(KEY,ham);}catch(e){return dur('Depolama dolu');}
+  let geri=null;try{geri=localStorage.getItem(KEY);}catch(e){}if(geri!==ham)return dur('Yazılan yedek doğrulanamadı');
+  try{sessionStorage.setItem('iq_kurtarmaBilgi','1');}catch(e){}location.reload();}
+window.addEventListener('error',e=>{if(e&&e.error&&e.error.kurtarmaKilidi){e.preventDefault();_kUyar();}});
+window.addEventListener('unhandledrejection',e=>{if(e&&e.reason&&e.reason.kurtarmaKilidi){e.preventDefault();_kUyar();}});
+try{Object.defineProperty(window,'kurtarmaDurumu',{configurable:false,enumerable:false,get(){return Object.freeze({durum:_kurtarma.durum,neden:_kurtarma.neden,nesil:_kurtarma.nesil});}});}catch(e){}
+_kurtarmaBaslat();
 // Dinleyicileri kur — ilk snapshot buluttaki veriyi getirir (başka cihaz katılınca)
 // Buluttan gelen 'satis' verisi ESKİ olabilir (onay henüz buluta yazılmadan sekme kapandıysa).
 // Yerelde onaylanan portal siparişlerini KORU ve bekleyenden temizle — böylece onaylanan sipariş
@@ -847,6 +972,7 @@ async function canliGonder(){
 }
 // save() → değişen domenleri buluta yaz (debounce)
 function canliYaz(){
+  if(!_kurtarmaYazabilir())return; /* R2.2b.4 */
   if(!canliAcik||_canliUygulaniyor||db.ornek)return; // demo veri buluta yazılmaz
   clearTimeout(_canliYazT);
   _canliYazT=setTimeout(()=>{
@@ -860,6 +986,7 @@ function canliYaz(){
 }
 // ANINDA buluta yaz (debounce beklemeden) — kritik işlerde (onay) ve sekme kapanırken kullanılır
 function canliYazHemen(domenler){
+  if(!_kurtarmaYazabilir())return Promise.resolve(); /* R2.2b.4 */
   if(!canliAcik||_canliUygulaniyor||db.ornek)return Promise.resolve();
   clearTimeout(_canliYazT);
   const izin=ROL_YAZ[canliRol()]||_CTUM;
@@ -876,11 +1003,11 @@ function canliYazHemen(domenler){
 /* 💾 IndexedDB GÜVENCE KATMANI — localStorage kotası dolsa bile verinin tam
    kopyası IndexedDB'de tutulur (kota ~5MB yerine yüzlerce MB). localStorage
    boş/bozuksa açılışta IndexedDB kopyasından otomatik kurtarılır. */
-let _idb=null,_idbYazT=null;
 function idbAc(){return new Promise(res=>{try{const rq=indexedDB.open('iqbasics',1);
   rq.onupgradeneeded=()=>{try{rq.result.createObjectStore('kv')}catch(e){}};
   rq.onsuccess=()=>res(rq.result);rq.onerror=()=>res(null);}catch(e){res(null)}});}
-function idbYaz(){clearTimeout(_idbYazT);_idbYazT=setTimeout(async()=>{try{
+function idbYaz(){if(!_kurtarmaYazabilir())return;clearTimeout(_idbYazT);_idbYazT=setTimeout(async()=>{try{
+  if(!_kurtarmaYazabilir())return; /* R2.2b.4: zamanlayıcı çalışırken de (başka sekme kurtarmış olabilir) */
   if(!_idb)_idb=await idbAc();if(!_idb)return;
   _idb.transaction('kv','readwrite').objectStore('kv').put(JSON.stringify(db),KEY);
 }catch(e){}},800);}
@@ -889,11 +1016,12 @@ function idbSil(){clearTimeout(_idbYazT);return new Promise(async res=>{try{if(!
 function idbOku(){return new Promise(async res=>{try{if(!_idb)_idb=await idbAc();if(!_idb)return res(null);
   const rq=_idb.transaction('kv','readonly').objectStore('kv').get(KEY);
   rq.onsuccess=()=>res(rq.result||null);rq.onerror=()=>res(null);}catch(e){res(null)}});}
-function save(){try{stokProjKaydet()}catch(e){} // aktif lokasyon stoğunu loklar'a flush et
+function save(){if(!_kurtarmaYazabilir())return _kurtarmaKayitEngeli(); /* R2.2b.4: karar beklenirken ertele, kilitte belleği geri al + KurtarmaKilidiHatasi */
+  try{stokProjKaydet()}catch(e){} // aktif lokasyon stoğunu loklar'a flush et
   try{if(!bulutMusteriMod)_damgala()}catch(e){} // müşteri modunda damgalama/mezar taşı üretilmez
   db._t=Date.now(); // kayıt zamanı — açılışta localStorage/IndexedDB'den hangisi yeni, ona bakılır
   try{idbYaz()}catch(e){}
-  try{localStorage.setItem(KEY,JSON.stringify(db));return true;}catch(e){console.error('save failed',e);
+  try{const _j=JSON.stringify(db);localStorage.setItem(KEY,_j);_kurtarma.sonKayit=_j;return true;}catch(e){console.error('save failed',e);
     if(!window._saveHataG){window._saveHataG=1;setTimeout(()=>{try{askConfirm('🚨 TARAYICI DEPOLAMASI DOLU!\nİşlemler İKİNCİL kopyaya (IndexedDB) kaydedilmeye devam ediyor — veri kaybı yok, ama alan açmalısın.\n\nSayfayı yenilersen son işlemler KAYBOLUR. Hemen:\n1) Ayarlar → Yedek Al (dosya olarak indir)\n2) Büyük fotoğrafları küçült/sil ya da eski verileri temizle\n\nSorun sürerse yedeği aldıktan sonra tarayıcı site verisini artırın.',()=>{},'Anladım')}catch(x){return false;}},200);}try{toast('⚠️ Depolama dolu — yerel kayıt yapılamadı! (IndexedDB kopyası ve bulut senkronu sürüyor) Fotoğrafları küçült ya da Ayarlar\'dan Cloudinary aç.');}catch(_){}
     // kota dolsa da bulut/IndexedDB'ye yazmaya devam et — aksi halde işlemler hiçbir yere gitmez
     try{if(canliAcik&&!_canliUygulaniyor)canliYaz();}catch(_){}try{if(db.otoYayin)otoYayinTetik()}catch(_){}return false;}if(canliAcik&&!_canliUygulaniyor)canliYaz();if(db.otoYayin){try{otoYayinTetik()}catch(e){}}}
@@ -1002,7 +1130,7 @@ async function canliBulutKatil(){
 }
 function otoYedekListe(){const y=JSON.parse(localStorage.getItem('iq_yedekler')||'[]');
   open_('🕑 Otomatik Yedekler',(y.length?y.map((b,i)=>`<div class="card" style="padding:11px 13px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="min-width:0"><b>${tstr(b.t)}</b><div class="mini">${esc(b.etiket||'')} · ${esc(b.ozet||'')}</div></div><button class="btn ghost sm" style="width:auto;margin:0;padding:8px 12px;flex:0 0 auto" onclick="otoYedekGeri(${i})">↩︎ Geri yükle</button></div></div>`).join(''):'<div class="mini">Henüz yedek yok. Riskli işlemlerden önce ve günde bir otomatik alınır.</div>')+'<div class="mini" style="margin-top:8px">Yedekler bu cihazda saklanır (son 10). Cihaz değişimi için "Yedek Al (indir)" ile dosya da al.</div>');}
-function otoYedekGeri(i){const y=JSON.parse(localStorage.getItem('iq_yedekler')||'[]');const b=y[i];if(!b)return;
+function otoYedekGeri(i){if(_kurtarma.durum!=='tamam')return _kUyar(); /* R2.2b.4 kurtarma kilidi */const y=JSON.parse(localStorage.getItem('iq_yedekler')||'[]');const b=y[i];if(!b)return;
   askConfirm('Bu yedeğe dönülsün mü? Şu anki veri bununla değişir ve canlı senkron kapatılır (istersen sonra tekrar açarsın).',()=>{try{JSON.parse(b.veri);if(canliAcik)canliDur();localStorage.setItem(KEY,b.veri);db=load();try{_mSnapInit()}catch(e){}db._t=Date.now();try{save()}catch(e){}closeM();go('panel');toast('↩︎ Yedek geri yüklendi ✓');}catch(e){toast('Yedek okunamadı')}});}
 function canliBulutKapat(){askConfirm('Canlı senkron kapatılsın mı? (Veri cihazda kalır ama artık senkronlanmaz)',()=>{canliDur();closeM();toast('Senkron kapatıldı');});}
 // 👤 Personel girişi: depocu/mağaza/ortak kendi hesabıyla girer → rolüne göre canlı veriye bağlanır
@@ -1068,10 +1196,11 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-171'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-173'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
-function bulutBaslat(){if(bulutHazir)return true;if(!bulutVar())return false;
+function bulutBaslat(){if(!_kurtarmaYazabilir())return false; /* R2.2b.4: kurtarma tamamlanmadan bulut YOK */
+  if(bulutHazir)return true;if(!bulutVar())return false;
   try{if(!firebase.apps.length)firebase.initializeApp(FB_CONFIG);_fb=firebase.firestore();
     // Çevrimdışı kalıcı bellek: internet yokken çalış, gelince otomatik gönder (uygulama kapansa bile korunur)
     try{_fb.enablePersistence({synchronizeTabs:true}).catch(()=>{});}catch(e){}
@@ -1607,15 +1736,23 @@ function lokPasifToggle(id){const l=lok(id);if(!l)return;
 /* ===== Transfer (lokasyonlar arası sevk) ===== */
 let trKalem=[], trUrunId=0;
 function lokStokRenk(u,renk,lokId){if(!u)return 0;if(renk&&renkObjs(u).length){const r=renkObjs(u).find(x=>(x.ad||'').toLocaleLowerCase('tr-TR')===(renk||'').toLocaleLowerCase('tr-TR'));return r?(+((r.loklar||{})[lokId])||0):0;}return +((u.loklar||{})[lokId])||0;}
+function trAnahtar(k){return k.uid+'|'+(k.renk||'').toLocaleLowerCase('tr-TR')} /* stok kimliği: ürün + renk (büyük/küçük harf duyarsız) */
+function trMili(x){return Math.round((+x||0)*1000)} /* miktar → binde seri (0.001 hassasiyet; uygulamanın 3 ondalık kuralı) */
+function trMiktarGecerli(a){a=+a;return Number.isFinite(a)&&a>0&&Math.abs(a*1000-Math.round(a*1000))<1e-6} /* pozitif, sonlu, en çok 3 ondalık */
+function trStokMili(x){return Math.floor((+x||0)*1000+1e-6)} /* stok aşağı yuvarlanır: kayan nokta artığı tolere edilir, gerçek açık gizlenmez */
+function trTemiz(x){return Math.round(x*1e9)/1e9||0} /* toplama/çıkarma sonrası kayan nokta artığını temizle (-0 → 0) */
+function trSatirEkle(uid,ad,renk,a){const v=trKalem.find(k=>trAnahtar(k)===trAnahtar({uid,renk}));if(v)v.adet=(trMili(v.adet)+trMili(a))/1000;else trKalem.push({uid,urun:ad,renk,adet:trMili(a)/1000});}
+function trBirlestir(kalemler){const m=new Map();(kalemler||[]).forEach(k=>{const key=trAnahtar(k),v=m.get(key);if(v)v.adet=(trMili(v.adet)+trMili(k.adet))/1000;else m.set(key,{...k,adet:trMili(k.adet)/1000});});return [...m.values()];}
+function trYetersiz(kalemler,from){return trBirlestir(kalemler).map(k=>({...k,mevcut:lokStokRenk(urun(k.uid),k.renk,from)})).filter(k=>trMili(k.adet)>trStokMili(k.mevcut));} /* kaynak stok negatif olamaz */
 function transferStokUygula(kalemler,lokId,yon){(kalemler||[]).forEach(k=>{const u=urun(k.uid);if(!u)return;const ad=+k.adet||0;if(!ad)return;
-  if(k.renk&&renkObjs(u).length){let r=renkObjs(u).find(x=>(x.ad||'').toLocaleLowerCase('tr-TR')===(k.renk||'').toLocaleLowerCase('tr-TR'));if(!r){r={ad:k.renk,hex:hexFromAd(k.renk)||'#ccc',stok:0,loklar:{}};u.renkler.push(r);}r.loklar=r.loklar||{};r.loklar[lokId]=(+((r.loklar||{})[lokId])||0)+yon*ad;}
-  else{u.loklar=u.loklar||{};u.loklar[lokId]=(+((u.loklar||{})[lokId])||0)+yon*ad;}
+  if(k.renk&&renkObjs(u).length){let r=renkObjs(u).find(x=>(x.ad||'').toLocaleLowerCase('tr-TR')===(k.renk||'').toLocaleLowerCase('tr-TR'));if(!r){r={ad:k.renk,hex:hexFromAd(k.renk)||'#ccc',stok:0,loklar:{}};u.renkler.push(r);}r.loklar=r.loklar||{};r.loklar[lokId]=trTemiz((+((r.loklar||{})[lokId])||0)+yon*ad);}
+  else{u.loklar=u.loklar||{};u.loklar[lokId]=trTemiz((+((u.loklar||{})[lokId])||0)+yon*ad);}
 });}
 function transferForm(){if(lokListe().length<2)return toast('Transfer için en az 2 lokasyon gerekli — Ayarlar > Lokasyonlar');
   trKalem=[];trUrunId=0;const trFrom=aktifLok,trTo=(lokListe().find(l=>l.id!==aktifLok)||{}).id||'';
   const opt=(sel)=>lokListe().map(l=>`<option value="${l.id}" ${l.id===sel?'selected':''}>${lokIc(l.id)} ${esc(l.ad)}</option>`).join('');
   open_('🔄 Transfer (Sevk)',`
-    <div class="g2"><div><label>Nereden</label><select id="tr-from" onchange="trUrunSec()">${opt(trFrom)}</select></div><div><label>Nereye</label><select id="tr-to">${opt(trTo)}</select></div></div>
+    <div class="g2"><div><label>Nereden</label><select id="tr-from" onchange="trUrunSec();cizTrListe()">${opt(trFrom)}</select></div><div><label>Nereye</label><select id="tr-to">${opt(trTo)}</select></div></div>
     <label style="margin-top:10px">Ürün ekle</label>
     <input id="tr-urun" list="tr-urun-dl" autocomplete="off" placeholder="🔍 ürün ara / seç" oninput="trUrunSec()">
     <datalist id="tr-urun-dl">${db.urunler.filter(u=>!u.pasif).map(u=>`<option value="${esc(u.ad)}">`).join('')}</datalist>
@@ -1626,26 +1763,31 @@ function transferForm(){if(lokListe().length<2)return toast('Transfer için en a
 }
 function trUrunSec(){const ad=($('tr-urun')?.value||'').trim().toLowerCase();const u=db.urunler.find(x=>!x.pasif&&(x.ad||'').toLowerCase()===ad);const box=$('tr-renk');if(!box)return;const from=$('tr-from')?.value||aktifLok;
   if(!u){box.innerHTML='';trUrunId=0;return;}trUrunId=u.id;
-  if(renkObjs(u).length){box.innerHTML=renkObjs(u).map((r,i)=>{const av=+((r.loklar||{})[from])||0;return `<div class="ierow"><span class="iesw" style="background:${r.hex||'#ccc'}"></span><div class="ienm"><b>${esc(r.ad||'—')}</b><span class="iestk ${av<=0?'az':''}">kaynakta ${av}</span></div><div class="iestp"><button type="button" onclick="trAdet(${i},-1)">−</button><input id="tra-${i}" type="number" inputmode="numeric" value="0" style="width:52px"><button type="button" class="p" onclick="trAdet(${i},1)">+</button></div></div>`}).join('')+`<button class="btn ghost sm" style="margin-top:8px" onclick="trEkle()">+ Listeye Ekle</button>`;}
-  else{const av=+((u.loklar||{})[from])||0;box.innerHTML=`<div class="ierow"><div class="ienm"><b>${esc(u.ad)}</b><span class="iestk ${av<=0?'az':''}">kaynakta ${av}</span></div><div class="iestp"><button type="button" onclick="trAdet(0,-1)">−</button><input id="tra-0" type="number" inputmode="numeric" value="0" style="width:52px"><button type="button" class="p" onclick="trAdet(0,1)">+</button></div></div><button class="btn ghost sm" style="margin-top:8px" onclick="trEkle()">+ Listeye Ekle</button>`;}
+  if(renkObjs(u).length){box.innerHTML=renkObjs(u).map((r,i)=>{const av=+((r.loklar||{})[from])||0;return `<div class="ierow"><span class="iesw" style="background:${r.hex||'#ccc'}"></span><div class="ienm"><b>${esc(r.ad||'—')}</b><span class="iestk ${av<=0?'az':''}">kaynakta ${av}</span></div><div class="iestp"><button type="button" onclick="trAdet(${i},-1)">−</button><input id="tra-${i}" type="number" inputmode="decimal" step="any" min="0" value="0" style="width:52px"><button type="button" class="p" onclick="trAdet(${i},1)">+</button></div></div>`}).join('')+`<button class="btn ghost sm" style="margin-top:8px" onclick="trEkle()">+ Listeye Ekle</button>`;}
+  else{const av=+((u.loklar||{})[from])||0;box.innerHTML=`<div class="ierow"><div class="ienm"><b>${esc(u.ad)}</b><span class="iestk ${av<=0?'az':''}">kaynakta ${av}</span></div><div class="iestp"><button type="button" onclick="trAdet(0,-1)">−</button><input id="tra-0" type="number" inputmode="decimal" step="any" min="0" value="0" style="width:52px"><button type="button" class="p" onclick="trAdet(0,1)">+</button></div></div><button class="btn ghost sm" style="margin-top:8px" onclick="trEkle()">+ Listeye Ekle</button>`;}
 }
 function trAdet(i,d){const el=$('tra-'+i);if(!el)return;el.value=Math.max(0,(+el.value||0)+d);}
 function trEkle(){const u=urun(trUrunId);if(!u)return toast('Önce ürün seç');
-  let n=0;if(renkObjs(u).length){renkObjs(u).forEach((r,i)=>{const a=Math.max(0,+($('tra-'+i)?.value||0));if(a>0){trKalem.push({uid:u.id,urun:u.ad,renk:r.ad,adet:a});n++;}});}
-  else{const a=Math.max(0,+($('tra-0')?.value||0));if(a>0){trKalem.push({uid:u.id,urun:u.ad,renk:'',adet:a});n++;}}
-  if(!n)return toast('Adet gir');
+  let n=0,h=0;const al=i=>{const a=+($('tra-'+i)?.value||0);if(!a)return 0;if(!trMiktarGecerli(a)){h++;return 0}return a;};
+  if(renkObjs(u).length){renkObjs(u).forEach((r,i)=>{const a=al(i);if(a){trSatirEkle(u.id,u.ad,r.ad,a);n++;}});}
+  else{const a=al(0);if(a){trSatirEkle(u.id,u.ad,'',a);n++;}}
+  if(h)toast('⛔ Geçersiz miktar — pozitif ve en fazla 3 ondalık olmalı');
+  if(!n)return h?undefined:toast('Adet gir');
   if($('tr-urun'))$('tr-urun').value='';trUrunId=0;if($('tr-renk'))$('tr-renk').innerHTML='';cizTrListe();
+  const ey=trYetersiz(trKalem,$('tr-from')?.value||aktifLok);if(ey.length)toast('⚠️ Kaynak stok yetersiz: '+ey.map(k=>k.urun+(k.renk?' · '+k.renk:'')+' '+k.adet+' > '+k.mevcut).join(', ')+' — bu haliyle kaydedilemez');
 }
-function cizTrListe(){const b=$('tr-liste');if(!b)return;b.innerHTML=trKalem.length?`<div class="sec">Sevk edilecek (${trKalem.reduce((a,k)=>a+(+k.adet||0),0)} adet)</div><div class="card" style="padding:4px 12px">`+trKalem.map((k,i)=>`<div class="kv"><span class="k">${esc(k.urun)}${k.renk?' · <b>'+esc(k.renk)+'</b>':''}</span><span class="v">${k.adet} <a onclick="trKalem.splice(${i},1);cizTrListe()" style="color:var(--bad);cursor:pointer;font-weight:800">✕</a></span></div>`).join('')+`</div>`:'<div class="mini">Henüz ürün eklenmedi.</div>';}
+function cizTrListe(){const b=$('tr-liste');if(!b)return;const eks=new Map(trYetersiz(trKalem,$('tr-from')?.value||aktifLok).map(k=>[trAnahtar(k),k.mevcut]));b.innerHTML=trKalem.length?`<div class="sec">Sevk edilecek (${trKalem.reduce((a,k)=>a+trMili(k.adet),0)/1000} adet)</div><div class="card" style="padding:4px 12px">`+trKalem.map((k,i)=>`<div class="kv"><span class="k">${esc(k.urun)}${k.renk?' · <b>'+esc(k.renk)+'</b>':''}</span><span class="v"${eks.has(trAnahtar(k))?' style="color:var(--bad)"':''}>${k.adet}${eks.has(trAnahtar(k))?' (kaynakta '+eks.get(trAnahtar(k))+')':''} <a onclick="trKalem.splice(${i},1);cizTrListe()" style="color:var(--bad);cursor:pointer;font-weight:800">✕</a></span></div>`).join('')+`</div>`:'<div class="mini">Henüz ürün eklenmedi.</div>';}
 function transferKaydet(){const from=$('tr-from')?.value,to=$('tr-to')?.value;
   if(!from||!to||from===to)return toast('Kaynak ve hedef farklı olmalı');
   if(!trKalem.length)return toast('Ürün ekle');
-  const eksik=trKalem.filter(k=>k.adet>lokStokRenk(urun(k.uid),k.renk,from));
+  if(trKalem.some(k=>!trMiktarGecerli(k.adet)))return toast('⛔ Geçersiz miktar — pozitif ve en fazla 3 ondalık olmalı; transfer oluşturulamaz');
+  trKalem=trBirlestir(trKalem);
+  const eksik=trYetersiz(trKalem,from);
+  if(eksik.length){cizTrListe();return toast('⛔ Kaynak ('+lokAd(from)+') stoğu yetersiz — transfer oluşturulamaz: '+eksik.map(k=>k.urun+(k.renk?' · '+k.renk:'')+' '+k.adet+' > '+k.mevcut).join(', '));}
   const commit=()=>{transferStokUygula(trKalem,from,-1);
     const t={id:'T'+Date.now().toString(36)+Math.floor(Math.random()*90+10),fromLok:from,toLok:to,kalemler:trKalem.map(k=>({...k})),tarih:Date.now(),durum:'yolda'};
     (db.transferler=db.transferler||[]).push(t);stokProjYukle();save();try{canliYazHemen(['stok'])}catch(e){}closeM();toast('🔄 Transfer oluşturuldu — '+lokAd(to)+'\'e yolda');transferListe();};
-  if(eksik.length)askConfirm('Bazı ürünlerde kaynak ('+lokAd(from)+') stoğu yetersiz — eksiye düşebilir.\nYine de oluşturulsun mu?',commit,'Yine de');
-  else commit();
+  commit();
 }
 function transferListe(){const ts=[...(db.transferler||[])].sort((a,b)=>b.tarih-a.tarih);
   open_('🔄 Transferler (Sevk)',
@@ -2686,7 +2828,7 @@ function hexFromAd(ad){return AD_HEX[(ad||'').toLowerCase().trim()]}
 const BEDEN_STD=['S','M','L','XL','XXL','3XL','4XL','5XL'];
 const PBSYM={TL:'₺',USD:'$',EUR:'€'};
 const ISLEMLER=['Kesim','Dikim','Nakış','Baskı','Ütü / Paket']; // tek üretim işlem listesi (Yıkama kullanılmıyor) — ISTASYON/FAS_ISLEM bundan türer
-let fRenk=[], fBeden=[], uPB='TL', uTab='genel', uKaynak='uretim';
+let fRenk=[], fBeden=[], uPB='TL', uTab='genel', uKaynak='uretim', fRenkAcilis=[], fUrunId=0;
 function resizeImg(file,cb,max=900,q=0.72){const r=new FileReader();r.onload=()=>{const img=new Image();img.onload=()=>{let w=img.width,h=img.height;if(w>h&&w>max){h=Math.round(h*max/w);w=max}else if(h>max){w=Math.round(w*max/h);h=max}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);try{cb(c.toDataURL('image/jpeg',q))}catch(e){cb(r.result)}};img.src=r.result};r.readAsDataURL(file)}
 // 🖼️ Fotoğrafı Cloudinary'ye yükle (ayarlıysa) → kısa link döndür; ayar yoksa/yüklenemezse base64 döndür (fallback → hiçbir şey bozulmaz)
 /* 📦 FOTOĞRAF DEPOSU — öncelik: Cloudinary (ayarlıysa) → Firebase Storage (bulut girişi varsa) → cihaz (base64).
@@ -2759,7 +2901,9 @@ function genBarkod(){let s='869';for(let i=0;i<9;i++)s+=Math.floor(Math.random()
 function formUrun(id,base){
   if(!canUrunYaz())return toast('Bu işlem için yetkiniz yok');
   const u=id?urun(id):(base||{birim:'seri',seri:5,renkler:[],kaynak:'uretim',cesit:'Markalı',karYuzde:40,pb:'TL'});
-  fRenk=(u.renkler||[]).map(r=>typeof r==='object'?{ad:r.ad||'',hex:r.hex,foto:r.foto||'',barkod:r.barkod||'',stok:+r.stok||0,kirik:r.kirik?{...r.kirik}:null}:{ad:RENK_ADI[r]||'',hex:r,foto:'',barkod:'',stok:0,kirik:null});
+  fUrunId=id||0;
+  fRenk=(u.renkler||[]).map(r=>typeof r==='object'?{ad:r.ad||'',hex:r.hex,foto:r.foto||'',barkod:r.barkod||'',stok:+r.stok||0,kirik:r.kirik?{...r.kirik}:null,_orj:r,_aStok:+r.stok||0,_aKirik:JSON.stringify(r.kirik||null)}:{ad:RENK_ADI[r]||'',hex:r,foto:'',barkod:'',stok:0,kirik:null});
+  fRenkAcilis=fRenk.map(r=>r._orj).filter(Boolean);
   fBeden=(u.bedenler&&u.bedenler.length)?u.bedenler.map(x=>typeof x==='object'?{beden:x.beden,adet:+x.adet||1}:{beden:x,adet:1}):BEDEN_STD.slice(0,u.seri||5).map(b=>({beden:b,adet:1}));
   uPB=u.pb||'TL';uTab='genel';uKaynak=u.kaynak==='alim'?'alim':'uretim';
   const teds=db.cariler.filter(c=>c.tip==='tedarikci');
@@ -2826,7 +2970,7 @@ function cizRenk(){
         <div onclick="renkFotoSec(${i})" title="Foto ekle" style="width:36px;height:36px;flex:0 0 auto;border-radius:9px;overflow:hidden;background:${sw};display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;border:1px solid var(--ln);color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.4)">${r.foto?`<img src="${guvenliSrc(r.foto)}" style="width:100%;height:100%;object-fit:cover">`:'📷'}<input type="file" accept="image/*" id="rf-${i}" style="display:none" onchange="renkFoto(${i},this)"></div>
         <input class="rad" list="renkList" autocomplete="off" value="${esc(r.ad||'')}" placeholder="Renk" oninput="fRenk[${i}].ad=this.value;cizRenkSwatch(${i},this)" style="flex:1;min-width:0;margin:0;padding:8px 9px">
         <div class="step sm" style="flex:0 0 auto"><button type="button" class="b" onclick="rStokAdet(${i},-1)">−</button><input type="number" inputmode="numeric" min="0" value="${r.stok||0}" oninput="if(+this.value<0)this.value=0;fRenk[${i}].stok=+this.value||0;renkTot()" style="width:50px"><button type="button" class="b p" onclick="rStokAdet(${i},1)">+</button></div>
-        <button type="button" class="del" onclick="fRenk.splice(${i},1);cizRenk()" style="flex:0 0 auto">✕</button>
+        <button type="button" class="del" onclick="renkSilIste(${i})" style="flex:0 0 auto">✕</button>
       </div>
       ${seriMi?`<div onclick="renkKirik(${i})" style="font-size:11px;color:var(--sub);margin-top:3px;cursor:pointer;padding-left:2px">${kirikOpen?'▾':'▸'} kırık seri (tek beden)${kirikTop?` · <b>${kirikTop}</b> adet`:''}</div>`:''}
       ${(seriMi&&kirikOpen)?`<div class="rc-kirik" style="margin-top:4px">${fBeden.length?fBeden.map(x=>{const bd=x.beden;return `<div class="kb"><span>${esc(bd)}</span><input type="number" inputmode="numeric" value="${(r.kirik&&r.kirik[bd])||''}" placeholder="0" oninput="setKirik(${i},'${esc(jsq(bd))}',this.value)"></div>`}).join(''):'<div class="mini">Önce Genel sekmesinde beden ekle</div>'}</div>`:''}
@@ -2843,6 +2987,164 @@ function renkTot(){const t=$('renk-tot');if(!t)return;if(!fRenk.length){t.textCo
 function renkEkle(){fRenk.push({ad:'',hex:'#8a8f98',foto:'',barkod:genBarkod(),stok:0,kirik:null});cizRenk()}
 function renkFotoSec(i){const el=$('rf-'+i);if(el)el.click()}
 function renkFoto(i,input){const f=input.files&&input.files[0];if(!f)return;resimSecYukle(f,d=>{if(fRenk[i])fRenk[i].foto=d;cizRenk()},1000,0.75)}
+function yeniRid(){try{const c=(typeof crypto!=='undefined')?crypto:null;if(!c)return null; /* R2.1: kalıcı renk kimliği — yalnız güvenli rastgele; zayıf kaynak (Math.random/Date/barkod/ad/sayaç) YOK */
+  if(typeof c.randomUUID==='function'){const u=c.randomUUID();if(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(u))return 'r_'+u;}
+  if(typeof c.getRandomValues==='function'){const b=c.getRandomValues(new Uint8Array(16));b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;const h=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');return 'r_'+h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20);}
+  }catch(e){}return null;}
+function _rlc(x){return (x||'').trim().toLocaleLowerCase('tr-TR')} /* renk adı karşılaştırma (Türkçe büyük/küçük harf) */
+function renkGuncel(u,o){if(!u||!o)return null;const R=renkObjs(u);return R.find(c=>c===o)||(o.barkod?R.find(c=>c.barkod===o.barkod):null)||R.find(c=>_rlc(c.ad)===_rlc(o.ad))||null;} /* formdaki (eski olabilir) renk → ürünün GÜNCEL renk nesnesi */
+function renkSilEngel(u,r){const n=[],ad=_rlc(r.ad),uid=u.id; /* güncel kayda göre: [] ise silinebilir */
+  const st={...(r.loklar||{})};if(+r.stok&&st[aktifLok]===undefined)st[aktifLok]=+r.stok;const lv=Object.entries(st).filter(([,v])=>+v);
+  const neg=lv.filter(([,v])=>+v<0),poz=lv.filter(([,v])=>+v>0);
+  if(poz.length)n.push('stok var ('+poz.map(([l,v])=>lokAd(l)+' '+v).join(', ')+')');
+  if(neg.length)n.push('negatif stok ('+neg.map(([l,v])=>lokAd(l)+' '+v).join(', ')+') — önce mutabakat gerekir');
+  if(Object.values(r.kirik||{}).some(v=>+v))n.push('kırık stok var ('+kirikStr(r.kirik)+')');
+  if(+r.defo)n.push('defolu stok var ('+(+r.defo)+')');
+  if((db.transferler||[]).some(t=>!t.iptal&&t.durum==='yolda'&&(t.kalemler||[]).some(k=>k.uid===uid&&_rlc(k.renk)===ad)))n.push('yoldaki transfer var');
+  if((db.isemirleri||[]).some(i=>i.urunId===uid&&!i.iptal&&i.durum!=='tamam'&&i.durum!=='iptal'&&(!(i.renkDagilim||[]).length||i.renkDagilim.some(x=>_rlc(x.ad)===ad))))n.push('açık iş emri var');
+  const kal=o=>(o.kalemler||[]).some(k=>k.uid===uid&&(k.renkler||[]).some(x=>_rlc(x.ad)===ad));
+  const ss=(db.satislar||[]).filter(s=>s&&!s.iptal&&s.tip!=='iade'&&kal(s));
+  if(ss.some(s=>s.teslimDurum==='ayrildi'||(s.eksikStok&&s.teslimDurum!=='teslim')))n.push('rezerve / bekleyen / ön sipariş var');
+  if(ss.some(s=>s.depo&&s.depo!=='hazir'))n.push('tamamlanmamış depo emri var');
+  if((db.bekleyenPortal||[]).some(kal))n.push('bekleyen portal siparişi var');
+  return n;}
+function renkSilIste(i){const r=fRenk[i];if(!r)return;
+  const u=fUrunId?urun(fUrunId):null,cur=(u&&r._orj)?renkGuncel(u,r._orj):null;
+  if(cur){const n=renkSilEngel(u,cur);if(n.length)return toast('⛔ "'+cur.ad+'" silinemez: '+n.join('; '),5000);}
+  fRenk.splice(i,1);cizRenk();}
+/* ===== R2.0 Renk kimliği denetimi — SALT OKUNUR (girdiyi değiştirmez, kaydetmez, ağ kullanmaz) ===== */
+function renkKimlikDenetle(veri){const v=veri||{},lc=x=>String(x==null?'':x).trim().toLocaleLowerCase('tr-TR');
+  const bul=[],acik=[],idx=new Map(),ridG=new Map(),gor=new Set();let renkSay=0,urunSay=0;
+  const ekle=(b)=>{const k=[b.kategori,b.kayit,b.urunId,lc(b.renk)].join('|');if(gor.has(k))return;gor.add(k);bul.push(b);};
+  const grup=(m,k,x)=>{if(!m.has(k))m.set(k,[]);m.get(k).push(x);};
+  (v.urunler||[]).forEach(u=>{if(!u||u.id==null)return;urunSay++;const R=(u.renkler||[]).filter(r=>r&&typeof r==='object');const ad=new Map(),rid=new Map(),bk=new Map();
+    const t=(kategori,onem,renk,gerekce)=>bul.push({kategori,onem,tur:'ürün rengi',kayit:'urun#'+u.id,urunId:u.id,urunAd:u.ad||'',renk,gerekce,acik:false}); /* ürün rengi bulguları tek tek (Siyah/siyah ayrı renklerdir) */
+    R.forEach(r=>{renkSay++;grup(ad,lc(r.ad),r);
+      if(r.rid){grup(rid,r.rid,r);grup(ridG,r.rid,{u,r});}else t('kimliksiz','bilgi',r.ad||'','Renkte değişmeyen kimlik (rid) yok');
+      const b=String(r.barkod||'').trim();if(b)grup(bk,b,r);else t('barkodsuz','orta',r.ad||'','Barkod yok — kimlik barkoddan türetilemez; elle mutabakat gerekebilir');});
+    ad.forEach(l=>{if(l.length>1)t('mukerrer-ad','yuksek',l.map(r=>r.ad).join(' / '),'Aynı üründe Türkçe harf kurallarına göre aynı renk adı '+l.length+' kez — elle mutabakat gerekli');});
+    bk.forEach((l,b)=>{if(l.length>1)t('mukerrer-barkod','yuksek',l.map(r=>r.ad).join(' / '),'Barkod '+b+' aynı üründe '+l.length+' renkte');});
+    idx.set(String(u.id),{u,R,ad,rid});});
+  ridG.forEach((l,id)=>{if(l.length>1)ekle({kategori:'mukerrer-rid',onem:'kritik',tur:'ürün rengi',kayit:l.map(x=>'urun#'+x.u.id).join(','),urunId:l[0].u.id,urunAd:l[0].u.ad||'',renk:l.map(x=>x.r.ad).join(' / '),gerekce:'rid '+id+' '+l.length+' renkte kullanılmış — kimlik benzersiz değil',acik:false});});
+  const kontrol=(tur,kayit,uid,ref,ac)=>{const ad=String(ref.ad||'').trim(),b={tur,kayit,urunId:uid==null?null:uid,urunAd:'',renk:ad,acik:!!ac};
+    if(uid==null||uid===''){ekle({...b,kategori:'urun-kimligi-yok',onem:'orta',gerekce:'Kayıtta ürün kimliği yok — renk eşleştirmesi yapılmadı (inceleme gerekli)'});return;}
+    const x=idx.get(String(uid));if(!x){ekle({...b,kategori:'urun-yok',onem:'yuksek',gerekce:'Ürün kaydı bulunamadı (silinmiş olabilir) — renk eşleştirmesi yapılmadı'});return;}
+    b.urunAd=x.u.ad||'';
+    if(ref.rid){const l=x.rid.get(ref.rid)||[];if(l.length===1)return;ekle({...b,kategori:l.length?'belirsiz':'kimlik-bulunamadi',onem:'kritik',gerekce:l.length?'Kayıttaki rid ürünün birden fazla renginde':'Kayıttaki rid ('+ref.rid+') ürünün renklerinde yok — ada göre eşleştirmeye düşülmedi'});return;}
+    if(!ad){if(x.R.length)ekle({...b,kategori:'renksiz-kayit',onem:'orta',gerekce:'Kayıtta renk yok ama ürün renkli — inceleme gerekli'});return;}
+    const c=x.ad.get(lc(ad))||[];
+    if(!c.length)ekle({...b,kategori:'eslesmeyen',onem:ac?'kritik':'yuksek',gerekce:'Bu adla renk yok — renk silinmiş veya yeniden adlandırılmış olabilir (inceleme gerekli); otomatik eşleştirme yapılmaz'});
+    else if(c.length>1)ekle({...b,kategori:'belirsiz',onem:ac?'kritik':'yuksek',gerekce:c.length+' renk aynı adla eşleşiyor ('+c.map(r=>r.ad).join(' / ')+') — elle mutabakat gerekli'});
+    else{ekle({...b,kategori:'tek-aday',onem:'bilgi',gerekce:'Adla tek aday bulundu — bu, tarihsel olarak aynı renk olduğunun kesin kanıtı değildir (aynı adla silinip yeniden eklenmiş olabilir)'});
+      if(c[0].ad!==ad)ekle({...b,kategori:'harf-farki',onem:'orta',gerekce:'Yalnız büyük/küçük harf farkıyla eşleşiyor ("'+ad+'" ↔ "'+c[0].ad+'") — birebir arayan akışlar bulamayabilir'});}
+    if(ac)acik.push({kayit,tur,urunId:uid,renk:ad});};
+  const acikSatis=s=>!s.iptal&&s.tip!=='iade'&&(s.teslimDurum==='ayrildi'||(s.eksikStok&&s.teslimDurum!=='teslim')||(s.depo&&s.depo!=='hazir'));
+  (v.satislar||[]).forEach(s=>{if(!s)return;const iade=s.tip==='iade',kay=(iade?'iade':'satis')+'#'+s.id,ac=acikSatis(s);
+    (s.kalemler||[]).forEach(k=>(k.renkler||[]).forEach(r=>kontrol(iade?'iade':(k.kirik?'kırık satış':'satış'),kay,k.uid,{ad:r.ad,rid:r.rid},ac)));
+    (s.eksik||[]).forEach(e=>{if(e&&e.renk)kontrol('ön sipariş (eksik)',kay,e.uid,{ad:e.renk,rid:e.rid},!s.iptal&&s.teslimDurum!=='teslim');});
+    Object.keys(s.depoKirik||{}).forEach(key=>{const d=s.depoKirik[key]||{},p=key.split('|');kontrol('depo emri (kırık)',kay,p[0],{ad:d.renk||p.slice(1).join('|')},ac);});});
+  (v.transferler||[]).forEach(t=>{if(!t)return;const ac=!t.iptal&&t.durum==='yolda';(t.kalemler||[]).forEach(k=>kontrol('transfer',('transfer#'+t.id),k.uid,{ad:k.renk,rid:k.rid},ac));});
+  (v.isemirleri||[]).forEach(i=>{if(!i)return;const ac=!i.iptal&&i.durum!=='tamam'&&i.durum!=='iptal',kay='isemri#'+i.id;
+    (i.renkDagilim||[]).forEach(r=>kontrol('iş emri',kay,i.urunId,{ad:r.ad,rid:r.rid},ac));
+    (i.duraklar||[]).forEach(d=>['gonderilenRenk','renkGelen','renkDefo'].forEach(f=>Object.keys((d&&d[f])||{}).forEach(ad=>kontrol('iş emri durağı',kay,i.urunId,{ad},ac))));});
+  (v.bekleyenPortal||[]).forEach(o=>{if(!o)return;(o.kalemler||[]).forEach(k=>(k.renkler||[]).forEach(r=>kontrol('portal siparişi','portal#'+o.id,k.uid,{ad:r.ad,rid:r.rid},true)));});
+  const sira={kritik:0,yuksek:1,orta:2,bilgi:3},kar=(a,b)=>a<b?-1:a>b?1:0;
+  bul.sort((a,b)=>sira[a.onem]-sira[b.onem]||kar(a.kategori,b.kategori)||kar(String(a.kayit),String(b.kayit))||kar(lc(a.renk),lc(b.renk)));
+  const ag=new Set(),acikIslemler=acik.filter(a=>{const k=a.kayit+'|'+a.urunId+'|'+lc(a.renk);if(ag.has(k))return false;ag.add(k);return true;}).sort((a,b)=>kar(a.kayit,b.kayit)||kar(lc(a.renk),lc(b.renk)));
+  const say=k=>bul.filter(b=>b.kategori===k).length;
+  return {ozet:{urun:urunSay,renk:renkSay,kimliksiz:say('kimliksiz'),barkodsuz:say('barkodsuz'),mukerrerAd:say('mukerrer-ad'),mukerrerBarkod:say('mukerrer-barkod'),mukerrerRid:say('mukerrer-rid'),
+    eslesmeyen:say('eslesmeyen'),belirsiz:say('belirsiz'),kimlikBulunamadi:say('kimlik-bulunamadi'),tekAday:say('tek-aday'),harfFarki:say('harf-farki'),urunYok:say('urun-yok'),urunKimligiYok:say('urun-kimligi-yok'),renksizKayit:say('renksiz-kayit'),
+    elleMutabakat:bul.filter(b=>b.onem==='kritik'||b.onem==='yuksek').length,acikIslem:acikIslemler.length},bulgular:bul,acikIslemler};}
+let _rkdRapor=null,_rkdZaman=0,_rkdFiltre={onem:'',kategori:''};
+const RKD_KAT={'kimliksiz':'Kimliksiz renk','barkodsuz':'Barkodsuz renk','mukerrer-ad':'Mükerrer renk adı','mukerrer-barkod':'Mükerrer barkod','mukerrer-rid':'Mükerrer rid','eslesmeyen':'Eşleşmeyen kayıt','belirsiz':'Belirsiz kayıt','kimlik-bulunamadi':'rid bulunamadı','tek-aday':'Tek aday (kanıt değil)','harf-farki':'Harf farkı','urun-yok':'Ürün yok','urun-kimligi-yok':'Ürün kimliği yok','renksiz-kayit':'Renksiz kayıt'};
+function renkKimlikDenetimEkrani(){if(!adminMi())return toast('⛔ Bu rapor yalnızca yönetici içindir');
+  _rkdRapor=renkKimlikDenetle({urunler:db.urunler,satislar:db.satislar,transferler:db.transferler,isemirleri:db.isemirleri,bekleyenPortal:db.bekleyenPortal});_rkdZaman=Date.now();_rkdFiltre={onem:'',kategori:''};
+  open_('🔎 Renk Kimliği Denetimi','<div id="rkd-govde"></div>');rkdCiz();}
+function rkdFiltre(t,v){if(!adminMi()||!_rkdRapor)return;_rkdFiltre[t]=_rkdFiltre[t]===v?'':v;rkdCiz();}
+function rkdCiz(){const el=$('rkd-govde');if(!el||!_rkdRapor)return;const r=_rkdRapor,o=r.ozet,f=_rkdFiltre;
+  const kv=(k,x)=>`<div class="kv"><span class="k">${k}</span><span class="v">${x}</span></div>`;
+  const chip=(t,v,et,n)=>`<div class="c ${f[t]===v?'on':''}" data-rkd-filtre="${t}:${v}" onclick="rkdFiltre('${t}','${v}')">${esc(et)}${n!=null?' · '+n:''}</div>`;
+  const onemAd={kritik:'Kritik',yuksek:'Yüksek',orta:'Orta',bilgi:'Bilgi'};
+  const kats=[...new Set(r.bulgular.map(b=>b.kategori))];
+  const liste=r.bulgular.filter(b=>(f.onem?b.onem===f.onem:(f.kategori?true:b.onem!=='bilgi'))&&(!f.kategori||b.kategori===f.kategori));
+  const goster=liste.slice(0,300);
+  const pill=b=>`<span class="pill ${b.onem==='kritik'||b.onem==='yuksek'?'low':b.onem==='orta'?'':'ok'}">${onemAd[b.onem]}</span>`;
+  el.innerHTML=`<div class="infobox">Bu rapor, cihazdaki verinin <b>${tstr(_rkdZaman)}</b> anındaki <b>anlık görüntüsüne</b> dayanır; yalnızca okur, hiçbir stok, renk, satış veya transfer kaydını değiştirmez. Erişim kontrolü uygulama içindedir; verinin gerçek yetkilendirmesi Firestore kurallarına bağlıdır.</div>
+    <div class="card" style="margin-top:10px;padding:4px 12px">${kv('Ürün / renk',o.urun+' / '+o.renk)}${kv('Kimliksiz renk',o.kimliksiz)}${kv('Barkodsuz renk',o.barkodsuz)}${kv('Mükerrer ad / barkod / rid',o.mukerrerAd+' / '+o.mukerrerBarkod+' / '+o.mukerrerRid)}${kv('Eşleşmeyen geçmiş kayıt',o.eslesmeyen)}${kv('Belirsiz geçmiş kayıt',o.belirsiz)}${kv('rid bulunamadı',o.kimlikBulunamadi)}${kv('Ürünü bulunamayan / ürün kimliği olmayan',o.urunYok+' / '+o.urunKimligiYok)}${kv('Tek aday (kesin kanıt değil)',o.tekAday)}${kv('Elle mutabakat gerektiren',o.elleMutabakat)}${kv('Açık işlem (ürün-renk)',o.acikIslem)}</div>
+    <div class="sec">Önem</div><div class="iechips">${chip('onem','kritik','Kritik',r.bulgular.filter(b=>b.onem==='kritik').length)}${chip('onem','yuksek','Yüksek',r.bulgular.filter(b=>b.onem==='yuksek').length)}${chip('onem','orta','Orta',r.bulgular.filter(b=>b.onem==='orta').length)}${chip('onem','bilgi','Bilgi',r.bulgular.filter(b=>b.onem==='bilgi').length)}</div>
+    <div class="sec">Kategori</div><div class="iechips">${kats.map(k=>chip('kategori',k,RKD_KAT[k]||k,r.bulgular.filter(b=>b.kategori===k).length)).join('')}</div>
+    <div class="mini" style="margin:8px 0">${liste.length} bulgu${!f.onem&&!f.kategori?' (bilgi düzeyi hariç)':''}${liste.length>goster.length?' · ilk '+goster.length+' gösteriliyor':''}</div>
+    ${goster.length?goster.map(b=>`<div class="card" style="padding:8px 12px;margin-bottom:6px"><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${pill(b)}<b style="font-size:13px">${esc(RKD_KAT[b.kategori]||b.kategori)}</b><span class="mini">${esc(b.tur)} · ${esc(String(b.kayit))}${b.acik?' · <b>açık işlem</b>':''}</span></div><div class="mini" style="margin-top:3px">${esc(b.urunAd||'—')}${b.renk?' · <b>'+esc(b.renk)+'</b>':''}</div><div class="mini" style="margin-top:2px">${esc(b.gerekce)}</div></div>`).join(''):'<div class="mini">Bu filtrede bulgu yok.</div>'}`;}
+/* ===== R2.1.1 Renk geçiş hazırlığı — SALT OKUNUR (kimlik atamaz, girdiyi değiştirmez, kaydetmez, ağ kullanmaz) ===== */
+function renkGecisHazirlikDenetle(veri){const v=veri||{},lc=x=>String(x==null?'':x).trim().toLocaleLowerCase('tr-TR');
+  const U=(v.urunler||[]).filter(u=>u&&typeof u==='object'),RO=u=>(u.renkler||[]).filter(r=>r&&typeof r==='object');
+  const idSay=new Map(),bkUrun=new Map(),ridSay=new Map();
+  U.forEach(u=>{if(u.id!=null&&u.id!=='')idSay.set(String(u.id),(idSay.get(String(u.id))||0)+1);
+    RO(u).forEach(r=>{const b=String(r.barkod||'').trim();if(b){if(!bkUrun.has(b))bkUrun.set(b,new Set());bkUrun.get(b).add(u);}if(r.rid)ridSay.set(r.rid,(ridSay.get(r.rid)||0)+1);});});
+  const ref=new Map(),kimsizIE=new Map(),bosIE=new Map();
+  const ekle=(uid,ad,kayit,tur,acik)=>{if(uid==null||uid==='')return;const a=lc(ad);if(!a)return;const k=String(uid);if(!ref.has(k))ref.set(k,new Map());const m=ref.get(k);if(!m.has(a))m.set(a,[]);m.get(a).push({kayit,tur,ad:String(ad).trim(),acik:!!acik});};
+  const acikSatis=s=>!s.iptal&&s.tip!=='iade'&&(s.teslimDurum==='ayrildi'||(s.eksikStok&&s.teslimDurum!=='teslim')||(s.depo&&s.depo!=='hazir'));
+  (v.satislar||[]).forEach(s=>{if(!s)return;const kay=(s.tip==='iade'?'iade#':'satis#')+s.id,ac=acikSatis(s);
+    (s.kalemler||[]).forEach(k=>(k.renkler||[]).forEach(r=>ekle(k.uid,r.ad,kay,s.tip==='iade'?'iade':'satış',ac)));
+    (s.eksik||[]).forEach(e=>{if(e)ekle(e.uid,e.renk,kay,'ön sipariş',!s.iptal&&s.teslimDurum!=='teslim');});
+    Object.keys(s.depoKirik||{}).forEach(key=>{const d=s.depoKirik[key]||{},p=key.split('|');ekle(p[0],d.renk||p.slice(1).join('|'),kay,'depo emri',ac);});});
+  (v.transferler||[]).forEach(t=>{if(!t)return;const ac=!t.iptal&&t.durum==='yolda';(t.kalemler||[]).forEach(k=>ekle(k.uid,k.renk,'transfer#'+t.id,'transfer',ac));});
+  (v.isemirleri||[]).forEach(i=>{if(!i)return;const ac=!i.iptal&&i.durum!=='tamam'&&i.durum!=='iptal',kay='isemri#'+i.id;
+    if(i.urunId==null||i.urunId===''){[['k:',i.kod],['a:',i.urun]].forEach(([p,x])=>{const a=lc(x);if(!a)return;if(!kimsizIE.has(p+a))kimsizIE.set(p+a,[]);kimsizIE.get(p+a).push(kay);});return;}
+    if(!(i.renkDagilim||[]).length&&ac){const k=String(i.urunId);if(!bosIE.has(k))bosIE.set(k,[]);bosIE.get(k).push(kay);}
+    (i.renkDagilim||[]).forEach(r=>ekle(i.urunId,r.ad,kay,'iş emri',ac));
+    (i.duraklar||[]).forEach(d=>['gonderilenRenk','renkGelen','renkDefo'].forEach(f=>Object.keys((d&&d[f])||{}).forEach(ad=>ekle(i.urunId,ad,kay,'iş emri durağı',ac))));});
+  (v.bekleyenPortal||[]).forEach(o=>{if(!o)return;(o.kalemler||[]).forEach(k=>(k.renkler||[]).forEach(r=>ekle(k.uid,r.ad,'portal#'+o.id,'portal',true)));});
+  const out=[],urunSorunlari=[],SR={ENGELLI:0,ELLE_MUTABAKAT:1,ADAY:2};
+  U.forEach(u=>{const R=RO(u),idYok=u.id==null||u.id==='',idMuk=!idYok&&idSay.get(String(u.id))>1,uk={urunId:idYok?null:u.id,urunAd:u.ad||'',urunKod:u.kod||''};
+    if(idYok)urunSorunlari.push({...uk,kod:'urun-kimligi-yok',metin:'Ürün kimliği (id) yok — geçmiş kayıtlarla güvenli karşılaştırma yapılamaz'});
+    if(idMuk)urunSorunlari.push({...uk,kod:'urun-kimligi-mukerrer',metin:'Ürün kimliği '+u.id+' birden fazla üründe — geçmiş kayıtların hangi ürüne ait olduğu belirsiz'});
+    const adSay=new Map(),bkSay=new Map();R.forEach(r=>{const a=lc(r.ad);adSay.set(a,(adSay.get(a)||0)+1);const b=String(r.barkod||'').trim();if(b)bkSay.set(b,(bkSay.get(b)||0)+1);});
+    const m=(!idYok&&!idMuk)?(ref.get(String(u.id))||new Map()):new Map(),adlar=new Set(R.map(r=>lc(r.ad)));
+    const eslesmeyen=[...m.keys()].filter(a=>!adlar.has(a)).map(a=>m.get(a)[0].ad);
+    const ie=[...new Set([...(kimsizIE.get('k:'+lc(u.kod))||[]),...(kimsizIE.get('a:'+lc(u.ad))||[])])],bos=(!idYok&&!idMuk)?(bosIE.get(String(u.id))||[]):[];
+    R.forEach(r=>{if(r.rid)return; /* yalnız kimliksiz eski renkler */
+      const s=[],w=[],ac=[],ad=lc(r.ad),b=String(r.barkod||'').trim();
+      if(idYok)s.push(['ENGELLI','urun-kimligi-yok','Ürün kimliği yok']);
+      if(idMuk)s.push(['ENGELLI','urun-kimligi-mukerrer','Ürün kimliği mükerrer']);
+      if(!ad)s.push(['ENGELLI','renk-adi-bos','Renk adı boş']);
+      if(ad&&adSay.get(ad)>1)s.push(['ELLE_MUTABAKAT','mukerrer-ad','Aynı üründe Türkçe harf kurallarına göre aynı renk adı birden fazla']);
+      if(!b)s.push(['ELLE_MUTABAKAT','barkodsuz','Barkod yok — kimlik doğrulaması için ikinci bağımsız işaret yok']);
+      else{if(bkSay.get(b)>1)s.push(['ELLE_MUTABAKAT','mukerrer-barkod','Aynı üründe aynı barkod ('+b+') birden fazla renkte']);
+        if(bkUrun.get(b).size>1)w.push(['barkod-baska-urunde','Barkod '+b+' başka ürün(ler)de de kullanılıyor — iş kuralı riski (otomatik hata sayılmadı)']);}
+      const refs=m.get(ad)||[];
+      if(refs.length){if(refs.some(x=>x.ad!==String(r.ad||'').trim()))s.push(['ELLE_MUTABAKAT','gecmis-harf-farki','Geçmiş kayıtlarda bu renk farklı harf büyüklüğüyle yazılmış']);
+        w.push(['gecmis-yalniz-ad',refs.length+' geçmiş kayıt bu renge yalnızca adla bağlanıyor — kesin tarihsel kanıt değildir (renk silinip aynı adla yeniden oluşturulmuş olabilir)']);
+        refs.filter(x=>x.acik).forEach(x=>ac.push({kayit:x.kayit,tur:x.tur}));}
+      if(eslesmeyen.length)s.push(['ELLE_MUTABAKAT','eslesmeyen-gecmis','Üründe hiçbir renge eşleşmeyen geçmiş renk adları var ('+eslesmeyen.join(', ')+') — silinmiş/yeniden adlandırılmış renk olabilir']);
+      if(ie.length)s.push(['ELLE_MUTABAKAT','kimliksiz-is-emri','Ürün kimliği olmayan iş emri ('+ie.join(', ')+') bu ürüne kod/ad benzerliğiyle bağlanabilir — güvenli eşleşme değil']);
+      bos.forEach(k=>ac.push({kayit:k,tur:'iş emri (renk dağılımı boş)'}));
+      if(ac.length)w.push(['acik-yukumluluk',ac.length+' açık işlem bu renge bağlı: '+[...new Set(ac.map(x=>x.kayit))].join(', ')]);
+      const sinif=s.some(x=>x[0]==='ENGELLI')?'ENGELLI':s.length?'ELLE_MUTABAKAT':'ADAY';
+      out.push({...uk,renk:String(r.ad||''),sinif,sorunlar:s.map(x=>({kod:x[1],metin:x[2]})),uyarilar:w.map(x=>({kod:x[0],metin:x[1]})),acikYukumluluk:ac});});});
+  ridSay.forEach((n,id)=>{if(n>1)urunSorunlari.push({urunId:null,urunAd:'',urunKod:'',kod:'mukerrer-rid',metin:'rid '+id+' '+n+' renkte kullanılmış — kimlik benzersiz değil'});});
+  const kar=(a,b)=>a<b?-1:a>b?1:0;
+  out.sort((a,b)=>SR[a.sinif]-SR[b.sinif]||kar(lc(a.urunAd),lc(b.urunAd))||kar(String(a.urunKod),String(b.urunKod))||kar(lc(a.renk),lc(b.renk))||kar(a.renk,b.renk));
+  urunSorunlari.sort((a,b)=>kar(a.kod,b.kod)||kar(lc(a.urunAd),lc(b.urunAd))||kar(a.metin,b.metin));
+  const say=k=>out.filter(x=>x.sinif===k).length;let kimlikli=0;U.forEach(u=>RO(u).forEach(r=>{if(r.rid)kimlikli++;}));
+  return {ozet:{ADAY:say('ADAY'),ELLE_MUTABAKAT:say('ELLE_MUTABAKAT'),ENGELLI:say('ENGELLI'),kimliksiz:out.length,kimlikli,urunSorunu:urunSorunlari.length},renkler:out,urunSorunlari};}
+let _rghRapor=null,_rghZaman=0,_rghFiltre={sinif:'',sorun:''};
+function renkGecisHazirlikEkrani(){if(!adminMi())return toast('⛔ Bu rapor yalnızca yönetici içindir');
+  _rghRapor=renkGecisHazirlikDenetle({urunler:db.urunler,satislar:db.satislar,transferler:db.transferler,isemirleri:db.isemirleri,bekleyenPortal:db.bekleyenPortal});_rghZaman=Date.now();_rghFiltre={sinif:'',sorun:''};
+  open_('🧭 Renk Geçiş Hazırlığı','<div id="rgh-govde"></div>');rghCiz();}
+function rghFiltre(t,v){if(!adminMi()||!_rghRapor)return;_rghFiltre[t]=_rghFiltre[t]===v?'':v;rghCiz();}
+function rghCiz(){const el=$('rgh-govde');if(!el||!_rghRapor)return;const r=_rghRapor,o=r.ozet,f=_rghFiltre;
+  const chip=(t,v,et,n)=>`<div class="c ${f[t]===v?'on':''}" data-rgh-filtre="${t}:${esc(v)}" onclick="rghFiltre('${t}','${esc(jsq(v))}')">${esc(et)} · ${n}</div>`;
+  const kodlar=[...new Set(r.renkler.flatMap(x=>[...x.sorunlar,...x.uyarilar].map(s=>s.kod)))].sort();
+  const liste=r.renkler.filter(x=>(!f.sinif||x.sinif===f.sinif)&&(!f.sorun||[...x.sorunlar,...x.uyarilar].some(s=>s.kod===f.sorun))),gos=liste.slice(0,300);
+  const pill=x=>`<span class="pill ${x.sinif==='ADAY'?'ok':'low'}">${x.sinif==='ELLE_MUTABAKAT'?'ELLE MUTABAKAT':x.sinif}</span>`;
+  el.innerHTML=`<div class="infobox"><b>Bu rapor kimlik atamaz ve veri değiştirmez.</b> Cihazdaki verinin <b>${tstr(_rghZaman)}</b> anındaki anlık görüntüsünü okur. <b>ADAY</b> kesin tarihsel eşleşme kanıtı değildir. Erişim kontrolü uygulama içindedir; gerçek veri yetkisi Firestore kurallarına bağlıdır.</div>
+    <div class="card" style="margin-top:10px;padding:4px 12px"><div class="kv"><span class="k">ADAY</span><span class="v">${o.ADAY}</span></div><div class="kv"><span class="k">ELLE MUTABAKAT</span><span class="v">${o.ELLE_MUTABAKAT}</span></div><div class="kv"><span class="k">ENGELLİ</span><span class="v">${o.ENGELLI}</span></div><div class="kv"><span class="k">Kimliksiz / kimlikli renk</span><span class="v">${o.kimliksiz} / ${o.kimlikli}</span></div><div class="kv"><span class="k">Ürün düzeyinde sorun</span><span class="v">${o.urunSorunu}</span></div></div>
+    ${r.urunSorunlari.length?`<div class="sec">Ürün düzeyinde sorunlar</div>${r.urunSorunlari.slice(0,100).map(x=>`<div class="card" style="padding:8px 12px;margin-bottom:6px"><b style="font-size:13px">${esc(x.urunAd||'(ürün kimliği yok)')}</b> <span class="mini">${esc(x.urunKod||'')}</span><div class="mini">${esc(x.metin)}</div></div>`).join('')}`:''}
+    <div class="sec">Sınıf</div><div class="iechips">${chip('sinif','ADAY','ADAY',o.ADAY)}${chip('sinif','ELLE_MUTABAKAT','ELLE MUTABAKAT',o.ELLE_MUTABAKAT)}${chip('sinif','ENGELLI','ENGELLİ',o.ENGELLI)}</div>
+    <div class="sec">Sorun / uyarı türü</div><div class="iechips">${kodlar.map(k=>chip('sorun',k,k,r.renkler.filter(x=>[...x.sorunlar,...x.uyarilar].some(s=>s.kod===k)).length)).join('')}</div>
+    <div class="mini" style="margin:8px 0">${liste.length} renk${liste.length>gos.length?' · ilk '+gos.length+' gösteriliyor':''}</div>
+    ${gos.length?gos.map(x=>`<div class="card" style="padding:8px 12px;margin-bottom:6px"><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${pill(x)}<b style="font-size:13px">${esc(x.urunAd||'—')}</b><span class="mini">${esc(x.urunKod||'')} · <b>${esc(x.renk||'(adsız)')}</b></span></div>${x.sorunlar.map(s=>`<div class="mini" style="margin-top:2px">• ${esc(s.metin)}</div>`).join('')}${x.uyarilar.map(s=>`<div class="mini" style="margin-top:2px;color:var(--thr)">⚠️ ${esc(s.metin)}</div>`).join('')}</div>`).join(''):'<div class="mini">Bu filtrede kayıt yok.</div>'}`;}
 function renkKirik(i){if(!fBeden.length){urunTab('genel');return toast('Önce seri içeriği (beden) ekle')}fRenk[i]._kirikOpen=!fRenk[i]._kirikOpen;if(fRenk[i]._kirikOpen&&!fRenk[i].kirik)fRenk[i].kirik={};cizRenk()}
 function setKirik(i,bd,v){if(!fRenk[i].kirik)fRenk[i].kirik={};const n=+v||0;if(n>0)fRenk[i].kirik[bd]=n;else delete fRenk[i].kirik[bd];renkTot()}
 function setBirim(b){$('sb-seri').classList.toggle('on',b==='seri');$('sb-adet').classList.toggle('on',b==='adet');const bw=$('beden-wrap');if(bw)bw.style.display=b==='seri'?'':'none';renkTot()}
@@ -2854,9 +3156,29 @@ function kaydetUrun(id){
   if(db.urunler.some(x=>x.id!==id&&(x.kod||'').trim().toLowerCase()===kod.toLowerCase())){urunTab('genel');$('u-kod')&&$('u-kod').focus();return toast('Bu kod zaten kullanılıyor: '+kod)}
   const birim=$('sb-seri').classList.contains('on')?'seri':'adet';
   const bedenler=birim==='seri'?fBeden.filter(x=>x.beden).map(x=>({beden:x.beden.trim(),adet:Math.max(1,+x.adet||1)})):[];
-  const renkler=fRenk.filter(r=>(r.ad||'').trim()||r.stok||r.foto).map(r=>({ad:(r.ad||'').trim(),hex:hexFromAd(r.ad)||r.hex||'#8a8f98',foto:r.foto||'',barkod:(r.barkod||'').trim()||genBarkod(),stok:+r.stok||0,kirik:(r.kirik&&Object.keys(r.kirik).length)?r.kirik:null}));
+  const curU=id?urun(id):null,kullanilan=new Set(),yeniRenkler=[];let cifte=false;
+  const renkler=fRenk.filter(r=>(r.ad||'').trim()||r.stok||r.foto).map(r=>{const cur=(curU&&r._orj)?renkGuncel(curU,r._orj):null;if(cur){if(kullanilan.has(cur))cifte=true;kullanilan.add(cur);}
+    const stokDok=(+r.stok||0)!==r._aStok,kirikDok=JSON.stringify(r.kirik||null)!==r._aKirik; /* kullanıcı değiştirdiyse form, değiştirmediyse güncel kayıt */
+    const kr=(cur&&!kirikDok)?cur.kirik:r.kirik;
+    const o={...(cur||((id&&r._orj)?r._orj:{})),ad:(r.ad||'').trim(),hex:hexFromAd(r.ad)||r.hex||'#8a8f98',foto:r.foto||'',barkod:(r.barkod||'').trim()||genBarkod(),stok:(cur&&!stokDok)?(+cur.stok||0):(+r.stok||0),kirik:(kr&&Object.keys(kr).length)?kr:null};
+    if(!(id&&r._orj))yeniRenkler.push(o);return o;}); /* yeni renk (yeni satır / yeni ürün / çoğaltma) → aşağıda güvenli rid; mevcut renk rid'si tabandan korunur, eski kimliksiz renge rid verilmez */
+  if(cifte){urunTab('stok');return toast('⛔ Kaydedilmedi — aynı renk formda iki satırla eşleşti; kartı kapatıp yeniden açın');}
   if(!renkler.length){urunTab('stok');return toast('En az bir renk gir (renksiz ürün olmaz)')}
   if(renkler.some(r=>!r.ad)){urunTab('stok');return toast('Her renge bir ad ver (Siyah, Beyaz...)')}
+  if(curU){const acilis=new Set(fRenkAcilis.map(o=>renkGuncel(curU,o)).filter(Boolean)); /* R1: silinen renkleri GÜNCEL kayıtta kontrol et */
+    const engel=[...acilis].filter(c=>!kullanilan.has(c)).map(c=>({c,n:renkSilEngel(curU,c)})).filter(x=>x.n.length);
+    if(engel.length){urunTab('stok');return toast('⛔ Kaydedilmedi — renk silinemez: '+engel.map(x=>'"'+x.c.ad+'": '+x.n.join('; ')).join(' | '),6000);}
+    renkObjs(curU).filter(c=>!acilis.has(c)&&!kullanilan.has(c)).forEach(c=>renkler.push(c));} /* kart açıkken başka cihazda eklenen renk korunur */
+  {const g=new Set();for(const r of renkler){const k=_rlc(r.ad);if(g.has(k)){urunTab('stok');return toast('⛔ Aynı renk adı iki kez kullanılamaz: "'+r.ad+'"');}g.add(k);}}
+  {if(id&&db.urunler.filter(x=>x&&String(x.id)===String(id)).length>1){urunTab('genel');return toast('⛔ Kaydedilmedi — bu ürün kimliği (id '+id+') birden fazla üründe kayıtlı; güvenli karşılaştırma yapılamaz, ürün kimliği mutabakatı gerekli',6000);}
+    const diger=new Map();db.urunler.forEach(x=>{if(x&&x!==curU)renkObjs(x).forEach(c=>{if(c.rid&&!diger.has(c.rid))diger.set(c.rid,x)})}); /* R2.1.1: kaydedilen ürün DIŞINDAKİ güncel ürünler (nesne kimliğiyle; ilgisiz ürünler arası eski çakışma bu kaydı engellemez) */
+    const cak=renkler.filter(r=>r.rid&&!yeniRenkler.includes(r)&&diger.has(r.rid));
+    if(cak.length){urunTab('stok');return toast('⛔ Kaydedilmedi — renk kimliği (rid) başka üründe de kullanılıyor: '+cak.map(r=>'"'+r.ad+'" ↔ '+(diger.get(r.rid).ad||'?')).join(', ')+' — elle mutabakat gerekli',6000);}
+    const dolu=new Set(diger.keys()); /* R2.1: yeni kimlik bütün ürünlerde benzersiz (kayıttan önce; hata → hiçbir şey yazılmaz) */
+    renkler.forEach(r=>{if(r.rid&&!yeniRenkler.includes(r))dolu.add(r.rid)});
+    for(const o of yeniRenkler){let x=null;for(let d=0;d<3&&!x;d++){const a=yeniRid();if(a&&!dolu.has(a))x=a;}
+      if(!x){urunTab('stok');return toast('⛔ Güvenli renk kimliği üretilemedi — kaydedilmedi (tarayıcı güvenli rastgele sayı sağlamıyor olabilir)');}o.rid=x;dolu.add(x);}
+    const rs=renkler.map(r=>r.rid).filter(Boolean);if(new Set(rs).size!==rs.length){urunTab('stok');return toast('⛔ Aynı renk kimliği (rid) iki renkte — kaydedilmedi; elle mutabakat gerekli');}}
   const kat=$('u-kat').value.trim();if(!kat){urunTab('genel');$('u-kat')&&$('u-kat').focus();return toast('Kategori gir')}
   const alis=Math.max(0,+$('u-alis').value||0), satis=Math.max(0,+$('u-satis').value||0);
   if(alis<=0){urunTab('genel');$('u-alis')&&$('u-alis').focus();return toast('Maliyet (alış fiyatı) gir — maliyetsiz ürün olmaz')}
@@ -2896,7 +3218,7 @@ function silUrun(id){const u=urun(id);
 /* ---- Ürün Çoğalt ---- */
 function cogaltUrun(id){const src=urun(id);if(!src)return;const c=JSON.parse(JSON.stringify(src));delete c.id;c.kod='';c.pasif=false;
   // Kopya YENİ bir model (farklı nakış vb.) → tasarım aynı kalır (renk/beden/kumaş/fiyat), fiziksel stok SIFIRDAN girilir. Kaynağın stoğu taşınmaz, yoksa hayalet envanter oluşur.
-  c.renkler=(c.renkler||[]).map(r=>({...r,barkod:genBarkod(),stok:0,kirik:null,defo:0}));c.stok=0;
+  c.renkler=(c.renkler||[]).map(({rid,...r})=>({...r,barkod:genBarkod(),stok:0,kirik:null,defo:0})); /* kopya renkleri kaydedilirken YENİ rid alır */c.stok=0;
   closeM();setTimeout(()=>{formUrun(0,c);toast('Kopyalandı — adı/nakışı değiştir, yeni kod gir, stoğu renk renk gir')},120)}
 /* ---- CODE128 barkod çizimi (okunabilir) ---- */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
@@ -3584,6 +3906,17 @@ function setPB(pb){
 function setVade(g){sVade=+g;[0,30,60,90].forEach(x=>{const el=$('sv-'+x);if(el)el.classList.toggle('on',x===+g)});const inf=$('s-vade-info');if(inf)inf.textContent=+g?(g+' gün vade → +%'+vadeFarkiYuzde()+' vade farkı eklenir'):'';cizSepet()}
 function satisReset(){sDuzenleIdx=null;sUrunId=0;if($('s-urun-in'))$('s-urun-in').value='';if($('s-renkler'))$('s-renkler').innerHTML='';if($('s-mikbox'))$('s-mikbox').style.display='none';if($('s-urninfo'))$('s-urninfo').textContent='';if($('s-mik'))$('s-mik').value=1}
 let sDuzenleIdx=null; // sepet satırı düzenleme modu (tıklayınca ayarlanır)
+/* R2.2b.2: YENİ satış satırında renk kimliği (rid). rid YALNIZ ürünün gerçek renk kaydından alınır ve kanonik renk motoruyla
+   (index.html yükleyicisinin hazırladığı tek kaynak) doğrulanır: birebir rid + doğru ürün + tüm veride benzersizlik + sağlam veri. Motor yalnız KİMLİK çözer;
+   sonucu stok yazma izni DEĞİLDİR (stok hesabı eskisi gibi). rid'i olmayan eski renk: rid üretilmez/kopyalanmaz, satır rid'siz kalır.
+   Motor hazır değilse ya da doğrulama geçmezse tahmin YOK: hata metni döner, çağıran hiçbir veriyi değiştirmeden durur. */
+function _satisRidDogrula(uid,rid,renkObj){const M=window.renkMotoru;
+  if(!M||!M.hazir||!M.motor)return 'Renk kimliği doğrulanamadı: renk motoru hazır değil'+(M&&M.hata?' ('+M.hata+')':'')+' — sayfayı yenileyin';
+  let r=null;try{r=M.motor.renkCoz(db,{uid,rid},{islem:'SALT_OKUMA'});}catch(e){r=null;}
+  if(!r||r.durum!=='UYGUN'||r.silinmis)return 'Renk kimliği (rid) doğrulanamadı'+(r?' — '+r.durum+': '+r.aciklama:'');
+  const u=urun(uid);if(!u||!Array.isArray(u.renkler)||(renkObj&&u.renkler[r.renkIdx]!==renkObj))return 'Renk kimliği (rid) bu ürünün seçilen rengine ait değil';
+  return '';}
+function _satisRidHatasi(liste){for(const k of (liste||[])){for(const r of (k&&k.renkler)||[]){if(r&&r.rid!==undefined){const h=_satisRidDogrula(k.uid,r.rid);if(h)return (k.urun||'')+' · '+(r.ad||'')+': '+h;}}}return '';}
 function sepEkle(){const u=sUrunId?urun(sUrunId):null;if(!u)return toast('Önce ürün seç');
   const _seri=birimAdet(u);
   const fyPiece=($('s-fiyat')&&$('s-fiyat').value!=='')?_sFiyatTL($('s-fiyat')):(musUrunFiyat(u.id)/_seri); // kutu satışın PB'sinde → TL'ye çevrilir
@@ -3591,11 +3924,14 @@ function sepEkle(){const u=sUrunId?urun(sUrunId):null;if(!u)return toast('Önce 
   const objs=renkObjs(u);
   const duz=(typeof sDuzenleIdx==='number'&&sepet[sDuzenleIdx]&&sepet[sDuzenleIdx].uid===u.id)?sDuzenleIdx:null;
   if(objs.length){
-    const rl=[];objs.forEach((r,i)=>{const q=+($('rq-'+i)?.value||0);if(q>0)rl.push({ad:r.ad,mik:q})});
+    const rl=[],kaynak=[];objs.forEach((r,i)=>{const q=+($('rq-'+i)?.value||0);if(q>0){rl.push(r.rid!==undefined?{ad:r.ad,rid:r.rid,mik:q}:{ad:r.ad,mik:q});kaynak.push(r);}});
     if(!rl.length)return toast('En az bir renk için adet gir');
+    for(let j=0;j<rl.length;j++){if(rl[j].rid!==undefined){const h=_satisRidDogrula(u.id,rl[j].rid,kaynak[j]);if(h)return toast('⛔ '+rl[j].ad+': '+h);}} /* R2.2b.2: doğrulanmadan sepete girmez */
+    const _esk=(duz!=null?sepet[duz]:sepet.find(k=>k.uid===u.id&&k.renkler&&!k.kirik));
+    if(_esk&&_esk.renkler)rl.forEach(e=>{if(e.rid!==undefined&&!_esk.renkler.some(x=>x.rid===e.rid)&&_esk.renkler.some(x=>x.rid===undefined&&x.ad===e.ad))delete e.rid;}); /* eski rid'siz satır ad üzerinden kimlik kazanmaz */
     if(duz!=null){sepet[duz]={uid:u.id,urun:u.ad,mik:rl.reduce((a,x)=>a+x.mik,0),birim:u.birim,fiyat:fy,renkler:rl};sDuzenleIdx=null;satisReset();cizSepet();toast('✏️ Satır güncellendi');return;}
     const exist=sepet.find(k=>k.uid===u.id&&k.renkler&&!k.kirik);
-    if(exist){rl.forEach(nr=>{const f=exist.renkler.find(x=>x.ad===nr.ad);if(f)f.mik+=nr.mik;else exist.renkler.push(nr)});exist.mik=exist.renkler.reduce((a,x)=>a+x.mik,0)}
+    if(exist){rl.forEach(nr=>{const f=exist.renkler.find(x=>nr.rid!==undefined?x.rid===nr.rid:(x.rid===undefined&&x.ad===nr.ad));if(f)f.mik+=nr.mik;else exist.renkler.push(nr)});exist.mik=exist.renkler.reduce((a,x)=>a+x.mik,0)}
     else sepet.push({uid:u.id,urun:u.ad,mik:rl.reduce((a,x)=>a+x.mik,0),birim:u.birim,fiyat:fy,renkler:rl});
     satisReset();cizSepet();return;
   }
@@ -3608,7 +3944,7 @@ function sepDuzenle(i){const k=sepet[i];if(!k)return;if(k.kirik)return toast('�
   urnBilgi();
   setTimeout(()=>{
     const objs=renkObjs(u);
-    if(objs.length&&k.renkler){objs.forEach((r,ix)=>{const f=k.renkler.find(x=>x.ad===r.ad);const el=$('rq-'+ix);if(el)el.value=f?f.mik:0;});}
+    if(objs.length&&k.renkler){objs.forEach((r,ix)=>{const f=(r.rid!==undefined&&k.renkler.find(x=>x.rid===r.rid))||k.renkler.find(x=>x.rid===undefined&&x.ad===r.ad);const el=$('rq-'+ix);if(el)el.value=f?f.mik:0;});}
     else if($('s-mik')){$('s-mik').value=k.mik;}
     if($('s-fiyat')&&k.fiyat!=null){const _s=birimAdet(u);const _tl=_s>1?k.fiyat/_s:k.fiyat;const _el=$('s-fiyat');_el.dataset.tl=_tl;_el.value=_pbYuvarla(_tl/(satisHesap().div||1));_el.dataset.v=_el.value;try{fiyatBilgi()}catch(e){}}
     const r=$('s-renkler')||$('s-mikbox');if(r&&r.scrollIntoView)r.scrollIntoView({block:'center'});
@@ -3751,6 +4087,7 @@ function satisKilitliCek(s){return !!(s&&(s.odemeler||[]).find(l=>{if(!l._cekId)
 function kaydetSatis(){
   if(!sepet.length)return toast('Sepet boş');
   {const rk=sepet.find(k=>{const u=urun(k.uid);return u&&hasRenkStok(u)&&!(k.renkler&&k.renkler.length)});if(rk)return toast('⚠️ "'+rk.urun+'" renkli ürün — sepetten çıkarıp renk seçerek ekle');}
+  {const _rh=_satisRidHatasi(sepet);if(_rh)return toast('⛔ Satış kaydedilmedi — '+_rh);} /* R2.2b.2: hiçbir veri değişmeden önce */
   const typed=($('s-mus-in')?.value||'').trim();
   if(!sMusId){
     if(typed)return askConfirm(`"${typed}" kayıtlı müşteri değil.\nÖnce müşteri olarak kaydedilsin mi?`,()=>satisMusteriEkle(typed),'Müşteri Ekle');
@@ -5033,18 +5370,119 @@ function eksikMusteriBildir(id){const s=db.satislar.find(x=>x.id===id);if(!s)ret
   waAc(m?m.tel:'',msg);
 }
 // Çözüm sonrası müşteriye bilgi mesajı
-function eksikCozBildir(id){const s=db.satislar.find(x=>x.id===id);if(!s||!s.eksikCozum||!s.eksikCozum.length)return toast('Çözüm kaydı yok');const m=cari(s.mid);const firma=db.firma||'IQ Basics';
+function eksikCozBildir(id){if(_kurtarma.durum!=='tamam')return _kUyar(); /* R2.2b.4 kurtarma kilidi */const s=db.satislar.find(x=>x.id===id);if(!s||!s.eksikCozum||!s.eksikCozum.length)return toast('Çözüm kaydı yok');const m=cari(s.mid);const firma=db.firma||'IQ Basics';
   const son=s.eksikCozum.slice(-6);
   const msg=`Merhaba ${m?m.ad:(s.mus||'')} 👋\n*${firma}*\n\nSipariş eksikleriniz şöyle çözüldü:\n`+son.map(c=>`• ${c.ozet||''}`).join('\n')+`\n\nGüncel sipariş tutarı: *${money(s.tutar,s.pb)}*\nGüncel bakiyeniz: *${TL(Math.abs((cari(s.mid)||{}).bakiye||0))}*${((cari(s.mid)||{}).bakiye||0)<0?' (sizin alacağınız)':''}\n\nTeşekkürler 🙏`;
   waAc(m?m.tel:'',msg);
 }
+/* R2.2b.3 — GÜVENLİ SATIŞ İPTALİ (yalnız silSatis kullanır; revertSatis / stokUygula / kirikStokUygula DEĞİŞMEDİ ve burada ÇAĞRILMAZ).
+   1) HAZIRLA: canlı veriye dokunmadan bütün satırlar, lokasyon ve finans ilişkileri doğrulanır; iptal, ilgili kayıtların KOPYASI
+      (taslak) üzerinde hesaplanır. Tek hata → hiçbir şey değişmez. Onaydan önce ve onaydan SONRA (veri değişmiş olabilir) yeniden yapılır.
+   2) UYGULA: taslak tek seferde (bekleme yok) canlı kayıtlara aktarılır ve birebir doğrulanır; hata/uyuşmazlıkta hepsi geri alınır.
+   Kimlik: rid'li satır yalnız kanonik motorla (Ders 47 rid doğrulama yardımcısı üzerinden, salt okuma). rid'siz eski satır: ürünün AKTİF renkleri arasında TEK ve
+   BİREBİR ad eşleşmesi (kimlik kanıtı / mutabakat DEĞİL; satışa rid yazılmaz). Renk asla oluşturulmaz, silinmiş renk canlanmaz.
+   Yerel kayıt: save() bütün db'yi tek JSON yazar. Bulut senkronu belge başına ayrı yazar → iki cihaz arası atomiklik YOKTUR. */
+function _satisIptalHazirla(id){
+  const kopya=o=>JSON.parse(JSON.stringify(o)),sayi=x=>typeof x==='number'&&isFinite(x);
+  const s=(db.satislar||[]).find(x=>x&&x.id===id);if(!s)return {hata:'Satış bulunamadı'};
+  if(s.iptal)return {hata:'Bu satış zaten iptal edilmiş'};
+  if(!Array.isArray(s.kalemler))return {hata:'Satış satırları okunamadı'}; /* satırsız (yalnız finans/taksit) satış: eskisi gibi iptal edilebilir */
+  const L=s.lokId||aktifLok,loks=db.lokasyonlar||[];
+  if(s.kalemler.length&&(!L||!(loks.some(l=>l&&l.id===L)||(!loks.length&&L===ANA_LOK))))return {hata:'Satışın lokasyonu ('+(L||'yok')+') bulunamadı'};
+  const akt=(L===aktifLok),T={u:{},s:kopya(s)};
+  for(let i=0;i<s.kalemler.length;i++){const k=s.kalemler[i],dk=T.s.kalemler[i];const sira=(i+1)+'. satır';
+    if(!k||typeof k!=='object')return {hata:sira+' okunamadı'};
+    const es=(db.urunler||[]).filter(u=>u&&u.id===k.uid);if(es.length!==1)return {hata:sira+': ürün '+(es.length?'kimliği birden fazla üründe':'bulunamadı')+' ('+(k.urun||k.uid)+')'};
+    const u=es[0],du=T.u[u.id]||(T.u[u.id]=kopya(u)),seri=birimAdet(u)>1;
+    if(Array.isArray(k.renkler)&&k.renkler.length){
+      if(!hasRenkStok(u))return {hata:sira+': ürünün renk kaydı yok ('+(k.urun||u.ad)+')'};
+      const ic=seriIcerik(u);
+      for(let j=0;j<k.renkler.length;j++){const rr=k.renkler[j];const ad=(rr&&rr.ad)||'?';
+        if(!rr||typeof rr!=='object')return {hata:sira+': renk satırı okunamadı'};
+        let idx=-1;
+        if(rr.rid!==undefined){const ad2=(u.renkler||[]).map((c,x)=>(c&&typeof c==='object'&&c.rid===rr.rid)?x:-1).filter(x=>x>=0);
+          if(ad2.length!==1)return {hata:sira+' · '+ad+': renk kimliği (rid) bu üründe '+(ad2.length?'birden fazla':'bulunamadı')+' — ada düşülmez'};
+          const h=_satisRidDogrula(u.id,rr.rid,u.renkler[ad2[0]]);if(h)return {hata:sira+' · '+ad+': '+h};idx=ad2[0];}
+        else{/* Türkçe küçük harfle de TEK aday olmalı (Kırmızı/kırmızı → belirsiz) VE ad birebir aynı olmalı */
+          const ad2=typeof rr.ad==='string'?(u.renkler||[]).map((c,x)=>(c&&typeof c==='object'&&c.silindi!==true&&_rlc(c.ad)===_rlc(rr.ad))?x:-1).filter(x=>x>=0):[];
+          if(ad2.length!==1||u.renkler[ad2[0]].ad!==rr.ad)return {hata:sira+' · '+ad+': Bu eski satışın renk kimliği doğrulanamadı. İptal için mutabakat gerekiyor.'};idx=ad2[0];}
+        const dro=du.renkler[idx],drr=dk.renkler[j];dro.loklar=dro.loklar||{};
+        if(k.kirik){const b=rr.beden;
+          if(!b||typeof b!=='object'||Array.isArray(b)||!Object.keys(b).length)return {hata:sira+' · '+ad+': kırık seri beden dağılımı yok'};
+          for(const bd of Object.keys(b)){if(!(bd in ic))return {hata:sira+' · '+ad+': "'+bd+'" bedeni üründe yok'};if(!Number.isInteger(b[bd])||b[bd]<0)return {hata:sira+' · '+ad+': '+bd+' bedeninin adedi geçersiz'};}
+          if(!Object.values(b).some(v=>v>0))return {hata:sira+' · '+ad+': kırık seri adedi sıfır'};
+          if(rr.boz!==undefined&&(!Number.isInteger(rr.boz)||rr.boz<0))return {hata:sira+' · '+ad+': bozulan seri sayısı geçersiz'};
+          /* kirikStokUygula(mult>0) ile birebir aynı hesap — ama yalnız doğrulanmış renkte ve taslakta */
+          const kr={...(dro.kirik||{})};Object.keys(b).forEach(bd=>{kr[bd]=(+kr[bd]||0)+(+b[bd]||0);});
+          const bz=+rr.boz||0;if(bz>0&&Object.keys(ic).length){const olur=Math.min(...Object.keys(ic).map(bd=>Math.floor((+kr[bd]||0)/ic[bd])));const m=Math.max(0,Math.min(bz,olur));
+            if(m>0){Object.keys(ic).forEach(bd=>{kr[bd]=(+kr[bd]||0)-ic[bd]*m;});dro.loklar[L]=(+dro.loklar[L]||0)+m;if(akt)dro.stok=(+dro.stok||0)+m;}}
+          drr.boz=0;Object.keys(kr).forEach(bd=>{if(!(+kr[bd]))delete kr[bd];});dro.kirik=Object.keys(kr).length?kr:null;}
+        else{const m=rr.mik;if(!sayi(m)||m<=0||(seri&&!Number.isInteger(m)))return {hata:sira+' · '+ad+': miktar geçersiz ('+m+')'};
+          dro.loklar[L]=(+dro.loklar[L]||0)+m;if(akt)dro.stok=(+dro.stok||0)+m;}
+        if(!sayi(+dro.loklar[L]))return {hata:sira+' · '+ad+': stok değeri hesaplanamadı'};}
+    }else{if(hasRenkStok(u))return {hata:sira+': renkli ürün satırında renk yok ('+(k.urun||u.ad)+')'};
+      const m=k.mik;if(!sayi(m)||m<=0||(seri&&!Number.isInteger(m)))return {hata:sira+': miktar geçersiz ('+m+')'};
+      du.loklar=du.loklar||{};du.loklar[L]=(+du.loklar[L]||0)+m;if(akt)du.stok=(+du.stok||0)+m;}}
+  if(akt)Object.values(T.u).forEach(du=>syncStok(du));
+  /* finans: revertSatis ile birebir aynı hesap — ama önce bütün ilişkiler doğrulanır, taslakta yapılır */
+  const div=satisDiv(s);if(!sayi(div)||div<=0)return {hata:'Satışın kur bilgisi geçersiz'};
+  const m=s.mid?cari(s.mid):null;if(s.mid&&!m)return {hata:'Satışın carisi bulunamadı — finans kaydı uydurulmaz'};
+  const dm=m?kopya(m):null,dh={},cekSil=[],hrk=[];
+  const hTaslak=hid=>{const h=hesap(hid);if(!h)return null;return dh[h.id]||(dh[h.id]=kopya(h));};
+  if(dm){dm.bakiye-=(s.tutar-s.odenen-(s.kesik||0))*div;if(s.kesik)dm.kesikToplam=(dm.kesikToplam||0)-s.kesik*div;}
+  if(s.odemeler&&s.odemeler.length){for(let i=0;i<s.odemeler.length;i++){const l=s.odemeler[i],dl=T.s.odemeler[i];if(!l||typeof l!=='object')return {hata:'Ödeme satırı okunamadı'};
+      const lTL=l._tl!=null?l._tl:(+l.tutar||0)*pbKur(l.pb);
+      if(l._cekId){if(!(db.cekler||[]).some(c=>c&&c.id===l._cekId))return {hata:'Satışın çek/POS kaydı bulunamadı — finans kaydı uydurulmaz'};cekSil.push(l._cekId);dl._cekId=null;}
+      else if(l._hesapId){if(!sayi(lTL))return {hata:'Ödeme tutarı geçersiz'};const h=hTaslak(l._hesapId);if(!h)return {hata:'Satışın kasa/banka hesabı bulunamadı — finans kaydı uydurulmaz'};h.bakiye-=lTL;hrk.push({hesapId:h.id,tutar:lTL});dl._hesapId=null;}}}
+  else if(s.odenen>0){if(s.odemeCekId){if(!(db.cekler||[]).some(c=>c&&c.id===s.odemeCekId))return {hata:'Satışın çek kaydı bulunamadı — finans kaydı uydurulmaz'};cekSil.push(s.odemeCekId);T.s.odemeCekId=null;}
+    else if(s.odemeHesapId){const h=hTaslak(s.odemeHesapId);if(!h)return {hata:'Satışın kasa hesabı bulunamadı — finans kaydı uydurulmaz'};h.bakiye-=s.odenen*div;}}
+  const tak=(s.taksitler||[]).filter(t=>t&&t.odendi).reduce((a,t)=>a+(+t.tutar||0),0);if(tak>0&&dm)dm.bakiye-=tak*div;
+  if(dm&&(!sayi(dm.bakiye)||(dm.kesikToplam!=null&&!sayi(dm.kesikToplam))))return {hata:'Cari bakiyesi hesaplanamadı'};
+  if(Object.values(dh).some(h=>!sayi(h.bakiye)))return {hata:'Kasa bakiyesi hesaplanamadı'};
+  T.s.iptal=true;T.s.iptalTarih=Date.now();
+  return {s,T,m,dm,dh,cekSil,hrk,tak,div};}
+/* Taslağı TEK seferde canlı kayıtlara aktarır; sonra birebir doğrular. Hata/uyuşmazlıkta her şeyi geri alır. Dönüş: '' ya da hata metni.
+   Başarıda p.geriAl() kurulur: save() başarısız olursa iptal öncesi bellek durumu (kayıtlar, çek/hareket listeleri, sayaç, damga/mezar
+   taşı alanları) geri yüklenir ve _mSnapInit() ile değişiklik tabanı yeniden kurulur (yanlış damga / mezar taşı oluşmaz). */
+function _satisIptalUygula(p){
+  const js=o=>JSON.stringify(o),aktar=(hedef,kaynak)=>{Object.keys(hedef).forEach(k=>{if(!(k in kaynak))delete hedef[k];});Object.keys(kaynak).forEach(k=>{hedef[k]=kaynak[k];});};
+  const urunler=Object.keys(p.T.u).map(id=>[db.urunler.find(u=>u&&String(u.id)===id),p.T.u[id]]);
+  const hesaplar=Object.keys(p.dh).map(id=>[hesap(id)||db.hesaplar.find(h=>String(h.id)===id),p.dh[id]]);
+  const ciftler=[...urunler,...hesaplar,...(p.m?[[p.m,p.dm]]:[]),[p.s,p.T.s]];
+  const yedek={c:ciftler.map(([h])=>js(h)),cek:db.cekler,hr:(db.hareketler||[]).length,seq:js(db.seq),ornek:db.ornek,t:db._t,ayarM:js(db._ayarM===undefined?null:db._ayarM),tomb:js(db._tomb===undefined?null:db._tomb)};
+  const geriYukle=()=>{ciftler.forEach(([h],i)=>{if(h)try{aktar(h,JSON.parse(yedek.c[i]));}catch(x){}});
+    db.cekler=yedek.cek;if(db.hareketler)db.hareketler.length=yedek.hr;db.seq=JSON.parse(yedek.seq);db.ornek=yedek.ornek;};
+  try{
+    if(ciftler.some(([h])=>!h))throw new Error('kayıt bulunamadı');
+    ciftler.forEach(([h,k])=>aktar(h,JSON.parse(js(k))));
+    if(p.cekSil.length)db.cekler=(db.cekler||[]).filter(c=>!p.cekSil.includes(c.id));
+    p.hrk.forEach(x=>db.hareketler.push({id:nid('hr'),tarih:Date.now(),hesapId:x.hesapId,yon:'out',tutar:x.tutar,tur:'Satış İptali',aciklama:'Satış #'+(p.s.id||'')+' · '+(p.s.mus||''),cariId:null}));
+    if(ciftler.some(([h,k])=>js(h)!==js(k))||p.s.iptal!==true||db.hareketler.length!==yedek.hr+p.hrk.length)throw new Error('kayıtlar beklenen duruma getirilemedi');
+    p.geriAl=()=>{geriYukle();db._t=yedek.t;
+      {const a=JSON.parse(yedek.ayarM);if(a===null)delete db._ayarM;else db._ayarM=a;}{const t=JSON.parse(yedek.tomb);if(t===null)delete db._tomb;else db._tomb=t;}
+      try{_mSnapInit();}catch(x){}
+      const tamam=ciftler.every(([h],i)=>js(h)===yedek.c[i])&&db.cekler===yedek.cek&&db.hareketler.length===yedek.hr;
+      if(!tamam)try{console.error('[satış iptali] geri alma doğrulanamadı');}catch(x){}return tamam;};
+    return '';
+  }catch(e){
+    geriYukle();
+    try{console.error('[satış iptali] geri alındı',e);}catch(x){}
+    return 'yerel uygulama hatası: '+((e&&e.message)||e);}}
 function silSatis(id){const s0=db.satislar.find(x=>x.id===id);
+  if(!s0)return toast('⛔ Satış bulunamadı — başka cihazdan silinmiş olabilir');
   if(satisKilitliCek(s0))return toast('⚠️ Çeki tahsil/ciro edilmiş satış iptal edilemez — önce Çekler ekranından işlemi geri al');
-  if(s0&&s0.iptal)return toast('Bu satış zaten iptal edilmiş');
+  if(s0.iptal)return toast('Bu satış zaten iptal edilmiş');
+  {const on=_satisIptalHazirla(id);if(on.hata)return toast('⛔ Satış iptal edilemedi — '+on.hata);}
   askKritik('Satış iptal edilsin mi? Stok, bakiye, ödeme ve çek geri alınır.\n\nKayıt SİLİNMEZ — listede "İPTAL" olarak üzeri çizili durur.',()=>{
-  const s=db.satislar.find(x=>x.id===id);revertSatis(s);
-  {const _tak=(s.taksitler||[]).filter(t=>t.odendi).reduce((a,t)=>a+(+t.tutar||0),0);if(_tak>0){const _m=cari(s.mid);if(_m){_m.bakiye-=_tak*satisDiv(s);setTimeout(()=>toast('ℹ️ Ödenmiş taksitler ('+money(_tak,s.pb||'TL')+') müşteri alacağına yazıldı — kasa değişmedi'),900);}}}
-  s.iptal=true;s.iptalTarih=Date.now();save();try{canliYazHemen(['satis','stok','cari','cek','kasa'])}catch(e){}try{musVeriGuncelle(s.mid)}catch(e){}closeM();go('satis');toast('Satış iptal edildi ✓ (çizili olarak duruyor)')},'İptal Et','Satış İptali')}
+  const s1=db.satislar.find(x=>x.id===id);if(s1&&satisKilitliCek(s1))return toast('⚠️ Çeki tahsil/ciro edilmiş satış iptal edilemez — önce Çekler ekranından işlemi geri al');
+  const p=_satisIptalHazirla(id);if(p.hata)return toast('⛔ Satış iptal edilemedi — '+p.hata+' (hiçbir değişiklik yapılmadı)');
+  const h=_satisIptalUygula(p);if(h)return toast('⛔ Satış iptal edilemedi — '+h+' (hiçbir değişiklik yapılmadı)');
+  const s=p.s;
+  /* Kalıcı kayıt başarısızsa iptal BAŞARILI SAYILMAZ: bellek iptal öncesine döner; başarı mesajı ve anında bulut yazımı YOK.
+     save()'in kurduğu IndexedDB / bulut / yayın zamanlayıcıları veriyi çalıştıkları anda okur → geri alınmış (eski) durumu yazar. */
+  if(save()===false){const tamam=p.geriAl();return toast('⛔ Satış iptal edilemedi — kayıt yapılamadı (cihaz depolama alanı dolu olabilir). '+(tamam?'İptal geri alındı; hiçbir değişiklik yapılmadı. Yer açıp tekrar deneyin.':'Geri alma doğrulanamadı — sayfayı yenilemeden önce yedek alın!'),6000);}
+  if(p.tak>0&&p.m)setTimeout(()=>toast('ℹ️ Ödenmiş taksitler ('+money(p.tak,s.pb||'TL')+') müşteri alacağına yazıldı — kasa değişmedi'),900);
+  try{canliYazHemen(['satis','stok','cari','cek','kasa'])}catch(e){}try{musVeriGuncelle(s.mid)}catch(e){}closeM();go('satis');toast('Satış iptal edildi ✓ (çizili olarak duruyor)')},'İptal Et','Satış İptali')}
 // İptal edilmiş satışı tekrar aktifleştir (müşteri siparişi iptal edip yeniden almak isterse) — silSatis'in birebir tersi
 function satisGeriAl(id){const s0=db.satislar.find(x=>x.id===id);
   if(!s0||!s0.iptal)return toast('Bu satış iptal değil');
@@ -7376,7 +7814,7 @@ function rPortal(){
   $('app').innerHTML=html;
 }
 function portalUretimeAl(uid){const u=urun(uid);go('uretim');setTimeout(()=>{if(typeof formIsEmri==='function'){formIsEmri();setTimeout(()=>{const el=$('ie-ad');if(el&&u){el.value=u.ad;if(typeof ieUrunAra==='function')ieUrunAra()}},130)}},60);}
-function portalHaberVer(uid){const u=urun(uid);const list=(db.stokBildirim||[]).filter(x=>x.uid===uid);if(!list.length)return;
+function portalHaberVer(uid){if(_kurtarma.durum!=='tamam')return _kUyar(); /* R2.2b.4 kurtarma kilidi */const u=urun(uid);const list=(db.stokBildirim||[]).filter(x=>x.uid===uid);if(!list.length)return;
   const kisiler=list.map(x=>'• '+x.mus+(x.tel?' ('+x.tel+')':'')).join('\n');
   const full=`📢 ${u?u.ad:''} tekrar hazır! Artık sipariş verebilirsiniz.\n\nBekleyenler:\n`+kisiler;
   askConfirm(`${list.length} kişiye haber verilecek:\n${kisiler}\n\nMesaj WhatsApp'a/panoya alınıp bu istekler kapatılsın mı?`,()=>{
@@ -7644,7 +8082,7 @@ function cariKulUret(id){const c=cari(id);if(!c)return;const tr={'ç':'c','ğ':'
   let kad=base,n=1;while(db.cariler.some(x=>x.id!==id&&(x.kullanici||'').toLowerCase()===kad)){kad=base+(++n)}
   c.kullanici=kad;c.sifre=(()=>{const A='abcdefghjkmnpqrstuvwxyz23456789';let r='';const b=new Uint8Array(8);try{crypto.getRandomValues(b)}catch(e){for(let i=0;i<8;i++)b[i]=Math.random()*256}for(let i=0;i<8;i++)r+=A[b[i]%A.length];return r})();c.sifreH='';sifreOzet(c.sifre).then(h=>{c.sifreH=h;save();});delete c.portalTok;save();cizPortalKul(($('pk-ara')||{}).value||'');toast('Giriş bilgisi oluşturuldu ✓ — "Bilgileri Gönder" ile ilet')}
 function cariKulSil(id){const c=cari(id);if(!c)return;askConfirm(esc(c.ad)+' portal girişini silmek istiyor musun?',()=>{c.kullanici='';c.sifre='';c.sifreH='';delete c.portalTok;save();cizPortalKul(($('pk-ara')||{}).value||'');toast('Giriş bilgisi silindi')},'Sil')}
-function cariKulPaylas(id){const c=cari(id);if(!c||!c.kullanici)return;const url=location.href.split('#')[0]+'#siparis';
+function cariKulPaylas(id){if(_kurtarma.durum!=='tamam')return _kUyar(); /* R2.2b.4 kurtarma kilidi */const c=cari(id);if(!c||!c.kullanici)return;const url=location.href.split('#')[0]+'#siparis';
   if(!c.sifre)return toast('Şifre daha önce gönderildi ve silindi — "🎲 Otomatik oluştur" ile yeni şifre üretip gönder');
   const t=c.bulutUid
     ? `${db.firma||'IQ Basics'} toptan sipariş portalı — giriş:\n\n🔗 ${url}\n"Giriş" sekmesinden:\n📱 Telefon: ${c.tel||''}\n🔑 Şifre: ${c.sifre}\n\nHer telefondan bu bilgilerle girebilirsiniz; siparişleriniz ve bakiyeniz kayıtlı kalır.`
@@ -9070,6 +9508,8 @@ function rAyarlar(){
    if(guv)html+=`<div class="sec">Güvenlik</div><div class="card">${guv}</div>`;}
   if(!kisitli)html+=`<div class="sec">Veri Güvenliği</div><div class="card">
     <div class="row" onclick="otoYedekListe()"><div class="av" style="background:var(--good)">🕑</div><div class="mid"><div class="t">Otomatik Yedekler</div><div class="s">riskli işlemlerden önce alınır · geri yükle</div></div><span style="color:var(--sub)">›</span></div>
+    <div class="row" onclick="renkKimlikDenetimEkrani()"><div class="av" style="background:var(--ind2)">🔎</div><div class="mid"><div class="t">Renk Kimliği Denetimi</div><div class="s">salt okunur geçiş raporu · hiçbir şeyi değiştirmez</div></div><span style="color:var(--sub)">›</span></div>
+    <div class="row" onclick="renkGecisHazirlikEkrani()"><div class="av" style="background:var(--ind2)">🧭</div><div class="mid"><div class="t">Renk Geçiş Hazırlığı</div><div class="s">eski renkler: aday / elle mutabakat / engelli · kimlik atamaz</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="yedekAl()"><div class="av g">💾</div><div class="mid"><div class="t">Yedek Al (indir)</div><div class="s">tüm verini dosya olarak kaydet</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="$('yedekFile').click()"><div class="av" style="background:var(--ind2)">📂</div><div class="mid"><div class="t">Yedekten Yükle</div><div class="s">daha önce aldığın yedeği geri yükle</div></div><span style="color:var(--sub)">›</span></div>
     <div class="row" onclick="bosBaslat()"><div class="av" style="background:var(--warn)">🧹</div><div class="mid"><div class="t">Test verilerini temizle (sıfırdan başla)</div><div class="s">örnek ürün/cari/satışları siler · firma+roller kalır</div></div><span style="color:var(--sub)">›</span></div>
@@ -9079,7 +9519,7 @@ function rAyarlar(){
   html+=`<div class="mini" style="text-align:center;margin-top:8px">${esc(db.firma||'IQ Basics')} · Toptan Yönetim · <b>sürüm ${APP_SURUM}</b></div>`;
   $('app').innerHTML=html;
 }
-function formFirma(){open_('Firma Bilgileri',`<div class="mini">Bu bilgiler termal fiş / sipariş fişi çıktısının başlığında görünür.</div>
+function formFirma(){if(_kurtarma.durum!=='tamam')return _kUyar(); /* R2.2b.4 kurtarma kilidi */open_('Firma Bilgileri',`<div class="mini">Bu bilgiler termal fiş / sipariş fişi çıktısının başlığında görünür.</div>
   <label>Logo (fişin en üstünde)</label>
   <div style="display:flex;gap:10px;align-items:center;margin-bottom:4px"><div class="logobox" onclick="$('f-logo-in').click()">${db.firmaLogo?`<img src="${guvenliSrc(db.firmaLogo)}">`:'📷 Logo'}</div>${db.firmaLogo?`<button type="button" class="btn ghost sm" style="width:auto;margin:0" onclick="db.firmaLogo='';save();closeM();formFirma()">Kaldır</button>`:'<span class="mini">Yoksa firma adı yazı olarak basılır</span>'}</div>
   <input type="file" id="f-logo-in" accept="image/*" style="display:none" onchange="firmaLogoSec(this)">
@@ -9117,7 +9557,7 @@ function yedekAl(){
   a.href=url;a.download=ad;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
   toast('Yedek indirildi ✓');
 }
-function yedekYukle(inp){
+function yedekYukle(inp){if(_kurtarma.durum!=='tamam')return _kUyar(); /* R2.2b.4 kurtarma kilidi */
   if(!adminMi()){inp.value='';return toast('Yetkiniz yok');}
   const f=inp.files&&inp.files[0];if(!f)return;
   const r=new FileReader();
@@ -9189,7 +9629,8 @@ if(localStorage.getItem('iq_oturumKilit')){
   else{try{localStorage.removeItem('iq_oturumKilit')}catch(e){}if(db.pin)kilitGoster();}
 }else if(db.pin)kilitGoster();
 // OTOMATİK: buluta giriş yapılmışsa (herhangi bir cihaz) senkron kendiliğinden açılır — elle açmak yok
-if(bulutVar()){bulutBaslat();bulutAuthBekle().then(()=>{if(!bulutGirisli()||bulutMusteriMod)return;bulutProfilYukle().then(()=>otoSenkron()).catch(()=>otoSenkron());});}
+_kurtarma.hazir.then(d=>{if(d!=='tamam')return; /* R2.2b.4: senkron yalnız kurtarma kararı 'tamam' ise */
+if(bulutVar()){bulutBaslat();bulutAuthBekle().then(()=>{if(!bulutGirisli()||bulutMusteriMod)return;bulutProfilYukle().then(()=>otoSenkron()).catch(()=>otoSenkron());});}});
 
 // Önbelleği temizleyip en son sürümü zorla getir (eski sürümde kalanlar için)
 async function uygulamayiGuncelle(){
@@ -9254,6 +9695,24 @@ async function uygulamayiGuncelle(){
   window.addEventListener('appinstalled',()=>{
     _prompt=null; const b=document.getElementById('pwa-kur'); if(b)b.remove();
   });
+})();
+</script>
+<script>
+/* R2.2b.1 — Renk çözümleme motoru YÜKLEYİCİSİ (yalnız yükleme + hazır durumu). Motorun tek implementasyonu js/ klasöründeki modüldür;
+   burada kopyası YOKTUR. Hiçbir iş akışı (satış, iptal, stok, transfer, üretim, portal, senkron, finans) motoru çağırmaz.
+   Motor yüklenemezse ya da sürümü uyuşmazsa hazir:false + hata kalır; yedek/ikinci yol YOK. Uygulamanın açılışını beklemez. */
+(function(){
+  if(window.renkMotoru)return;
+  var BEKLENEN=1,d={hazir:false,hata:null,motor:null},dis={beklenenSurum:BEKLENEN};
+  ['hazir','hata','motor'].forEach(function(k){Object.defineProperty(dis,k,{enumerable:true,get:function(){return d[k];}});});
+  Object.defineProperty(window,'renkMotoru',{value:Object.freeze(dis),writable:false,configurable:false});
+  function hata(m,e){d.hata=m;try{console.error('[renk motoru] '+m,e||'');}catch(x){}}
+  var p;try{p=import('./js/renk-cozumleme.mjs');}catch(e){hata('Renk motoru yüklenemedi (tarayıcı modül desteği yok)',e);return;}
+  p.then(function(m){
+    if(!m||m.MOTOR_SURUM!==BEKLENEN||typeof m.renkCoz!=='function'){hata('Renk motoru sürüm uyuşmazlığı (beklenen '+BEKLENEN+', gelen '+(m&&m.MOTOR_SURUM)+') — sayfayı yenileyin');return;}
+    d.motor=Object.freeze({MOTOR_SURUM:m.MOTOR_SURUM,DURUM:m.DURUM,ISLEM:m.ISLEM,MUTABAKAT_GUVEN_SINIRI:m.MUTABAKAT_GUVEN_SINIRI,renkCoz:m.renkCoz,mutabakatOnayiOlustur:m.mutabakatOnayiOlustur,urunParmagi:m.urunParmagi,adAnahtari:m.adAnahtari});
+    d.hazir=true;
+  },function(e){hata('Renk motoru yüklenemedi: '+((e&&e.message)||e),e);});
 })();
 </script>
 </body>
