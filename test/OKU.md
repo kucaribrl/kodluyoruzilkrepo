@@ -51,6 +51,14 @@ Hepsi birden:
 ```bash
 for f in test/*.test.mjs; do echo "== $f =="; node "$f" || exit 1; done
 ```
+> Bu komut ilk hatada durur: test 29 bilinçli kırmızı olduğu için 30 ve sonrasına ulaşmaz. Hepsini durmadan
+> çalıştırmak için `|| exit 1` kaldırılır. **CI (`.github/workflows/test.yml`, "Uçtan uca testler")** bütün testleri
+> sonuna kadar çalıştırır ve değerlendirmeyi en sonda yapar: bir test yalnız çıkış kodu 0, tanınan son satır özeti
+> (`N PASS, M FAIL` | `SONUÇ: N ok, M FAIL` | `N geçti, M kaldı` | `pageErrors: none`), 0 başarısızlık ve hiç `FAIL`
+> satırı olmadan geçer; eksik/yarım çıktı başarısızdır. Test 29 yalnız KESİN imzayla bilinçli kırmızı kabul edilir
+> (çıkış 1, `37 PASS, 9 FAIL`, 37 PASS satırı, FAIL kimlikleri tam olarak T6 T7 T8 T9 T10 T11 T15 T30 T38) **ve** test 31
+> başarılıyken `PASS T40` satırı bulunduğunda; imza değişirse CI kırmızı olur ve bilinçli güncelleme gerekir. Sonuçlar
+> GitHub Actions adım özetinde test test (sonuç, son satır, süre) ve test 29 için "BİLİNÇLİ KIRMIZI" uyarısıyla görünür.
 
 Sistemde kurulu bir Chromium kullanmak istersen:
 ```bash

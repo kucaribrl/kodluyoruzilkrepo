@@ -25,5 +25,74 @@ jobs:
       - name: Satır sonu (bat/vbs/ps1 CRLF)
         run: |
           git ls-files --eol '*.bat' '*.vbs' '*.ps1' | awk '$1!="i/crlf"{print "LF kalmış:",$0; bad=1} END{exit bad}'
+      # Bütün testler SONUNA KADAR çalışır; değerlendirme en sonda yapılır (bir testin kırılması sonrakileri gizlemez).
+      # Bir test yalnız şu durumda geçer: çıkış kodu 0, son satır tanınan özet biçimi, 0 başarısızlık, en az 1 başarılı, hiç "FAIL" satırı yok.
+      # Tanınan son satır biçimleri: "N PASS, M FAIL" | "SONUÇ: N ok, M FAIL" | "N geçti, M kaldı" | "pageErrors: none" (01–06).
+      # BİLİNÇLİ KIRMIZI test 29 yalnız KESİN imzayla kabul edilir: çıkış 1, son satır "37 PASS, 9 FAIL", 37 PASS satırı,
+      # tam olarak T6 T7 T8 T9 T10 T11 T15 T30 T38 FAIL kimlikleri VE test 31 başarılı + "PASS T40" satırı (test 29 imza denetimi).
+      # İmza değişirse (daha çok ya da daha az başarısızlık, yarım çıktı) CI kırmızı olur: bilinçli güncelleme gerekir.
       - name: Uçtan uca testler
-        run: for f in test/*.test.mjs; do echo "== $f =="; node "$f" || exit 1; done
+        shell: bash
+        run: |
+          set +e
+          set -u
+          OZET="${GITHUB_STEP_SUMMARY:-/dev/null}"
+          KAYIT="$(mktemp -d "${RUNNER_TEMP:-/tmp}/testler.XXXXXX")" || { echo "::error::Geçici klasör açılamadı"; exit 1; }
+          BILINEN_KIRMIZI="test/29-satis-iptal-guvenligi.test.mjs"
+          BEKLENEN_SON="37 PASS, 9 FAIL"
+          BEKLENEN_PASS=37
+          BEKLENEN_FAIL="T10 T11 T15 T30 T38 T6 T7 T8 T9"
+          DENETCI="test/31-yeni-satis-rid.test.mjs"
+          DENETCI_KONTROL="T40"
+          hata=0; sayi=0; kirmizi_aday=0; denetci_ok=0; kirmizi_not=""
+          { echo "## Uçtan uca testler"; echo; echo "| Test | Sonuç | Son satır | Süre (sn) |"; echo "|---|---|---|---|"; } >> "$OZET"
+          satir() { echo "| \`$1\` | $2 | $3 | $4 |" >> "$OZET"; }
+          for f in test/*.test.mjs; do
+            sayi=$((sayi + 1))
+            log="$KAYIT/$(basename "$f").log"
+            echo "== $f =="
+            bas=$(date +%s)
+            node "$f" > "$log" 2>&1
+            kod=$?
+            sure=$(( $(date +%s) - bas ))
+            cat "$log"
+            son="$(grep -v '^[[:space:]]*$' "$log" | tail -n 1 | tr -d '\r' | cut -c1-120)"
+            npass="$(grep -c '^PASS ' "$log")"
+            nfailsatir="$(grep -c '^FAIL' "$log")"
+            ozp=""; ozf=""
+            if [[ "$son" =~ ^([0-9]+)\ PASS,\ ([0-9]+)\ FAIL ]]; then ozp="${BASH_REMATCH[1]}"; ozf="${BASH_REMATCH[2]}"
+            elif [[ "$son" =~ ^SONUÇ:\ ([0-9]+)\ ok,\ ([0-9]+)\ FAIL ]]; then ozp="${BASH_REMATCH[1]}"; ozf="${BASH_REMATCH[2]}"
+            elif [[ "$son" =~ ^([0-9]+)\ geçti,\ ([0-9]+)\ kaldı ]]; then ozp="${BASH_REMATCH[1]}"; ozf="${BASH_REMATCH[2]}"
+            elif [ "$son" = "pageErrors: none" ]; then ozp="$npass"; ozf="$nfailsatir"
+            fi
+            if [ "$f" = "$BILINEN_KIRMIZI" ]; then
+              failler="$(grep -E '^FAIL T[0-9A-Za-z]+ ' "$log" | awk '{print $2}' | sort | tr '\n' ' ' | sed 's/ $//')"
+              if [ "$kod" = "1" ] && [ "$son" = "$BEKLENEN_SON" ] && [ "$npass" = "$BEKLENEN_PASS" ] && [ "$nfailsatir" = "9" ] && [ "$failler" = "$BEKLENEN_FAIL" ]; then
+                kirmizi_aday=1; kirmizi_not="$son · $failler"
+                satir "$f" "⏳ bilinçli kırmızı adayı (test 31 T40 bekleniyor)" "$son" "$sure"
+              else
+                echo "::error file=$f::Bilinçli kırmızı testin İMZASI DEĞİŞTİ (bilinçli güncelleme gerekir): çıkış=$kod, son='$son', PASS satırı=$npass, FAIL satırı=$nfailsatir, FAIL kimlikleri='$failler' — beklenen: çıkış=1, '$BEKLENEN_SON', $BEKLENEN_PASS PASS, '$BEKLENEN_FAIL'"
+                satir "$f" "❌ imza değişti" "$son" "$sure"; hata=1
+              fi
+              continue
+            fi
+            if [ "$kod" = "0" ] && [ -n "$ozp" ] && [ "$ozf" = "0" ] && [ "$ozp" -gt 0 ] && [ "$nfailsatir" = "0" ]; then
+              satir "$f" "✅ geçti" "$son" "$sure"
+              if [ "$f" = "$DENETCI" ] && grep -q "^PASS $DENETCI_KONTROL " "$log"; then denetci_ok=1; fi
+            else
+              if [ -z "$ozp" ]; then neden="eksik ya da tanınmayan sonuç özeti (yarım çıktı?)"; else neden="çıkış=$kod, başarısız=$ozf, FAIL satırı=$nfailsatir"; fi
+              echo "::error file=$f::Test başarısız — $neden; son satır: '$son'"
+              satir "$f" "❌ başarısız ($neden)" "$son" "$sure"; hata=1
+            fi
+          done
+          if [ ! -f "$BILINEN_KIRMIZI" ]; then
+            echo "::error::$BILINEN_KIRMIZI bulunamadı"; hata=1
+          elif [ "$kirmizi_aday" = "1" ] && [ "$denetci_ok" = "1" ]; then
+            echo "::warning file=$BILINEN_KIRMIZI::BİLİNÇLİ KIRMIZI (kabul edildi): $kirmizi_not — imza ve test 31 $DENETCI_KONTROL doğrulandı"
+            { echo; echo "**⚠️ BİLİNÇLİ KIRMIZI — \`$BILINEN_KIRMIZI\`:** $kirmizi_not (kesin imza + test 31 $DENETCI_KONTROL doğrulandı; düzeltilmedi, gizlenmedi)"; } >> "$OZET"
+          elif [ "$kirmizi_aday" = "1" ]; then
+            echo "::error file=$DENETCI::Test 29'un bilinçli kırmızı kabulü için test 31 başarılı olmalı ve 'PASS $DENETCI_KONTROL' satırı bulunmalı"
+            { echo; echo "**❌ Test 29 kabul EDİLMEDİ:** test 31 $DENETCI_KONTROL doğrulanamadı"; } >> "$OZET"; hata=1
+          fi
+          { echo; echo "Toplam $sayi test dosyası çalıştırıldı · sonuç: $([ "$hata" = "0" ] && echo 'BAŞARILI' || echo 'BAŞARISIZ')"; } >> "$OZET"
+          exit "$hata"
