@@ -335,3 +335,73 @@ export function izlemeGuncelle(onceki, kontrol) {
   }
   return { kayitlar, kapanan };
 }
+
+// ===================================================================== Ders 50.3c-2: PAKETLEME, YETKİ, SENKRON KANITI (saf) =====================================================================
+// Başlangıç görüntüsü KAYIPSIZ paketlenir: olaylar sütunlu biçime çevrilir (tabanAc(tabanPaketle(g)) === g, alan alan).
+// Özet (hash) ile EŞLEŞTİRME YAPILMAZ: olay kimliği/imzası olduğu gibi saklanır → çakışma ile bir olayın "eski" sanılması imkânsız.
+// Sıkıştırma (gzip) ve bütünlük özeti (SHA-256, yalnız bozulmayı yakalamak için) depo katmanında (js/defter-depo.mjs) yapılır.
+export const PAKET_BICIM = 'iqbasics-defter-taban';
+export const PAKET_SURUM = 1;
+const OLAY_ALAN = ['c', 'borc', 'alacak', 'h', 'yon', 'tutar']; // + n, tur, anahtar (her olayda); alan sırası goruntu() ile aynı
+
+export function tabanPaketle(g) {
+  const e = Object.entries(g.olay), tur = [], turNo = new Map();
+  const k = { imza: [], n: [], tur: [], anahtar: [] }; for (const a of OLAY_ALAN) k[a] = [];
+  for (const [imza, o] of e) { k.imza.push(imza); k.n.push(o.n); k.anahtar.push(o.anahtar);
+    if (!turNo.has(o.tur)) { turNo.set(o.tur, tur.length); tur.push(o.tur); } k.tur.push(turNo.get(o.tur));
+    for (const a of OLAY_ALAN) k[a].push(a in o ? o[a] : null); }
+  const { olay, ...govde } = g;
+  return { bicim: PAKET_BICIM, surum: PAKET_SURUM, motorSurum: MOTOR_SURUM, govde: { ...govde, olay: { sayi: e.length, turSozluk: tur, ...k } } };
+}
+
+// Paketi doğrular ve görüntüye geri açar. Tanınmayan biçim/sürüm → TANINMAYAN; yapı bozuk → BOZUK (görüntü verilmez).
+export function tabanAc(p) {
+  const red = (hata, neden) => ({ ok: false, hata, neden });
+  if (!nesne(p)) return red('BOZUK', 'paket nesne değil');
+  if (p.bicim !== PAKET_BICIM) return red('TANINMAYAN', 'paket biçimi tanınmıyor');
+  if (p.surum !== PAKET_SURUM) return red('TANINMAYAN', 'paket sürümü ' + p.surum + ' (beklenen ' + PAKET_SURUM + ')');
+  if (p.motorSurum !== MOTOR_SURUM) return red('TANINMAYAN', 'motor sürümü ' + p.motorSurum + ' (beklenen ' + MOTOR_SURUM + ')');
+  const g = p.govde, bilinen = ['motorSurum', 'kur', 'cari', 'kasa', 'olay', 'tomb', 'cekKimlik'];
+  if (nesne(g) && Object.keys(g).some(x => !bilinen.includes(x))) return red('BOZUK', 'gövdede tanınmayan alan');
+  if (!nesne(g) || !nesne(g.cari) || !nesne(g.kasa) || !nesne(g.olay) || !nesne(g.tomb) || !Array.isArray(g.cekKimlik) || !nesne(g.kur)) return red('BOZUK', 'gövde alanları eksik');
+  if (g.motorSurum !== MOTOR_SURUM) return red('BOZUK', 'gövde motor sürümü uyuşmuyor');
+  for (const L of ['cariler', 'hesaplar', 'cekler']) if (!Array.isArray(g.tomb[L])) return red('BOZUK', 'silme izi listesi eksik: ' + L);
+  for (const c of Object.values(g.cari)) if (!nesne(c) || !nesne(c.E) || !Array.isArray(c.cekler) || !Array.isArray(c.karsilik) || !nesne(c.taksitSatis) || !nesne(c.kursuz) || !nesne(c.fason)
+    || !(c.devir === null || sonlu(c.devir)) || !['cek', 'fason', 'iade'].every(a => sonlu(c.E[a]))) return red('BOZUK', 'cari kaydı bozuk');
+  for (const h of Object.values(g.kasa)) if (!nesne(h) || !nesne(h.E) || !sonlu(h.E.eski) || !(h.fark === null || sonlu(h.fark)) || !nesne(h.eski)) return red('BOZUK', 'kasa kaydı bozuk');
+  const k = g.olay, n = k.sayi, alanlar = ['imza', 'n', 'tur', 'anahtar', ...OLAY_ALAN];
+  if (!Number.isInteger(n) || n < 0 || !Array.isArray(k.turSozluk) || alanlar.some(a => !Array.isArray(k[a]) || k[a].length !== n)) return red('BOZUK', 'olay sütunları eksik ya da boyları farklı');
+  const olay = {};
+  for (let i = 0; i < n; i++) {
+    const imza = k.imza[i], t = k.turSozluk[k.tur[i]];
+    if (typeof imza !== 'string' || imza in olay || !Number.isInteger(k.n[i]) || k.n[i] < 1 || typeof t !== 'string') return red('BOZUK', 'olay ' + i + ' bozuk (imza / tekrar sayısı / tür)');
+    const o = { n: k.n[i] }; for (const a of OLAY_ALAN) if (k[a][i] !== null) o[a] = k[a][i]; o.tur = t; o.anahtar = k.anahtar[i]; olay[imza] = o;
+  }
+  return { ok: true, goruntu: { motorSurum: g.motorSurum, kur: g.kur, cari: g.cari, kasa: g.kasa, olay, tomb: g.tomb, cekKimlik: g.cekKimlik } }; // goruntu() alan sırası
+}
+
+// İzleme verisine her erişimde (okuma VE yazma) aranan yetki. Bütün bilgiler çağırandan gelir.
+export function izlemeYetkisi(y) {
+  y = nesne(y) ? y : {}; const n = [];
+  if (y.kurtarma !== 'tamam') n.push('veri kurtarma kararı "tamam" değil');
+  if (y.admin !== true) n.push('yönetici değil');
+  if (y.personelMod !== false) n.push('personel modu (ya da bilinmiyor)');
+  if (y.musteriMod !== false) n.push('müşteri (portal) modu (ya da bilinmiyor)');
+  if (y.ornek !== false) n.push('örnek veri (ya da bilinmiyor)');
+  return { izin: n.length === 0, nedenler: n };
+}
+
+// Senkron güncelliğinin KANITI (bildirim almak güncellik değildir). Bulut açıksa her domen için: sunucudan okundu (önbellek değil)
+// ve sunucu = son uygulanan gölge = yerel veri; bekleyen yazımlar sunucuca onaylandı; cihaz çevrimiçi. Her durumda bellek = kalıcı kayıt.
+export function senkronKaniti(s) {
+  s = nesne(s) ? s : {}; const n = [];
+  if (s.bellekKalici !== true) n.push('bu sekmenin belleği kalıcı kayıtla aynı değil (ya da bilinmiyor)');
+  if (s.canli === false) return { uygun: n.length === 0, bulutsuz: true, nedenler: n };
+  if (s.canli !== true) { n.push('bulut durumu bilinmiyor'); return { uygun: false, bulutsuz: false, nedenler: n }; }
+  if (s.cevrimici !== true) n.push('çevrimdışı ya da bağlantı bilinmiyor');
+  if (s.yazimlarOnaylandi !== true) n.push('bekleyen bulut yazımları onaylanmadı');
+  const ls = liste(s.domenler), su = nesne(s.sunucudan) ? s.sunucudan : {}, ue = nesne(s.ucluEsit) ? s.ucluEsit : {};
+  if (!ls.length) n.push('domen listesi yok');
+  for (const d of ls) { if (su[d] !== true) n.push(d + ': sunucudan okunamadı (önbellek ya da hata)'); else if (ue[d] !== true) n.push(d + ': sunucu, gölge ve yerel veri aynı değil'); }
+  return { uygun: n.length === 0, bulutsuz: false, nedenler: n };
+}
