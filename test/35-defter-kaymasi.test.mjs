@@ -1,6 +1,6 @@
-// Ders 50.3a — DEFTER KAYMASI TESPİT MOTORU, YALNIZ TEST (uygulama kodu DEĞİŞTİRİLMEZ; motor yalnız test yardımcısıdır).
+// Ders 50.3a / 50.3c-1 — DEFTER KAYMASI TESPİT MOTORU (uygulama kodu DEĞİŞTİRİLMEZ; uygulama motoru bu aşamada yüklemez).
 // ORTAM: SAHTE, BELLEK İÇİ FIRESTORE — gerçek Firebase de, Firebase emülatörü de DEĞİLDİR (test/yardimci/iki-cihaz-sahte-firestore.mjs).
-// Motor: test/yardimci/defter-kaymasi.mjs — saf ve salt okunur; uygulama verisinin JSON anlık görüntüsü üzerinde çalışır.
+// Motor: js/defter-izleme.mjs (TEK KAYNAK, test 36 ile ortak) — saf ve salt okunur; uygulama verisinin JSON anlık görüntüsü üzerinde çalışır.
 //
 // Beklenen kayma BAĞIMSIZ bir gerçek değerden türetilir (motorun kendisinden değil):
 //   beklenen kayma (cari / kasa) = (gerçekleşen bakiye − DOĞRU bakiye) + (bilerek yapılan kayıt dışı değişiklik)
@@ -11,7 +11,7 @@
 // Sentetik veri (9xxx). Sunucu rastgele port, sw.js → 404. Hata → çıkış kodu 1.
 import path from 'path'; import { fileURLToPath } from 'url';
 import { duzenekKur, islem, bekle, VERI_YOLU, GERCEK_FIREBASE } from './yardimci/iki-cihaz-sahte-firestore.mjs';
-import { taban, tespit, cariDevir, UYARI_SINIFLARI, ESIK } from './yardimci/defter-kaymasi.mjs';
+import { goruntu as taban, tespit, cariDevir, UYARI_SINIFLARI, ESIK } from '../js/defter-izleme.mjs';
 
 const DEPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = process.env.IQ_TEST_KOK ? path.resolve(process.env.IQ_TEST_KOK) : DEPO;
