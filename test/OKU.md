@@ -63,6 +63,27 @@ for f in test/*.test.mjs; do echo "== $f =="; node "$f" || exit 1; done
 > başarılıyken `PASS T40` satırı bulunduğunda; imza değişirse CI kırmızı olur ve bilinçli güncelleme gerekir. Sonuçlar
 > GitHub Actions adım özetinde test test (sonuç, son satır, süre) ve test 29 için "BİLİNÇLİ KIRMIZI" uyarısıyla görünür.
 
+### Firebase emülatörü deneyleri (yalnız YEREL — CI'da çalışmaz)
+`test/emulator/` altındaki dosyalar `.test.mjs` ile bitmez; CI ("Uçtan uca testler" → `test/*.test.mjs`) onları görmez. Gerçek Firebase'e
+bağlanmaz: proje kimliği zorunlu olarak `demo-iqbasics-test`, uygulamanın gerçek yapılandırması SDK'ya hiç verilmez, tarayıcı yeni ve boş
+profilde çalışır ve localhost dışı her istek gerçekleşmeden engellenir. Araçlar depo DIŞINDA geçici bir klasöre kurulur (depoda
+`package.json`, `firebase.json`, `.firebaserc` oluşmaz). Gerekenler: Java 21, Node 22, Playwright/Chromium.
+```bash
+E=/tmp/iq-emu-araclar; mkdir -p $E && (cd $E && npm i --no-audit --no-fund firebase-tools firebase@10.12.0)
+```
+```bash
+(cd /tmp/iq-emu-araclar && NO_UPDATE_NOTIFIER=1 ./node_modules/.bin/firebase setup:emulators:firestore --project demo-iqbasics-test)
+```
+```bash
+IQ_EMU_DIR=/tmp/iq-emu-araclar node test/emulator/39a-yalitim.mjs   # Ders 50.3c-3b-1: emülatör yalıtımı + tek sahte belge yaz/oku
+```
+İlk iki komut kurulum aşamasıdır (paketler ve emülatörün Java dosyası internetten indirilir). Test çalışırken emülatörü kendisi 127.0.0.1
+üzerinde, geçici `firebase.json` ve basit test kurallarıyla başlatır; emülatör sürecine boş bir ana klasör verilir (gerçek oturum / kimlik
+bilgisi görülmez) ve dış ağ vekili ölü adrese yönlendirilir. Test sonunda süreç kapatılır, portlar ve geçici dosyaların silindiği doğrulanır.
+| Dosya | Kapsam |
+|---|---|
+| `test/emulator/39a-yalitim.mjs` | Ders 50.3c-3b-1. A0 SDK 10.12.0 compat; A1 emülatör sürecinde kimlik bilgisi yok; A2 Firestore + Auth emülatörleri yalnız 127.0.0.1, proje `demo-iqbasics-test`; A3 boş tarayıcı profili, dış istekler (firestore.googleapis.com, example.com) gerçekleşmeden engellenir; A4 uygulamanın AÇILIŞTAKİ Firebase başlatması dahil her başlatma sarmalayıcıdan geçer (gerçek "iq-basics" yapılandırması SDK'ya verilmez); A5 uygulamanın kendi `bulutBaslat()` çağrısı emülatöre bağlanır; A6 yalnız `emulator_test/yalitim` sahte belgesi yazılır, SUNUCUDAN okunur ve emülatörün yerel arayüzüyle doğrulanır; test kuralları işletme yollarını kapatır; A7 uygulama verisi yalnız boş profilin örnek verisi; A8 gerçekleşen bütün istekler yerel, gerçek Firebase'e 0 istek, gerçek proje kimliği hiçbir istekte yok; A9 emülatör kapanır, portlar serbest, geçici dosyalar silinir, depoda dosya üretilmez. Durum: YEREL — CANLIYA ALINMADI |
+
 Sistemde kurulu bir Chromium kullanmak istersen:
 ```bash
 PLAYWRIGHT_CHROMIUM=/usr/bin/chromium node test/01-hata-duzeltmeleri.test.mjs
