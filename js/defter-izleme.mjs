@@ -405,3 +405,72 @@ export function senkronKaniti(s) {
   for (const d of ls) { if (su[d] !== true) n.push(d + ': sunucudan okunamadı (önbellek ya da hata)'); else if (ue[d] !== true) n.push(d + ': sunucu, gölge ve yerel veri aynı değil'); }
   return { uygun: n.length === 0, bulutsuz: false, nedenler: n };
 }
+
+// ===================================================================== Ders 50.3c-3a: TANILAMA (saf, tabansız) =====================================================================
+// Yalnız VERİLEN verinin kendi içindeki tutarlılığını inceler. Başlangıç görüntüsü, bulut ya da depo KULLANMAZ; kayıp tespiti DEĞİLDİR.
+// Her bulgu "incelenmeli" düzeyindedir (kesin neden ya da kayıp iddiası yok). ek.domenBoyut: { domen: bayt } (çağıran ölçer).
+export const TANILAMA_SINIR = Object.freeze({ belgeUyari: 900000, belgeSinir: 950000, tutarEsik: 0.01 });
+export function tanilama(d, ek) {
+  d = nesne(d) ? d : {}; ek = nesne(ek) ? ek : {};
+  const g = goruntu(d), uyarilar = [], ekle = (kod, konu, mesaj) => uyarilar.push({ kod, seviye: 'incelenmeli', konu, mesaj });
+  const kim = (x) => (x === null || x === undefined ? '—' : String(x));
+  // Ölçümler: cari devri ve kasa farkı (USD cariler İZLENMİYOR)
+  const cari = Object.values(g.cari).map(c => ({ id: c.id, ad: c.ad, tip: c.tip, doviz: c.doviz, devir: c.devir, izlenmiyor: c.doviz === 'USD', gecersiz: c.gecersiz }));
+  const kasa = Object.values(g.kasa).map(h => ({ id: h.id, ad: h.ad, fark: h.fark, gecersiz: h.gecersiz }));
+  // Tekrarlanan kimlikler
+  for (const L of ['cariler', 'hesaplar', 'cekler', 'satislar', 'hareketler']) { const say = new Map();
+    for (const r of liste(d[L])) if (nesne(r)) { const k = kim(r.id); say.set(k, (say.get(k) || 0) + 1); }
+    for (const [k, n] of say) if (n > 1) ekle('TEKRAR_KIMLIK', L + '#' + k, `${L}: aynı kimlik (${k}) ${n} kayıtta`); }
+  // Sayısal olmayan tutarlar
+  const sayiDegil = (v) => v !== undefined && v !== null && v !== '' && !sonlu(+v);
+  const alanlar = { cariler: ['bakiye', 'bakiyeUSD'], hesaplar: ['bakiye'], satislar: ['tutar', 'odenen', 'kesik', 'satisKur'], hareketler: ['tutar', 'kesik'], cekler: ['tutar', 'kurFarki'] };
+  for (const [L, as] of Object.entries(alanlar)) for (const r of liste(d[L])) if (nesne(r)) for (const a of as) if (sayiDegil(r[a])) ekle('SAYI_DEGIL', L + '#' + kim(r.id), `${L} #${kim(r.id)}: "${a}" alanı sayı değil`);
+  for (const k of ['kurUSD', 'kurEUR']) if (!(sonlu(+d[k]) && +d[k] > 0)) ekle('KUR_GECERSIZ', 'ayar#' + k, `${k} geçersiz ya da yok`);
+  // Var olmayan kayıtlara bağlılık
+  const varMi = (L) => new Set(liste(d[L]).filter(nesne).map(r => kim(r.id)));
+  const C = varMi('cariler'), H = varMi('hesaplar'), K = varMi('cekler');
+  for (const s of liste(d.satislar)) { if (!nesne(s) || s.iptal) continue;
+    if (s.mid != null && !C.has(kim(s.mid))) ekle('BAGLI_KAYIT_YOK', 'satislar#' + kim(s.id), `satış #${kim(s.id)}: carisi (${kim(s.mid)}) yok`);
+    if (s.odemeHesapId != null && !liste(s.odemeler).length && !H.has(kim(s.odemeHesapId))) ekle('BAGLI_KAYIT_YOK', 'satislar#' + kim(s.id), `satış #${kim(s.id)}: eski ödeme hesabı (${kim(s.odemeHesapId)}) yok`);
+    for (const l of liste(s.odemeler)) if (nesne(l)) { if (l._hesapId != null && !H.has(kim(l._hesapId))) ekle('BAGLI_KAYIT_YOK', 'satislar#' + kim(s.id), `satış #${kim(s.id)}: ödeme hesabı (${kim(l._hesapId)}) yok`);
+      if (l._cekId != null && !K.has(kim(l._cekId))) ekle('BAGLI_KAYIT_YOK', 'satislar#' + kim(s.id), `satış #${kim(s.id)}: ödeme çeki (${kim(l._cekId)}) yok`); } }
+  for (const h of liste(d.hareketler)) { if (!nesne(h)) continue;
+    if (h.cariId != null && !C.has(kim(h.cariId))) ekle('BAGLI_KAYIT_YOK', 'hareketler#' + kim(h.id), `hareket #${kim(h.id)}: carisi (${kim(h.cariId)}) yok`);
+    if (h.hesapId != null && h.yon && !H.has(kim(h.hesapId))) ekle('BAGLI_KAYIT_YOK', 'hareketler#' + kim(h.id), `hareket #${kim(h.id)}: hesabı (${kim(h.hesapId)}) yok`); }
+  for (const c of liste(d.cekler)) if (nesne(c) && c.cariId != null && !C.has(kim(c.cariId))) ekle('BAGLI_KAYIT_YOK', 'cekler#' + kim(c.id), `çek #${kim(c.id)}: carisi (${kim(c.cariId)}) yok`);
+  for (const i of liste(d.isemirleri)) if (nesne(i)) liste(i.duraklar).forEach((dk, x) => { if (nesne(dk) && (+dk.borclanan || 0) && dk.borcFasonId != null && !C.has(kim(dk.borcFasonId))) ekle('BAGLI_KAYIT_YOK', 'isemirleri#' + kim(i.id), `iş emri #${kim(i.id)} durak ${x + 1}: borç yazılan fason (${kim(dk.borcFasonId)}) yok`); });
+  // Eşleşmeyen çek ↔ çekli/kartlı tahsilat-ödeme hareketi (aynı cari, aynı tutar; elle çek ve satış çeki hariç)
+  for (const [k, c] of Object.entries(g.cari)) { if (c.doviz === 'USD') continue;
+    const cekler = c.cekler.filter(x => x.cariIsle && !x.bagli && !x.elle), kars = c.karsilik.map(x => kurus(x.tutar));
+    for (const x of cekler) { const i = kars.indexOf(kurus(x.tutar)); if (i >= 0) kars.splice(i, 1);
+      else ekle('CEK_KARSILIKSIZ', 'cari#' + k, `çek #${x.id} (${x.tutar}) tahsilat/ödeme ya da satış çeki ama eşleşen çekli hareket yok (kayıt kaybolmuş ya da çek başka cariye taşınmış olabilir)`); }
+    for (const t of kars) ekle('HAREKET_CEKSIZ', 'cari#' + k, `çekli/kartlı hareket (${r2(t / 100)}) var ama eşleşen çek yok (çek silinmiş, taşınmış ya da kaybolmuş olabilir)`); }
+  // Taksit toplamı: cari başına "Taksit" hareketleri ↔ satışlardaki ödenmiş taksit
+  const takH = new Map(), takS = new Map();
+  for (const h of liste(d.hareketler)) if (nesne(h) && h.tip === 'tahsilat' && h.tur === 'Taksit' && h.cariId != null) takH.set(kim(h.cariId), (takH.get(kim(h.cariId)) || 0) + (+h.tutar || 0));
+  for (const [k, c] of Object.entries(g.cari)) for (const x of Object.values(c.taksitSatis)) if (x.T > 0 && x.div !== null) takS.set(k, (takS.get(k) || 0) + x.T * x.div);
+  for (const k of new Set([...takH.keys(), ...takS.keys()])) { const a = r2(takH.get(k) || 0), b = r2(takS.get(k) || 0);
+    if (Math.abs(a - b) >= TANILAMA_SINIR.tutarEsik) ekle('TAKSIT_UYUMSUZ', 'cari#' + k, `"Taksit" tahsilatları ${a} · satışlardaki ödenmiş taksit ${b} (taksit planı kaldırılmış ya da kayıt kaybolmuş olabilir)`); }
+  // Eski ödeme alanı (odemeHesapId / odemeCekId) ve kur bilgisi eksik dövizli satışlar
+  const eski = [], kursuz = [];
+  for (const s of liste(d.satislar)) { if (!nesne(s) || s.iptal) continue;
+    if (s.tip !== 'iade' && !liste(s.odemeler).length && s.odenen > 0 && (s.odemeHesapId != null || s.odemeCekId != null)) eski.push(kim(s.id));
+    if (!s.satisKur && (s.pb === 'USD' || s.pb === 'EUR')) kursuz.push(kim(s.id)); }
+  if (eski.length) ekle('ESKI_ODEME_ALANI', 'satislar', `${eski.length} satış eski ödeme alanıyla (odemeHesapId / odemeCekId): iptal ya da düzenlemede kasa hareketi yazılmadan düşer`);
+  if (kursuz.length) ekle('KUR_EKSIK_DOVIZ', 'satislar', `${kursuz.length} dövizli satışta kur bilgisi (satisKur) yok: ekstre tutarı güncel kura göre değişir`);
+  // Bulut belge boyutu (domen belgesi en çok 1 MB)
+  const boyut = nesne(ek.domenBoyut) ? ek.domenBoyut : {};
+  for (const [dm, b] of Object.entries(boyut)) if (+b >= TANILAMA_SINIR.belgeUyari) ekle('BELGE_BOYUTU', 'domen#' + dm, `${dm} bulut belgesi ${Math.round(+b / 1024)} KB (sınır 1 MB${+b >= TANILAMA_SINIR.belgeSinir ? ' — SINIRDA, yazım başarısız olabilir' : ' — yaklaşıyor'})`);
+  // Bilinen uygulama kısıtları (DÜZELTİLMEDİ): nakit iade ekstre gösterimi, ürün kartından tedarikçi borcu
+  const iade = new Map();
+  for (const h of liste(d.hareketler)) if (nesne(h) && !h.tip && (h.tur === 'İade' || h.tur === 'İade iptali') && h.cariId != null && h.tutar > 0) { const k = kim(h.cariId), o = iade.get(k) || { sayi: 0, tutar: 0 }; o.sayi++; o.tutar = r2(o.tutar + (+h.tutar || 0)); iade.set(k, o); }
+  const tedarikci = cari.filter(c => (c.tip === 'tedarikci' || c.tip === 'fason') && !c.izlenmiyor && c.devir !== null && Math.abs(c.devir) >= 1).length;
+  const kisitlar = [
+    { kod: 'NAKIT_IADE', baslik: 'Nakit iade ekstre gösterimi (bilinen uygulama kısıtı)', cariSayisi: iade.size, hareketSayisi: [...iade.values()].reduce((a, o) => a + o.sayi, 0), tutar: r2([...iade.values()].reduce((a, o) => a + o.tutar, 0)),
+      mesaj: 'Nakit iade ve iadenin geri alınması kasa hareketi olarak cari ekstresinde BORÇ görünüyor; cari bakiyesi değişmiyor. Devir bu yüzden farklı görünebilir.' },
+    { kod: 'K8', baslik: 'Ürün kartından tedarikçi borcu (bilinen uygulama kısıtı)', tedarikciDevirli: tedarikci,
+      mesaj: 'Ürün kartından tedarikçiye yazılan borç hareket kaydı oluşturmaz. Tedarikçi/fason devri bu yüzden ya da elle bakiye düzeltmesi yüzünden farklı olabilir; kesin neden bu kontrolle belirlenemez.' }];
+  const usd = cari.filter(c => c.izlenmiyor).length;
+  return { motorSurum: MOTOR_SURUM, olcum: { cari, kasa }, uyarilar, kisitlar,
+    sayac: { cari: cari.length, kasa: kasa.length, usdIzlenmiyor: usd, eskiOdemeAlani: eski.length, kurEksikDoviz: kursuz.length, uyari: uyarilar.length } };
+}

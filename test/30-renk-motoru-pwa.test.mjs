@@ -274,7 +274,7 @@ await ctx.close(); SV.swIcerik = null; davranis += 3;
 
 // H: sürüm uyumu ve SW kaynağı
 const no = (s) => ((s || '').match(/(\d+)$/) || [])[1];
-T('T34 APP_SURUM ve CACHE tutarlı (aynı numara)', APP && CACHE && no(APP) === no(CACHE.replace(/^iqbasics-v/, '')) && no(APP) === '174', { APP, CACHE });
+T('T34 APP_SURUM ve CACHE tutarlı (aynı numara)', APP && CACHE && no(APP) === no(CACHE.replace(/^iqbasics-v/, '')) && no(APP) === '175', { APP, CACHE });
 T('T46 sw.js: motor KRİTİK önbellek girdisi (hata yutulmaz, HTTP önbelleği atlanır); skipWaiting yalnız mesajla',
   /KRITIK\s*=\s*\[\s*'\.\/js\/renk-cozumleme\.mjs'\s*\]/.test(sw || '') && /cache:\s*'reload'/.test(sw || '') && (sw.match(/skipWaiting\(\)/g) || []).length === 1 && /SKIP_WAITING'\) self\.skipWaiting\(\)/.test(sw || ''), null);
 

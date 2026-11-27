@@ -32,7 +32,8 @@ T('A1 [kapsam] depo yalnız "iqbasics-defter" adını açar (kurtarma veritaban�
 const YASAK_MOTOR = ['localStorage', 'indexedDB', 'fetch(', 'firebase', 'document', 'window', 'globalThis', 'Date.now', 'new Date', 'Math.random', 'crypto', 'CompressionStream', 'import('];
 T('A1 [saflık] motor (paketleme dahil) hâlâ saf: depolama / saat / rastgelelik / şifreleme / sıkıştırma kullanmaz', YASAK_MOTOR.every(y => !mkod.includes(y)) && !/^\s*import\s/m.test(mkod), YASAK_MOTOR.filter(y => mkod.includes(y)));
 const INDEX = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'), SW = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-T('A1 [kapsam] index.html ve sw.js motoru ya da depoyu YÜKLEMİYOR (uygulama davranışı değişmedi)', !/defter-izleme|defter-depo|iqbasics-defter/.test(INDEX + SW));
+// Ders 50.3c-3a: uygulama yalnız saf motoru (defter-izleme, tanılama) istek üzerine yükler — DEPO hâlâ uygulamada yok.
+T('A1 [kapsam] index.html ve sw.js izleme DEPOSUNU yüklemiyor ve "iqbasics-defter" veritabanını hiç anmıyor (uygulama depoya bağlı değil)', !/defter-depo|iqbasics-defter/.test(INDEX + SW));
 
 const V = () => ({ kurUSD: 30, kurEUR: 33, _tomb: { cekler: { 77: 1 } },
   cariler: [{ id: 1, ad: 'M1', tip: 'musteri', bakiye: 500 }, { id: '2', ad: 'M2', tip: 'musteri', bakiye: 300 }, { id: 3, ad: 'T1', tip: 'tedarikci', bakiye: 1000 }, { id: 4, ad: 'F1', tip: 'fason', bakiye: 0 }, { id: 5, ad: 'U1', tip: 'tedarikci', doviz: 'USD', bakiye: 0, bakiyeUSD: 100 }],

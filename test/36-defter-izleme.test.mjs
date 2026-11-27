@@ -35,7 +35,12 @@ const YASAK = ['localStorage', 'sessionStorage', 'indexedDB', 'fetch(', 'XMLHttp
 T('A1 [saflık] motor kaynağında depolama/ağ/DOM/Firebase/saat/rastgelelik/uygulama yazma çağrısı YOK', YASAK.every(y => !kod.includes(y)), YASAK.filter(y => kod.includes(y)));
 T('A1 [saflık] motor hiçbir modül içe aktarmıyor (bağımsız, tek dosya)', !/^\s*import\s/m.test(kod));
 const INDEX = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'), SW = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-T('A1 [kapsam] index.html ve sw.js motoru YÜKLEMİYOR (bu aşamada uygulama davranışı değişmedi)', !/defter-izleme/.test(INDEX) && !/defter-izleme/.test(SW));
+// Ders 50.3c-3a: uygulama motoru YALNIZ Defter Kontrolü → Tanılama düğmesiyle, istek üzerine yükler (tek dinamik içe aktarma, açılışta yükleme yok);
+// izleme deposu (defter-depo / iqbasics-defter) uygulamada YOK. sw.js motoru yalnız İSTEĞE BAĞLI (kritik olmayan) önbelleğe alır.
+{ const imp = INDEX.match(/import\(['"][^'"]*defter-izleme[^'"]*['"]\)/g) || [], yuk = (INDEX.match(/function _defterMotorAl\(\)\{[\s\S]*?\n/) || [''])[0];
+  T('A1 [kapsam] index.html motoru yalnız _defterMotorAl içinde, tek dinamik içe aktarmayla yükler; izleme deposu uygulamada YOK', imp.length === 1 && yuk.includes(imp[0]) && !/defter-depo|iqbasics-defter/.test(INDEX), { imp, yuk: yuk.slice(0, 120) });
+  T('A1 [kapsam] _defterMotorAl yalnız yetkili tanılama düğmesinden çağrılır (açılışta / otomatik çağrı yok)', (INDEX.match(/_defterMotorAl\(\)/g) || []).length === 2 && /async function defterTanilamaCalistir\(\)\{\s*\{const y=_defterYetki\(\);if\(!y\.izin\)/.test(INDEX));
+  T('A1 [kapsam] sw.js motoru İSTEĞE BAĞLI önbelleğe alır (kritik listede değil; hata yutulur); depo önbellekte yok', /const ISTEGE_BAGLI = \['\.\/js\/defter-izleme\.mjs'\];/.test(SW) && /KRITIK = \['\.\/js\/renk-cozumleme\.mjs'\];/.test(SW) && !/defter-depo|iqbasics-defter/.test(SW)); }
 T('A1 [kapsam] eski test motoru kaldırıldı; test 35 ortak motoru kullanıyor (ikinci hesaplama YOK)', !fs.existsSync(path.join(ROOT, 'test/yardimci/defter-kaymasi.mjs'))
   && /from '\.\.\/js\/defter-izleme\.mjs'/.test(fs.readFileSync(path.join(ROOT, 'test/35-defter-kaymasi.test.mjs'), 'utf8')));
 

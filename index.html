@@ -1044,6 +1044,7 @@ function canliBulutAyar(){
 }
 // 🧮 Defter tutarlılık kontrolü — bakiyeler ile kayıt defteri karşılaştırılır (olay-temelli muhasebeye geçiş hazırlığı)
 function defterKontrolAc(){
+  {const _y=_defterYetki();if(!_y.izin)return toast('⛔ Yetkiniz yok — '+_y.nedenler.join(', '));} /* Ders 50.3c-3a: yetki fonksiyonun İÇİNDE (yetkisizse hiçbir şey hesaplanmaz/gösterilmez) */
   const hs=db.hesaplar.map(h=>{const net=(db.hareketler||[]).filter(x=>x.hesapId===h.id&&x.yon).reduce((a,x)=>a+(x.yon==='in'?1:-1)*(+x.tutar||0),0);
     return {ad:h.ad,bakiye:+h.bakiye||0,defter:net,fark:(+h.bakiye||0)-net};});
   const cs=db.cariler.filter(c=>c.tip==='musteri').map(c=>{let devir=0;try{devir=cariEkstre(c.id).devir}catch(e){}return {ad:c.ad,bakiye:+c.bakiye||0,devir};})
@@ -1052,8 +1053,47 @@ function defterKontrolAc(){
     <div class="mini" style="line-height:1.55">Hesap bakiyeleri <b>kasa defteriyle</b>, cari bakiyeler <b>satış/tahsilat kayıtlarıyla</b> karşılaştırılır.
     <b>Fark/Devir</b> = kayıtlarla açıklanamayan kısım (açılış bakiyesi ya da eski/elle düzeltme). Sabit kalması normaldir; <b>zamanla BÜYÜYORSA</b> bir işlem deftere yazılmıyor demektir.</div>
     <div class="sec">Hesaplar (kasa/banka)</div><div class="card" style="padding:6px 12px">${hs.map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--ln2);font-size:12.5px"><span>${esc(x.ad)}</span><span style="text-align:right"><b>${TL(x.bakiye)}</b><div class="mini">defter ${TL(x.defter)} · fark ${Math.abs(x.fark)<0.5?'✓ yok':TL(x.fark)}</div></span></div>`).join('')||'—'}</div>
-    <div class="sec">Devri en yüksek 10 cari</div><div class="card" style="padding:6px 12px">${cs.slice(0,10).map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--ln2);font-size:12.5px"><span>${esc(x.ad)}</span><span style="text-align:right"><b>${TL(x.bakiye)}</b><div class="mini">devir ${TL(x.devir)}</div></span></div>`).join('')||'<div class="mini" style="padding:8px">Tüm cari bakiyeler kayıtlarla tam açıklanıyor ✓</div>'}</div>`);
+    <div class="sec">Devri en yüksek 10 cari</div><div class="card" style="padding:6px 12px">${cs.slice(0,10).map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--ln2);font-size:12.5px"><span>${esc(x.ad)}</span><span style="text-align:right"><b>${TL(x.bakiye)}</b><div class="mini">devir ${TL(x.devir)}</div></span></div>`).join('')||'<div class="mini" style="padding:8px">Tüm cari bakiyeler kayıtlarla tam açıklanıyor ✓</div>'}</div>
+    <div class="sec">Defter İzleme — Tanılama</div><div class="card" id="dk-izleme" style="padding:10px 12px">
+    <div class="mini" style="line-height:1.55"><b>Bu kontrol yalnız mevcut cihazdaki kayıtları inceler. Kayıp tespiti veya bulut verisinin doğrulandığı anlamına gelmez.</b> Bulgular yalnız "incelenmeli" uyarısıdır; hiçbir kayıt değiştirilmez.</div>
+    <button class="btn ghost sm" style="margin-top:8px" onclick="defterTanilamaCalistir()">▶️ Tanılamayı çalıştır</button><div id="dk-izleme-sonuc"></div></div>`);
 }
+/* ===== 🧮 Defter İzleme — Tanılama (Ders 50.3c-3a) =====
+   SALT OKUNUR: yalnız cihazdaki db'yi js/defter-izleme.mjs tanilama() ile inceler. Firebase okuması/yazımı YOK, izleme deposu
+   AÇILMAZ (uygulamada yok), localStorage / IndexedDB güvence kopyasına YAZILMAZ, otomatik çalışmaz (yalnız yetkili kullanıcının düğmesiyle).
+   Motor kritik değildir: yalnız düğmeye basılınca yüklenir; yüklenemezse yalnız bu bölüm "kullanılamıyor" der. */
+function _defterBulutKullaniliyor(){return !!(canliAcik||db.canliBulut===true||db.senkronOldu||bulutKul||bulutGirisli());}
+/* Merkezi yetki: kurtarma tamam + personel/müşteri modu ve örnek veri değil + yerel yönetici + bulut kullanılıyorsa bulut rolü admin/ortak.
+   Cihazdaki varsayılan "patron" rolü bulut varken TEK BAŞINA yetmez (bulut mağaza/depocu hesabı kasa/çek belgelerini okuyamaz). */
+function _defterYetki(){const n=[];let k='';try{k=(window.kurtarmaDurumu||{}).durum;}catch(e){}
+  if(k!=='tamam')n.push('veri kurtarma tamamlanmadı');
+  if(db.personelMod)n.push('personel modu');
+  if(bulutMusteriMod)n.push('müşteri modu');
+  if(db.ornek)n.push('örnek veri');
+  if(!adminMi())n.push('yönetici değil');
+  if(_defterBulutKullaniliyor()){const r=canliRol();if(r!=='admin'&&r!=='ortak')n.push('bulut rolü yönetici/ortak değil');}
+  return {izin:!n.length,nedenler:n};}
+var _defterMotorP=null;
+function _defterMotorAl(){if(!_defterMotorP)_defterMotorP=import('./js/defter-izleme.mjs').then(m=>{if(!m||m.MOTOR_SURUM!==1||typeof m.tanilama!=='function')throw new Error('defter motoru sürüm uyuşmazlığı — sayfayı yenileyin');return m;}).catch(e=>{_defterMotorP=null;throw e;});
+  return _defterMotorP;}
+async function defterTanilamaCalistir(){
+  {const y=_defterYetki();if(!y.izin){const e0=$('dk-izleme-sonuc');if(e0)e0.innerHTML='';return toast('⛔ Yetkiniz yok — '+y.nedenler.join(', '));}}
+  const el=$('dk-izleme-sonuc');if(!el)return;el.innerHTML='<div class="mini" style="padding:8px 0">İnceleniyor…</div>';
+  let m;try{m=await _defterMotorAl();}catch(e){const e1=$('dk-izleme-sonuc');if(e1)e1.innerHTML=`<div class="warnbox" style="margin-top:8px">Tanılama şu an kullanılamıyor (${esc((e&&e.message)||'motor yüklenemedi')}). Yukarıdaki defter kontrolü etkilenmez.</div>`;return;}
+  {const y=_defterYetki();if(!y.izin){const e2=$('dk-izleme-sonuc');if(e2)e2.innerHTML='';return toast('⛔ Yetkiniz yok — '+y.nedenler.join(', '));}} /* yükleme sırasında yetki değişmiş olabilir (ör. kurtarma kilidi) */
+  const boyut={};try{Object.keys(CANLI_DOMEN).forEach(dm=>{boyut[dm]=JSON.stringify(canliAl(db,dm)).length;});}catch(e){} /* yalnız bellekte ölçüm; buluta gidilmez */
+  let t;try{t=m.tanilama(db,{domenBoyut:boyut});}catch(e){const e3=$('dk-izleme-sonuc');if(e3)e3.innerHTML='<div class="warnbox" style="margin-top:8px">Tanılama hesaplanamadı. Yukarıdaki defter kontrolü etkilenmez.</div>';return;}
+  const e4=$('dk-izleme-sonuc');if(e4)e4.innerHTML=_defterTanilamaHtml(t);}
+function _defterTanilamaHtml(t){const ad={};t.olcum.cari.forEach(c=>{ad['cari#'+c.id]=c.ad;});
+  const satir=(sol,sag)=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--ln2);font-size:12.5px"><span>${sol}</span><span style="text-align:right">${sag}</span></div>`;
+  const u=t.uyarilar,EN=50,s=t.sayac;
+  const ted=t.olcum.cari.filter(c=>(c.tip==='tedarikci'||c.tip==='fason')&&!c.izlenmiyor&&c.devir!==null&&Math.abs(c.devir)>0.5).sort((a,b)=>Math.abs(b.devir)-Math.abs(a.devir)).slice(0,10);
+  const usd=t.olcum.cari.filter(c=>c.izlenmiyor);
+  return `<div class="mini" style="margin-top:8px">${u.length?`<b>${u.length} uyarı — incelenmeli</b>`:'Uyarı yok ✓'} · eski ödeme alanlı satış ${s.eskiOdemeAlani} · kur bilgisi eksik dövizli satış ${s.kurEksikDoviz} · izlenmeyen USD cari ${s.usdIzlenmiyor}</div>`
+    +(u.length?`<div style="margin-top:6px">${u.slice(0,EN).map(x=>satir(`⚠️ <b>İncelenmeli</b> · ${esc(x.mesaj)}`,`<span class="mini">${esc(ad[x.konu]!=null?ad[x.konu]:x.konu)}</span>`)).join('')}${u.length>EN?`<div class="mini" style="padding:6px 0">+${u.length-EN} uyarı daha</div>`:''}</div>`:'')
+    +`<div class="sec" style="margin-top:10px">Devri en yüksek 10 tedarikçi / fason</div>${ted.map(c=>satir(esc(c.ad),`devir ${TL(c.devir)}`)).join('')||'<div class="mini" style="padding:6px 0">Kayıtlarla açıklanmayan tedarikçi/fason devri yok ✓</div>'}`
+    +`<div class="sec" style="margin-top:10px">İzlenmeyen (USD) cariler</div><div class="mini" style="padding:4px 0">${usd.length?`${usd.slice(0,20).map(c=>esc(c.ad)).join(', ')}${usd.length>20?' +'+(usd.length-20):''} — bakiye USD alanında, hareketler TL: bu kontrolde İZLENMİYOR`:'Yok'}</div>`
+    +`<div class="sec" style="margin-top:10px">Bilinen uygulama kısıtları</div>${t.kisitlar.map(k=>`<div class="warnbox" style="margin-top:6px"><b>${esc(k.baslik)}</b><div class="mini" style="margin-top:4px;line-height:1.5">${esc(k.mesaj)}${k.kod==='NAKIT_IADE'?` Bu cihazda: ${k.cariSayisi} cari, ${k.hareketSayisi} hareket, ${TL(k.tutar)}.`:''}${k.kod==='K8'?` Devri olan tedarikçi/fason: ${k.tedarikciDevirli}.`:''}</div></div>`).join('')}`;}
 // 🔍 Senkron teşhis — internet/giriş/rol/okuma/yazma tek tek test edip rapor eder
 async function canliTeshis(){
   if(!bulutBaslat())return toast('Bulut ayarlı değil');
@@ -1196,7 +1236,7 @@ const FB_CONFIG = {
   appId: "1:432547902086:web:0ad08ac8e04df637951707"
 };
 const MAGAZA_ID = 'iqbasics';
-const APP_SURUM = '2026.07.24-174'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
+const APP_SURUM = '2026.07.24-175'; // sürüm damgası — Ayarlar'da görünür (güncel mi diye kontrol)
 let _fb=null, bulutHazir=false, bulutMusteriMod=false;
 function bulutVar(){return !!(FB_CONFIG.apiKey && window.firebase)}
 function bulutBaslat(){if(!_kurtarmaYazabilir())return false; /* R2.2b.4: kurtarma tamamlanmadan bulut YOK */

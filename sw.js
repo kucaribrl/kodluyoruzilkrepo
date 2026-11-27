@@ -1,5 +1,5 @@
 /* IQ Basics — Service Worker (çevrimdışı çalışma + kurulabilir PWA) */
-const CACHE = 'iqbasics-v174';
+const CACHE = 'iqbasics-v175';
 
 /* Uygulama kabuğu: internet olmasa da açılması gereken dosyalar */
 const SHELL = [
@@ -21,6 +21,9 @@ const SHELL = [
 /* KRİTİK dosyalar: önbelleğe alınamazsa kurulum BAŞARISIZ olur (yeni sürüm hazır sayılmaz, eski sürüm çalışmaya devam eder).
    Renk motoru index.html ile aynı sürümde olmalı; HTTP önbelleği atlanır (eski motor yeni önbelleğe girmesin). */
 const KRITIK = ['./js/renk-cozumleme.mjs'];
+/* İSTEĞE BAĞLI dosyalar: HTTP önbelleği atlanır (eski sürüm karışmasın) ama önbelleğe alınamazsa kurulum BOZULMAZ —
+   yalnız o özellik çevrimdışı kullanılamaz. Defter izleme motoru (Defter Kontrolü → Tanılama) yalnız elle açılır. */
+const ISTEGE_BAGLI = ['./js/defter-izleme.mjs'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
@@ -29,7 +32,9 @@ self.addEventListener('install', (e) => {
         // tek tek ekle: biri düşse bile kurulum bozulmasın
         ...SHELL.map((u) => c.add(u).catch(() => null)),
         // kritik: hata yutulmaz
-        ...KRITIK.map((u) => c.add(new Request(u, { cache: 'reload' })))
+        ...KRITIK.map((u) => c.add(new Request(u, { cache: 'reload' }))),
+        // isteğe bağlı: hata yutulur
+        ...ISTEGE_BAGLI.map((u) => c.add(new Request(u, { cache: 'reload' })).catch(() => null))
       ])
     )
   );
