@@ -10,7 +10,7 @@
 //      gerçekleşmeden önce yakalanır: localhost / 127.0.0.1 dışı her istek ENGELLENİR; gstatic SDK dosyaları yerel kopyadan verilir.
 //   4) Emülatör süreci: geçici klasörde firebase.json + basit test kuralları; yalnız 127.0.0.1; boş geçici ana klasör (gerçek oturum /
 //      kimlik bilgisi görülmez); dış ağ vekili ölü adrese yönlendirilir; kalıcı veri yok; test sonunda süreç kapatılır ve portlar doğrulanır.
-import { spawn, execFileSync } from 'child_process'; import net from 'net'; import http from 'http'; import fs from 'fs'; import os from 'os'; import path from 'path';
+import { spawn, execFileSync } from 'child_process'; import { createHash } from 'crypto'; import net from 'net'; import http from 'http'; import fs from 'fs'; import os from 'os'; import path from 'path';
 import { fileURLToPath } from 'url'; import { chromium } from 'playwright';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -26,7 +26,10 @@ if (!EMU || !fs.existsSync(path.join(EMU, 'node_modules/.bin/firebase'))) dur('I
 if (EMU.startsWith(ROOT + path.sep) || EMU === ROOT) dur('emülatör araçları depo İÇİNE kurulmamalı');
 const SDK_DIR = path.join(EMU, 'node_modules/firebase'), SDK_SURUM = JSON.parse(fs.readFileSync(path.join(SDK_DIR, 'package.json'), 'utf8')).version;
 const CLI_SURUM = JSON.parse(fs.readFileSync(path.join(EMU, 'node_modules/firebase-tools/package.json'), 'utf8')).version;
-const gitDurum = () => execFileSync('git', ['status', '--porcelain'], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean).map(l => l.slice(3)).sort();
+const gitDurum = () => execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean).sort()
+  .map(l => { const f = path.join(ROOT, l.slice(3)); let oz = '-'; try { if (fs.statSync(f).isFile()) oz = createHash('sha256').update(fs.readFileSync(f)).digest('hex').slice(0, 16); } catch (e) { oz = 'yok'; } return l + ' ' + oz; });
+// Yalnız TESTİN KENDİ yan etkisi denetlenir: başlangıç ve bitişteki git durumu (durum kodu + izlenmeyen dosyalar + içerik özeti) aynı olmalı.
+// Hangi dosyaların değişmesine izin verildiği her dersin commit öncesi kontrolünde ayrıca doğrulanır (burada sabit liste YOK).
 const git0 = gitDurum();
 console.log(`ORTAM: Firebase EMÜLATÖRÜ (gerçek Firebase DEĞİL) · proje ${PROJE} · firebase-tools ${CLI_SURUM} · firebase SDK ${SDK_SURUM} · Node ${process.version}`);
 T('A0 [araç] tarayıcıya verilecek SDK uygulamanın kullandığı sürümle aynı (10.12.0 compat)', SDK_SURUM === SDK && ['app', 'firestore', 'auth'].every(m => fs.existsSync(path.join(SDK_DIR, `firebase-${m}-compat.js`))), SDK_SURUM);
@@ -145,7 +148,7 @@ const portlar = await Promise.all(Object.values(P).map(acikMi));
 T('A9 [kapanış] emülatör süreci kapandı ve bütün portları serbest', !!emuBitti && portlar.every(x => !x), { emuBitti, portlar });
 fs.rmSync(GECICI, { recursive: true, force: true });
 T('A9 [kalıcılık] geçici yapılandırma ve emülatör verisi silindi (dışa aktarma yok)', !fs.existsSync(GECICI));
-const git1 = gitDurum(), izinli = ['test/emulator/', 'test/emulator/39a-yalitim.mjs', 'test/OKU.md'];
-T('A9 [depo] çalışma ağacında yalnız izinli dosyalar değişti; test depoda hiçbir dosya üretmedi', JSON.stringify(git1) === JSON.stringify(git0) && git1.every(f => izinli.includes(f)), { git0, git1 });
+const git1 = gitDurum();
+T('A9 [depo] test depoda hiçbir yan etki bırakmadı: başlangıç ve bitişteki git durumu (durum, izlenmeyen dosyalar, içerik özeti) birebir aynı', JSON.stringify(git1) === JSON.stringify(git0), { git0, git1 });
 console.log(`${ok} PASS, ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
